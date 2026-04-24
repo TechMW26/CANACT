@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen pb-24 md:pb-6 md:flex">
+    <div className="min-h-screen pb-28 md:pb-6 md:flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:gap-1 md:py-4 md:pr-2">
         <div className="px-3 py-2 mb-2">
@@ -81,20 +81,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 md:pl-2">
-        {/* Top bar */}
-        <header className="sticky top-0 z-30 bg-candy/95 backdrop-blur safe-top">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
-            <Link href="/feed" className="flex-1 inline-flex items-center gap-2">
+        {/* Floating glass top bar */}
+        <header className="sticky top-0 z-30 px-3 pt-3 md:pt-4 safe-top">
+          <div className="flex items-center gap-1 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+            <Link href="/feed" className="flex-1 inline-flex items-center gap-2 min-w-0">
               <span className="md:hidden"><Brand size={26} /></span>
-              <span className="hidden md:inline text-lg font-bold text-ink">{titleFor(pathname)}</span>
+              <span className="hidden md:inline text-lg font-bold text-ink truncate">{titleFor(pathname)}</span>
             </Link>
-            <Link href="/search" aria-label="Search" className="rounded-full p-2 hover:bg-brand-light">
+            <Link href="/search" aria-label="Search" className="rounded-full p-2 text-ink/80 hover:bg-brand-light hover:text-brand transition">
               <Search size={20} strokeWidth={2} />
             </Link>
-            <Link href="/notifications" aria-label="Notifications" className="rounded-full p-2 hover:bg-brand-light">
+            <Link href="/notifications" aria-label="Notifications" className="rounded-full p-2 text-ink/80 hover:bg-brand-light hover:text-brand transition">
               <Bell size={20} strokeWidth={2} />
             </Link>
-            <Link href="/profile" aria-label="My profile">
+            <Link href="/profile" aria-label="My profile" className="ml-1 ring-2 ring-white rounded-full">
               <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={32} />
             </Link>
           </div>
@@ -102,36 +102,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-4 md:p-6"><PageTransition>{children}</PageTransition></div>
       </main>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-surface/95 backdrop-blur border-t border-line safe-bottom">
-        <div className="grid grid-cols-5 h-16 items-end">
-          {TABS.map(({ href, label, Icon, isFab }) => {
-            const active = !isFab && (pathname === href || pathname?.startsWith(href));
-            if (isFab) {
+      {/* Floating mobile bottom nav */}
+      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-3 safe-bottom pointer-events-none">
+        <div className="pointer-events-auto mx-auto max-w-md rounded-[28px] bg-white/85 backdrop-blur-xl border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
+          <div className="grid grid-cols-5 h-16 items-center">
+            {TABS.map(({ href, label, Icon, isFab }) => {
+              const active = !isFab && (pathname === href || pathname?.startsWith(href));
+              if (isFab) {
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-label="Create"
+                    className="flex items-center justify-center"
+                  >
+                    <span className="-mt-8 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-[0_10px_24px_-6px_rgba(200,16,46,0.55)] ring-4 ring-white hover:bg-brand-dark active:scale-95 transition">
+                      <Icon size={26} strokeWidth={2.4} />
+                    </span>
+                  </Link>
+                );
+              }
               return (
                 <Link
                   key={href}
                   href={href}
-                  aria-label="Create"
-                  className="flex items-end justify-center"
+                  className={`relative flex flex-col items-center justify-center gap-0.5 h-16 transition ${active ? 'text-brand' : 'text-ink/60 hover:text-ink'}`}
                 >
-                  <span className="-mt-7 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-card hover:bg-brand-dark transition">
-                    <Icon size={26} strokeWidth={2.4} />
-                  </span>
+                  <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
+                  <span className="text-[11px] font-semibold">{label}</span>
+                  <span className={`absolute bottom-1.5 h-1 w-1 rounded-full bg-brand transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`} />
                 </Link>
               );
-            }
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex flex-col items-center justify-center gap-0.5 h-16 ${active ? 'text-brand' : 'text-ink/70'}`}
-              >
-                <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
-                <span className="text-[11px] font-semibold">{label}</span>
-              </Link>
-            );
-          })}
+            })}
+          </div>
         </div>
       </nav>
     </div>

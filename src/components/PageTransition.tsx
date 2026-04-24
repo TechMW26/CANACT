@@ -83,24 +83,24 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
                 : ''
             }
           >
-            {/* Each path keeps the bottom rectangle fully filled and uses
-                cubic Béziers along the TOP edge for organic candy curves. */}
+            {/* Subtle, single broad wave on top + bottom edges. Wider control
+                spacing keeps the curves gentle on narrow mobile screens. */}
             <path
               className="canact-blob a"
               fill="url(#candyGrad)"
-              d="M-5,30 C12,8 28,42 50,18 C72,-4 86,38 105,14 L105,140 L-5,140 Z"
+              d="M-10,6 C25,-2 75,14 110,4 L110,96 C75,104 25,88 -10,96 Z"
             />
             <path
               className="canact-blob b"
               fill="url(#candyGrad2)"
               opacity="0.92"
-              d="M-5,38 C18,18 36,48 56,26 C78,4 92,46 105,22 L105,140 L-5,140 Z"
+              d="M-10,11 C30,3 70,19 110,9 L110,101 C70,109 30,93 -10,101 Z"
             />
             <path
               className="canact-blob c"
               fill="url(#candyGrad3)"
               opacity="0.78"
-              d="M-5,46 C22,28 40,54 60,32 C82,12 96,52 105,32 L105,140 L-5,140 Z"
+              d="M-10,16 C35,8 65,22 110,14 L110,106 C65,114 35,98 -10,106 Z"
             />
           </g>
         </svg>
