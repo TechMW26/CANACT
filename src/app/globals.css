@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+html, body { background: #FFF8F8; color: #0A0A0A; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* Hide scrollbars on horizontal chip rows */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Basic safe-area paddings for bottom nav on iOS Safari */
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+.safe-top { padding-top: max(env(safe-area-inset-top), 12px); }
+
+input, textarea, select, button { font: inherit; }
+input, textarea, select { background: #fff; }
+
+/* utility focus ring in brand red */
+.focus-ring:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
+
+/* ---------- Liquid candy page transition ---------- */
+/* The two SVG <path> blobs translate from below the viewport up & off-screen,
+   the goo filter glues them into a single liquid sheet.
+   `in` = sweep up to cover; `out` = continue up to reveal new content. */
+
+.canact-blob {
+  transform: translate3d(0,140%,0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Quick, jitter-free liquid candy sweep.
+   in  = cover  (decel)
+   out = reveal (accel) */
+.canact-blob-in  .canact-blob.a { animation: canactBlobIn  340ms cubic-bezier(.22,.85,.3,1)  forwards; }
+.canact-blob-in  .canact-blob.b { animation: canactBlobIn  380ms cubic-bezier(.22,.85,.3,1)  forwards; animation-delay: 30ms; }
+.canact-blob-in  .canact-blob.c { animation: canactBlobIn  420ms cubic-bezier(.22,.85,.3,1)  forwards; animation-delay: 55ms; }
+
+.canact-blob-out .canact-blob.a { animation: canactBlobOut 380ms cubic-bezier(.55,.05,.3,1)  forwards; }
+.canact-blob-out .canact-blob.b { animation: canactBlobOut 410ms cubic-bezier(.55,.05,.3,1)  forwards; animation-delay: 25ms; }
+.canact-blob-out .canact-blob.c { animation: canactBlobOut 440ms cubic-bezier(.55,.05,.3,1)  forwards; animation-delay: 50ms; }
+
+@keyframes canactBlobIn  {
+  from { transform: translate3d(0,140%,0); }
+  to   { transform: translate3d(0,0,0); }
+}
+@keyframes canactBlobOut {
+  from { transform: translate3d(0,0,0); }
+  to   { transform: translate3d(0,-140%,0); }
+}
+
+/* Page enter — opacity + tiny translate only (no filter -> no jitter) */
+.canact-page-enter {
+  animation: canactPageEnter 320ms cubic-bezier(.22,.85,.3,1) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+@keyframes canactPageEnter {
+  0%   { opacity: 0; transform: translate3d(0,12px,0); }
+  100% { opacity: 1; transform: translate3d(0,0,0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canact-page-enter,
+  .canact-blob-in .canact-blob,
+  .canact-blob-out .canact-blob { animation: none !important; }
+}
