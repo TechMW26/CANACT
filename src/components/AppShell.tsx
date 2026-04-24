@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 md:pl-2">
         {/* Floating glass top bar */}
         <header className="sticky top-0 z-30 px-3 pt-3 md:pt-4 safe-top">
-          <div className="flex items-center gap-1 rounded-2xl bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+          <div className="flex items-center gap-1 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
             <Link href="/feed" className="flex-1 inline-flex items-center gap-2 min-w-0">
               <span className="md:hidden"><Brand size={26} /></span>
               <span className="hidden md:inline text-lg font-bold text-ink truncate">{titleFor(pathname)}</span>
@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Floating mobile bottom nav */}
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-3 safe-bottom pointer-events-none">
-        <div className="pointer-events-auto mx-auto max-w-md rounded-[28px] bg-white/85 backdrop-blur-xl border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
+        <div className="pointer-events-auto mx-auto max-w-md rounded-[28px] bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
           <div className="grid grid-cols-5 h-16 items-center">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = !isFab && (pathname === href || pathname?.startsWith(href));
