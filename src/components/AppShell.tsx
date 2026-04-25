@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/welcome');
-    else if (profile && profile.profileComplete === false && !pathname?.startsWith('/onboard')) {
+    else if ((!profile || profile.profileComplete === false) && !pathname?.startsWith('/onboard')) {
       router.replace('/onboard');
     }
   }, [user, profile, loading, pathname, router]);

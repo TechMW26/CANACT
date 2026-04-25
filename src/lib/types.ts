@@ -31,6 +31,7 @@ export interface UserProfile {
   mobile?: string;
   city?: string;
   country?: string;
+  countryCode?: string;
   address?: string;
   dateOfBirth?: string;
   bio?: string;

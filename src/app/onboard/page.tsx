@@ -1,8 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Country, City } from 'country-state-city';
 import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
+import { PhoneInput, isPhoneValid, toE164 } from '@/components/PhoneInput';
+import { Combobox, type ComboOption } from '@/components/Combobox';
+import type { CountryCode } from 'libphonenumber-js';
 import { BrandMark } from '@/components/Brand';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/Toaster';
@@ -13,18 +17,55 @@ export default function OnboardPage() {
   const [busy, setBusy] = useState(false);
 
   const [mobile, setMobile] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>('IN');
   const [dob, setDob] = useState('');
-  const [city, setCity] = useState('');
+  const [countryCode, setCountryCode] = useState<string>('IN');
   const [country, setCountry] = useState('India');
+  const [city, setCity] = useState('');
   const [gender, setGender] = useState<'female' | 'male' | 'nonbinary' | 'other' | ''>('');
+
+  const phoneValid = useMemo(() => isPhoneValid(phoneCountry, mobile), [phoneCountry, mobile]);
+
+  const countryOptions: ComboOption[] = useMemo(
+    () => Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name, flag: c.isoCode })),
+    [],
+  );
+
+  const cityOptions: ComboOption[] = useMemo(() => {
+    if (!countryCode) return [];
+    const cities = City.getCitiesOfCountry(countryCode) ?? [];
+    // De-dupe city names within a country (some appear multiple times across states).
+    const seen = new Set<string>();
+    const out: ComboOption[] = [];
+    for (const c of cities) {
+      if (seen.has(c.name)) continue;
+      seen.add(c.name);
+      out.push({ value: c.name, label: c.name });
+    }
+    out.sort((a, b) => a.label.localeCompare(b.label));
+    return out;
+  }, [countryCode]);
 
   // Hydrate from existing profile (e.g. partially filled).
   useEffect(() => {
     if (!profile) return;
-    if (profile.mobile) setMobile(profile.mobile);
+    if (profile.mobile) {
+      // Stored as E.164 (+91...). Strip leading '+' and dial code if present.
+      const raw = String(profile.mobile).replace(/[^0-9+]/g, '');
+      setMobile(raw.replace(/^\+?\d{1,3}/, ''));
+    }
     if (profile.dateOfBirth) setDob(profile.dateOfBirth);
+    if (profile.countryCode) {
+      setCountryCode(profile.countryCode);
+      const c = Country.getCountryByCode(profile.countryCode);
+      if (c) setCountry(c.name);
+      else if (profile.country) setCountry(profile.country);
+    } else if (profile.country) {
+      const match = Country.getAllCountries().find((c) => c.name.toLowerCase() === profile.country!.toLowerCase());
+      if (match) { setCountryCode(match.isoCode); setCountry(match.name); }
+      else setCountry(profile.country);
+    }
     if (profile.city) setCity(profile.city);
-    if (profile.country) setCountry(profile.country);
     if (profile.gender) setGender(profile.gender);
   }, [profile]);
 
@@ -56,18 +97,19 @@ export default function OnboardPage() {
           className="space-y-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            const phone = mobile.replace(/[^0-9]/g, '');
-            if (phone.length < 7) return toast('Please enter a valid mobile number', 'error');
+            if (!isPhoneValid(phoneCountry, mobile)) return toast('Please enter a valid mobile number', 'error');
+            if (!country.trim() || !countryCode) return toast('Country is required', 'error');
             if (!city.trim()) return toast('City is required', 'error');
             if (!dob) return toast('Date of birth is required', 'error');
 
             setBusy(true);
             try {
               await updateMyProfile({
-                mobile: phone,
+                mobile: toE164(phoneCountry, mobile),
                 dateOfBirth: dob,
+                country: country.trim(),
+                countryCode,
                 city: city.trim(),
-                country: country.trim() || undefined,
                 gender: gender || undefined,
                 profileComplete: true,
               });
@@ -80,14 +122,13 @@ export default function OnboardPage() {
             }
           }}
         >
-          <Input
-            label="Mobile number"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="e.g. 9876543210"
+          <PhoneInput
+            country={phoneCountry}
+            onCountryChange={setPhoneCountry}
             value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
+            onChange={setMobile}
             required
+            error={mobile && !phoneValid ? 'Enter a valid number for the selected country' : undefined}
           />
           <Input
             label="Date of birth"
@@ -96,10 +137,28 @@ export default function OnboardPage() {
             onChange={(e) => setDob(e.target.value)}
             required
           />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="City" value={city} onChange={(e) => setCity(e.target.value)} required />
-            <Input label="Country" value={country} onChange={(e) => setCountry(e.target.value)} />
-          </div>
+          <Combobox
+            label="Country"
+            required
+            value={countryCode}
+            options={countryOptions}
+            placeholder="Select country"
+            onChange={(v, opt) => {
+              setCountryCode(v);
+              setCountry(opt?.label ?? '');
+              setCity('');
+            }}
+          />
+          <Combobox
+            label="City"
+            required
+            value={city}
+            options={cityOptions}
+            placeholder={countryCode ? 'Select city' : 'Select a country first'}
+            disabled={!countryCode || cityOptions.length === 0}
+            emptyText={countryCode ? 'No cities found' : 'Select a country first'}
+            onChange={(v) => setCity(v)}
+          />
           <Select label="Gender (optional)" value={gender} onChange={(e) => setGender(e.target.value as any)}>
             <option value="">Prefer not to say</option>
             <option value="female">Female</option>

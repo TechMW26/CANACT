@@ -24,8 +24,8 @@ export default function WelcomePage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    if (profile && profile.profileComplete === false) router.replace('/onboard');
-    else if (profile) router.replace('/feed');
+    if (!profile || profile.profileComplete === false) router.replace('/onboard');
+    else router.replace('/feed');
   }, [user, profile, loading, router]);
 
   return (

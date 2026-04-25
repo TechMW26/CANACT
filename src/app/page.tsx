@@ -9,8 +9,8 @@ export default function Home() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/welcome');
-    else if (profile && profile.profileComplete === false) router.replace('/onboard');
-    else if (profile) router.replace('/feed');
+    else if (!profile || profile.profileComplete === false) router.replace('/onboard');
+    else router.replace('/feed');
   }, [user, profile, loading, router]);
   return (
     <div className="min-h-screen flex items-center justify-center">
