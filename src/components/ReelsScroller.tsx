@@ -160,16 +160,6 @@ function ReelTile({
         <audio ref={audioRef} src={reel.music.url} loop muted={muted} />
       )}
 
-      {/* Mute toggle */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
-        aria-label={muted ? 'Unmute' : 'Mute'}
-        className="absolute right-3 top-20 z-30 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15"
-      >
-        {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-      </button>
-
       {/* Pause indicator */}
       {paused && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
