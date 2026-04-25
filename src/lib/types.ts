@@ -181,7 +181,38 @@ export interface ChatMessage {
   toUid: string;
   text: string;
   createdAt: number;
+  /** Edited timestamp; presence implies the message has been edited. */
+  editedAt?: number;
+  /** Soft delete: when true, body is replaced with a tombstone. */
+  deleted?: boolean;
+  /** Emoji reactions keyed by uid -> emoji. */
+  reactions?: Record<string, string>;
+  /** Quoted/replied message context shown above the bubble. */
+  replyTo?: {
+    id: string;
+    fromUid: string;
+    text: string;
+  };
+  /** Optional shared attachment rendered as a rich card. */
+  attachment?: ChatAttachment;
 }
+
+export type ChatAttachment =
+  | {
+      kind: 'post';
+      postId: string;
+      authorName?: string;
+      text?: string;
+      thumbUrl?: string;
+    }
+  | {
+      kind: 'reel';
+      reelId: string;
+      authorName?: string;
+      caption?: string;
+      thumbUrl?: string;
+      videoUrl?: string;
+    };
 
 export type ChatThreadStatus = 'pending' | 'accepted' | 'declined';
 

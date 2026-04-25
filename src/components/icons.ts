@@ -78,4 +78,6 @@ export {
   Bookmark,
   Phone,
   RotateCcw,
+  CornerUpLeft,
+  Copy,
 } from 'lucide-react';

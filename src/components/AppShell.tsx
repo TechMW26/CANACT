@@ -75,6 +75,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />;
   }
 
+  // Full-screen routes: hide the unified header, page transition wrapper, and
+  // bottom nav so the page can own the entire viewport (chat threads, etc).
+  const isFullScreen = !!pathname && /^\/inbox\/[^/]+/.test(pathname);
+
+  if (isFullScreen) {
+    return (
+      <div id="canact-app-shell" className="min-h-screen">
+        {children}
+        <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
+      </div>
+    );
+  }
+
   return (
     <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6 md:flex">
       <ScrollDirectionWatcher />

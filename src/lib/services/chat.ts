@@ -1,6 +1,6 @@
-import { onValue, ref, set, update, push, get, child, query, orderByChild, runTransaction } from 'firebase/database';
+import { onValue, ref, set, update, push, get, query, orderByChild, runTransaction, remove } from 'firebase/database';
 import { db } from '../firebase';
-import type { ChatMessage, ChatThread } from '../types';
+import type { ChatAttachment, ChatMessage, ChatThread } from '../types';
 
 function threadIdFor(a: string, b: string) {
   return [a, b].sort().join('__');
@@ -52,7 +52,13 @@ export function listenMyThreads(uid: string, cb: (threads: ChatThread[]) => void
   });
 }
 
-export async function sendChatMessage(threadId: string, fromUid: string, toUid: string, text: string) {
+export async function sendChatMessage(
+  threadId: string,
+  fromUid: string,
+  toUid: string,
+  text: string,
+  extras?: { replyTo?: ChatMessage['replyTo']; attachment?: ChatAttachment },
+) {
   const node = push(ref(db, `chatMessages/${threadId}`));
   const msg: ChatMessage = {
     id: node.key as string,
@@ -61,13 +67,44 @@ export async function sendChatMessage(threadId: string, fromUid: string, toUid: 
     text,
     createdAt: Date.now(),
   };
+  if (extras?.replyTo) msg.replyTo = extras.replyTo;
+  if (extras?.attachment) msg.attachment = extras.attachment;
   await set(node, msg);
+  const previewText = extras?.attachment
+    ? extras.attachment.kind === 'post'
+      ? '📎 Shared a post'
+      : '🎬 Shared a reel'
+    : text;
   await update(ref(db, `chatThreads/${threadId}`), {
     lastMessageAt: msg.createdAt,
-    lastMessageText: text,
+    lastMessageText: previewText,
   });
   await runTransaction(ref(db, `chatThreads/${threadId}/unread/${toUid}`), (n: number) => (n ?? 0) + 1);
   return msg;
+}
+
+export async function reactToChatMessage(threadId: string, messageId: string, uid: string, emoji: string | null) {
+  const r = ref(db, `chatMessages/${threadId}/${messageId}/reactions/${uid}`);
+  if (emoji) await set(r, emoji);
+  else await remove(r);
+}
+
+export async function editChatMessage(threadId: string, messageId: string, uid: string, text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const r = ref(db, `chatMessages/${threadId}/${messageId}`);
+  const snap = await get(r);
+  const msg = snap.val() as ChatMessage | null;
+  if (!msg || msg.fromUid !== uid || msg.deleted) return;
+  await update(r, { text: trimmed, editedAt: Date.now() });
+}
+
+export async function deleteChatMessage(threadId: string, messageId: string, uid: string) {
+  const r = ref(db, `chatMessages/${threadId}/${messageId}`);
+  const snap = await get(r);
+  const msg = snap.val() as ChatMessage | null;
+  if (!msg || msg.fromUid !== uid) return;
+  await update(r, { deleted: true, text: '' });
 }
 
 export async function markThreadRead(threadId: string, uid: string) {

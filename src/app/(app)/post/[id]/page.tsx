@@ -12,8 +12,9 @@ import { WhaPost } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/Toaster';
-import { Smile, Heart, PartyPopper, Frown, Angry, Send } from '@/components/icons';
+import { Smile, Heart, PartyPopper, Frown, Angry, Send, Share2 } from '@/components/icons';
 import { MediaSlider } from '@/components/MediaSlider';
+import { ShareToChatSheet } from '@/components/ShareToChatSheet';
 import type { LucideIcon } from 'lucide-react';
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon }[] = [
@@ -31,6 +32,7 @@ export default function PostDetail() {
   const [post, setPost] = useState<WhaPost | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [text, setText] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => listenPost(id, setPost), [id]);
   useEffect(() => listenComments(id, setComments), [id]);
@@ -61,6 +63,7 @@ export default function PostDetail() {
             </button>
           ))}
           <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShareOpen(true)} aria-label="Send to chat"><Share2 size={14} /></Button>
             {!isMine && <Button size="sm" variant="outline" onClick={() => { reportPost(post.id, user.uid, 'inappropriate'); toast('Reported', 'success'); }}>Report</Button>}
             {isMine && <Button size="sm" variant="danger" onClick={async () => { await deletePost(post.id, user.uid); router.replace('/feed'); }}>Delete</Button>}
           </div>
@@ -91,6 +94,17 @@ export default function PostDetail() {
           <Button type="submit" aria-label="Send"><Send size={16} /></Button>
         </form>
       </Card>
+      <ShareToChatSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        attachment={shareOpen ? {
+          kind: 'post',
+          postId: post.id,
+          authorName: post.authorName,
+          text: post.text,
+          thumbUrl: post.mediaUrls?.[0],
+        } : null}
+      />
     </div>
   );
 }
