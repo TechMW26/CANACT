@@ -32,8 +32,13 @@ export function Sheet({
   useEffect(() => {
     if (open) {
       setMounted(true);
-      const id = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(id);
+      // Double rAF so the initial off-screen styles paint before we flip
+      // `entered` — guarantees the transition fires on first open.
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setEntered(true));
+      });
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
     }
     setEntered(false);
     const t = setTimeout(() => setMounted(false), ANIM_MS);
@@ -73,7 +78,8 @@ export function Sheet({
         className={`absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
-        className={`relative w-full max-w-md rounded-t-[32px] bg-white px-4 pb-8 pt-3 shadow-[0_-20px_60px_-20px_rgba(10,10,10,0.45)] safe-bottom transform transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(.22,.85,.3,1)] ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        style={{ transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)' }}
+        className={`relative w-full max-w-md rounded-t-[32px] bg-white px-4 pb-8 pt-3 shadow-[0_-20px_60px_-20px_rgba(10,10,10,0.45)] safe-bottom transform ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
         {title !== undefined && (
