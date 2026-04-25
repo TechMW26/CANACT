@@ -8,9 +8,10 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, ReelItem, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
 import { listenUserWhaPosts } from '@/lib/services/wha';
+import { listenUserReels } from '@/lib/services/reels';
 import { toast } from '@/components/Toaster';
 import { requestFollow } from '@/lib/services/favourites';
 import {
@@ -65,9 +66,13 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
 
   // Instagram-style posts grid (user's authored WHA posts).
   const [posts, setPosts] = useState<WhaPost[]>([]);
+  const [reels, setReels] = useState<ReelItem[]>([]);
   const [tab, setTab] = useState<'posts' | 'reels' | 'tagged'>('posts');
   useEffect(() => {
     return listenUserWhaPosts(uid, setPosts);
+  }, [uid]);
+  useEffect(() => {
+    return listenUserReels(uid, setReels);
   }, [uid]);
 
   if (!u) return <div className="h-32 flex items-center justify-center text-muted">Loading…</div>;
@@ -271,7 +276,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
         <div className="grid grid-cols-3 border-b border-line">
           {([
             { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
-            { id: 'reels', label: 'Reels', Icon: Film, count: 0 },
+            { id: 'reels', label: 'Reels', Icon: Film, count: reels.length },
             { id: 'tagged', label: 'Tagged', Icon: Bookmark, count: 0 },
           ] as const).map(({ id, label, Icon, count }) => {
             const active = tab === id;
@@ -327,10 +332,46 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
               })}
             </div>
           )
+        ) : tab === 'reels' ? (
+          reels.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+                <Film size={20} />
+              </span>
+              <div className="text-sm font-bold text-ink">No reels yet</div>
+              <div className="text-xs text-muted">{isSelf ? 'Tap + to share a reel.' : 'Nothing here yet.'}</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-[2px] bg-line">
+              {reels.map((r) => (
+                <Link
+                  key={r.id}
+                  href="/reels"
+                  className="relative aspect-[9/16] overflow-hidden bg-black"
+                >
+                  {r.posterUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <video
+                      src={r.videoUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                  <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    <Film size={10} className="inline -mt-0.5 mr-0.5" />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-              {tab === 'reels' ? <Film size={20} /> : <Bookmark size={20} />}
+              <Bookmark size={20} />
             </span>
             <div className="text-sm font-bold text-ink">Coming soon</div>
             <div className="text-xs text-muted">This tab will light up soon.</div>

@@ -12,7 +12,8 @@ import { listenWhaFeed, reactWha } from '@/lib/services/wha';
 import { listenPollFeed, votePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
-import { FeedItem, Poll, RateMeSession, StoryItem, WhaPost } from '@/lib/types';
+import { listenReels } from '@/lib/services/reels';
+import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
 import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye } from '@/components/icons';
@@ -29,8 +30,11 @@ const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIc
 ];
 
 const FILTERS = [
-  { id: 'all', label: 'All' }, { id: 'wha', label: "What's Happening" },
-  { id: 'poll', label: 'Polls' }, { id: 'rateme', label: 'Rate Me' },
+  { id: 'all', label: 'All' },
+  { id: 'wha', label: "What's Happening" },
+  { id: 'poll', label: 'Polls' },
+  { id: 'rateme', label: 'Rate Me' },
+  { id: 'reel', label: 'Reels' },
 ];
 
 export default function FeedPage() {
@@ -41,12 +45,14 @@ export default function FeedPage() {
   const [wha, setWha] = useState<WhaPost[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [rms, setRms] = useState<RateMeSession[]>([]);
+  const [reels, setReels] = useState<ReelItem[]>([]);
   const [stories, setStories] = useState<StoryItem[]>([]);
-  const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme'>('all');
+  const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme' | 'reel'>('all');
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   useEffect(() => listenWhaFeed(setWha), []);
   useEffect(() => listenPollFeed(setPolls), []);
   useEffect(() => listenActiveRateMe(setRms), []);
+  useEffect(() => listenReels(setReels), []);
   useEffect(() => listenActiveStories(setStories), []);
 
   const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
@@ -59,11 +65,12 @@ export default function FeedPage() {
       ...wha.map((d) => ({ kind: 'wha' as const, data: d })),
       ...polls.map((d) => ({ kind: 'poll' as const, data: d })),
       ...rms.map((d) => ({ kind: 'rateme' as const, data: d })),
+      ...reels.map((d) => ({ kind: 'reel' as const, data: d })),
     ];
     a.sort((x, y) => tsOf(y) - tsOf(x));
     return a.filter((it) => filter === 'all' || it.kind === filter)
       .filter((it) => withinRadius(it, coords, radius));
-  }, [wha, polls, rms, filter, coords, radius]);
+  }, [wha, polls, rms, reels, filter, coords, radius]);
 
   const openOwnStory = () => {
     if (myStory) {
@@ -138,6 +145,8 @@ export default function FeedPage() {
             <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} />
           ) : it.kind === 'poll' ? (
             <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
+          ) : it.kind === 'reel' ? (
+            <ReelCard key={`reel_${it.data.id}`} reel={it.data} />
           ) : (
             <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
           ))}
@@ -290,6 +299,44 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
         <Button variant={my === 'dislike' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'dislike'); } catch (e: any) { toast(e.message, 'error'); } }}>
           <ThumbsDown size={16} className="mr-1" /> {sess.dislikes ?? 0}
         </Button>
+      </div>
+    </article>
+  );
+}
+
+function ReelCard({ reel }: { reel: ReelItem }) {
+  const likeCount = reel.likes ? Object.keys(reel.likes).length : 0;
+  return (
+    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        <Link href={`/profile/${reel.uid}`}>
+          <Avatar src={reel.authorPhoto} name={reel.authorName} />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <Link href={`/profile/${reel.uid}`} className="block truncate font-bold">
+            {reel.authorName}
+          </Link>
+          <span className="text-xs text-muted">{timeAgo(reel.createdAt)} • Reel</span>
+        </div>
+      </div>
+      {reel.caption ? <p className="mt-2 whitespace-pre-wrap">{reel.caption}</p> : null}
+      <Link href="/reels" className="mt-3 block">
+        <VideoPreview
+          src={reel.videoUrl}
+          className="aspect-[9/16] w-full max-w-[320px] mx-auto rounded-[24px]"
+          fit="contain"
+        />
+      </Link>
+      <div className="mt-3 flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-light px-3 py-1 text-xs font-bold text-brand">
+          <Heart size={14} /> {likeCount}
+        </span>
+        <Link
+          href="/reels"
+          className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75"
+        >
+          Watch in Reels
+        </Link>
       </div>
     </article>
   );

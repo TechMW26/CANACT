@@ -39,6 +39,21 @@ export function listenReels(cb: (items: ReelItem[]) => void) {
   });
 }
 
+export function listenUserReels(uid: string, cb: (items: ReelItem[]) => void) {
+  // Read full reels list and filter by uid client-side. Avoids needing an index
+  // on `uid` in RTDB rules. Reel volume is small.
+  const r = query(ref(db, 'reels'), orderByChild('createdAt'));
+  return onValue(r, (snap) => {
+    const out: ReelItem[] = [];
+    snap.forEach((c) => {
+      const v = c.val() as ReelItem;
+      if (v && v.uid === uid) out.push(v);
+    });
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    cb(out);
+  });
+}
+
 export async function toggleReelLike(reelId: string, uid: string) {
   const r = ref(db, `reels/${reelId}/likes/${uid}`);
   await runTransaction(r, (cur) => (cur ? null : Date.now()));

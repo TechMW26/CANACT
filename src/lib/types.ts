@@ -235,7 +235,8 @@ export interface NotificationItem {
 export type FeedItem =
   | { kind: 'wha'; data: WhaPost }
   | { kind: 'poll'; data: Poll }
-  | { kind: 'rateme'; data: RateMeSession };
+  | { kind: 'rateme'; data: RateMeSession }
+  | { kind: 'reel'; data: ReelItem };
 
 /* ---------- Vicinity / proximity rating ---------- */
 
