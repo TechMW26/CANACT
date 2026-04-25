@@ -1,7 +1,7 @@
 'use client';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getDatabase, Database } from 'firebase/database';
-import { getAuth, GoogleAuthProvider, type Auth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, browserLocalPersistence, indexedDBLocalPersistence, type Auth } from 'firebase/auth';
 
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,6 +28,10 @@ export function getFirebaseAuth(): Auth {
   if (_auth) return _auth;
   _auth = getAuth(firebaseApp);
   try { _auth.useDeviceLanguage(); } catch {}
+  // Persist session across reloads (IndexedDB preferred, localStorage fallback).
+  _auth.setPersistence(indexedDBLocalPersistence).catch(() => {
+    _auth!.setPersistence(browserLocalPersistence).catch(() => {});
+  });
   return _auth;
 }
 

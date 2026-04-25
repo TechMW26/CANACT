@@ -58,7 +58,7 @@ function isMobile(): boolean {
 }
 
 /** Seed a minimal profile after first Google sign-in. Profile is marked incomplete
- * so the app can route the user to /onboard to fill the rest. */
+ * so the app can route the user to /onboard to fill the rest. Safe to call repeatedly. */
 async function seedProfileIfMissing(u: FbUser) {
   const snap = await get(ref(db, `users/${u.uid}`));
   if (snap.exists()) return;
@@ -94,49 +94,68 @@ async function seedProfileIfMissing(u: FbUser) {
   await set(ref(db, `users/${u.uid}`), cleaned);
 }
 
+/** Fire-and-forget seed. Errors are logged but never thrown so they cannot
+ * stall the auth listener or block routing. */
+function seedInBackground(u: FbUser) {
+  seedProfileIfMissing(u).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] seedProfileIfMissing failed', err);
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Pick up redirect result on mount (mobile flow), then start listener.
+  // Auth state listener — the SOLE source of truth for `user`.
+  // We never await anything here; routing must not depend on RTDB succeeding.
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-    (async () => {
-      const auth = getFirebaseAuth();
-      try {
-        const r = await getRedirectResult(auth);
-        if (r?.user) await seedProfileIfMissing(r.user);
-      } catch {
-        // ignore — listener still resolves auth state
-      }
-      unsub = onAuthStateChanged(auth, async (u) => {
+    const auth = getFirebaseAuth();
+    // Pick up redirect result (mobile flow). Errors are non-fatal.
+    getRedirectResult(auth).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] getRedirectResult failed', err);
+    });
+    const unsub = onAuthStateChanged(
+      auth,
+      (u) => {
         if (!u) {
           setUser(null);
           setProfile(null);
           setLoading(false);
           return;
         }
-        try {
-          await seedProfileIfMissing(u);
-        } catch {
-          // continue — profile listener below will surface errors
-        }
+        // Set user IMMEDIATELY so routing can react.
         setUser(toSession(u));
-      });
-    })();
-    return () => { if (unsub) unsub(); };
+        setLoading(false);
+        // Seed profile in background; never blocks the listener.
+        seedInBackground(u);
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[auth] onAuthStateChanged error', err);
+        setLoading(false);
+      },
+    );
+    return () => unsub();
   }, []);
 
-  // Profile subscription
+  // Profile subscription — independent of auth `loading`.
   useEffect(() => {
     if (!user) { setProfile(null); return; }
-    setLoading(true);
-    const off = onValue(ref(db, `users/${user.uid}`), (snap) => {
-      const v = snap.val() as UserProfile | null;
-      setProfile(v ?? null);
-      setLoading(false);
-    });
+    const off = onValue(
+      ref(db, `users/${user.uid}`),
+      (snap) => {
+        const v = snap.val() as UserProfile | null;
+        setProfile(v ?? null);
+      },
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[auth] profile subscription error', err);
+        setProfile(null);
+      },
+    );
     return () => off();
   }, [user?.uid]);
 
@@ -153,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         const r = await signInWithPopup(auth, provider);
-        if (r.user) await seedProfileIfMissing(r.user);
+        if (r.user) seedInBackground(r.user);
       } catch (err: any) {
         const code = err?.code ?? '';
         if (

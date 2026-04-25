@@ -76,7 +76,7 @@ export default function OnboardPage() {
     else if (profile?.profileComplete) router.replace('/feed');
   }, [user, profile, loading, router]);
 
-  if (!user || !profile) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
@@ -84,12 +84,17 @@ export default function OnboardPage() {
     );
   }
 
+  // Profile may not have been seeded yet (RTDB latency / first-time sign-in).
+  // Fall back to Google profile data so the form is usable immediately.
+  const displayFirst = profile?.firstName || profile?.fullName?.split(' ')[0]
+    || user.displayName?.split(' ')[0] || 'there';
+
   return (
     <div className="min-h-screen flex items-start md:items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="flex justify-center mb-3"><BrandMark size={72} /></div>
-          <h1 className="text-2xl font-extrabold text-ink">Welcome, {profile.firstName || profile.fullName.split(' ')[0]}!</h1>
+          <h1 className="text-2xl font-extrabold text-ink">Welcome, {displayFirst}!</h1>
           <p className="mt-1 text-sm text-muted">Just a few details to finish setting up your profile.</p>
         </div>
 
