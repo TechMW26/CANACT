@@ -57,7 +57,7 @@ input[type="time"]::-webkit-date-and-time-value {
 /* Unified column width used by header pill, page content, and bottom nav so
    the entire app feels visually centered with consistent edge gutters. */
 .canact-col {
-  width: 98vw;
+  width: 96vw;
   max-width: 480px;
   margin-left: auto;
   margin-right: auto;
