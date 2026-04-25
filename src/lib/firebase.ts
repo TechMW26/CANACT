@@ -19,9 +19,23 @@ const config = {
 
 export const firebaseApp: FirebaseApp = getApps().length ? getApp() : initializeApp(config);
 export const db: Database = getDatabase(firebaseApp);
-export const auth: Auth = getAuth(firebaseApp);
-auth.useDeviceLanguage();
 
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+// Auth is lazy — getAuth() throws synchronously at module import time on the
+// server (during Next.js prerender) when NEXT_PUBLIC_FIREBASE_API_KEY is
+// missing. Only initialize it in the browser.
+let _auth: Auth | null = null;
+export function getFirebaseAuth(): Auth {
+  if (_auth) return _auth;
+  _auth = getAuth(firebaseApp);
+  try { _auth.useDeviceLanguage(); } catch {}
+  return _auth;
+}
+
+let _googleProvider: GoogleAuthProvider | null = null;
+export function getGoogleProvider(): GoogleAuthProvider {
+  if (_googleProvider) return _googleProvider;
+  _googleProvider = new GoogleAuthProvider();
+  _googleProvider.setCustomParameters({ prompt: 'select_account' });
+  return _googleProvider;
+}
 

@@ -1,7 +1,6 @@
 'use client';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
@@ -11,7 +10,7 @@ import {
   type User as FbUser,
 } from 'firebase/auth';
 import { onValue, ref, update, get, remove, set } from 'firebase/database';
-import { auth, db, googleProvider } from './firebase';
+import { db, getFirebaseAuth, getGoogleProvider } from './firebase';
 import { UserProfile } from './types';
 
 interface SessionUser {
@@ -104,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let unsub: (() => void) | undefined;
     (async () => {
+      const auth = getFirebaseAuth();
       try {
         const r = await getRedirectResult(auth);
         if (r?.user) await seedProfileIfMissing(r.user);
@@ -145,9 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     signInWithGoogle: async () => {
-      // Try popup first (best UX on desktop). Fall back to redirect on mobile
-      // or when popups are blocked / not supported.
-      const provider = googleProvider ?? new GoogleAuthProvider();
+      const auth = getFirebaseAuth();
+      const provider = getGoogleProvider();
       if (isMobile()) {
         await signInWithRedirect(auth, provider);
         return;
@@ -170,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     signOut: async () => {
-      await fbSignOut(auth);
+      await fbSignOut(getFirebaseAuth());
       setUser(null);
       setProfile(null);
     },
@@ -187,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await update(ref(db, `users/${user.uid}`), cleaned);
     },
     deleteAccount: async () => {
+      const auth = getFirebaseAuth();
       const u = auth.currentUser;
       if (!u) throw new Error('Not signed in');
       await remove(ref(db, `users/${u.uid}`));
