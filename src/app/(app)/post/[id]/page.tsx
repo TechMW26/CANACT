@@ -13,6 +13,7 @@ import { timeAgo } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/Toaster';
 import { Smile, Heart, PartyPopper, Frown, Angry, Send } from '@/components/icons';
+import { MediaSlider } from '@/components/MediaSlider';
 import type { LucideIcon } from 'lucide-react';
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon }[] = [
@@ -50,12 +51,7 @@ export default function PostDetail() {
         </div>
         {post.text && <p className="mt-3 whitespace-pre-wrap">{post.text}</p>}
         {post.mediaUrls?.length ? (
-          <div className="mt-3 space-y-2">
-            {post.mediaUrls.map((u, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={u} alt="" className="w-full rounded-xl" />
-            ))}
-          </div>
+          <div className="mt-3"><MediaSlider urls={post.mediaUrls} /></div>
         ) : null}
         <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
           {REACTIONS.map(({ id, Icon }) => (

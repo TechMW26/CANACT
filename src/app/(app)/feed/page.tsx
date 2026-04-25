@@ -19,6 +19,7 @@ import { toast } from '@/components/Toaster';
 import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
+import { MediaSlider } from '@/components/MediaSlider';
 import { Sheet } from '@/components/Sheet';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -239,20 +240,7 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
       <Link href={`/post/${post.id}`}>
         {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
         {post.mediaUrls?.length ? (
-          post.mediaUrls.length === 1 ? (
-            isVideoUrl(post.mediaUrls[0]) ? (
-              <VideoPreview
-                src={post.mediaUrls[0]}
-                className="mt-3 w-full aspect-[4/5] rounded-[24px]"
-                fit="cover"
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.mediaUrls[0]} alt="" className="mt-3 w-full aspect-[4/5] object-cover rounded-[24px] bg-brand-light" />
-            )
-          ) : (
-            <MediaSlider urls={post.mediaUrls} />
-          )
+          <div className="mt-3"><MediaSlider urls={post.mediaUrls} /></div>
         ) : null}
       </Link>
       <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
@@ -333,45 +321,6 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
         </Button>
       </div>
     </article>
-  );
-}
-
-function MediaSlider({ urls }: { urls: string[] }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [idx, setIdx] = useState(0);
-  function onScroll() {
-    const el = ref.current;
-    if (!el) return;
-    const w = el.clientWidth || 1;
-    setIdx(Math.round(el.scrollLeft / w));
-  }
-  return (
-    <div className="relative mt-3">
-      <div
-        ref={ref}
-        onScroll={onScroll}
-        className="flex w-full snap-x snap-mandatory overflow-x-auto rounded-[24px] no-scrollbar"
-      >
-        {urls.map((u, i) => (
-          <div key={i} className="relative w-full shrink-0 snap-center">
-            {isVideoUrl(u) ? (
-              <VideoPreview src={u} className="aspect-[4/5] w-full" fit="cover" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={u} alt="" className="aspect-[4/5] w-full object-cover bg-brand-light" />
-            )}
-          </div>
-        ))}
-      </div>
-      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white">
-        {idx + 1}/{urls.length}
-      </span>
-      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1">
-        {urls.map((_, i) => (
-          <span key={i} className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/55'}`} />
-        ))}
-      </div>
-    </div>
   );
 }
 
