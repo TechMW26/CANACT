@@ -218,7 +218,7 @@ export function StoryViewer({
                 onClick={(e) => { e.stopPropagation(); setVidMuted((m) => !m); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={vidMuted ? 'Unmute' : 'Mute'}
-                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur z-10"
+                className="absolute right-3 top-3 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
               >
                 {vidMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
@@ -249,17 +249,17 @@ export function StoryViewer({
             </div>
           ))}
 
-          {/* Tap zones */}
+          {/* Tap zones — inset top so they don't sit over the mute / close controls */}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
-            className="absolute inset-y-0 left-0 z-10 w-1/3"
+            className="absolute bottom-0 left-0 top-16 z-10 w-1/3"
             aria-label="Previous"
           />
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); goNext(); }}
-            className="absolute inset-y-0 right-0 z-10 w-1/3"
+            className="absolute bottom-0 right-0 top-16 z-10 w-1/3"
             aria-label="Next"
           />
 

@@ -9,7 +9,7 @@ import type { ChatAttachment } from '@/lib/types';
  * In-chat preview card for shared posts/reels. Renders a compact bubble that
  * navigates to the underlying post/reel when tapped.
  */
-export function ChatAttachmentCard({ attachment, mine }: { attachment: ChatAttachment; mine: boolean }) {
+export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment; mine?: boolean }) {
   const [thumb, setThumb] = useState<string | undefined>(attachment.thumbUrl);
   const [text, setText] = useState<string | undefined>(
     attachment.kind === 'post' ? attachment.text : attachment.caption,
@@ -47,22 +47,26 @@ export function ChatAttachmentCard({ attachment, mine }: { attachment: ChatAttac
   return (
     <Link
       href={href}
-      className={`block w-60 overflow-hidden rounded-2xl border ${mine ? 'border-white/30 bg-white/10' : 'border-line bg-white'}`}
+      prefetch
+      className="block w-64 overflow-hidden rounded-2xl border border-line bg-white text-ink shadow-[0_8px_22px_-12px_rgba(10,10,10,0.18)]"
     >
-      <div className="relative aspect-[4/5] bg-black/10">
+      <div className="relative aspect-[4/5] bg-brand-light/40">
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumb} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-ink/50">{label}</div>
         )}
-        <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">
+        <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white shadow">
           {label}
         </span>
       </div>
-      <div className={`px-3 py-2 text-xs ${mine ? 'text-white' : 'text-ink'}`}>
-        {author && <div className="font-extrabold truncate">{author}</div>}
-        {text && <div className={`mt-0.5 line-clamp-2 ${mine ? 'text-white/85' : 'text-ink/70'}`}>{text}</div>}
+      <div className="px-3 py-2.5">
+        {author && <div className="truncate text-sm font-extrabold text-ink">{author}</div>}
+        {text && <div className="mt-0.5 line-clamp-2 text-xs leading-snug text-ink/70">{text}</div>}
+        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand-light px-2.5 py-1 text-[11px] font-bold text-brand">
+          Open {label.toLowerCase()} →
+        </div>
       </div>
     </Link>
   );

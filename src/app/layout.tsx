@@ -23,14 +23,14 @@ export const metadata: Metadata = {
   },
 };
 export const viewport: Viewport = {
-  width: 'device-width', initialScale: 1, maximumScale: 1, viewportFit: 'cover',
+  width: 'device-width', initialScale: 1, maximumScale: 1, minimumScale: 1, userScalable: false, viewportFit: 'cover',
   themeColor: '#FFF8F8',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-candy text-ink antialiased">
+      <body className="min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-candy text-ink antialiased">
         <AuthProvider>
           <div className="mx-auto max-w-screen-md md:max-w-screen-lg">
             {children}

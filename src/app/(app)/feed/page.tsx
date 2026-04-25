@@ -16,11 +16,13 @@ import { listenReels } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal, Send } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
 import { MediaSlider } from '@/components/MediaSlider';
 import { Sheet } from '@/components/Sheet';
+import { ShareToChatSheet } from '@/components/ShareToChatSheet';
+import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import type { LucideIcon } from 'lucide-react';
@@ -55,6 +57,7 @@ export default function FeedPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [loaded, setLoaded] = useState({ wha: false, polls: false, rms: false, reels: false, stories: false });
+  const [shareAttachment, setShareAttachment] = useState<ChatAttachment | null>(null);
   useEffect(() => listenWhaFeed((v) => { setWha(v); setLoaded((s) => ({ ...s, wha: true })); }), []);
   useEffect(() => listenPollFeed((v) => { setPolls(v); setLoaded((s) => ({ ...s, polls: true })); }), []);
   useEffect(() => listenActiveRateMe((v) => { setRms(v); setLoaded((s) => ({ ...s, rms: true })); }), []);
@@ -171,11 +174,11 @@ export default function FeedPage() {
 
         <div className="space-y-6">
           {items.map((it) => it.kind === 'wha' ? (
-            <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} />
+            <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} onShare={setShareAttachment} />
           ) : it.kind === 'poll' ? (
             <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
           ) : it.kind === 'reel' ? (
-            <ReelCard key={`reel_${it.data.id}`} reel={it.data} />
+            <ReelCard key={`reel_${it.data.id}`} reel={it.data} onShare={setShareAttachment} />
           ) : (
             <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
           ))}
@@ -213,6 +216,12 @@ export default function FeedPage() {
           </div>
         </Sheet>
       )}
+
+      <ShareToChatSheet
+        open={!!shareAttachment}
+        onClose={() => setShareAttachment(null)}
+        attachment={shareAttachment}
+      />
     </div>
     </SkeletonTheme>
   );
@@ -226,7 +235,7 @@ function withinRadius(it: FeedItem, c: { lat: number; lng: number } | null, r: n
   return haversineMeters(c, { lat: d.lat, lng: d.lng }) <= r;
 }
 
-function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
+function WhaCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void }) {
   const myReact = post.reactionVoters?.[myUid];
   return (
     <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
@@ -237,7 +246,7 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
           <span className="text-xs text-muted">{timeAgo(post.createdAt)} • What's Happening</span>
         </div>
       </div>
-      <Link href={`/post/${post.id}`}>
+      <Link href={`/post/${post.id}`} prefetch>
         {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
         {post.mediaUrls?.length ? (
           <div className="mt-3"><MediaSlider urls={post.mediaUrls} /></div>
@@ -250,9 +259,13 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
             <Icon size={14} /> {post.reactions?.[id] ?? 0}
           </button>
         ))}
-        <Link href={`/post/${post.id}`} className="ml-auto rounded-full px-3 h-8 text-xs font-semibold border border-line bg-white inline-flex items-center gap-1">
+        <Link href={`/post/${post.id}`} prefetch className="ml-auto rounded-full px-3 h-8 text-xs font-semibold border border-line bg-white inline-flex items-center gap-1">
           <MessageCircle size={14} /> {post.commentCount ?? 0}
         </Link>
+        <button onClick={() => onShare({ kind: 'post', postId: post.id })} aria-label="Share"
+          className="rounded-full px-3 h-8 text-xs font-semibold border border-line bg-white inline-flex items-center gap-1">
+          <Send size={14} />
+        </button>
       </div>
     </article>
   );
@@ -324,7 +337,7 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   );
 }
 
-function ReelCard({ reel }: { reel: ReelItem }) {
+function ReelCard({ reel, onShare }: { reel: ReelItem; onShare: (a: ChatAttachment) => void }) {
   const likeCount = reel.likes ? Object.keys(reel.likes).length : 0;
   return (
     <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
@@ -340,7 +353,7 @@ function ReelCard({ reel }: { reel: ReelItem }) {
         </div>
       </div>
       {reel.caption ? <p className="mt-2 whitespace-pre-wrap">{reel.caption}</p> : null}
-      <Link href={`/reel/${reel.id}`} className="mt-3 block">
+      <Link href={`/reel/${reel.id}`} prefetch className="mt-3 block">
         <VideoPreview
           src={reel.videoUrl}
           className="aspect-[9/16] w-full rounded-[24px]"
@@ -353,10 +366,15 @@ function ReelCard({ reel }: { reel: ReelItem }) {
         </span>
         <Link
           href={`/reel/${reel.id}`}
+          prefetch
           className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75"
         >
           Watch in Reels
         </Link>
+        <button onClick={() => onShare({ kind: 'reel', reelId: reel.id })} aria-label="Share"
+          className="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75">
+          <Send size={14} />
+        </button>
       </div>
     </article>
   );
