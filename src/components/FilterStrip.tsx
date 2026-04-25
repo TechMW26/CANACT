@@ -17,8 +17,8 @@ export function FilterStrip({
   className?: string;
 }) {
   return (
-    <div className={`-mx-2 overflow-x-auto no-scrollbar ${className ?? ''}`}>
-      <div className="flex w-max gap-2 px-2">
+    <div className={`-mx-2 overflow-x-auto overflow-y-visible no-scrollbar ${className ?? ''}`}>
+      <div className="flex w-max gap-2 px-2 py-3">
         {MEDIA_FILTERS.map((f) => {
           const active = selected === f.id;
           return (

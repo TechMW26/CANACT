@@ -181,7 +181,7 @@ function ReelTile({
       {/* Soft bottom fade — no hard line */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
 
-      <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-4 pb-28">
+      <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-4 pb-8 safe-bottom">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Avatar src={reel.authorPhoto ?? null} name={reel.authorName} size={36} />

@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/auth';
 import { createReel } from '@/lib/services/reels';
 import { uploadMedia } from '@/lib/uploadMedia';
 import type { MusicTrack } from '@/lib/musicLibrary';
-import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
+import { filterCss, MEDIA_FILTERS, type MediaFilterId } from '@/lib/mediaFilters';
 
 const MAX_DURATION = 60;
 
@@ -154,6 +154,25 @@ export default function ReelCreatePage() {
       if (v.paused) v.play().catch(() => undefined);
       else v.pause();
     };
+    const cycleFilter = (dir: 1 | -1) => {
+      const ids = MEDIA_FILTERS.map((f) => f.id);
+      const i = ids.indexOf(filter);
+      const next = ids[(i + dir + ids.length) % ids.length];
+      setFilter(next);
+    };
+    let touchX = 0;
+    let touchY = 0;
+    const onTouchStart = (e: React.TouchEvent) => {
+      touchX = e.touches[0].clientX;
+      touchY = e.touches[0].clientY;
+    };
+    const onTouchEnd = (e: React.TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchX;
+      const dy = e.changedTouches[0].clientY - touchY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        cycleFilter(dx < 0 ? 1 : -1);
+      }
+    };
     const ui = (
       <div className="fixed inset-0 z-[100] bg-black text-white">
         <video
@@ -164,6 +183,8 @@ export default function ReelCreatePage() {
           playsInline
           muted={muted}
           onClick={togglePlay}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
           className="absolute inset-0 h-full w-full object-contain"
           style={{ filter: filterCss(filter) }}
         />
