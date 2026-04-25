@@ -318,7 +318,7 @@ function ReelCard({ reel }: { reel: ReelItem }) {
         </div>
       </div>
       {reel.caption ? <p className="mt-2 whitespace-pre-wrap">{reel.caption}</p> : null}
-      <Link href="/reels" className="mt-3 block">
+      <Link href={`/reel/${reel.id}`} className="mt-3 block">
         <VideoPreview
           src={reel.videoUrl}
           className="aspect-[9/16] w-full rounded-[24px]"
@@ -330,7 +330,7 @@ function ReelCard({ reel }: { reel: ReelItem }) {
           <Heart size={14} /> {likeCount}
         </span>
         <Link
-          href="/reels"
+          href={`/reel/${reel.id}`}
           className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75"
         >
           Watch in Reels

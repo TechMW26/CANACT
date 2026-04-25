@@ -210,6 +210,7 @@ export interface ReelItem {
   music?: { id: string; title: string; artist: string; url: string };
   likes?: Record<string, number>;
   views?: number;
+  commentCount?: number;
   createdAt: number;
 }
 

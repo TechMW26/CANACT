@@ -67,3 +67,18 @@ export async function deleteReel(reelId: string, uid: string) {
   await remove(ref(db, `reels/${reelId}`));
   await remove(ref(db, `userReels/${uid}/${reelId}`));
 }
+
+export async function addReelComment(reelId: string, uid: string, name: string, photoURL: string | undefined, text: string) {
+  const node = push(ref(db, `reelComments/${reelId}`));
+  await set(node, stripUndef({ id: node.key, uid, name, photoURL, text, createdAt: Date.now() }));
+  await runTransaction(ref(db, `reels/${reelId}/commentCount`), (c: number) => (c ?? 0) + 1);
+}
+
+export function listenReelComments(reelId: string, cb: (items: any[]) => void) {
+  return onValue(ref(db, `reelComments/${reelId}`), (snap) => {
+    const out: any[] = [];
+    snap.forEach((c) => { out.push(c.val()); });
+    out.sort((a, b) => a.createdAt - b.createdAt);
+    cb(out);
+  });
+}
