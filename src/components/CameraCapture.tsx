@@ -171,10 +171,31 @@ export function CameraCapture({
             className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? 'scale-x-[-1]' : ''}`}
           />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#1a0d10] via-black to-[#1a0d10] px-8 text-center">
-            <Film size={42} className="opacity-80" />
-            <div className="text-base font-bold">Record with your camera</div>
-            <div className="text-xs text-white/70">Tap the shutter to open your phone&rsquo;s camera. Up to {maxVideoSec}s.</div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-7 bg-gradient-to-b from-[#1a0d10] via-black to-[#1a0d10] px-6 text-center safe-top safe-bottom">
+            <div className="space-y-2">
+              <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-brand/20 ring-1 ring-brand/40">
+                <Film size={36} />
+              </div>
+              <h2 className="text-xl font-extrabold">Add a video</h2>
+              <p className="text-sm text-white/65">Up to {maxVideoSec}s. We&rsquo;ll let you trim, filter and add music after.</p>
+            </div>
+
+            <div className="flex w-full max-w-sm flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => nativeVideoRef.current?.click()}
+                className="flex items-center justify-center gap-3 rounded-2xl bg-brand px-5 py-4 text-base font-bold shadow-[0_18px_36px_-18px_rgba(200,16,46,0.55)] active:scale-[0.98] transition"
+              >
+                <Aperture size={20} /> Record with camera
+              </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center justify-center gap-3 rounded-2xl bg-white/10 px-5 py-4 text-base font-bold backdrop-blur ring-1 ring-white/20 active:scale-[0.98] transition"
+              >
+                <ImageIcon size={20} /> Choose from gallery
+              </button>
+            </div>
           </div>
         )}
         {!ready && !error && mode === 'photo' && (
@@ -182,7 +203,7 @@ export function CameraCapture({
             Starting camera…
           </div>
         )}
-        {error && (
+        {error && mode === 'photo' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center">
             <div className="text-sm text-white/85">{error}</div>
             <button
@@ -195,8 +216,12 @@ export function CameraCapture({
           </div>
         )}
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/55 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-black/65 to-transparent" />
+        {mode === 'photo' && (
+          <>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/55 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-black/65 to-transparent" />
+          </>
+        )}
 
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-4 safe-top">
           <button
@@ -207,17 +232,21 @@ export function CameraCapture({
           >
             <X size={20} />
           </button>
-          <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
-            {`${facing === 'user' ? 'Front' : 'Back'}${multiple && mode === 'photo' ? ` · ${shots.length}/${maxPhotos}` : ''}`}
-          </span>
-          <button
-            type="button"
-            onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
-            aria-label="Switch camera"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-40"
-          >
-            <SwitchCamera size={18} />
-          </button>
+          {mode === 'photo' ? (
+            <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
+              {`${facing === 'user' ? 'Front' : 'Back'}${multiple ? ` · ${shots.length}/${maxPhotos}` : ''}`}
+            </span>
+          ) : <span />}
+          {mode === 'photo' ? (
+            <button
+              type="button"
+              onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
+              aria-label="Switch camera"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-40"
+            >
+              <SwitchCamera size={18} />
+            </button>
+          ) : <span className="h-10 w-10" />}
         </div>
 
         {allowVideo && (
@@ -237,43 +266,41 @@ export function CameraCapture({
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between px-8 pb-8 safe-bottom">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            aria-label="Pick from gallery"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur disabled:opacity-40"
-          >
-            <ImageIcon size={20} />
-          </button>
-
-          <button
-            type="button"
-            onClick={onShutter}
-            disabled={mode === 'photo' && !ready}
-            aria-label={mode === 'video' ? 'Open camera to record' : 'Capture photo'}
-            className="relative inline-flex h-20 w-20 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-50"
-          >
-            <span className="absolute inset-2 rounded-full border-[3px] border-white/85" />
-            {mode === 'photo' ? (
-              <span className="absolute inset-[14px] rounded-full bg-white" />
-            ) : (
-              <span className="absolute inset-[14px] rounded-full bg-brand" />
-            )}
-          </button>
-
-          {multiple && mode === 'photo' && shots.length > 0 ? (
+        {mode === 'photo' && (
+          <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between px-8 pb-8 safe-bottom">
             <button
               type="button"
-              onClick={() => onCapture(shots)}
-              className="rounded-full bg-brand px-4 py-3 text-sm font-bold"
+              onClick={() => fileRef.current?.click()}
+              aria-label="Pick from gallery"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur disabled:opacity-40"
             >
-              Done · {shots.length}
+              <ImageIcon size={20} />
             </button>
-          ) : (
-            <span className="h-12 w-12" />
-          )}
-        </div>
+
+            <button
+              type="button"
+              onClick={onShutter}
+              disabled={!ready}
+              aria-label="Capture photo"
+              className="relative inline-flex h-20 w-20 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-50"
+            >
+              <span className="absolute inset-2 rounded-full border-[3px] border-white/85" />
+              <span className="absolute inset-[14px] rounded-full bg-white" />
+            </button>
+
+            {multiple && shots.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onCapture(shots)}
+                className="rounded-full bg-brand px-4 py-3 text-sm font-bold"
+              >
+                Done · {shots.length}
+              </button>
+            ) : (
+              <span className="h-12 w-12" />
+            )}
+          </div>
+        )}
 
         {multiple && mode === 'photo' && shots.length > 0 && (
           <div className="absolute bottom-44 left-0 right-0 z-10 flex gap-2 overflow-x-auto px-6 pb-2 no-scrollbar">
