@@ -1,6 +1,7 @@
 import { onValue, ref, set, update, push, get, query, orderByChild, runTransaction, remove } from 'firebase/database';
 import { db } from '../firebase';
 import type { ChatAttachment, ChatMessage, ChatThread } from '../types';
+import { sendPush } from './sendPush';
 
 function threadIdFor(a: string, b: string) {
   return [a, b].sort().join('__');
@@ -80,6 +81,20 @@ export async function sendChatMessage(
     lastMessageText: previewText,
   });
   await runTransaction(ref(db, `chatThreads/${threadId}/unread/${toUid}`), (n: number) => (n ?? 0) + 1);
+
+  // Best-effort web push to the recipient. Body is sanitized server-side and
+  // emojis stripped per product policy.
+  const threadSnap = await get(ref(db, `chatThreads/${threadId}`));
+  const thread = threadSnap.val() as ChatThread | null;
+  const fromName = thread?.participants?.[fromUid]?.name || 'Someone';
+  sendPush({
+    toUid,
+    title: `New message from ${fromName}`,
+    body: previewText,
+    url: `/inbox/${fromUid}`,
+    tag: `chat:${threadId}`,
+  });
+
   return msg;
 }
 

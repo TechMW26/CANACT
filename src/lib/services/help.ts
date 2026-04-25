@@ -2,6 +2,7 @@ import { onValue, push, ref, set, update, get, remove, query, orderByChild, runT
 import { db } from '../firebase';
 import { HelpRequest, HelpStatus } from '../types';
 import { pushNotification } from './notifications';
+import { sendPush } from './sendPush';
 
 /** Recursively drop undefined fields — Firebase RTDB rejects them. */
 function stripUndefined<T>(value: T): T {
@@ -58,6 +59,13 @@ export async function acceptHelp(id: string, helper: { uid: string; name: string
   await update(ref(db, `help/${id}/acceptedBy/${helper.uid}`), { name: helper.name, photoURL: helper.photoURL ?? null, at: Date.now() });
   await update(ref(db, `help/${id}`), { status: 'inProcess' });
   await pushNotification(help.uid, { kind: 'help', title: `${helper.name} accepted your help`, body: help.text.slice(0, 80), data: { helpId: id } });
+  sendPush({
+    toUid: help.uid,
+    title: `${helper.name} accepted your help`,
+    body: help.text.slice(0, 120),
+    url: `/help/${id}`,
+    tag: `help:${id}`,
+  });
 }
 export async function cancelHelpAccept(id: string, helperUid: string) {
   await remove(ref(db, `help/${id}/acceptedBy/${helperUid}`));

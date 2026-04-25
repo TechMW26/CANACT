@@ -4,6 +4,7 @@ import {
 import { db } from '../firebase';
 import type { PresenceEntry, Encounter, PendingRating, UserProfile } from '../types';
 import { haversineMeters } from '../utils';
+import { sendPush } from './sendPush';
 
 /* Tunable thresholds — chosen for accurate "they were really together" detection. */
 export const VICINITY = {
@@ -17,12 +18,17 @@ export const VICINITY = {
   MIN_DURATION_MS: 45_000,
   /** Encounter must have at least this many in-vicinity samples to qualify. */
   MIN_SAMPLES: 3,
-  /** No fresh sighting for this long → considered departed. */
-  DEPART_GAP_MS: 90_000,
+  /** No fresh sighting for this long → considered departed. Must be at least
+   *  10 minutes so the rating prompt only appears after a real separation,
+   *  not transient GPS jitter. */
+  DEPART_GAP_MS: 10 * 60_000,
   /** Presence entries older than this are ignored as stale. */
   PRESENCE_STALE_MS: 90_000,
   /** How often (ms) we write our own presence + scan for nearby users. */
   TICK_MS: 20_000,
+  /** Cooldown after I rate or dismiss a person — don't ask again for them
+   *  during this window even if we re-encounter. */
+  RATING_COOLDOWN_MS: 24 * 60 * 60_000,
 };
 
 export function pairKeyOf(a: string, b: string) {
@@ -99,6 +105,14 @@ async function maybeFinalizeDeparted(myUid: string) {
     if (!stale) continue;
     if (enc.qualified) {
       const otherUid = enc.a === myUid ? enc.b : enc.a;
+      // Skip if I already rated/dismissed this person within the cooldown.
+      const ratedSnap = await get(ref(db, `ratedPairs/${myUid}/${otherUid}`));
+      const rated = ratedSnap.val() as { at: number } | null;
+      if (rated && (now - (rated.at ?? 0)) < VICINITY.RATING_COOLDOWN_MS) {
+        // Mark this encounter as handled to prevent re-prompts within cooldown.
+        await remove(ref(db, `encounters/${key}`));
+        continue;
+      }
       const meta = (enc as any).meta ?? {};
       const otherName = meta[`${otherUid}_name`] ?? 'Someone nearby';
       const otherPhoto = meta[`${otherUid}_photo`] ?? undefined;
@@ -112,6 +126,17 @@ async function maybeFinalizeDeparted(myUid: string) {
         durationMs: Math.max(0, enc.lastSeen - enc.startedAt),
       };
       await set(ref(db, `pendingRatings/${myUid}/${key}`), pending);
+      // Notify the rater that there is someone waiting to be rated.
+      sendPush({
+        toUid: myUid,
+        title: 'Rate your recent meet',
+        body: `How was your interaction with ${otherName}?`,
+        url: '/feed',
+        tag: `rate:${key}`,
+      });
+      // Clear the encounter so a fresh one will be created if we meet again later.
+      await remove(ref(db, `encounters/${key}`));
+      continue;
     }
     // Only the user whose tick discovers it removes the encounter when *both* sides are stale.
     // Heuristic: if the gap is well past the threshold, just remove.
@@ -232,7 +257,13 @@ export function listenPendingRatings(uid: string, cb: (list: PendingRating[]) =>
 }
 
 export async function dismissPendingRating(uid: string, pairKey: string) {
+  // Extract the other uid from the deterministic pair key so we can record
+  // the cooldown marker against this specific person.
+  const otherUid = pairKey.split('__').find((p) => p !== uid);
   await remove(ref(db, `pendingRatings/${uid}/${pairKey}`));
+  if (otherUid) {
+    await set(ref(db, `ratedPairs/${uid}/${otherUid}`), { at: Date.now(), dismissed: true });
+  }
 }
 
 /**
@@ -258,5 +289,7 @@ export async function submitProximityRating(fromUid: string, toUid: string, pair
       return u;
     });
   }
-  await dismissPendingRating(fromUid, pairKey);
+  // Record cooldown marker so we don't re-prompt for the same person.
+  await set(ref(db, `ratedPairs/${fromUid}/${toUid}`), { at: Date.now(), stars: s });
+  await remove(ref(db, `pendingRatings/${fromUid}/${pairKey}`));
 }
