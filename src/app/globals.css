@@ -22,71 +22,21 @@ input, textarea, select { background: #fff; }
 /* utility focus ring in brand red */
 .focus-ring:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
 
-/* ---------- Liquid candy page transition ---------- */
-/* The two SVG <path> blobs translate from below the viewport up & off-screen,
-   the goo filter glues them into a single liquid sheet.
-   `in` = sweep up to cover; `out` = continue up to reveal new content. */
-
-/* Overlay container — fixed-size GPU layer, no filters. */
-.canact-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  pointer-events: none;
-  overflow: hidden;
-  contain: layout paint size;
-}
-
-/* Each SVG blob is absolutely sized to fill the overlay. We only ever
-   animate translate3d on the parent wrapper, never on the SVG itself. */
-.canact-blob {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.canact-blob.b { opacity: 0.92; }
-
-/* The wrapper that actually moves. Single transform-only animation that
-   stays on the GPU; iOS Safari handles this at 60fps even on old devices. */
-.canact-blob-in,
-.canact-blob-out {
-  position: absolute;
-  inset: 0;
-  transform: translate3d(0, 110%, 0);
-  will-change: transform;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  -webkit-transform-style: preserve-3d;
-  transform-style: preserve-3d;
-}
-.canact-blob-in  { animation: canactSweepIn  300ms cubic-bezier(.22,.85,.3,1) forwards; }
-.canact-blob-out { animation: canactSweepOut 360ms cubic-bezier(.55,.05,.3,1) forwards; }
-
-@keyframes canactSweepIn {
-  from { transform: translate3d(0, 110%, 0); }
-  to   { transform: translate3d(0, 0,    0); }
-}
-@keyframes canactSweepOut {
-  from { transform: translate3d(0, 0,     0); }
-  to   { transform: translate3d(0, -110%, 0); }
-}
-
-/* Page enter — opacity + tiny translate only. No filter, no scale. */
-.canact-page-enter {
-  animation: canactPageEnter 280ms cubic-bezier(.22,.85,.3,1) both;
+/* ---------- Page entrance: subtle staggered fade-in ---------- */
+/* Pure transform + opacity, GPU-only — smooth on every device, including
+   iOS Safari. Each direct child of <PageTransition> gets a cascading delay. */
+.canact-fade-in {
+  opacity: 0;
+  animation: canactFadeIn 360ms cubic-bezier(.22,.85,.3,1) forwards;
   will-change: transform, opacity;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
-@keyframes canactPageEnter {
-  0%   { opacity: 0; transform: translate3d(0, 10px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0,    0); }
+@keyframes canactFadeIn {
+  0%   { opacity: 0; transform: translate3d(0, 8px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0,   0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .canact-page-enter,
-  .canact-blob-in,
-  .canact-blob-out { animation: none !important; }
+  .canact-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
