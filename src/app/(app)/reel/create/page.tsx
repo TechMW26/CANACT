@@ -24,6 +24,7 @@ import {
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
 import { createReel } from '@/lib/services/reels';
+import { uploadMedia } from '@/lib/uploadMedia';
 import type { MusicTrack } from '@/lib/musicLibrary';
 import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
@@ -364,11 +365,14 @@ export default function ReelCreatePage() {
             if (!videoUrl) return toast('Record or upload a video first', 'error');
             setBusy(true);
             try {
+              // Process the recorded/picked video on-device, then upload the
+              // final blob to Vercel Blob. Only the public URL is stored in RTDB.
+              const { url: hostedUrl } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
               await createReel({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
-                videoUrl,
+                videoUrl: hostedUrl,
                 caption: caption.trim() || undefined,
                 filter: filter === 'none' ? undefined : filter,
                 music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url } : undefined,

@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Avatar } from './Avatar';
 import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
 import { PlusSheet } from './PlusSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
+import { Select } from './Input';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -38,10 +40,17 @@ const SIDE_LINKS = [
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <DistanceProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </DistanceProvider>
+  );
+}
+
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, loading } = useAuth();
-  const hideHeader = pathname?.startsWith('/feed');
   const [plusOpen, setPlusOpen] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
 
@@ -94,25 +103,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 md:pl-2">
-        {/* Floating glass top bar */}
-        <header className={`sticky top-0 z-30 px-3 pt-3 md:pt-4 safe-top ${hideHeader ? 'hidden' : ''}`}>
-          <div className="flex items-center gap-1 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
-            <Link href="/feed" className="flex-1 inline-flex items-center gap-2 min-w-0">
-              <span className="md:hidden"><Brand size={26} /></span>
-              <span className="hidden md:inline text-lg font-bold text-ink truncate">{titleFor(pathname)}</span>
-            </Link>
-            <Link href="/search" aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-              <Search size={16} strokeWidth={2.2} />
-            </Link>
-            <Link href="/inbox" aria-label="Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-              <MessageSquare size={16} strokeWidth={2.2} />
-            </Link>
-            <Link href="/notifications" aria-label="Notifications" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-              <Bell size={16} strokeWidth={2.2} />
-            </Link>
-          </div>
-        </header>
-        <div className={hideHeader ? 'p-0 md:p-0' : 'p-4 md:p-6'}><PageTransition>{children}</PageTransition></div>
+        <UnifiedHeader />
+        <div className="px-4 pb-4 md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
       </main>
 
@@ -178,4 +170,35 @@ function titleFor(path: string | null) {
   if (path.startsWith('/settings')) return 'Settings';
   if (path.startsWith('/edit-profile')) return 'Edit profile';
   return '';
+}
+
+function UnifiedHeader() {
+  const { radiusIdx, setRadiusIdx } = useDistance();
+  return (
+    <header
+      className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6 md:pt-4 bg-[linear-gradient(180deg,#FFD8DD_0%,#FFE8EC_55%,rgba(255,248,248,0)_100%)]"
+    >
+      <div className="flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+        <Brand size={26} href="/feed" />
+        <div className="ml-auto inline-flex items-center gap-2">
+          <Select
+            aria-label="Feed distance filter"
+            value={String(radiusIdx)}
+            onChange={(e) => setRadiusIdx(Number(e.target.value))}
+            className="h-8 w-auto min-w-[78px] rounded-full border border-[#F1D7DC] bg-brand-light px-2 text-center text-[11px] font-bold text-brand shadow-none [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
+          >
+            {RADIUS_OPTIONS.map((option) => (
+              <option key={option.index} value={option.index}>{option.label}</option>
+            ))}
+          </Select>
+          <Link href="/search" aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+            <Search size={16} strokeWidth={2.2} />
+          </Link>
+          <Link href="/inbox" aria-label="Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+            <MessageSquare size={16} strokeWidth={2.2} />
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
 }

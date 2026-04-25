@@ -10,6 +10,7 @@ import { ArrowLeft, Camera, MapPin, Plus, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { createWhaPost } from '@/lib/services/wha';
+import { uploadMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 
 const MAX_PHOTOS = 10;
@@ -121,12 +122,19 @@ export default function PostCreatePage() {
             if (!text.trim() && shots.length === 0) return toast('Add a photo or caption', 'error');
             setBusy(true);
             try {
+              // Upload each captured shot to Vercel Blob and persist only the
+              // returned public URLs in RTDB (data URLs would blow up the DB).
+              const hostedUrls: string[] = [];
+              for (const s of shots) {
+                const { url } = await uploadMedia(s, { kind: 'post', uid: user.uid });
+                hostedUrls.push(url);
+              }
               await createWhaPost({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
                 text: text.trim(),
-                mediaUrls: shots,
+                mediaUrls: hostedUrls,
                 lat: coords?.lat,
                 lng: coords?.lng,
               });

@@ -9,6 +9,7 @@ import { FilterStrip } from '@/components/FilterStrip';
 import { ArrowLeft, Sparkles } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { upsertStory } from '@/lib/services/stories';
+import { uploadMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
@@ -89,11 +90,12 @@ export default function StoryCreatePage() {
           onClick={async () => {
             setBusy(true);
             try {
+              const { url: hostedUrl } = await uploadMedia(shot, { kind: 'story', uid: user.uid });
               await upsertStory({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
-                mediaUrl: shot,
+                mediaUrl: hostedUrl,
                 caption: videoCaption.trim() || undefined,
                 filter: videoFilter === 'none' ? undefined : videoFilter,
                 overlays: [],
@@ -119,11 +121,12 @@ export default function StoryCreatePage() {
       onCancel={() => setShot(null)}
       onShare={async (overlays, caption, filter) => {
         try {
+          const { url: hostedUrl } = await uploadMedia(shot, { kind: 'story', uid: user.uid });
           await upsertStory({
             uid: user.uid,
             authorName: profile.fullName,
             authorPhoto: profile.photoURL,
-            mediaUrl: shot,
+            mediaUrl: hostedUrl,
             caption,
             filter: filter && filter !== 'none' ? filter : undefined,
             overlays,

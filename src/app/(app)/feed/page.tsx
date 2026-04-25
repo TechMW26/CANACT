@@ -4,19 +4,18 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
+import { useDistance } from '@/lib/distance';
 import { Avatar } from '@/components/Avatar';
-import { Brand } from '@/components/Brand';
 import { Button } from '@/components/Button';
-import { Select } from '@/components/Input';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenWhaFeed, reactWha } from '@/lib/services/wha';
 import { listenPollFeed, votePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
 import { FeedItem, Poll, RateMeSession, StoryItem, WhaPost } from '@/lib/types';
-import { formatDistance, haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
+import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Search, Eye, MessageSquare } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import type { LucideIcon } from 'lucide-react';
 
@@ -28,11 +27,6 @@ const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIc
   { id: 'angry', Icon: Angry,       label: 'Angry' },
 ];
 
-const RADII = [1000, 5000, 10000, 25000, 100000, Infinity];
-const RADIUS_OPTIONS = RADII.map((radius, index) => ({
-  index,
-  label: radius === Infinity ? 'Anywhere' : formatDistance(radius),
-}));
 const FILTERS = [
   { id: 'all', label: 'All' }, { id: 'wha', label: "What's Happening" },
   { id: 'poll', label: 'Polls' }, { id: 'rateme', label: 'Rate Me' },
@@ -41,20 +35,19 @@ const FILTERS = [
 export default function FeedPage() {
   const { user, profile } = useAuth();
   const { coords } = useGeo();
+  const { radius } = useDistance();
   const router = useRouter();
   const [wha, setWha] = useState<WhaPost[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [rms, setRms] = useState<RateMeSession[]>([]);
   const [stories, setStories] = useState<StoryItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme'>('all');
-  const [radiusIdx, setRadiusIdx] = useState(2);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   useEffect(() => listenWhaFeed(setWha), []);
   useEffect(() => listenPollFeed(setPolls), []);
   useEffect(() => listenActiveRateMe(setRms), []);
   useEffect(() => listenActiveStories(setStories), []);
 
-  const radius = RADII[radiusIdx];
   const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
   const orderedStories = useMemo(() => {
     const others = stories.filter((story) => story.uid !== user?.uid);
@@ -81,35 +74,10 @@ export default function FeedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#FFD8DD_0%,#FFE8EC_22%,rgba(255,248,248,0)_60%)] pb-24 md:pb-10">
+    <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6">
-        <div className="flex items-center gap-1 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
-          <Brand size={26} href="/feed" />
-          <div className="ml-auto inline-flex items-center gap-2">
-            <div className="inline-flex items-center gap-1 rounded-full border border-[#F1D7DC] bg-white/90 pl-3 pr-1 py-1 text-xs">
-              <span className="font-semibold text-muted">{coords ? 'Within' : 'Off'}</span>
-              <Select
-                aria-label="Feed distance filter"
-                value={String(radiusIdx)}
-                onChange={(e) => setRadiusIdx(Number(e.target.value))}
-                className="h-7 w-auto min-w-[92px] rounded-full border-0 bg-brand-light px-2 text-center text-[11px] font-bold text-brand shadow-none [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
-              >
-                {RADIUS_OPTIONS.map((option) => (
-                  <option key={option.index} value={option.index}>{option.label}</option>
-                ))}
-              </Select>
-            </div>
-            <Link href="/search" aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-              <Search size={16} strokeWidth={2.2} />
-            </Link>
-            <Link href="/inbox" aria-label="Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-              <MessageSquare size={16} strokeWidth={2.2} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-3 overflow-x-auto no-scrollbar">
+      <section className="px-3 pb-4 md:px-6">
+        <div className="overflow-x-auto no-scrollbar">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
               <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
@@ -143,8 +111,8 @@ export default function FeedPage() {
           </div>
         </div>
 
-        <div className="mt-1 -mx-4 overflow-x-auto no-scrollbar md:-mx-6">
-          <div className="flex w-max gap-2 px-4 md:px-6">
+        <div className="mt-1 -mx-3 overflow-x-auto no-scrollbar md:-mx-6">
+          <div className="flex w-max gap-2 px-3 md:px-6">
             {FILTERS.map((f) => (
               <button key={f.id} onClick={() => setFilter(f.id as any)}
                 className={`whitespace-nowrap shrink-0 rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
