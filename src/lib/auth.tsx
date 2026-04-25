@@ -112,11 +112,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // We never await anything here; routing must not depend on RTDB succeeding.
   useEffect(() => {
     const auth = getFirebaseAuth();
-    // Pick up redirect result (mobile flow). Errors are non-fatal.
-    getRedirectResult(auth).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn('[auth] getRedirectResult failed', err);
-    });
+    // Pick up redirect result (mobile flow). On success, force a hard reload to
+    // '/' so React/Next state can't drift from Firebase state — the / route
+    // then routes to /onboard or /feed based on profileComplete.
+    getRedirectResult(auth)
+      .then((r) => {
+        if (r?.user && typeof window !== 'undefined') {
+          // Replace history so back-button doesn't return to /welcome.
+          window.location.replace('/');
+        }
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[auth] getRedirectResult failed', err);
+      });
     const unsub = onAuthStateChanged(
       auth,
       (u) => {

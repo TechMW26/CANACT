@@ -90,10 +90,10 @@ export default function OnboardPage() {
     || user.displayName?.split(' ')[0] || 'there';
 
   return (
-    <div className="min-h-screen flex items-start md:items-center justify-center p-6">
+    <div className="min-h-[100svh] flex items-center justify-center px-5 py-8 sm:py-12">
       <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <div className="flex justify-center mb-3"><BrandMark size={72} /></div>
+        <div className="text-center mb-5">
+          <div className="flex justify-center mb-3"><BrandMark size={64} /></div>
           <h1 className="text-2xl font-extrabold text-ink">Welcome, {displayFirst}!</h1>
           <p className="mt-1 text-sm text-muted">Just a few details to finish setting up your profile.</p>
         </div>
