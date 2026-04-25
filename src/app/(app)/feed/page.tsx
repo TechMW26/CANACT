@@ -321,8 +321,8 @@ function ReelCard({ reel }: { reel: ReelItem }) {
       <Link href="/reels" className="mt-3 block">
         <VideoPreview
           src={reel.videoUrl}
-          className="aspect-[9/16] w-full max-w-[320px] mx-auto rounded-[24px]"
-          fit="contain"
+          className="aspect-[9/16] w-full rounded-[24px]"
+          fit="cover"
         />
       </Link>
       <div className="mt-3 flex items-center gap-2">

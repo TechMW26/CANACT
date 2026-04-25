@@ -105,12 +105,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 md:pl-2">
-        {/* Fixed status-bar backdrop. Stays visible even when the header is
-            hidden so feed/page content scrolling upwards can't bleed into the
-            iOS status bar / notch area. */}
-        <div aria-hidden className="canact-statusbar-cap" />
         <UnifiedHeader />
-        <div className="px-4 pb-4 md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="mx-auto w-full max-w-md px-4 pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
       </main>
 
@@ -186,7 +182,7 @@ function UnifiedHeader() {
       data-canact-header
       className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6 md:pt-4 bg-[linear-gradient(180deg,#FFD8DD_0%,#FFE8EC_55%,#FFF8F8_100%)]"
     >
-      <div className="flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+      <div className="mx-auto w-full max-w-md md:max-w-none flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
         <div className="ml-auto inline-flex items-center gap-2">
           <Select
