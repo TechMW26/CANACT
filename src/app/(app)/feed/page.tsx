@@ -76,7 +76,7 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pt-1 pb-2 md:-mx-6 md:px-6 bg-candy">
+      <section className="canact-stories-strip sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pt-1 pb-3 md:-mx-6 md:px-6">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
@@ -112,7 +112,7 @@ export default function FeedPage() {
         </div>
       </section>
 
-      <div className="canact-filters-wrap sticky top-[calc(env(safe-area-inset-top,0px)+64px+96px)] z-[19] -mx-4 md:-mx-6 bg-candy">
+      <div className="canact-filters-wrap sticky top-[calc(env(safe-area-inset-top,0px)+64px+96px)] z-[19] -mx-4 md:-mx-6 pb-2">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex w-max gap-2 px-4 py-2 md:px-6">
             {FILTERS.map((f) => (

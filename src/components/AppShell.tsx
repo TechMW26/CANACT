@@ -215,23 +215,22 @@ function ScrollDirectionWatcher() {
     if (!shell) return;
     let lastY = window.scrollY;
     let ticking = false;
-    const TOP_GUARD = 12;     // always show header when this close to top
-    const HIDE_AFTER = 96;    // need to be past this much scroll before we hide
-    const DELTA = 6;          // ignore tiny jitter
+    const TOP_GUARD = 8;      // always show when this close to top
+    const DELTA = 2;          // ignore only sub-pixel jitter — even ~4px scroll hides
 
     const update = () => {
       const y = window.scrollY;
       const dy = y - lastY;
-      if (Math.abs(dy) > DELTA) {
-        if (y < TOP_GUARD) {
-          shell.setAttribute('data-header-hidden', 'false');
-        } else if (dy > 0 && y > HIDE_AFTER) {
-          shell.setAttribute('data-header-hidden', 'true');
-        } else if (dy < 0) {
-          shell.setAttribute('data-header-hidden', 'false');
-        }
-        lastY = y;
+      if (y < TOP_GUARD) {
+        shell.setAttribute('data-header-hidden', 'false');
+      } else if (dy > DELTA) {
+        // any downward scroll past tiny jitter — hide immediately
+        shell.setAttribute('data-header-hidden', 'true');
+      } else if (dy < -DELTA) {
+        // upward scroll — show again
+        shell.setAttribute('data-header-hidden', 'false');
       }
+      lastY = y;
       ticking = false;
     };
     const onScroll = () => {
