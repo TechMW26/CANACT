@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     title: 'Canact',
   },
   icons: {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = {
   width: 'device-width', initialScale: 1, maximumScale: 1, viewportFit: 'cover',
-  themeColor: '#C8102E',
+  themeColor: '#FFF8F8',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
