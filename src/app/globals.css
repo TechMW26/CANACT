@@ -97,17 +97,23 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 /* Body scale-down when a sheet is open. The transition lives on the shell
    itself (not on the toggle class) so the reverse animation plays at the
-   same duration when the class is removed on close. */
+   same duration when the class is removed on close.
+
+   Important: do NOT set `will-change: transform/filter` here at baseline —
+   that would make the shell a containing block for `position: fixed`
+   descendants (per the CSS spec), causing the bottom nav to anchor to the
+   shell instead of the viewport. We only opt into will-change while the
+   zoom-out class is active. */
 #canact-app-shell {
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), filter 320ms ease-out, border-radius 320ms ease-out;
   transform-origin: 50% 0%;
-  will-change: transform, filter;
 }
 .canact-sheet-zoom-out {
   transform: scale(0.9);
   filter: brightness(0.85);
   border-radius: 24px;
   overflow: hidden;
+  will-change: transform, filter;
 }
 
 @keyframes storybar {
