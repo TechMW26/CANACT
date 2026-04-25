@@ -105,6 +105,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 md:pl-2">
+        {/* Fixed status-bar backdrop. Stays visible even when the header is
+            hidden so feed/page content scrolling upwards can't bleed into the
+            iOS status bar / notch area. */}
+        <div aria-hidden className="canact-statusbar-cap" />
         <UnifiedHeader />
         <div className="px-4 pb-4 md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />

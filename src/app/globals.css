@@ -110,6 +110,20 @@ input[type="time"]::-webkit-date-and-time-value {
   pointer-events: none;
 }
 
+/* Fixed candy strip behind the iOS status bar / notch. Always visible so feed
+   content scrolling upward gets masked instead of bleeding into the status
+   bar when the header has slid away. */
+.canact-statusbar-cap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 35;
+  background: #FFD8DD;
+  pointer-events: none;
+}
+
 /* Stories strip: soft candy gradient fades into the feed instead of a hard
    horizontal cut. Slides up to fill the header gap when header is hidden. */
 .canact-stories-strip {
