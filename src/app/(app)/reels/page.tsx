@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
-import { ArrowLeft, Heart, MessageCircle, Music, Plus, Send } from '@/components/icons';
+import { ArrowLeft, Heart, MessageCircle, Music, Plus, Send, Volume2, VolumeX, Pause, Play } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { listenReels, toggleReelLike, bumpReelView } from '@/lib/services/reels';
 import type { ReelItem } from '@/lib/types';
@@ -50,6 +50,7 @@ function ReelTile({ reel, myUid }: { reel: ReelItem; myUid: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -94,14 +95,33 @@ function ReelTile({ reel, myUid }: { reel: ReelItem; myUid: string }) {
       <video
         ref={videoRef}
         src={reel.videoUrl}
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain"
         style={{ filter: filterCss(reel.filter) }}
         loop
         playsInline
-        muted={!!reel.music}
+        muted={!!reel.music || muted}
       />
       {reel.music && (
-        <audio ref={audioRef} src={reel.music.url} loop />
+        <audio ref={audioRef} src={reel.music.url} loop muted={muted} />
+      )}
+
+      {/* Mute toggle */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
+        aria-label={muted ? 'Unmute' : 'Mute'}
+        className="absolute right-3 top-16 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
+      >
+        {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+      </button>
+
+      {/* Pause indicator */}
+      {paused && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur">
+            <Play size={26} />
+          </span>
+        </div>
       )}
 
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/30" />

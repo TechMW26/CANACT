@@ -17,6 +17,7 @@ import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
 import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
+import { VideoPreview } from '@/components/VideoPreview';
 import type { LucideIcon } from 'lucide-react';
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
@@ -185,11 +186,10 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
         {post.mediaUrls?.length ? (
           post.mediaUrls.length === 1 ? (
             isVideoUrl(post.mediaUrls[0]) ? (
-              <video
+              <VideoPreview
                 src={post.mediaUrls[0]}
-                className="mt-3 w-full h-72 rounded-[24px] bg-black object-cover"
-                controls
-                playsInline
+                className="mt-3 w-full h-72 rounded-[24px]"
+                fit="contain"
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
@@ -200,7 +200,7 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
               {post.mediaUrls.map((u, i) => (
                 <div key={i} className="relative shrink-0 snap-start">
                   {isVideoUrl(u) ? (
-                    <video src={u} className="h-72 w-72 rounded-[24px] bg-black object-cover" muted playsInline loop autoPlay />
+                    <VideoPreview src={u} className="h-72 w-72 rounded-[24px]" fit="contain" />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={u} alt="" className="h-72 w-72 object-cover rounded-[24px] bg-brand-light" />

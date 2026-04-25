@@ -56,12 +56,13 @@ export default function StoryCreatePage() {
         <div className="overflow-hidden rounded-[28px] bg-black shadow-[0_18px_36px_-26px_rgba(10,10,10,0.32)]">
           <video
             src={shot}
-            className="aspect-[9/16] w-full object-cover"
+            className="aspect-[9/16] w-full object-contain"
             style={{ filter: filterCss(videoFilter) }}
             autoPlay
             loop
             playsInline
             controls
+            controlsList="nodownload noremoteplayback"
           />
         </div>
 

@@ -65,6 +65,8 @@ export {
   Megaphone,
   Volume2,
   VolumeX,
+  Play,
+  Pause,
   Award,
   Flag,
   CheckCircle2,

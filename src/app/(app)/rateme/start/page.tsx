@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { CameraCapture, isVideoUrl } from '@/components/CameraCapture';
+import { VideoPreview } from '@/components/VideoPreview';
 import { ArrowLeft, Clock, Eye, Timer } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { startRateMe } from '@/lib/services/rateme';
@@ -58,7 +59,7 @@ export default function RateMeStartPage() {
       <div className="overflow-hidden rounded-[30px] bg-white/92 ring-1 ring-[#F1D7DC] shadow-[0_18px_36px_-26px_rgba(10,10,10,0.18)]">
         {photo ? (
           isVideoUrl(photo) ? (
-            <video src={photo} className="h-80 w-full bg-black object-cover" autoPlay loop playsInline muted controls />
+            <VideoPreview src={photo} className="h-80 w-full" fit="contain" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={photo} alt="" className="h-80 w-full object-cover" />

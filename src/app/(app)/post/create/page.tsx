@@ -6,6 +6,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { CameraCapture, isVideoUrl } from '@/components/CameraCapture';
 import { Textarea } from '@/components/Input';
+import { VideoPreview } from '@/components/VideoPreview';
 import { ArrowLeft, Camera, MapPin, Plus, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
@@ -73,7 +74,7 @@ export default function PostCreatePage() {
           {shots.map((src, i) => (
             <div key={i} className="relative shrink-0 snap-start">
               {isVideoUrl(src) ? (
-                <video src={src} className="h-40 w-32 rounded-2xl bg-black object-cover" muted playsInline loop autoPlay />
+                <VideoPreview src={src} className="h-40 w-32 rounded-2xl" fit="cover" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={src} alt="" className="h-40 w-32 rounded-2xl object-cover" />

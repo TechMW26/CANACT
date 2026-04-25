@@ -148,6 +148,12 @@ export default function ReelCreatePage() {
 
   // ────────────────── PREVIEW (filters / mute / retake) ──────────────────
   if (step === 'preview' && videoUrl) {
+    const togglePlay = () => {
+      const v = previewRef.current;
+      if (!v) return;
+      if (v.paused) v.play().catch(() => undefined);
+      else v.pause();
+    };
     const ui = (
       <div className="fixed inset-0 z-[100] bg-black text-white">
         <video
@@ -157,7 +163,8 @@ export default function ReelCreatePage() {
           loop
           playsInline
           muted={muted}
-          className="absolute inset-0 h-full w-full object-cover"
+          onClick={togglePlay}
+          className="absolute inset-0 h-full w-full object-contain"
           style={{ filter: filterCss(filter) }}
         />
 
@@ -170,7 +177,7 @@ export default function ReelCreatePage() {
           >
             <RotateCcw size={14} /> Retake
           </button>
-          <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur">Preview</div>
+          <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur">Tap video to pause</div>
           <button
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Unmute' : 'Mute'}
@@ -239,9 +246,19 @@ export default function ReelCreatePage() {
               autoPlay
               playsInline
               muted={muted}
-              className="h-full w-full object-cover"
+              controls
+              controlsList="nodownload noremoteplayback"
+              className="h-full w-full object-contain"
               style={{ filter: filterCss(filter) }}
             />
+            <button
+              type="button"
+              onClick={() => setMuted((m) => !m)}
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              className="absolute left-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+            >
+              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </button>
             <button
               type="button"
               onClick={() => setStep('preview')}

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Avatar } from './Avatar';
 import { isVideoUrl } from './CameraCapture';
 import { filterCss } from '@/lib/mediaFilters';
-import { Heart, MessageSquare, Send, Trash2, X, Eye } from './icons';
+import { Heart, MessageSquare, Send, Trash2, X, Eye, Volume2, VolumeX } from './icons';
 import { listenStory, markStoryView, replyToStory, toggleStoryLike } from '@/lib/services/stories';
 import type { StoryItem } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
@@ -37,6 +37,7 @@ export function StoryViewer({
   const [showViewers, setShowViewers] = useState(false);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [vidMuted, setVidMuted] = useState(false);
   const startedAtRef = useRef<number>(Date.now());
   const elapsedRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
@@ -202,15 +203,26 @@ export function StoryViewer({
           onPointerCancel={() => setPaused(false)}
         >
           {isVideoUrl(story.mediaUrl) ? (
-            <video
-              src={story.mediaUrl}
-              className="h-full w-full object-cover"
-              style={{ filter: filterCss(story.filter) }}
-              autoPlay
-              loop
-              playsInline
-              muted={false}
-            />
+            <>
+              <video
+                src={story.mediaUrl}
+                className="h-full w-full object-contain"
+                style={{ filter: filterCss(story.filter) }}
+                autoPlay
+                loop
+                playsInline
+                muted={vidMuted}
+              />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setVidMuted((m) => !m); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                aria-label={vidMuted ? 'Unmute' : 'Mute'}
+                className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur z-10"
+              >
+                {vidMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+            </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={story.mediaUrl} alt={story.caption ?? ''} className="h-full w-full object-cover" style={{ filter: filterCss(story.filter) }} draggable={false} />
