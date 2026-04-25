@@ -170,17 +170,20 @@ export function MessageBubble({
         ) : null}
 
         {reactionEntries.length > 0 && (
-          <div className={`flex ${mine ? 'justify-end' : 'justify-start'} -mt-1`}>
-            <div className="flex items-center gap-1 rounded-full border border-line bg-white px-2 py-0.5 text-[12px] shadow-sm">
+          <div className={`relative h-3 ${mine ? 'self-end' : 'self-start'}`}>
+            <div
+              key={reactionEntries.map(([, e]) => e).join(',') + ':' + reactionEntries.length}
+              className={`canact-reaction-pop absolute -top-3 ${mine ? 'right-2' : 'left-2'} flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 shadow-[0_4px_12px_-4px_rgba(10,10,10,0.25)] ring-1 ring-line`}
+            >
               {Object.entries(reactionCounts).map(([emoji, count]) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => onReact(message, myReaction === emoji ? null : emoji)}
-                  className={`leading-none ${myReaction === emoji ? 'opacity-100' : 'opacity-90'}`}
+                  className={`flex items-center gap-0.5 rounded-full px-1 leading-none transition ${myReaction === emoji ? 'scale-110' : ''}`}
                 >
-                  <span>{emoji}</span>
-                  {count > 1 && <span className="ml-0.5 text-[10px] font-bold text-ink/70">{count}</span>}
+                  <span className="text-[14px]">{emoji}</span>
+                  {count > 1 && <span className="text-[10px] font-bold text-ink/70">{count}</span>}
                 </button>
               ))}
             </div>

@@ -190,6 +190,24 @@ function titleFor(path: string | null) {
 
 function UnifiedHeader() {
   const { radiusIdx, setRadiusIdx } = useDistance();
+  const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) { setPendingCount(0); return; }
+    let friends = 0, favs = 0;
+    const update = () => setPendingCount(friends + favs);
+    let off1: (() => void) | undefined;
+    let off2: (() => void) | undefined;
+    (async () => {
+      const friendsMod = await import('@/lib/services/friends');
+      const favMod = await import('@/lib/services/favourites');
+      off1 = friendsMod.listenIncomingRequests(user.uid, (items) => { friends = items.length; update(); });
+      off2 = favMod.listenFollowRequests(user.uid, (items) => { favs = items.length; update(); });
+    })();
+    return () => { off1?.(); off2?.(); };
+  }, [user?.uid]);
+
   return (
     <header
       data-canact-header
@@ -208,10 +226,18 @@ function UnifiedHeader() {
               <option key={option.index} value={option.index}>{option.label}</option>
             ))}
           </Select>
-          <Link href="/search" aria-label="Search" onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
             <Search size={16} strokeWidth={2.2} />
           </Link>
-          <Link href="/inbox" aria-label="Inbox" onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className="relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+            <Heart size={16} strokeWidth={2.2} />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
+          </Link>
+          <Link href="/inbox" aria-label="Inbox" prefetch onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
             <MessageSquare size={16} strokeWidth={2.2} />
           </Link>
         </div>

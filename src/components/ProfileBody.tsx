@@ -5,7 +5,6 @@ import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, ReelItem, UserProfile, WhaPost } from '@/lib/types';
@@ -26,16 +25,14 @@ import {
   Award,
   CheckCircle2,
   Crown,
-  Lock,
   Mail,
   MapPin,
-  ShieldAlert,
-  Sparkles,
   ThumbsDown,
   ThumbsUp,
   Camera,
   Film,
   Bookmark,
+  Settings as SettingsIcon,
 } from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
@@ -43,12 +40,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [u, setU] = useState<UserProfile | null>(null);
   const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attr?: { key: AttrKey; at: number }; cards?: Record<string, number> } | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
-  const [aadhaarNumber, setAadhaarNumber] = useState('');
-  const [requestId, setRequestId] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (s) => setU(s.val()));
@@ -75,7 +66,32 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     return listenUserReels(uid, setReels);
   }, [uid]);
 
-  if (!u) return <div className="h-32 flex items-center justify-center text-muted">Loading…</div>;
+  if (!u) {
+    return (
+      <div className="space-y-4">
+        <Card className="overflow-hidden border border-[#F1D7DC]">
+          <div className="flex items-start gap-4">
+            <div className="h-24 w-24 shrink-0 animate-pulse rounded-3xl bg-brand-light" />
+            <div className="flex-1 space-y-3">
+              <div className="h-5 w-44 animate-pulse rounded bg-brand-light" />
+              <div className="flex gap-2">
+                <div className="h-6 w-16 animate-pulse rounded-full bg-brand-light/70" />
+                <div className="h-6 w-20 animate-pulse rounded-full bg-brand-light/70" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[0,1,2].map((i) => <div key={i} className="h-16 animate-pulse rounded-2xl bg-brand-light/60" />)}
+          </div>
+        </Card>
+        <Card className="!p-0">
+          <div className="grid grid-cols-3 gap-[2px] bg-line">
+            {[0,1,2,3,4,5].map((i) => <div key={i} className="aspect-square animate-pulse bg-brand-light/60" />)}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const cooldownLeft = (() => {
     if (!myVote?.attr) return 0;
@@ -96,56 +112,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     if (isSelf || !user) return;
     if (myVote?.cards?.[c]) await takeBackCard(uid, user.uid, c);
     else await giveCard(uid, user.uid, c);
-  };
-
-  const sendOtp = async () => {
-    if (!aadhaarNumber.trim()) {
-      toast('Enter your Aadhaar number to continue.', 'error');
-      return;
-    }
-    setSendingOtp(true);
-    try {
-      const res = await fetch('/api/verify/digilocker/send-otp', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ aadhaarNumber, uid: user?.uid }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setRequestId(data.requestId ?? '');
-      setOtpSent(true);
-      toast(data?.message ?? 'OTP sent', 'success');
-    } catch (e: any) {
-      toast(e?.message ?? 'Could not send OTP', 'error');
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-  const completeVerification = async () => {
-    if (!otp.trim() || !requestId) {
-      toast('Enter the OTP first.', 'error');
-      return;
-    }
-    setVerifying(true);
-    try {
-      const res = await fetch('/api/verify/digilocker/complete', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ otp, requestId, uid: user?.uid }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setOtp('');
-      setOtpSent(false);
-      setRequestId('');
-      setAadhaarNumber('');
-      toast('Profile verified. Name, DOB, and address are now locked.', 'success');
-    } catch (e: any) {
-      toast(e?.message ?? 'Could not verify profile', 'error');
-    } finally {
-      setVerifying(false);
-    }
   };
 
   const statCards = [
@@ -189,7 +155,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
                 <RatingPill value={u.rating ?? 0} />
                 <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.likesCount ?? 0} likes</span>
                 <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.dislikesCount ?? 0} dislikes</span>
-                {u.mobile ? <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">+91 {u.mobile}</span> : null}
+                {isSelf && u.mobile ? <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">+91 {u.mobile}</span> : null}
               </div>
             </div>
           </div>
@@ -203,15 +169,18 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
             ))}
           </div>
 
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
-            <InfoPill icon={<MapPin size={14} />} label={locationText || 'Location not set'} />
-            <InfoPill icon={<Mail size={14} />} label={u.email || 'Email private'} />
-            <InfoPill icon={<Award size={14} />} label={u.dateOfBirth ? `DOB ${u.dateOfBirth}` : 'DOB not verified'} />
-            <InfoPill icon={<Crown size={14} />} label={u.address || 'Address not verified'} />
-          </div>
+          {/* Personal info — only visible to the owner */}
+          {isSelf ? (
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+              <InfoPill icon={<MapPin size={14} />} label={locationText || 'Location not set'} />
+              <InfoPill icon={<Mail size={14} />} label={u.email || 'Email private'} />
+              <InfoPill icon={<Award size={14} />} label={u.dateOfBirth ? `DOB ${u.dateOfBirth}` : 'DOB not verified'} />
+              <InfoPill icon={<Crown size={14} />} label={u.address || 'Address not verified'} />
+            </div>
+          ) : null}
 
-          {u.bio ? <p className="mt-4 text-sm leading-6 text-ink/75 whitespace-pre-wrap">{u.bio}</p> : null}
-          {u.tags?.length ? (
+          {isSelf && u.bio ? <p className="mt-4 text-sm leading-6 text-ink/75 whitespace-pre-wrap">{u.bio}</p> : null}
+          {isSelf && u.tags?.length ? (
             <div className="mt-4 flex flex-wrap gap-2">
               {u.tags.map((t) => (
                 <span key={t} className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-[11px] font-bold text-brand shadow-sm">
@@ -223,12 +192,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
 
           <div className="mt-5 flex flex-wrap gap-2">
             {isSelf ? (
-              <>
-                <Link href="/edit-profile"><Button variant="outline" size="sm">Edit profile</Button></Link>
-                {!isVerified ? <Button size="sm" icon={<ShieldAlert size={14} />} onClick={() => document.getElementById('verify-profile-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Verify profile</Button> : null}
-                <Link href="/rateme/start"><Button size="sm" variant="subtle">Start Rate Me</Button></Link>
-                <Link href="/underground"><Button variant="ghost" size="sm">Underground</Button></Link>
-              </>
+              <Link href="/profile/settings" prefetch>
+                <Button variant="outline" size="sm" icon={<SettingsIcon size={14} />}>Profile settings</Button>
+              </Link>
             ) : (
               <>
                 <Button size="sm" variant={myVote?.main === 'like' ? 'primary' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'like')}>
@@ -262,7 +228,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
                   onDecline={async () => { if (user) await declineFriendRequest(user.uid, uid); }}
                   onUnfriend={async () => { if (user) await unfriend(user.uid, uid); }}
                 />
-                <Link href={`/inbox/${uid}`}>
+                <Link href={`/inbox/${uid}`} prefetch>
                   <Button size="sm" variant="outline">Message</Button>
                 </Link>
               </>
@@ -379,66 +345,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
         )}
       </Card>
 
-      {isSelf ? (
-        <Card id="verify-profile-panel" className="overflow-hidden border border-[#EFD9DD] bg-white shadow-[0_18px_44px_-26px_rgba(10,10,10,0.22)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
-                <Sparkles size={12} /> Verify Profile
-              </div>
-              <h3 className="mt-3 text-xl font-black tracking-tight text-ink">DigiLocker identity lock</h3>
-              <p className="mt-1 text-sm text-ink/65">
-                Verify via OTP and Canact will auto-lock your name, DOB, and address so others can trust the profile.
-              </p>
-            </div>
-            {isVerified ? <VerifiedBadge compact /> : null}
-          </div>
-
-          {isVerified ? (
-            <div className="mt-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <div className="flex items-center gap-2 font-bold"><CheckCircle2 size={16} /> Verified via DigiLocker</div>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <LockedField label="Name" value={u.fullName} />
-                <LockedField label="DOB" value={u.dateOfBirth || 'Not available'} />
-                <LockedField label="Address" value={u.address || 'Not available'} className="md:col-span-2" />
-              </div>
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-800">
-                <Lock size={13} /> These fields are locked after verification
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-3xl border border-[#F2DADF] bg-[linear-gradient(135deg,rgba(255,248,248,1),rgba(255,216,221,0.38))] p-4">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 1</div>
-                <Input
-                  label="Aadhaar number"
-                  value={aadhaarNumber}
-                  onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                  placeholder="Enter 12-digit Aadhaar"
-                  className="mt-2"
-                  inputMode="numeric"
-                />
-                <Button size="sm" className="mt-3" loading={sendingOtp} onClick={sendOtp}>Send OTP</Button>
-              </div>
-
-              <div className="rounded-3xl border border-[#F2DADF] bg-white p-4">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 2</div>
-                <Input
-                  label="OTP"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Enter OTP"
-                  className="mt-2"
-                  inputMode="numeric"
-                  disabled={!otpSent}
-                />
-                <Button size="sm" className="mt-3" variant="outline" loading={verifying} onClick={completeVerification} disabled={!otpSent}>Verify with DigiLocker</Button>
-              </div>
-            </div>
-          )}
-        </Card>
-      ) : null}
-
       <Card>
         <div className="flex items-center justify-between">
           <h3 className="font-black tracking-tight">Attributes</h3>
@@ -520,14 +426,7 @@ function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
-function LockedField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
-  return (
-    <div className={`rounded-2xl border border-emerald-200 bg-white px-3 py-3 ${className}`}>
-      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-ink">{value}</div>
-    </div>
-  );
-}
+function LockedField(_: { label: string; value: string; className?: string }) { return null; }
 
 function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { title: string; items: readonly AttrKey[]; u: UserProfile; mine?: AttrKey; disabled: boolean; onPick: (k: AttrKey) => void; positive: boolean }) {
   return (

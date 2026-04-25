@@ -46,7 +46,7 @@ input[type="time"]::-webkit-date-and-time-value {
 /* ---------- Page entrance: smooth fade + tiny rise ---------- */
 .canact-fade-in {
   opacity: 0;
-  animation: canactFadeIn 180ms ease-out both;
+  animation: canactFadeIn 90ms ease-out both;
   will-change: opacity;
 }
 @keyframes canactFadeIn {
@@ -77,6 +77,18 @@ input[type="time"]::-webkit-date-and-time-value {
 @keyframes canactSheetSlide {
   0%   { transform: translate3d(0, 100%, 0); opacity: 0.6; }
   100% { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+/* Reaction pill pop-in (used in chat bubbles) */
+.canact-reaction-pop {
+  animation: canactReactionPop 320ms cubic-bezier(.22,1.6,.45,1) both;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+@keyframes canactReactionPop {
+  0%   { opacity: 0; transform: scale(0.4) translateY(4px); }
+  60%  { opacity: 1; transform: scale(1.18) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* ---------- Plus sheet: slide-up + body scale-down ---------- */

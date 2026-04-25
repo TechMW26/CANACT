@@ -37,7 +37,25 @@ export default function PostDetail() {
   useEffect(() => listenPost(id, setPost), [id]);
   useEffect(() => listenComments(id, setComments), [id]);
 
-  if (!post || !user) return null;
+  if (!user) return null;
+  if (!post) {
+    return (
+      <div className="space-y-3">
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-brand-light" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-32 animate-pulse rounded bg-brand-light" />
+              <div className="h-2 w-20 animate-pulse rounded bg-brand-light/70" />
+            </div>
+          </div>
+          <div className="mt-4 h-4 w-full animate-pulse rounded bg-brand-light" />
+          <div className="mt-2 h-4 w-2/3 animate-pulse rounded bg-brand-light" />
+          <div className="mt-3 aspect-video w-full animate-pulse rounded-2xl bg-brand-light/70" />
+        </Card>
+      </div>
+    );
+  }
   const myReact = post.reactionVoters?.[user.uid];
   const isMine = post.uid === user.uid;
 

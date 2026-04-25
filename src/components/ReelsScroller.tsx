@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
+import { ShareToChatSheet } from '@/components/ShareToChatSheet';
 import {
   ArrowLeft, Heart, MessageCircle, Music, Plus, Send,
   Volume2, VolumeX, Play, X,
@@ -20,6 +21,7 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [mounted, setMounted] = useState(false);
   const [commentReel, setCommentReel] = useState<ReelItem | null>(null);
+  const [shareReel, setShareReel] = useState<ReelItem | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => listenReels(setReels), []);
@@ -76,6 +78,7 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
               reel={r}
               myUid={user?.uid ?? ''}
               onComment={() => setCommentReel(r)}
+              onShare={() => setShareReel(r)}
             />
           ))}
         </div>
@@ -90,6 +93,12 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
           onClose={() => setCommentReel(null)}
         />
       )}
+
+      <ShareToChatSheet
+        open={!!shareReel}
+        onClose={() => setShareReel(null)}
+        attachment={shareReel ? { kind: 'reel', reelId: shareReel.id } : null}
+      />
     </div>
   );
 
@@ -97,9 +106,9 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
 }
 
 function ReelTile({
-  reel, myUid, onComment,
+  reel, myUid, onComment, onShare,
 }: {
-  reel: ReelItem; myUid: string; onComment: () => void;
+  reel: ReelItem; myUid: string; onComment: () => void; onShare: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -211,7 +220,7 @@ function ReelTile({
           </button>
           <button
             type="button"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
             className="flex flex-col items-center gap-1"
             aria-label="Share"
           >

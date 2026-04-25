@@ -178,6 +178,7 @@ export default function InboxThreadPage() {
         className="flex-1 overflow-y-auto px-3 py-3"
         style={{ overscrollBehavior: 'contain' }}
       >
+        <div className="flex min-h-full flex-col justify-end">
         {incomingPending && (
           <div className="mx-auto mb-4 max-w-sm rounded-2xl bg-brand-light/60 p-3 text-center text-sm">
             <div className="font-extrabold text-ink">Chat request</div>
@@ -231,6 +232,7 @@ export default function InboxThreadPage() {
             );
           })}
         </ul>
+        </div>
       </div>
 
       {/* Composer */}
@@ -290,25 +292,28 @@ export default function InboxThreadPage() {
       </div>
 
       {/* Long-press action sheet */}
-      <Sheet open={!!actionMsg} onClose={() => setActionMsg(null)} title="Message">
+      <Sheet open={!!actionMsg} onClose={() => setActionMsg(null)} title="">
         {actionMsg && (
-          <div className="space-y-3">
-            <div className="flex justify-center gap-1.5">
-              {QUICK_REACTIONS.map((emoji) => {
-                const active = actionMsg.reactions?.[user.uid] === emoji;
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleReact(actionMsg, active ? null : emoji)}
-                    className={`inline-flex h-11 w-11 items-center justify-center rounded-full text-2xl transition ${
-                      active ? 'bg-brand-light scale-110' : 'hover:bg-brand-light/50'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
-                );
-              })}
+          <div className="space-y-4">
+            <div className="rounded-3xl bg-white p-2 shadow-[0_8px_24px_-12px_rgba(10,10,10,0.18)] ring-1 ring-line">
+              <div className="flex items-center justify-between gap-1">
+                {QUICK_REACTIONS.map((emoji, i) => {
+                  const active = actionMsg.reactions?.[user.uid] === emoji;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => handleReact(actionMsg, active ? null : emoji)}
+                      style={{ animationDelay: `${i * 28}ms` }}
+                      className={`canact-reaction-pop inline-flex h-12 w-12 items-center justify-center rounded-full text-[26px] leading-none transition active:scale-95 ${
+                        active ? 'bg-brand-light scale-110' : 'hover:bg-brand-light/50'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-1">
               <ActionRow
