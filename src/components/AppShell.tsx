@@ -77,6 +77,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6 md:flex">
+      <ScrollDirectionWatcher />
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:gap-1 md:py-4 md:pr-2">
         <div className="px-3 py-2 mb-2">
@@ -178,6 +179,7 @@ function UnifiedHeader() {
   const { radiusIdx, setRadiusIdx } = useDistance();
   return (
     <header
+      data-canact-header
       className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6 md:pt-4 bg-[linear-gradient(180deg,#FFD8DD_0%,#FFE8EC_55%,rgba(255,248,248,0)_100%)]"
     >
       <div className="flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
@@ -203,4 +205,43 @@ function UnifiedHeader() {
       </div>
     </header>
   );
+}
+
+/** Watches window scroll and toggles `data-header-hidden` on the shell so
+ *  CSS can slide the unified header up and the stories strip into its place. */
+function ScrollDirectionWatcher() {
+  useEffect(() => {
+    const shell = document.getElementById('canact-app-shell');
+    if (!shell) return;
+    let lastY = window.scrollY;
+    let ticking = false;
+    const TOP_GUARD = 12;     // always show header when this close to top
+    const HIDE_AFTER = 96;    // need to be past this much scroll before we hide
+    const DELTA = 6;          // ignore tiny jitter
+
+    const update = () => {
+      const y = window.scrollY;
+      const dy = y - lastY;
+      if (Math.abs(dy) > DELTA) {
+        if (y < TOP_GUARD) {
+          shell.setAttribute('data-header-hidden', 'false');
+        } else if (dy > 0 && y > HIDE_AFTER) {
+          shell.setAttribute('data-header-hidden', 'true');
+        } else if (dy < 0) {
+          shell.setAttribute('data-header-hidden', 'false');
+        }
+        lastY = y;
+      }
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(update);
+        ticking = true;
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return null;
 }

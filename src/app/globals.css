@@ -95,6 +95,25 @@ input[type="time"]::-webkit-date-and-time-value {
   50%      { transform: scale(1.06); opacity: 0.85; }
 }
 
+/* ---------- Auto-hide unified header on scroll-down ----------
+   AppShell toggles `data-header-hidden="true"` on the shell wrapper as the
+   user scrolls down. The sticky header slides up out of view; the sticky
+   stories+filters strip slides up to fill the space. Reverses on any upward
+   scroll (or when near top). */
+[data-canact-header] {
+  transition: transform 280ms cubic-bezier(.22,.85,.3,1);
+  will-change: transform;
+}
+[data-header-hidden="true"] [data-canact-header] {
+  transform: translate3d(0, calc(-100% - env(safe-area-inset-top, 0px)), 0);
+}
+.canact-stories-strip {
+  transition: top 280ms cubic-bezier(.22,.85,.3,1);
+}
+[data-header-hidden="true"] .canact-stories-strip {
+  top: env(safe-area-inset-top, 0px) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .canact-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
   .canact-splash-pulse { animation: none !important; }
