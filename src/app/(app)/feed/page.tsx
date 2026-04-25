@@ -76,7 +76,7 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pt-1 pb-3 md:-mx-6 md:px-6 bg-candy after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-4 after:h-4 after:bg-[linear-gradient(180deg,#FFF8F8_0%,rgba(255,248,248,0)_100%)]">
+      <section className="canact-stories-strip sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pt-1 pb-2 md:-mx-6 md:px-6 bg-candy">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
@@ -110,9 +110,11 @@ export default function FeedPage() {
             ))}
           </div>
         </div>
+      </section>
 
-        <div className="mt-1 -mx-3 overflow-x-auto no-scrollbar md:-mx-6">
-          <div className="flex w-max gap-2 px-3 py-2 md:px-6">
+      <div className="canact-filters-wrap sticky top-[calc(env(safe-area-inset-top,0px)+64px+96px)] z-[19] -mx-4 md:-mx-6 bg-candy">
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="flex w-max gap-2 px-4 py-2 md:px-6">
             {FILTERS.map((f) => (
               <button key={f.id} onClick={() => setFilter(f.id as any)}
                 className={`whitespace-nowrap shrink-0 rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
@@ -121,16 +123,16 @@ export default function FeedPage() {
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
-      <section className="mx-auto max-w-2xl px-4 md:px-6">
+      <section className="mx-auto max-w-3xl px-2 pt-4 md:px-4">
         {items.length === 0 && (
           <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted shadow-[0_18px_36px_-26px_rgba(10,10,10,0.16)]">
             Nothing here yet. Be the first to post around you.
           </div>
         )}
 
-        <div className="space-y-5">
+        <div className="space-y-6">
           {items.map((it) => it.kind === 'wha' ? (
             <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} />
           ) : it.kind === 'poll' ? (
