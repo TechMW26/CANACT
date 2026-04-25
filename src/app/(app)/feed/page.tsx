@@ -91,16 +91,16 @@ export default function FeedPage() {
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip relative pt-2 pb-5">
-        <div className="canact-stories-fade overflow-x-auto no-scrollbar pr-14">
-          <div className="flex min-w-max items-center gap-3 py-1">
-            <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
-              <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
-                <div className="rounded-full bg-white p-[3px]">
+      <section className="canact-stories-strip flex items-center gap-2 py-2">
+        <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
+          <div className="flex min-w-max items-center gap-2.5 pr-2">
+            <button type="button" onClick={openOwnStory} className="flex w-[64px] shrink-0 items-center justify-center">
+              <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px]">
+                <div className="rounded-full bg-white p-[2px]">
                   <div className="relative">
-                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={64} />
-                    <span className="absolute bottom-0 right-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand text-white ring-4 ring-white">
-                      {myStory ? <Eye size={12} /> : <Plus size={14} />}
+                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={56} />
+                    <span className="absolute bottom-0 right-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white">
+                      {myStory ? <Eye size={10} /> : <Plus size={12} />}
                     </span>
                   </div>
                 </div>
@@ -109,8 +109,8 @@ export default function FeedPage() {
 
             {!loaded.stories && stories.length === 0 ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={`s_skel_${i}`} className="flex w-[78px] shrink-0 flex-col items-center gap-2">
-                  <Skeleton circle width={70} height={70} />
+                <div key={`s_skel_${i}`} className="flex w-[64px] shrink-0 items-center justify-center">
+                  <Skeleton circle width={60} height={60} />
                 </div>
               ))
             ) : orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
@@ -118,34 +118,34 @@ export default function FeedPage() {
                 key={story.id}
                 type="button"
                 onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === story.id))}
-                className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center"
+                className="flex w-[64px] shrink-0 items-center justify-center"
               >
-                <div className="rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
-                  <div className="rounded-full bg-white p-[3px]">
-                    <Avatar src={story.authorPhoto ?? null} name={story.authorName} size={64} />
+                <div className="rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px]">
+                  <div className="rounded-full bg-white p-[2px]">
+                    <Avatar src={story.authorPhoto ?? null} name={story.authorName} size={56} />
                   </div>
                 </div>
               </button>
             ))}
           </div>
         </div>
-        {/* Filter trigger pinned to the right edge, vertically centered with the story rings */}
+        {/* Filter trigger — same visual size as a story ring, inline so it always sits in line */}
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
           aria-label="Filter feed"
-          className="absolute right-1 top-[calc(50%+2px)] z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand border border-line shadow-[0_8px_20px_-10px_rgba(200,16,46,0.55)]"
+          className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-brand border border-line"
         >
           <SlidersHorizontal size={18} />
           {filter !== 'all' && (
-            <span className="absolute -top-0.5 -right-0.5 inline-flex h-3 w-3 rounded-full bg-brand ring-2 ring-white" />
+            <span className="absolute -top-0.5 -right-0.5 inline-flex h-2.5 w-2.5 rounded-full bg-brand ring-2 ring-white" />
           )}
         </button>
       </section>
 
-      <div className="canact-filters-wrap pb-1" />
+      <div className="canact-filters-wrap" />
 
-      <section className="pt-3">
+      <section className="pt-1">
         {isLoading && items.length === 0 ? (
           <div className="space-y-6">
             {Array.from({ length: 3 }).map((_, i) => (
