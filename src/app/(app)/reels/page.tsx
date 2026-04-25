@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
 import { ArrowLeft, Heart, MessageCircle, Music, Plus, Send, Volume2, VolumeX, Pause, Play } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
@@ -11,12 +12,26 @@ import { filterCss } from '@/lib/mediaFilters';
 export default function ReelsPage() {
   const { user } = useAuth();
   const [reels, setReels] = useState<ReelItem[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => listenReels(setReels), []);
+  useEffect(() => {
+    setMounted(true);
+    // Hide AppShell header while reels page is open.
+    const shell = document.getElementById('canact-app-shell');
+    shell?.setAttribute('data-header-hidden', 'true');
+    document.body.style.overflow = 'hidden';
+    return () => {
+      shell?.setAttribute('data-header-hidden', 'false');
+      document.body.style.overflow = '';
+    };
+  }, []);
 
-  return (
-    <div className="fixed inset-0 z-30 bg-black text-white">
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-4">
+  if (!mounted) return null;
+
+  const ui = (
+    <div className="fixed inset-0 z-[60] bg-black text-white">
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between p-4 safe-top bg-gradient-to-b from-black/60 to-transparent">
         <Link href="/feed" aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur">
           <ArrowLeft size={18} />
         </Link>
@@ -35,7 +50,7 @@ export default function ReelsPage() {
           </Link>
         </div>
       ) : (
-        <div className="h-full snap-y snap-mandatory overflow-y-auto">
+        <div className="h-full w-full snap-y snap-mandatory overflow-y-auto overscroll-contain">
           {reels.map((r) => (
             <ReelTile key={r.id} reel={r} myUid={user?.uid ?? ''} />
           ))}
@@ -43,6 +58,8 @@ export default function ReelsPage() {
       )}
     </div>
   );
+
+  return createPortal(ui, document.body);
 }
 
 function ReelTile({ reel, myUid }: { reel: ReelItem; myUid: string }) {
@@ -80,7 +97,7 @@ function ReelTile({ reel, myUid }: { reel: ReelItem; myUid: string }) {
   return (
     <div
       ref={ref}
-      className="relative h-screen w-full snap-start"
+      className="relative h-[100dvh] w-full snap-start snap-always"
       onClick={() => {
         if (paused) {
           videoRef.current?.play().catch(() => {});

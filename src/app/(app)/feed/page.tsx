@@ -84,7 +84,7 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pt-1 pb-3 md:-mx-6 md:px-6">
+      <section className="canact-stories-strip -mx-4 px-3 pt-2 pb-3 md:-mx-6 md:px-6">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
@@ -98,7 +98,6 @@ export default function FeedPage() {
                   </div>
                 </div>
               </div>
-              <span className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink/80">{myStory ? 'Your story' : 'Add story'}</span>
             </button>
 
             {orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
@@ -113,14 +112,13 @@ export default function FeedPage() {
                     <Avatar src={story.authorPhoto ?? null} name={story.authorName} size={64} />
                   </div>
                 </div>
-                <span className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink/80">{story.authorName}</span>
               </button>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="canact-filters-wrap sticky top-[calc(env(safe-area-inset-top,0px)+64px+96px)] z-[19] -mx-4 md:-mx-6 pb-2">
+      <div className="canact-filters-wrap -mx-4 md:-mx-6 pb-2">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex w-max gap-2 px-4 py-2 md:px-6">
             {FILTERS.map((f) => (

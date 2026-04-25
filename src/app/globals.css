@@ -101,53 +101,23 @@ input[type="time"]::-webkit-date-and-time-value {
    stories+filters strip slides up to fill the space. Reverses on any upward
    scroll (or when near top). */
 [data-canact-header] {
-  transition: transform 220ms cubic-bezier(.22,.85,.3,1), opacity 180ms ease;
-  will-change: transform;
+  transition: opacity 200ms ease;
+  will-change: opacity;
 }
 [data-header-hidden="true"] [data-canact-header] {
-  transform: translate3d(0, calc(-100% - env(safe-area-inset-top, 0px)), 0);
   opacity: 0;
   pointer-events: none;
 }
 
-/* Fixed candy strip behind the iOS status bar / notch. Always visible so feed
-   content scrolling upward gets masked instead of bleeding into the status
-   bar when the header has slid away. Uses the same gradient as the unified
-   header so it reads as a seamless continuation. */
-.canact-statusbar-cap {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: env(safe-area-inset-top, 0px);
-  z-index: 35;
-  background: linear-gradient(180deg, #FFD8DD 0%, #FFE8EC 55%, #FFF8F8 100%);
-  pointer-events: none;
-}
+/* Status-bar cap removed — header simply fades out in place. */
+.canact-statusbar-cap { display: none; }
 
-/* Stories strip: soft candy gradient fades into the feed instead of a hard
-   horizontal cut. Slides up to fill the header gap when header is hidden. */
-.canact-stories-strip {
-  background: linear-gradient(180deg, #FFF8F8 0%, #FFF8F8 70%, rgba(255, 248, 248, 0) 100%);
-  transition: top 220ms cubic-bezier(.22,.85,.3,1);
-}
-[data-header-hidden="true"] .canact-stories-strip {
-  top: env(safe-area-inset-top, 0px) !important;
-}
-
-/* Filters row: same soft gradient fade. On scroll-down it slides up and
-   fades out completely (no clipped half-pill state). Reappears on scroll-up. */
+.canact-stories-strip,
 .canact-filters-wrap {
-  background: linear-gradient(180deg, #FFF8F8 0%, #FFF8F8 70%, rgba(255, 248, 248, 0) 100%);
-  transition:
-    transform 220ms cubic-bezier(.22,.85,.3,1),
-    opacity   180ms ease,
-    top       220ms cubic-bezier(.22,.85,.3,1);
-  will-change: transform, opacity;
+  transition: opacity 200ms ease;
 }
 [data-header-hidden="true"] .canact-filters-wrap {
   opacity: 0;
-  transform: translate3d(0, -120%, 0);
   pointer-events: none;
 }
 
