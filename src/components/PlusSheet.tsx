@@ -69,7 +69,7 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-end justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center" role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Close"

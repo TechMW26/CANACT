@@ -19,6 +19,7 @@ import { toast } from '@/components/Toaster';
 import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
+import { Sheet } from '@/components/Sheet';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import type { LucideIcon } from 'lucide-react';
@@ -59,7 +60,6 @@ export default function FeedPage() {
   useEffect(() => listenReels((v) => { setReels(v); setLoaded((s) => ({ ...s, reels: true })); }), []);
   useEffect(() => listenActiveStories((v) => { setStories(v); setLoaded((s) => ({ ...s, stories: true })); }), []);
   const isLoading = !loaded.wha || !loaded.polls || !loaded.rms || !loaded.reels;
-  const activeFilter = FILTERS.find((f) => f.id === filter) ?? FILTERS[0];
 
   const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
   const orderedStories = useMemo(() => {
@@ -91,9 +91,9 @@ export default function FeedPage() {
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip relative pt-2 pb-3">
-        <div className="canact-stories-fade overflow-x-auto no-scrollbar pr-12">
-          <div className="flex min-w-max gap-3 pb-2">
+      <section className="canact-stories-strip relative pt-2 pb-5">
+        <div className="canact-stories-fade overflow-x-auto no-scrollbar pr-14">
+          <div className="flex min-w-max items-center gap-3 py-1">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
               <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
                 <div className="rounded-full bg-white p-[3px]">
@@ -129,12 +129,12 @@ export default function FeedPage() {
             ))}
           </div>
         </div>
-        {/* Filter trigger pinned to the right edge of the stories row */}
+        {/* Filter trigger pinned to the right edge, vertically centered with the story rings */}
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
           aria-label="Filter feed"
-          className="absolute right-1 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand border border-line shadow-[0_8px_20px_-10px_rgba(200,16,46,0.55)]"
+          className="absolute right-1 top-[calc(50%+2px)] z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand border border-line shadow-[0_8px_20px_-10px_rgba(200,16,46,0.55)]"
         >
           <SlidersHorizontal size={18} />
           {filter !== 'all' && (
@@ -143,9 +143,7 @@ export default function FeedPage() {
         </button>
       </section>
 
-      <div className="canact-filters-wrap pb-1">
-        <div className="text-xs font-bold text-ink/60 uppercase tracking-wide px-1">{activeFilter.label}</div>
-      </div>
+      <div className="canact-filters-wrap pb-1" />
 
       <section className="pt-3">
         {isLoading && items.length === 0 ? (
@@ -199,28 +197,20 @@ export default function FeedPage() {
       ) : null}
 
       {filterOpen && (
-        <div className="fixed inset-0 z-[55]" onClick={() => setFilterOpen(false)}>
-          <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
-          <div
-            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4 pb-6 safe-bottom shadow-2xl canact-sheet-slide"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto h-1 w-10 rounded-full bg-line mb-3" />
-            <div className="text-sm font-extrabold mb-3">Filter feed</div>
-            <div className="grid grid-cols-2 gap-2">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => { setFilter(f.id as any); setFilterOpen(false); }}
-                  className={`rounded-2xl px-4 py-3 text-sm font-semibold border ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+        <Sheet open={filterOpen} onClose={() => setFilterOpen(false)} title="Filter feed">
+          <div className="grid grid-cols-2 gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => { setFilter(f.id as any); setFilterOpen(false); }}
+                className={`rounded-2xl px-4 py-3 text-sm font-semibold border ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
-        </div>
+        </Sheet>
       )}
     </div>
     </SkeletonTheme>
