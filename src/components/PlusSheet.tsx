@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart3, Camera, ChevronRight, Eye, Film, LifeBuoy, Sparkles, X } from './icons';
 import type { LucideIcon } from 'lucide-react';
@@ -28,6 +28,8 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
   // Mounted controls actual DOM presence; entered drives the animation state.
   const [mounted, setMounted] = useState(open);
   const [entered, setEntered] = useState(false);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   // Open: mount immediately + flip entered on next frame so transition runs.
   useEffect(() => {
@@ -47,15 +49,15 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
     if (!mounted) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     window.addEventListener('keydown', onKey);
-    const shell = document.getElementById('canact-app-shell');
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
+      const shell = document.getElementById('canact-app-shell');
       shell?.classList.remove('canact-sheet-zoom-out');
     };
-  }, [mounted, onClose]);
+  }, [mounted]);
 
   // Toggle the zoom class in sync with the sheet's animation state.
   useEffect(() => {
