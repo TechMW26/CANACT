@@ -112,7 +112,8 @@ input[type="time"]::-webkit-date-and-time-value {
 
 /* Fixed candy strip behind the iOS status bar / notch. Always visible so feed
    content scrolling upward gets masked instead of bleeding into the status
-   bar when the header has slid away. */
+   bar when the header has slid away. Uses the same gradient as the unified
+   header so it reads as a seamless continuation. */
 .canact-statusbar-cap {
   position: fixed;
   top: 0;
@@ -120,7 +121,7 @@ input[type="time"]::-webkit-date-and-time-value {
   right: 0;
   height: env(safe-area-inset-top, 0px);
   z-index: 35;
-  background: #FFD8DD;
+  background: linear-gradient(180deg, #FFD8DD 0%, #FFE8EC 55%, #FFF8F8 100%);
   pointer-events: none;
 }
 
