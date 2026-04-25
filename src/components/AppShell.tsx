@@ -8,6 +8,7 @@ import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
 import { PlusSheet } from './PlusSheet';
 import { VicinityTracker } from './VicinityTracker';
+import { Splash } from './Splash';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -42,21 +43,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const hideHeader = pathname?.startsWith('/feed');
   const [plusOpen, setPlusOpen] = useState(false);
+  const [profileTimedOut, setProfileTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!user || profile) { setProfileTimedOut(false); return; }
+    const id = setTimeout(() => setProfileTimedOut(true), 7000);
+    return () => clearTimeout(id);
+  }, [user, profile]);
 
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace('/welcome');
-    else if ((!profile || profile.profileComplete === false) && !pathname?.startsWith('/onboard')) {
+    if (!user) { router.replace('/welcome'); return; }
+    // Don't bounce to /onboard while the profile subscription is still pending.
+    if (!profile && !profileTimedOut) return;
+    if ((!profile || profile.profileComplete === false) && !pathname?.startsWith('/onboard')) {
       router.replace('/onboard');
     }
-  }, [user, profile, loading, pathname, router]);
+  }, [user, profile, loading, pathname, router, profileTimedOut]);
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-      </div>
-    );
+  if (loading || !user || (!profile && !profileTimedOut)) {
+    return <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />;
   }
 
   return (

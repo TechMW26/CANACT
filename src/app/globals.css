@@ -86,6 +86,16 @@ input[type="time"]::-webkit-date-and-time-value {
   100% { width: 100%; }
 }
 
+/* Splash screen brand mark gentle pulse */
+.canact-splash-pulse {
+  animation: canactSplashPulse 1.6s cubic-bezier(.4,0,.6,1) infinite;
+}
+@keyframes canactSplashPulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.06); opacity: 0.85; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .canact-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .canact-splash-pulse { animation: none !important; }
 }

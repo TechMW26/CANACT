@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/Button';
 import { BrandMark } from '@/components/Brand';
+import { Splash } from '@/components/Splash';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/Toaster';
 
@@ -21,12 +22,28 @@ export default function WelcomePage() {
   const router = useRouter();
   const { user, profile, loading, signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [profileTimedOut, setProfileTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!user || profile) { setProfileTimedOut(false); return; }
+    const id = setTimeout(() => setProfileTimedOut(true), 7000);
+    return () => clearTimeout(id);
+  }, [user, profile]);
 
   useEffect(() => {
     if (loading || !user) return;
+    // Wait for the profile snapshot — existing users should land on /feed,
+    // not bounce through /onboard.
+    if (!profile && !profileTimedOut) return;
     if (!profile || profile.profileComplete === false) router.replace('/onboard');
     else router.replace('/feed');
-  }, [user, profile, loading, router]);
+  }, [user, profile, loading, profileTimedOut, router]);
+
+  // While we're authenticated but waiting on routing, cover the page so the
+  // user never sees the sign-in button again.
+  if (user) {
+    return <Splash message="Signing you in…" />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">

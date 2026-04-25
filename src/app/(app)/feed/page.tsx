@@ -81,7 +81,7 @@ export default function FeedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fff8f8_0%,#fff2f3_18%,#fff8f8_42%,#fff8f8_100%)] pb-24 md:pb-10">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#FFD8DD_0%,#FFE8EC_22%,rgba(255,248,248,0)_60%)] pb-24 md:pb-10">
 
       <section className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6">
         <div className="flex items-center gap-1 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
