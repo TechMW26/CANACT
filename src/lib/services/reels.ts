@@ -2,15 +2,28 @@ import { onValue, push, ref, remove, set, update, query, orderByChild, runTransa
 import { db } from '../firebase';
 import type { ReelItem } from '../types';
 
+function stripUndef<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(stripUndef).filter((x) => x !== undefined) as unknown as T;
+  if (v && typeof v === 'object') {
+    const out: any = {};
+    for (const [k, val] of Object.entries(v as any)) {
+      if (val === undefined) continue;
+      out[k] = stripUndef(val as any);
+    }
+    return out as T;
+  }
+  return v;
+}
+
 export async function createReel(input: Omit<ReelItem, 'id' | 'createdAt' | 'likes' | 'views'>) {
   const node = push(ref(db, 'reels'));
-  const reel: ReelItem = {
+  const reel: ReelItem = stripUndef({
     ...input,
     id: node.key as string,
     createdAt: Date.now(),
     likes: {},
     views: 0,
-  };
+  });
   await set(node, reel);
   await set(ref(db, `userReels/${input.uid}/${reel.id}`), reel.createdAt);
   return reel;

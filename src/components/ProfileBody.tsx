@@ -8,8 +8,9 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile } from '@/lib/types';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
+import { listenUserWhaPosts } from '@/lib/services/wha';
 import { toast } from '@/components/Toaster';
 import { requestFollow } from '@/lib/services/favourites';
 import {
@@ -31,6 +32,9 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Camera,
+  Film,
+  Bookmark,
 } from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
@@ -58,6 +62,13 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     if (!user || isSelf) return;
     return listenFriendStatus(user.uid, uid, setFriendStatus);
   }, [uid, user?.uid, isSelf]);
+
+  // Instagram-style posts grid (user's authored WHA posts).
+  const [posts, setPosts] = useState<WhaPost[]>([]);
+  const [tab, setTab] = useState<'posts' | 'reels' | 'tagged'>('posts');
+  useEffect(() => {
+    return listenUserWhaPosts(uid, setPosts);
+  }, [uid]);
 
   if (!u) return <div className="h-32 flex items-center justify-center text-muted">Loading…</div>;
 
@@ -253,6 +264,78 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
             )}
           </div>
         </div>
+      </Card>
+
+      {/* Instagram-style posts grid */}
+      <Card className="!p-0 overflow-hidden">
+        <div className="grid grid-cols-3 border-b border-line">
+          {([
+            { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
+            { id: 'reels', label: 'Reels', Icon: Film, count: 0 },
+            { id: 'tagged', label: 'Tagged', Icon: Bookmark, count: 0 },
+          ] as const).map(({ id, label, Icon, count }) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`relative flex items-center justify-center gap-2 py-3 text-xs font-bold uppercase tracking-[0.18em] transition ${active ? 'text-brand' : 'text-ink/45 hover:text-ink/70'}`}
+              >
+                <Icon size={14} strokeWidth={2.2} />
+                <span className="hidden sm:inline">{label}</span>
+                <span>{count}</span>
+                {active ? <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-brand" /> : null}
+              </button>
+            );
+          })}
+        </div>
+        {tab === 'posts' ? (
+          posts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+                <Camera size={20} />
+              </span>
+              <div className="text-sm font-bold text-ink">No posts yet</div>
+              <div className="text-xs text-muted">{isSelf ? 'Tap + to share something.' : 'Nothing here yet.'}</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-[2px] bg-line">
+              {posts.map((p) => {
+                const cover = p.mediaUrls?.[0];
+                return (
+                  <Link
+                    key={p.id}
+                    href={`/post/${p.id}`}
+                    className="relative aspect-square overflow-hidden bg-brand-light"
+                  >
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-light to-white p-2 text-center text-[11px] font-semibold leading-tight text-ink/70">
+                        <span className="line-clamp-5">{p.text || 'Untitled'}</span>
+                      </div>
+                    )}
+                    {p.mediaUrls && p.mediaUrls.length > 1 ? (
+                      <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        {p.mediaUrls.length}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+              {tab === 'reels' ? <Film size={20} /> : <Bookmark size={20} />}
+            </span>
+            <div className="text-sm font-bold text-ink">Coming soon</div>
+            <div className="text-xs text-muted">This tab will light up soon.</div>
+          </div>
+        )}
       </Card>
 
       {isSelf ? (

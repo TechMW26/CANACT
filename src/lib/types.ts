@@ -145,6 +145,8 @@ export interface StoryItem {
   authorPhoto?: string;
   mediaUrl: string;
   caption?: string;
+  /** CSS filter id from MEDIA_FILTERS (e.g. 'vivid', 'mono'). */
+  filter?: string;
   overlays?: StoryOverlay[];
   viewers?: Record<string, StoryViewer>;
   likes?: Record<string, number>;
@@ -203,6 +205,8 @@ export interface ReelItem {
   videoUrl: string;
   posterUrl?: string;
   caption?: string;
+  /** CSS filter id from MEDIA_FILTERS (e.g. 'vivid', 'mono'). */
+  filter?: string;
   music?: { id: string; title: string; artist: string; url: string };
   likes?: Record<string, number>;
   views?: number;

@@ -5,16 +5,19 @@ import { CameraCapture, isVideoUrl } from '@/components/CameraCapture';
 import { StoryEditor } from '@/components/StoryEditor';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Input';
-import { ArrowLeft } from '@/components/icons';
+import { FilterStrip } from '@/components/FilterStrip';
+import { ArrowLeft, Sparkles } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { upsertStory } from '@/lib/services/stories';
 import { toast } from '@/components/Toaster';
+import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
 export default function StoryCreatePage() {
   const { user, profile } = useAuth();
   const router = useRouter();
   const [shot, setShot] = useState<string | null>(null);
   const [videoCaption, setVideoCaption] = useState('');
+  const [videoFilter, setVideoFilter] = useState<MediaFilterId>('none');
   const [busy, setBusy] = useState(false);
 
   if (!user || !profile) return null;
@@ -44,19 +47,34 @@ export default function StoryCreatePage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <div className="text-xl font-black tracking-tight text-ink">Share story</div>
+            <div className="text-xl font-black tracking-tight text-ink">Preview & share</div>
             <div className="text-xs text-ink/55">Video · disappears in 24h</div>
           </div>
         </header>
 
         <div className="overflow-hidden rounded-[28px] bg-black shadow-[0_18px_36px_-26px_rgba(10,10,10,0.32)]">
-          <video src={shot} className="aspect-[9/16] w-full object-cover" autoPlay loop playsInline controls />
+          <video
+            src={shot}
+            className="aspect-[9/16] w-full object-cover"
+            style={{ filter: filterCss(videoFilter) }}
+            autoPlay
+            loop
+            playsInline
+            controls
+          />
+        </div>
+
+        <div className="mt-3 rounded-2xl bg-black/90 p-3 ring-1 ring-white/10">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
+            <Sparkles size={12} /> Filters
+          </div>
+          <FilterStrip thumbUrl={shot} isVideo selected={videoFilter} onChange={setVideoFilter} />
         </div>
 
         <div className="mt-3">
           <Textarea
             label="Caption (optional)"
-            placeholder="Say something\u2026"
+            placeholder="Say something…"
             value={videoCaption}
             onChange={(e) => setVideoCaption(e.target.value)}
             maxLength={300}
@@ -77,6 +95,7 @@ export default function StoryCreatePage() {
                 authorPhoto: profile.photoURL,
                 mediaUrl: shot,
                 caption: videoCaption.trim() || undefined,
+                filter: videoFilter === 'none' ? undefined : videoFilter,
                 overlays: [],
               });
               toast('Story shared', 'success');
@@ -98,7 +117,7 @@ export default function StoryCreatePage() {
     <StoryEditor
       imageUrl={shot}
       onCancel={() => setShot(null)}
-      onShare={async (overlays, caption) => {
+      onShare={async (overlays, caption, filter) => {
         try {
           await upsertStory({
             uid: user.uid,
@@ -106,6 +125,7 @@ export default function StoryCreatePage() {
             authorPhoto: profile.photoURL,
             mediaUrl: shot,
             caption,
+            filter: filter && filter !== 'none' ? filter : undefined,
             overlays,
           });
           toast('Story shared', 'success');

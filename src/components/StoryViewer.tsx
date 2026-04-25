@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Avatar } from './Avatar';
 import { isVideoUrl } from './CameraCapture';
+import { filterCss } from '@/lib/mediaFilters';
 import { Heart, MessageSquare, Send, Trash2, X, Eye } from './icons';
 import { listenStory, markStoryView, replyToStory, toggleStoryLike } from '@/lib/services/stories';
 import type { StoryItem } from '@/lib/types';
@@ -204,6 +205,7 @@ export function StoryViewer({
             <video
               src={story.mediaUrl}
               className="h-full w-full object-cover"
+              style={{ filter: filterCss(story.filter) }}
               autoPlay
               loop
               playsInline
@@ -211,7 +213,7 @@ export function StoryViewer({
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={story.mediaUrl} alt={story.caption ?? ''} className="h-full w-full object-cover" draggable={false} />
+            <img src={story.mediaUrl} alt={story.caption ?? ''} className="h-full w-full object-cover" style={{ filter: filterCss(story.filter) }} draggable={false} />
           )}
           {(story.overlays ?? []).map((o) => (
             <div

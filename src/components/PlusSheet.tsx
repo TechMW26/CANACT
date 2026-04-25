@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BarChart3, Camera, ChevronRight, Eye, Film, LifeBuoy, Sparkles, X } from './icons';
 import type { LucideIcon } from 'lucide-react';
@@ -22,25 +22,63 @@ const ITEMS: Item[] = [
   { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: LifeBuoy,  accent: 'from-[#FFF8F8] to-[#FFE3E7]' },
 ];
 
+const ANIM_MS = 320;
+
 export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Mounted controls actual DOM presence; entered drives the animation state.
+  const [mounted, setMounted] = useState(open);
+  const [entered, setEntered] = useState(false);
+
+  // Open: mount immediately + flip entered on next frame so transition runs.
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setMounted(true);
+      const id = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(id);
+    }
+    // Close: play exit, then unmount.
+    setEntered(false);
+    const t = setTimeout(() => setMounted(false), ANIM_MS);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // Body lock + Esc + app-shell zoom-out
+  useEffect(() => {
+    if (!mounted) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
+    const shell = document.getElementById('canact-app-shell');
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
+      shell?.classList.remove('canact-sheet-zoom-out');
     };
-  }, [open, onClose]);
+  }, [mounted, onClose]);
 
-  if (!open) return null;
+  // Toggle the zoom class in sync with the sheet's animation state.
+  useEffect(() => {
+    const shell = document.getElementById('canact-app-shell');
+    if (!shell) return;
+    if (entered) shell.classList.add('canact-sheet-zoom-out');
+    else shell.classList.remove('canact-sheet-zoom-out');
+  }, [entered]);
+
+  if (!mounted) return null;
   if (typeof document === 'undefined') return null;
+
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-end justify-center" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-t-[32px] bg-white px-4 pb-8 pt-3 shadow-[0_-20px_60px_-20px_rgba(10,10,10,0.45)] safe-bottom">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
+      />
+      <div
+        className={`relative w-full max-w-md rounded-t-[32px] bg-white px-4 pb-8 pt-3 shadow-[0_-20px_60px_-20px_rgba(10,10,10,0.45)] safe-bottom transform transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(.22,.85,.3,1)] ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+      >
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl font-black tracking-tight text-ink">Create</h2>
@@ -72,3 +110,4 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
     document.body,
   );
 }
+

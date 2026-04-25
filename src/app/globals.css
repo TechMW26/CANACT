@@ -19,22 +19,66 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
 input, textarea, select, button { font: inherit; }
 input, textarea, select { background: #fff; }
 
+/* iOS Safari renders <input type="date"/time/etc.> with an implicit min-height
+   that overflows our 44px field. Force native date controls into our box. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-min-logical-width: 0;
+  min-height: 0;
+  line-height: normal;
+  display: block;
+}
+/* Native picker indicator — keep it tappable but compact. */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.25rem;
+}
+
 /* utility focus ring in brand red */
 .focus-ring:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
 
-/* ---------- Page entrance: subtle staggered fade-in ---------- */
-/* Pure transform + opacity, GPU-only — smooth on every device, including
-   iOS Safari. Each direct child of <PageTransition> gets a cascading delay. */
+/* ---------- Page entrance: smooth fade + tiny rise ---------- */
 .canact-fade-in {
   opacity: 0;
-  animation: canactFadeIn 360ms cubic-bezier(.22,.85,.3,1) forwards;
+  animation: canactFadeIn 420ms cubic-bezier(.22,.85,.3,1) both;
   will-change: transform, opacity;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
 @keyframes canactFadeIn {
-  0%   { opacity: 0; transform: translate3d(0, 8px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0,   0); }
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.985); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* ---------- Plus sheet: slide-up + body scale-down ---------- */
+.canact-sheet-backdrop {
+  opacity: 0;
+  animation: canactBackdropIn 220ms ease-out forwards;
+}
+.canact-sheet-panel {
+  opacity: 0;
+  transform: translate3d(0, 100%, 0);
+  animation: canactSheetIn 380ms cubic-bezier(.22,.85,.3,1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes canactBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes canactSheetIn {
+  0%   { opacity: 0; transform: translate3d(0, 100%, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+/* Body scale-down when a sheet is open */
+.canact-sheet-zoom-out {
+  transform-origin: 50% 0%;
+  transition: transform 380ms cubic-bezier(.22,.85,.3,1), filter 380ms ease-out;
+  transform: scale(0.96);
+  filter: brightness(0.92);
 }
 
 @keyframes storybar {

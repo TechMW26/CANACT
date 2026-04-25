@@ -1,8 +1,10 @@
 'use client';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Plus, Send, Trash2, Type } from './icons';
+import { ArrowLeft, Plus, Send, Trash2, Type, Sparkles } from './icons';
 import type { StoryOverlay } from '@/lib/types';
+import { FilterStrip } from './FilterStrip';
+import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
 const COLORS = ['#FFFFFF', '#0A0A0A', '#C8102E', '#FFD43B', '#22C55E', '#3B82F6', '#A855F7'];
 const BG_OPTIONS: Array<{ id: string; bg?: string; label: string }> = [
@@ -19,11 +21,13 @@ export function StoryEditor({
 }: {
   imageUrl: string;
   onCancel: () => void;
-  onShare: (overlays: StoryOverlay[], caption?: string) => void | Promise<void>;
+  onShare: (overlays: StoryOverlay[], caption?: string, filter?: MediaFilterId) => void | Promise<void>;
 }) {
   const [overlays, setOverlays] = useState<StoryOverlay[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
+  const [filter, setFilter] = useState<MediaFilterId>('none');
+  const [showFilters, setShowFilters] = useState(false);
   const [busy, setBusy] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
@@ -94,13 +98,23 @@ export function StoryEditor({
           >
             <ArrowLeft size={18} />
           </button>
-          <button
-            type="button"
-            onClick={addText}
-            className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-xs font-bold backdrop-blur"
-          >
-            <Type size={14} /> Add text
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              aria-pressed={showFilters}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold backdrop-blur ${showFilters ? 'bg-white text-ink' : 'bg-white/15'}`}
+            >
+              <Sparkles size={14} /> Filters
+            </button>
+            <button
+              type="button"
+              onClick={addText}
+              className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-xs font-bold backdrop-blur"
+            >
+              <Type size={14} /> Add text
+            </button>
+          </div>
         </div>
 
         <div
@@ -112,7 +126,7 @@ export function StoryEditor({
           className="relative flex-1 overflow-hidden"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ filter: filterCss(filter) }} />
           {overlays.map((o) => (
             <div
               key={o.id}
@@ -183,37 +197,42 @@ export function StoryEditor({
             </div>
           </div>
         ) : (
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-4 pb-6 pt-8 safe-bottom">
-            <input
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Add a caption (optional)"
-              className="flex-1 rounded-full bg-white/15 px-4 py-3 text-sm text-white placeholder:text-white/60 backdrop-blur outline-none"
-            />
-            <button
-              type="button"
-              onClick={addText}
-              aria-label="Add text"
-              className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur"
-            >
-              <Plus size={18} />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await onShare(overlays, caption.trim() || undefined);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              aria-label="Share story"
-              className="inline-flex h-12 items-center gap-2 rounded-full bg-brand px-5 font-extrabold disabled:opacity-60"
-            >
-              <Send size={16} /> Share
-            </button>
+          <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 bg-gradient-to-t from-black/70 to-transparent px-4 pb-6 pt-6 safe-bottom">
+            {showFilters ? (
+              <FilterStrip thumbUrl={imageUrl} selected={filter} onChange={setFilter} />
+            ) : null}
+            <div className="flex items-center gap-2">
+              <input
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Add a caption (optional)"
+                className="flex-1 rounded-full bg-white/15 px-4 py-3 text-sm text-white placeholder:text-white/60 backdrop-blur outline-none"
+              />
+              <button
+                type="button"
+                onClick={addText}
+                aria-label="Add text"
+                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+              >
+                <Plus size={18} />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await onShare(overlays, caption.trim() || undefined, filter);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                aria-label="Share story"
+                className="inline-flex h-12 items-center gap-2 rounded-full bg-brand px-5 font-extrabold disabled:opacity-60"
+              >
+                <Send size={16} /> Share
+              </button>
+            </div>
           </div>
         )}
       </div>

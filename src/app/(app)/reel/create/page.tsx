@@ -7,13 +7,29 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Input';
 import { MusicPicker } from '@/components/MusicPicker';
-import { ArrowLeft, Film, ImageIcon, Music, SwitchCamera, Trash2, X } from '@/components/icons';
+import { FilterStrip } from '@/components/FilterStrip';
+import {
+  ArrowLeft,
+  Film,
+  ImageIcon,
+  Music,
+  RotateCcw,
+  Sparkles,
+  SwitchCamera,
+  Trash2,
+  Volume2,
+  VolumeX,
+  X,
+} from '@/components/icons';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
 import { createReel } from '@/lib/services/reels';
 import type { MusicTrack } from '@/lib/musicLibrary';
+import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
 const MAX_DURATION = 60;
+
+type Step = 'capture' | 'preview' | 'compose';
 
 export default function ReelCreatePage() {
   const { user, profile } = useAuth();
@@ -21,12 +37,13 @@ export default function ReelCreatePage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  const composeRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  const [step, setStep] = useState<'capture' | 'compose'>('capture');
+  const [step, setStep] = useState<Step>('capture');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -34,11 +51,14 @@ export default function ReelCreatePage() {
   const [caption, setCaption] = useState('');
   const [music, setMusic] = useState<MusicTrack | null>(null);
   const [showMusic, setShowMusic] = useState(false);
+  const [filter, setFilter] = useState<MediaFilterId>('none');
+  const [muted, setMuted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Camera stream lifecycle (only during capture step).
   useEffect(() => {
     if (step !== 'capture') return;
     let cancelled = false;
@@ -87,7 +107,7 @@ export default function ReelCreatePage() {
       const reader = new FileReader();
       reader.onload = () => {
         setVideoUrl(reader.result as string);
-        setStep('compose');
+        setStep('preview');
       };
       reader.readAsDataURL(blob);
     };
@@ -108,14 +128,23 @@ export default function ReelCreatePage() {
     const reader = new FileReader();
     reader.onload = () => {
       setVideoUrl(reader.result as string);
-      setStep('compose');
+      setStep('preview');
     };
     reader.readAsDataURL(file);
+  };
+
+  const retake = () => {
+    setVideoUrl(null);
+    setFilter('none');
+    setMuted(false);
+    setSeconds(0);
+    setStep('capture');
   };
 
   if (!user || !profile) return null;
   if (!mounted) return null;
 
+  // ────────────────── CAPTURE ──────────────────
   if (step === 'capture') {
     const ui = (
       <div className="fixed inset-0 z-[100] bg-black text-white">
@@ -127,7 +156,7 @@ export default function ReelCreatePage() {
           className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? 'scale-x-[-1]' : ''}`}
         />
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/55 to-transparent p-4">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/55 to-transparent p-4 safe-top">
           <button
             onClick={() => router.replace('/create')}
             aria-label="Close"
@@ -147,14 +176,14 @@ export default function ReelCreatePage() {
         </div>
 
         {recording && (
-          <div className="absolute left-0 right-0 top-14 px-4">
+          <div className="absolute left-0 right-0 top-16 px-4">
             <div className="h-1 overflow-hidden rounded-full bg-white/25">
               <div className="h-full bg-brand transition-all" style={{ width: `${(seconds / MAX_DURATION) * 100}%` }} />
             </div>
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/55 to-transparent px-6 pb-10 pt-8">
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/55 to-transparent px-6 pb-10 pt-8 safe-bottom">
           <button
             onClick={() => fileRef.current?.click()}
             aria-label="Upload"
@@ -192,13 +221,71 @@ export default function ReelCreatePage() {
     return createPortal(ui, document.body);
   }
 
+  // ────────────────── PREVIEW (filters / mute / retake) ──────────────────
+  if (step === 'preview' && videoUrl) {
+    const ui = (
+      <div className="fixed inset-0 z-[100] bg-black text-white">
+        <video
+          ref={previewRef}
+          src={videoUrl}
+          autoPlay
+          loop
+          playsInline
+          muted={muted}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ filter: filterCss(filter) }}
+        />
+
+        {/* Top bar */}
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/60 to-transparent p-4 safe-top">
+          <button
+            onClick={retake}
+            aria-label="Retake"
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-2 text-xs font-bold backdrop-blur"
+          >
+            <RotateCcw size={14} /> Retake
+          </button>
+          <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur">Preview</div>
+          <button
+            onClick={() => setMuted((m) => !m)}
+            aria-label={muted ? 'Unmute' : 'Mute'}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur"
+          >
+            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
+        </div>
+
+        {/* Bottom controls */}
+        <div className="absolute inset-x-0 bottom-0 space-y-3 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-4 pb-6 pt-6 safe-bottom">
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider">
+              <Sparkles size={12} /> Filters
+            </div>
+            <button
+              onClick={() => setShowMusic(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur"
+            >
+              <Music size={14} /> {music ? 'Music ✓' : 'Add music'}
+            </button>
+          </div>
+          <FilterStrip thumbUrl={videoUrl} isVideo selected={filter} onChange={setFilter} />
+          <Button full size="lg" onClick={() => setStep('compose')}>Next</Button>
+        </div>
+
+        <MusicPicker open={showMusic} onClose={() => setShowMusic(false)} onPick={setMusic} />
+      </div>
+    );
+    return createPortal(ui, document.body);
+  }
+
+  // ────────────────── COMPOSE (caption + share) ──────────────────
   return (
     <div className="mx-auto max-w-2xl pb-10">
       <header className="mb-4 flex items-center gap-2">
         <button
           type="button"
           aria-label="Back"
-          onClick={() => { setVideoUrl(null); setStep('capture'); }}
+          onClick={() => setStep('preview')}
           className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line shadow-sm"
         >
           <ArrowLeft size={18} />
@@ -221,13 +308,22 @@ export default function ReelCreatePage() {
         {videoUrl && (
           <div className="relative mx-auto mt-4 aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-[28px] bg-black">
             <video
-              ref={previewRef}
+              ref={composeRef}
               src={videoUrl}
               loop
               autoPlay
               playsInline
+              muted={muted}
               className="h-full w-full object-cover"
+              style={{ filter: filterCss(filter) }}
             />
+            <button
+              type="button"
+              onClick={() => setStep('preview')}
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur"
+            >
+              <Sparkles size={11} /> Edit
+            </button>
           </div>
         )}
 
@@ -274,6 +370,7 @@ export default function ReelCreatePage() {
                 authorPhoto: profile.photoURL,
                 videoUrl,
                 caption: caption.trim() || undefined,
+                filter: filter === 'none' ? undefined : filter,
                 music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url } : undefined,
               });
               router.replace('/reels');

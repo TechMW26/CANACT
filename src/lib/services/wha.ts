@@ -26,6 +26,18 @@ export function listenWhaFeed(cb: (items: WhaPost[]) => void) {
   });
 }
 
+/** Listen for posts authored by a specific user (Instagram-style profile grid).
+ * Filters client-side and includes expired posts so the grid does not empty out. */
+export function listenUserWhaPosts(uid: string, cb: (items: WhaPost[]) => void) {
+  const r = query(ref(db, 'wha'), orderByChild('createdAt'));
+  return onValue(r, (snap) => {
+    const out: WhaPost[] = [];
+    snap.forEach((c) => { const v = c.val() as WhaPost; if (v && v.uid === uid) out.push(v); });
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    cb(out);
+  });
+}
+
 export function listenPost(id: string, cb: (p: WhaPost | null) => void) {
   return onValue(ref(db, `wha/${id}`), (snap) => cb(snap.val()));
 }

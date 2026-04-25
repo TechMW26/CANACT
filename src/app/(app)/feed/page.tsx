@@ -83,8 +83,8 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#fff8f8_0%,#fff2f3_18%,#fff8f8_42%,#fff8f8_100%)] pb-24 md:pb-10">
 
-      <section className="sticky top-0 z-20 bg-[linear-gradient(180deg,#fff8f8_0%,#fff8f8_55%,rgba(255,248,248,0.92)_82%,rgba(255,248,248,0)_100%)] px-4 pt-3 pb-6 safe-top md:px-6">
-        <div className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 shadow-[0_10px_30px_-18px_rgba(10,10,10,0.28)] ring-1 ring-white/70 backdrop-blur-xl">
+      <section className="sticky top-0 z-30 px-3 pt-3 pb-4 safe-top md:px-6">
+        <div className="flex items-center gap-1 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
           <Brand size={26} href="/feed" />
           <div className="ml-auto inline-flex items-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-full border border-[#F1D7DC] bg-white/90 pl-3 pr-1 py-1 text-xs">
@@ -100,18 +100,10 @@ export default function FeedPage() {
                 ))}
               </Select>
             </div>
-            <Link
-              href="/search"
-              aria-label="Search"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 transition hover:bg-brand-light hover:text-brand"
-            >
+            <Link href="/search" aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
               <Search size={16} strokeWidth={2.2} />
             </Link>
-            <Link
-              href="/inbox"
-              aria-label="Inbox"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 transition hover:bg-brand-light hover:text-brand"
-            >
+            <Link href="/inbox" aria-label="Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
               <MessageSquare size={16} strokeWidth={2.2} />
             </Link>
           </div>
@@ -151,13 +143,15 @@ export default function FeedPage() {
           </div>
         </div>
 
-        <div className="mt-1 flex flex-wrap justify-center gap-2">
-          {FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setFilter(f.id as any)}
-              className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
-              {f.label}
-            </button>
-          ))}
+        <div className="mt-1 -mx-4 overflow-x-auto no-scrollbar md:-mx-6">
+          <div className="flex w-max gap-2 px-4 md:px-6">
+            {FILTERS.map((f) => (
+              <button key={f.id} onClick={() => setFilter(f.id as any)}
+                className={`whitespace-nowrap shrink-0 rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

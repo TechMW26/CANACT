@@ -2,13 +2,28 @@ import { onValue, ref, set, remove, update, push, child } from 'firebase/databas
 import { db } from '../firebase';
 import type { StoryItem, StoryOverlay, StoryReply } from '../types';
 
+/** Recursively strip undefined values; Firebase RTDB rejects them and that's
+ * the most common cause of "Share story" silently throwing. */
+function stripUndef<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(stripUndef).filter((x) => x !== undefined) as unknown as T;
+  if (v && typeof v === 'object') {
+    const out: any = {};
+    for (const [k, val] of Object.entries(v as any)) {
+      if (val === undefined) continue;
+      out[k] = stripUndef(val as any);
+    }
+    return out as T;
+  }
+  return v;
+}
+
 export async function upsertStory(input: Omit<StoryItem, 'id' | 'createdAt' | 'expiresAt' | 'viewers' | 'likes' | 'replies'>) {
-  const story: StoryItem = {
+  const story: StoryItem = stripUndef({
     ...input,
     id: input.uid,
     createdAt: Date.now(),
     expiresAt: Date.now() + 24 * 3600 * 1000,
-  };
+  });
   await set(ref(db, `stories/${input.uid}`), story);
   return story;
 }

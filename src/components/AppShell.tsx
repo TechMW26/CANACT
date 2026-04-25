@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen pb-28 md:pb-6 md:flex">
+    <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6 md:flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:gap-1 md:py-4 md:pr-2">
         <div className="px-3 py-2 mb-2">

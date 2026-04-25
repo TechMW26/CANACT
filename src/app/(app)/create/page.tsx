@@ -1,6 +1,17 @@
 'use client';
 import Link from 'next/link';
-import { BarChart3, Camera, ChevronRight, Eye, LifeBuoy, Sparkles } from '@/components/icons';
+import {
+  BarChart3,
+  Camera,
+  ChevronRight,
+  Eye,
+  Film,
+  LifeBuoy,
+  Sparkles,
+  EyeOff,
+  CircleHelp,
+  Megaphone,
+} from '@/components/icons';
 import type { LucideIcon } from 'lucide-react';
 
 type Action = {
@@ -11,42 +22,91 @@ type Action = {
   accent: string;
   ring: string;
   badge?: string;
+  iconColor?: string;
 };
 
-const ACTIONS: Action[] = [
+/** Top creation flows (rich cards). */
+const PRIMARY: Action[] = [
+  {
+    href: '/story/create',
+    title: 'Story',
+    desc: 'Camera-first moment with text & filters. Disappears in 24h.',
+    Icon: Sparkles,
+    accent: 'from-[#FFE3E7] to-[#FFD8DD]',
+    ring: 'ring-[#F7BFC7]',
+    badge: '24h',
+  },
   {
     href: '/post/create',
     title: "What's Happening",
-    desc: 'Snap a moment with your back camera. Auto-disappears in 24h.',
+    desc: 'Photos / carousel with caption. Auto-disappears in 24h.',
     Icon: Camera,
-    accent: 'from-[#FFE3E7] to-[#FFD8DD]',
+    accent: 'from-[#FFEDF0] to-[#FFD8DD]',
     ring: 'ring-[#F7BFC7]',
-    badge: 'Camera first',
+    badge: 'Vicinity',
+  },
+  {
+    href: '/reel/create',
+    title: 'Reel',
+    desc: 'Short vertical clip with music & filters.',
+    Icon: Film,
+    accent: 'from-[#FFF1F3] to-[#FFE3E7]',
+    ring: 'ring-[#F1D7DC]',
+    badge: 'Vertical',
   },
   {
     href: '/rateme/start',
     title: 'Rate Me',
-    desc: 'Front camera selfie, switch or upload. Live for hours, not forever.',
+    desc: 'Front-camera selfie. Goes live for hours.',
     Icon: Eye,
     accent: 'from-[#FFEDF0] to-[#FFD8DD]',
     ring: 'ring-[#F7BFC7]',
     badge: 'Selfie',
   },
+];
+
+/** Quick actions (compact tiles). */
+const SECONDARY: Action[] = [
   {
     href: '/poll/create',
-    title: 'Poll · Ask · Suggest',
-    desc: 'Get a quick read from your area or favourites.',
+    title: 'Poll',
+    desc: 'Read your area in seconds.',
     Icon: BarChart3,
     accent: 'from-[#FFF1F3] to-[#FFE3E7]',
     ring: 'ring-[#F1D7DC]',
   },
   {
+    href: '/poll/create?mode=ask',
+    title: 'Ask',
+    desc: 'Open-ended question to your circle.',
+    Icon: CircleHelp,
+    accent: 'from-[#FFF1F3] to-[#FFE3E7]',
+    ring: 'ring-[#F1D7DC]',
+  },
+  {
+    href: '/poll/create?mode=suggest',
+    title: 'Suggest',
+    desc: 'Pitch an idea, gather reactions.',
+    Icon: Megaphone,
+    accent: 'from-[#FFF8F8] to-[#FFE3E7]',
+    ring: 'ring-[#F1D7DC]',
+  },
+  {
     href: '/help/create',
     title: 'Help',
-    desc: 'Red, Orange or Yellow — call your circle to action.',
+    desc: 'Red / Orange / Yellow ping.',
     Icon: LifeBuoy,
     accent: 'from-[#FFF8F8] to-[#FFE3E7]',
     ring: 'ring-[#F1D7DC]',
+  },
+  {
+    href: '/underground',
+    title: 'Underground',
+    desc: 'Go invisible for a while.',
+    Icon: EyeOff,
+    accent: 'from-[#1A1A1A] to-[#2A2A2A]',
+    ring: 'ring-black/40',
+    iconColor: 'text-white',
   },
 ];
 
@@ -62,7 +122,7 @@ export default function CreateHubPage() {
       </header>
 
       <div className="grid gap-3">
-        {ACTIONS.map(({ href, title, desc, Icon, accent, ring, badge }) => (
+        {PRIMARY.map(({ href, title, desc, Icon, accent, ring, badge }) => (
           <Link
             key={href}
             href={href}
@@ -87,6 +147,31 @@ export default function CreateHubPage() {
             </div>
           </Link>
         ))}
+      </div>
+
+      <div className="mt-6 mb-2 flex items-center gap-2">
+        <div className="h-px flex-1 bg-line" />
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-ink/45">Quick actions</div>
+        <div className="h-px flex-1 bg-line" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {SECONDARY.map(({ href, title, desc, Icon, accent, ring, iconColor }) => {
+          const dark = accent.includes('1A1A1A');
+          return (
+            <Link
+              key={href + title}
+              href={href}
+              className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${accent} p-4 ring-1 ${ring} shadow-[0_10px_24px_-18px_rgba(10,10,10,0.22)] transition active:scale-[0.99]`}
+            >
+              <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${dark ? 'bg-white/10' : 'bg-white'} ${iconColor ?? 'text-brand'} shadow-[0_8px_18px_-14px_rgba(200,16,46,0.4)]`}>
+                <Icon size={18} strokeWidth={2} />
+              </span>
+              <div className={`mt-3 text-sm font-extrabold tracking-tight ${dark ? 'text-white' : 'text-ink'}`}>{title}</div>
+              <div className={`mt-0.5 text-[11px] leading-snug ${dark ? 'text-white/70' : 'text-ink/60'}`}>{desc}</div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

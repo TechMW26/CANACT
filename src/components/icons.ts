@@ -72,4 +72,7 @@ export {
   Zap,
   Smile,
   PartyPopper,
+  Bookmark,
+  Phone,
+  RotateCcw,
 } from 'lucide-react';

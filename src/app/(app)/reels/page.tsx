@@ -6,6 +6,7 @@ import { ArrowLeft, Heart, MessageCircle, Music, Plus, Send } from '@/components
 import { useAuth } from '@/lib/auth';
 import { listenReels, toggleReelLike, bumpReelView } from '@/lib/services/reels';
 import type { ReelItem } from '@/lib/types';
+import { filterCss } from '@/lib/mediaFilters';
 
 export default function ReelsPage() {
   const { user } = useAuth();
@@ -94,6 +95,7 @@ function ReelTile({ reel, myUid }: { reel: ReelItem; myUid: string }) {
         ref={videoRef}
         src={reel.videoUrl}
         className="h-full w-full object-cover"
+        style={{ filter: filterCss(reel.filter) }}
         loop
         playsInline
         muted={!!reel.music}

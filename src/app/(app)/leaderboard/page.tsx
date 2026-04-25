@@ -22,13 +22,15 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap justify-center gap-2">
-        {SCOPES.map((s) => (
-          <button key={s.id} onClick={() => setScope(s.id)}
-            className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border ${scope === s.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>
-            {s.label}
-          </button>
-        ))}
+      <div className="-mx-4 overflow-x-auto no-scrollbar md:-mx-6">
+        <div className="flex w-max gap-2 px-4 md:px-6">
+          {SCOPES.map((s) => (
+            <button key={s.id} onClick={() => setScope(s.id)}
+              className={`whitespace-nowrap shrink-0 rounded-full px-4 h-9 text-sm font-semibold border ${scope === s.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
       {rows.length === 0 && <Card className="text-center text-muted">No one to show in this scope yet.</Card>}
       <ul className="space-y-2">
