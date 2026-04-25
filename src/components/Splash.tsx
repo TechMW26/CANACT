@@ -1,23 +1,22 @@
 'use client';
+import { useEffect } from 'react';
 import { BrandMark } from './Brand';
+import { haptic } from '@/lib/haptics';
 
-/** Branded full-screen splash shown while auth and profile are resolving.
- * Replaces the bare half-second spinner so the user is never staring at a
- * blank screen during the Google sign-in handoff. */
-export function Splash({ message }: { message?: string }) {
+/** Minimal full-screen loader: brand icon + a small spinner underneath.
+ * Fires a success haptic when it unmounts (i.e. loading completes). */
+export function Splash(_props: { message?: string } = {}) {
+  useEffect(() => {
+    return () => { haptic('success'); };
+  }, []);
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-candy">
-      <div className="relative">
-        <span className="absolute inset-0 -m-3 rounded-full border-2 border-brand/30 animate-ping" />
-        <span className="absolute inset-0 -m-3 rounded-full border-2 border-brand/15" />
-        <div className="canact-splash-pulse">
-          <BrandMark size={88} />
-        </div>
-      </div>
-      <div className="mt-7 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold text-ink/70 ring-1 ring-line shadow-[0_10px_24px_-18px_rgba(10,10,10,0.28)]">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
-        {message ?? 'Getting things ready…'}
-      </div>
+      <BrandMark size={88} />
+      <span
+        aria-label="Loading"
+        role="status"
+        className="mt-6 inline-block h-6 w-6 rounded-full border-2 border-brand/25 border-t-brand animate-spin"
+      />
     </div>
   );
 }

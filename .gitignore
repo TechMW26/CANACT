@@ -11,3 +11,4 @@ dist
 .vscode
 coverage
 tsconfig.tsbuildinfo
+.env*.local

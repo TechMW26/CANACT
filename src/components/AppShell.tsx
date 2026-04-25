@@ -11,6 +11,7 @@ import { PlusSheet } from './PlusSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
 import { Select } from './Input';
+import { haptic } from '@/lib/haptics';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -119,7 +120,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   <button
                     key={href}
                     type="button"
-                    onClick={() => setPlusOpen(true)}
+                    onClick={() => { haptic('strong'); setPlusOpen(true); }}
                     aria-label="Create"
                     className="flex items-center justify-center"
                   >
@@ -135,6 +136,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   key={href}
                   href={href}
                   aria-label={label || href}
+                  onClick={() => { if (!active) haptic('selection'); }}
                   className={`relative flex flex-col items-center justify-center h-16 transition ${active ? 'text-brand' : 'text-ink/60 hover:text-ink'}`}
                 >
                   {isProfile ? (
@@ -191,10 +193,10 @@ function UnifiedHeader() {
               <option key={option.index} value={option.index}>{option.label}</option>
             ))}
           </Select>
-          <Link href="/search" aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+          <Link href="/search" aria-label="Search" onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
             <Search size={16} strokeWidth={2.2} />
           </Link>
-          <Link href="/inbox" aria-label="Inbox" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+          <Link href="/inbox" aria-label="Inbox" onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
             <MessageSquare size={16} strokeWidth={2.2} />
           </Link>
         </div>

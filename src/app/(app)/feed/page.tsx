@@ -76,7 +76,7 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="px-3 pb-4 md:px-6">
+      <section className="sticky top-[calc(env(safe-area-inset-top,0px)+64px)] z-20 -mx-4 px-3 pb-4 pt-1 md:-mx-6 md:px-6 bg-[linear-gradient(180deg,#FFF8F8_0%,#FFF8F8_70%,rgba(255,248,248,0)_100%)]">
         <div className="overflow-x-auto no-scrollbar">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
