@@ -31,8 +31,15 @@ export interface UserProfile {
   mobile?: string;
   city?: string;
   country?: string;
+  address?: string;
+  dateOfBirth?: string;
   bio?: string;
   photoURL?: string;
+  profileVerified?: boolean;
+  verificationProvider?: 'digilocker';
+  verificationIdLast4?: string;
+  verifiedAt?: number;
+  verificationLockedAt?: number;
   rating: number;
   ratingCount: number;
   likesCount: number;
@@ -48,7 +55,9 @@ export interface UserProfile {
   undergroundDayKey?: string;
   rateMeOn?: boolean;
   rateMeUntil?: number;
-  passwordHash?: string;
+  /** True once the user has filled the post-Google-signin onboarding form. */
+  profileComplete?: boolean;
+  gender?: 'female' | 'male' | 'nonbinary' | 'other';
   createdAt: number;
 }
 
@@ -99,6 +108,50 @@ export interface RateMeSession {
   dislikes: number;
 }
 
+export interface StoryOverlay {
+  id: string;
+  text: string;
+  /** 0..1 relative position */
+  x: number;
+  y: number;
+  rotation?: number;
+  scale?: number;
+  color?: string;
+  background?: string;
+}
+
+export interface StoryViewer {
+  uid: string;
+  name: string;
+  photoURL?: string;
+  at: number;
+  liked?: boolean;
+}
+
+export interface StoryReply {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromPhoto?: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface StoryItem {
+  id: string;
+  uid: string;
+  authorName: string;
+  authorPhoto?: string;
+  mediaUrl: string;
+  caption?: string;
+  overlays?: StoryOverlay[];
+  viewers?: Record<string, StoryViewer>;
+  likes?: Record<string, number>;
+  replies?: Record<string, StoryReply>;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface HelpRequest {
   id: string;
   uid: string;
@@ -127,6 +180,43 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+export type ChatThreadStatus = 'pending' | 'accepted' | 'declined';
+
+export interface ChatThread {
+  id: string;
+  members: Record<string, true>;
+  initiator: string;
+  status: ChatThreadStatus;
+  createdAt: number;
+  lastMessageAt: number;
+  lastMessageText?: string;
+  participants: Record<string, { uid: string; name: string; photoURL?: string }>;
+  unread?: Record<string, number>;
+}
+
+export interface ReelItem {
+  id: string;
+  uid: string;
+  authorName: string;
+  authorPhoto?: string;
+  videoUrl: string;
+  posterUrl?: string;
+  caption?: string;
+  music?: { id: string; title: string; artist: string; url: string };
+  likes?: Record<string, number>;
+  views?: number;
+  createdAt: number;
+}
+
+export type FriendStatus = 'none' | 'requested' | 'incoming' | 'friends';
+
+export interface FriendEdge {
+  uid: string;
+  name: string;
+  photoURL?: string;
+  at: number;
+}
+
 export interface NotificationItem {
   id: string;
   kind: 'help' | 'follow' | 'react' | 'comment' | 'system';
@@ -141,3 +231,35 @@ export type FeedItem =
   | { kind: 'wha'; data: WhaPost }
   | { kind: 'poll'; data: Poll }
   | { kind: 'rateme'; data: RateMeSession };
+
+/* ---------- Vicinity / proximity rating ---------- */
+
+export interface PresenceEntry {
+  uid: string;
+  lat: number;
+  lng: number;
+  accuracy: number;
+  name: string;
+  photoURL?: string;
+  updatedAt: number;
+}
+
+export interface Encounter {
+  a: string;
+  b: string;
+  startedAt: number;
+  lastSeen: number;
+  samples: number;
+  qualified?: boolean;
+  closestMeters?: number;
+}
+
+export interface PendingRating {
+  pairKey: string;
+  otherUid: string;
+  otherName: string;
+  otherPhoto?: string;
+  encounteredAt: number;
+  departedAt: number;
+  durationMs: number;
+}

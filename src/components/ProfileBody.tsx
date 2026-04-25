@@ -1,22 +1,49 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { onValue, ref, get } from 'firebase/database';
+import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
 import { toast } from '@/components/Toaster';
 import { requestFollow } from '@/lib/services/favourites';
-import { ThumbsUp, ThumbsDown } from '@/components/icons';
+import {
+  acceptFriendRequest,
+  cancelFriendRequest,
+  declineFriendRequest,
+  listenFriendStatus,
+  sendFriendRequest,
+  unfriend,
+} from '@/lib/services/friends';
+import {
+  Award,
+  CheckCircle2,
+  Crown,
+  Lock,
+  Mail,
+  MapPin,
+  ShieldAlert,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+} from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const { user, profile: me } = useAuth();
   const [u, setU] = useState<UserProfile | null>(null);
   const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attr?: { key: AttrKey; at: number }; cards?: Record<string, number> } | null>(null);
+  const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [requestId, setRequestId] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (s) => setU(s.val()));
@@ -25,6 +52,11 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   useEffect(() => {
     if (!user || isSelf) return;
     return onValue(ref(db, `votes/${uid}/${user.uid}`), (s) => setMyVote(s.val() ?? {}));
+  }, [uid, user?.uid, isSelf]);
+
+  useEffect(() => {
+    if (!user || isSelf) return;
+    return listenFriendStatus(user.uid, uid, setFriendStatus);
   }, [uid, user?.uid, isSelf]);
 
   if (!u) return <div className="h-32 flex items-center justify-center text-muted">Loading…</div>;
@@ -50,51 +82,242 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     else await giveCard(uid, user.uid, c);
   };
 
+  const sendOtp = async () => {
+    if (!aadhaarNumber.trim()) {
+      toast('Enter your Aadhaar number to continue.', 'error');
+      return;
+    }
+    setSendingOtp(true);
+    try {
+      const res = await fetch('/api/verify/digilocker/send-otp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ aadhaarNumber, uid: user?.uid }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setRequestId(data.requestId ?? '');
+      setOtpSent(true);
+      toast(data?.message ?? 'OTP sent', 'success');
+    } catch (e: any) {
+      toast(e?.message ?? 'Could not send OTP', 'error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const completeVerification = async () => {
+    if (!otp.trim() || !requestId) {
+      toast('Enter the OTP first.', 'error');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/verify/digilocker/complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ otp, requestId, uid: user?.uid }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setOtp('');
+      setOtpSent(false);
+      setRequestId('');
+      setAadhaarNumber('');
+      toast('Profile verified. Name, DOB, and address are now locked.', 'success');
+    } catch (e: any) {
+      toast(e?.message ?? 'Could not verify profile', 'error');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const statCards = [
+    { label: 'Rating', value: (u.rating ?? 0).toFixed(1), tone: 'text-brand bg-brand-light/70' },
+    { label: 'Likes', value: String(u.likesCount ?? 0), tone: 'text-emerald-700 bg-emerald-50' },
+    { label: 'Cards', value: String(CARD_KEYS.reduce((sum, key) => sum + (u.cardsReceived?.[key] ?? 0), 0)), tone: 'text-amber-700 bg-amber-50' },
+  ];
+  const locationText = [u.city, u.country].filter(Boolean).join(', ');
+  const isVerified = !!u.profileVerified;
+
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="flex items-center gap-4">
-          <Avatar src={u.photoURL} name={u.fullName} size={72} />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-extrabold truncate">{u.fullName}</h2>
-            <div className="mt-1 flex items-center gap-2 flex-wrap">
-              <RatingPill value={u.rating ?? 0} />
-              <span className="text-xs text-muted">{u.likesCount ?? 0} likes • {u.dislikesCount ?? 0} dislikes</span>
+      <Card className="relative overflow-hidden border border-[#F1D7DC] bg-[radial-gradient(circle_at_top_left,_rgba(255,216,221,0.9),_rgba(255,248,248,0.96)_44%,_rgba(255,255,255,1)_100%)] shadow-[0_24px_60px_-28px_rgba(200,16,46,0.35)]">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-brand/10 blur-2xl" />
+        <div className="pointer-events-none absolute -left-8 bottom-0 h-24 w-24 rounded-full bg-amber-200/30 blur-2xl" />
+        <div className="relative">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
+            <div className="flex items-center gap-4 md:flex-col md:items-start">
+              <div className="rounded-[28px] bg-white/80 p-1.5 shadow-[0_10px_24px_-12px_rgba(10,10,10,0.25)] ring-1 ring-white/70">
+                <Avatar src={u.photoURL} name={u.fullName} size={96} />
+              </div>
+              <div className="flex-1 min-w-0 md:hidden">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-2xl font-black tracking-tight truncate">{u.fullName}</h2>
+                  {isVerified ? <VerifiedBadge /> : null}
+                </div>
+                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                  <RatingPill value={u.rating ?? 0} />
+                  <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.likesCount ?? 0} likes</span>
+                  <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.dislikesCount ?? 0} dislikes</span>
+                </div>
+              </div>
             </div>
-            {u.city || u.country ? <p className="text-xs text-muted mt-1">{[u.city, u.country].filter(Boolean).join(', ')}</p> : null}
-          </div>
-        </div>
-        {u.bio && <p className="mt-3 text-sm text-muted whitespace-pre-wrap">{u.bio}</p>}
-        {u.tags?.length ? (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {u.tags.map((t) => <span key={t} className="text-[11px] rounded-full bg-brand-light text-brand px-2 py-0.5 font-bold">{t}</span>)}
-          </div>
-        ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {isSelf ? (
-            <>
-              <Link href="/edit-profile"><Button variant="outline" size="sm">Edit profile</Button></Link>
-              <Link href="/rateme/start"><Button size="sm">Start Rate Me</Button></Link>
-              <Link href="/underground"><Button variant="ghost" size="sm">Underground</Button></Link>
-            </>
-          ) : (
-            <>
-              <Button size="sm" variant={myVote?.main === 'like' ? 'primary' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'like')}>
-                <ThumbsUp size={14} className="mr-1" /> Like
-              </Button>
-              <Button size="sm" variant={myVote?.main === 'dislike' ? 'danger' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'dislike')}>
-                <ThumbsDown size={14} className="mr-1" /> Dislike
-              </Button>
-              <Button size="sm" variant="subtle" onClick={async () => { if (user && me) { await requestFollow(user.uid, me.fullName, uid); toast('Request sent', 'success'); } }}>+ Favourite</Button>
-            </>
-          )}
+            <div className="hidden flex-1 min-w-0 md:block">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-3xl font-black tracking-tight truncate">{u.fullName}</h2>
+                {isVerified ? <VerifiedBadge /> : null}
+              </div>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <RatingPill value={u.rating ?? 0} />
+                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.likesCount ?? 0} likes</span>
+                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.dislikesCount ?? 0} dislikes</span>
+                {u.mobile ? <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">+91 {u.mobile}</span> : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {statCards.map((item) => (
+              <div key={item.label} className={`rounded-2xl px-3 py-3 ${item.tone}`}>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">{item.label}</div>
+                <div className="mt-1 text-xl font-black leading-none">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            <InfoPill icon={<MapPin size={14} />} label={locationText || 'Location not set'} />
+            <InfoPill icon={<Mail size={14} />} label={u.email || 'Email private'} />
+            <InfoPill icon={<Award size={14} />} label={u.dateOfBirth ? `DOB ${u.dateOfBirth}` : 'DOB not verified'} />
+            <InfoPill icon={<Crown size={14} />} label={u.address || 'Address not verified'} />
+          </div>
+
+          {u.bio ? <p className="mt-4 text-sm leading-6 text-ink/75 whitespace-pre-wrap">{u.bio}</p> : null}
+          {u.tags?.length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {u.tags.map((t) => (
+                <span key={t} className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-[11px] font-bold text-brand shadow-sm">
+                  {t}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {isSelf ? (
+              <>
+                <Link href="/edit-profile"><Button variant="outline" size="sm">Edit profile</Button></Link>
+                {!isVerified ? <Button size="sm" icon={<ShieldAlert size={14} />} onClick={() => document.getElementById('verify-profile-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Verify profile</Button> : null}
+                <Link href="/rateme/start"><Button size="sm" variant="subtle">Start Rate Me</Button></Link>
+                <Link href="/underground"><Button variant="ghost" size="sm">Underground</Button></Link>
+              </>
+            ) : (
+              <>
+                <Button size="sm" variant={myVote?.main === 'like' ? 'primary' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'like')}>
+                  <ThumbsUp size={14} className="mr-1" /> Like
+                </Button>
+                <Button size="sm" variant={myVote?.main === 'dislike' ? 'danger' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'dislike')}>
+                  <ThumbsDown size={14} className="mr-1" /> Dislike
+                </Button>
+                <Button size="sm" variant="subtle" onClick={async () => { if (user && me) { await requestFollow(user.uid, me.fullName, uid); toast('Request sent', 'success'); } }}>+ Favourite</Button>
+                <FriendButton
+                  status={friendStatus}
+                  onSend={async () => {
+                    if (!user || !me) return;
+                    await sendFriendRequest(
+                      { uid: user.uid, name: me.fullName, photoURL: me.photoURL },
+                      { uid: u.uid, name: u.fullName, photoURL: u.photoURL },
+                    );
+                    toast('Friend request sent', 'success');
+                  }}
+                  onCancel={async () => { if (user) await cancelFriendRequest(user.uid, uid); }}
+                  onAccept={async () => {
+                    if (!user || !me) return;
+                    await acceptFriendRequest(
+                      user.uid,
+                      { name: me.fullName, photoURL: me.photoURL },
+                      uid,
+                      { name: u.fullName, photoURL: u.photoURL },
+                    );
+                    toast('You are now friends', 'success');
+                  }}
+                  onDecline={async () => { if (user) await declineFriendRequest(user.uid, uid); }}
+                  onUnfriend={async () => { if (user) await unfriend(user.uid, uid); }}
+                />
+                <Link href={`/inbox/${uid}`}>
+                  <Button size="sm" variant="outline">Message</Button>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </Card>
 
+      {isSelf ? (
+        <Card id="verify-profile-panel" className="overflow-hidden border border-[#EFD9DD] bg-white shadow-[0_18px_44px_-26px_rgba(10,10,10,0.22)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
+                <Sparkles size={12} /> Verify Profile
+              </div>
+              <h3 className="mt-3 text-xl font-black tracking-tight text-ink">DigiLocker identity lock</h3>
+              <p className="mt-1 text-sm text-ink/65">
+                Verify via OTP and Canact will auto-lock your name, DOB, and address so others can trust the profile.
+              </p>
+            </div>
+            {isVerified ? <VerifiedBadge compact /> : null}
+          </div>
+
+          {isVerified ? (
+            <div className="mt-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <div className="flex items-center gap-2 font-bold"><CheckCircle2 size={16} /> Verified via DigiLocker</div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <LockedField label="Name" value={u.fullName} />
+                <LockedField label="DOB" value={u.dateOfBirth || 'Not available'} />
+                <LockedField label="Address" value={u.address || 'Not available'} className="md:col-span-2" />
+              </div>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-800">
+                <Lock size={13} /> These fields are locked after verification
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-3xl border border-[#F2DADF] bg-[linear-gradient(135deg,rgba(255,248,248,1),rgba(255,216,221,0.38))] p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 1</div>
+                <Input
+                  label="Aadhaar number"
+                  value={aadhaarNumber}
+                  onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  placeholder="Enter 12-digit Aadhaar"
+                  className="mt-2"
+                  inputMode="numeric"
+                />
+                <Button size="sm" className="mt-3" loading={sendingOtp} onClick={sendOtp}>Send OTP</Button>
+              </div>
+
+              <div className="rounded-3xl border border-[#F2DADF] bg-white p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 2</div>
+                <Input
+                  label="OTP"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter OTP"
+                  className="mt-2"
+                  inputMode="numeric"
+                  disabled={!otpSent}
+                />
+                <Button size="sm" className="mt-3" variant="outline" loading={verifying} onClick={completeVerification} disabled={!otpSent}>Verify with DigiLocker</Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       <Card>
         <div className="flex items-center justify-between">
-          <h3 className="font-bold">Attributes</h3>
+          <h3 className="font-black tracking-tight">Attributes</h3>
           {cooldownLeft > 0 && !isSelf && <span className="text-xs text-muted">Cooldown {Math.ceil(cooldownLeft / 60000)} min</span>}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -104,14 +327,14 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       </Card>
 
       <Card>
-        <h3 className="font-bold">Cards</h3>
+        <h3 className="font-black tracking-tight">Cards</h3>
         <p className="text-xs text-muted">Tap to give. Tap again to take back. One card per pair.</p>
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
           {CARD_KEYS.map((c) => {
             const given = !!myVote?.cards?.[c];
             return (
               <button key={c} disabled={isSelf} onClick={() => handleCard(c)}
-                className={`rounded-2xl p-3 border text-left ${given ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'} disabled:opacity-70`}>
+                className={`rounded-2xl p-3 border text-left transition ${given ? 'bg-brand text-white border-brand shadow-[0_10px_24px_-14px_rgba(200,16,46,0.65)]' : 'bg-white text-ink border-line hover:border-brand-light'} disabled:opacity-70`}>
                 <div className="text-xs font-bold uppercase tracking-wide opacity-80">Card</div>
                 <div className="font-bold">{CARD_LABELS[c]}</div>
                 <div className="mt-1 text-xs">{u.cardsReceived?.[c] ?? 0} received</div>
@@ -120,6 +343,64 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
           })}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function FriendButton({
+  status,
+  onSend,
+  onCancel,
+  onAccept,
+  onDecline,
+  onUnfriend,
+}: {
+  status: 'none' | 'requested' | 'incoming' | 'friends';
+  onSend: () => void | Promise<void>;
+  onCancel: () => void | Promise<void>;
+  onAccept: () => void | Promise<void>;
+  onDecline: () => void | Promise<void>;
+  onUnfriend: () => void | Promise<void>;
+}) {
+  if (status === 'friends') {
+    return <Button size="sm" variant="outline" onClick={() => onUnfriend()}>✓ Friends</Button>;
+  }
+  if (status === 'requested') {
+    return <Button size="sm" variant="outline" onClick={() => onCancel()}>Requested</Button>;
+  }
+  if (status === 'incoming') {
+    return (
+      <>
+        <Button size="sm" onClick={() => onAccept()}>Accept</Button>
+        <Button size="sm" variant="ghost" onClick={() => onDecline()}>Decline</Button>
+      </>
+    );
+  }
+  return <Button size="sm" onClick={() => onSend()}>Add friend</Button>;
+}
+
+function VerifiedBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full bg-emerald-100 font-bold text-emerald-800 ${compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'}`}>
+      <CheckCircle2 size={compact ? 12 : 14} /> Verified
+    </span>
+  );
+}
+
+function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="inline-flex min-w-0 items-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-sm text-ink/75 shadow-[0_8px_20px_-16px_rgba(10,10,10,0.3)]">
+      <span className="shrink-0 text-brand">{icon}</span>
+      <span className="truncate">{label}</span>
+    </div>
+  );
+}
+
+function LockedField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-emerald-200 bg-white px-3 py-3 ${className}`}>
+      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-ink">{value}</div>
     </div>
   );
 }

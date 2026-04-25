@@ -22,7 +22,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex flex-wrap justify-center gap-2">
         {SCOPES.map((s) => (
           <button key={s.id} onClick={() => setScope(s.id)}
             className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border ${scope === s.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>

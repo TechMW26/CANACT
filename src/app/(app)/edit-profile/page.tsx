@@ -17,6 +17,7 @@ export default function EditProfilePage() {
   const [country, setCountry] = useState(profile?.country ?? '');
   const [busy, setBusy] = useState(false);
   if (!profile) return null;
+  const locked = !!profile.profileVerified;
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     setPhoto(await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f); }));
@@ -30,10 +31,21 @@ export default function EditProfilePage() {
       <div className="mt-4 space-y-3">
         <Input label="Photo URL (or pick a file above)" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…" />
         <Textarea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} maxLength={300} />
+        {locked ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            Your profile is verified. Name, DOB, address, city, and country are locked to the verified record.
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3">
-          <Input label="City" value={city} onChange={(e) => setCity(e.target.value)} />
-          <Input label="Country" value={country} onChange={(e) => setCountry(e.target.value)} />
+          <Input label="City" value={city} onChange={(e) => setCity(e.target.value)} disabled={locked} />
+          <Input label="Country" value={country} onChange={(e) => setCountry(e.target.value)} disabled={locked} />
         </div>
+        {locked ? (
+          <>
+            <Input label="Date of birth" value={profile.dateOfBirth ?? ''} disabled />
+            <Textarea label="Verified address" value={profile.address ?? ''} disabled className="min-h-[72px]" />
+          </>
+        ) : null}
       </div>
       <Button full size="lg" loading={busy} className="mt-4" onClick={async () => {
         setBusy(true);

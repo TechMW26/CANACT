@@ -3,14 +3,43 @@ import { db } from '../firebase';
 import { HelpRequest, HelpStatus } from '../types';
 import { pushNotification } from './notifications';
 
+/** Recursively drop undefined fields — Firebase RTDB rejects them. */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(stripUndefined) as any;
+  if (value && typeof value === 'object') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(value as any)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefined(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | 'status'>) {
+  if (!input.text || !input.text.trim()) {
+    throw new Error('Please describe what you need.');
+  }
   if (input.type === 'red' && (input.authorRating ?? 0) < 3.5) {
-    throw new Error('Red Help requires rating of 3.5 or higher.');
+    throw new Error('Red Help requires a rating of 3.5 or higher. Build trust first with Orange or Yellow help.');
   }
   const node = push(ref(db, 'help'));
-  const help: HelpRequest = { ...input, id: node.key!, createdAt: Date.now(), status: 'open' };
-  await set(node, help);
-  await set(ref(db, `userHelps/${input.uid}/${help.id}`), help.createdAt);
+  const help: HelpRequest = stripUndefined({
+    ...input,
+    id: node.key!,
+    createdAt: Date.now(),
+    status: 'open',
+  });
+  try {
+    await set(node, help);
+    await set(ref(db, `userHelps/${input.uid}/${help.id}`), help.createdAt);
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    if (msg.includes('PERMISSION_DENIED')) throw new Error('Not allowed to post help here. Try signing in again.');
+    if (msg.toLowerCase().includes('network')) throw new Error('Network issue — check your connection and try again.');
+    throw new Error(`Could not send help request: ${msg}`);
+  }
   return help;
 }
 

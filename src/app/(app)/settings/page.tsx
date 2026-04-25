@@ -24,7 +24,7 @@ export default function SettingsPage() {
       <Card>
         <h3 className="font-bold">Account</h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={async () => { await signOut(); router.replace('/login'); }}>Sign out</Button>
+          <Button variant="outline" onClick={async () => { await signOut(); router.replace('/welcome'); }}>Sign out</Button>
           <Button variant="danger" onClick={() => setOpen(true)}>Delete profile</Button>
         </div>
       </Card>
@@ -36,7 +36,7 @@ export default function SettingsPage() {
         onConfirm={async () => {
           try {
             await deleteAccount();
-            router.replace('/login');
+            router.replace('/welcome');
           } catch (e: any) { toast(e?.message ?? 'Could not delete', 'error'); }
         }}
       />

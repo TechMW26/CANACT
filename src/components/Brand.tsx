@@ -15,7 +15,7 @@ export function Brand({
 }) {
   const inner = (
     <span className={clsx('inline-flex items-center gap-2', className)}>
-      <Image src="/logo.png" alt="Canact" width={size} height={size} priority className="rounded-md object-contain" />
+      <Image src="/logo.png" alt="Canact" width={size} height={size} priority className="object-contain" />
       {showText && <span className="font-extrabold tracking-tight text-brand" style={{ fontSize: Math.round(size * 0.78) }}>Canact</span>}
     </span>
   );

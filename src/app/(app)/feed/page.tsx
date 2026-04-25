@@ -1,18 +1,23 @@
 'use client';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
-import { Card } from '@/components/Card';
-import { Avatar, RatingPill } from '@/components/Avatar';
+import { Avatar } from '@/components/Avatar';
+import { Brand } from '@/components/Brand';
 import { Button } from '@/components/Button';
+import { Select } from '@/components/Input';
+import { StoryViewer } from '@/components/StoryViewer';
 import { listenWhaFeed, reactWha } from '@/lib/services/wha';
 import { listenPollFeed, votePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
-import { FeedItem, Poll, RateMeSession, WhaPost } from '@/lib/types';
+import { deleteStory, listenActiveStories } from '@/lib/services/stories';
+import { FeedItem, Poll, RateMeSession, StoryItem, WhaPost } from '@/lib/types';
 import { formatDistance, haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { Sparkles, MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Search, Eye, MessageSquare } from '@/components/icons';
+import { isVideoUrl } from '@/components/CameraCapture';
 import type { LucideIcon } from 'lucide-react';
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
@@ -24,6 +29,10 @@ const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIc
 ];
 
 const RADII = [1000, 5000, 10000, 25000, 100000, Infinity];
+const RADIUS_OPTIONS = RADII.map((radius, index) => ({
+  index,
+  label: radius === Infinity ? 'Anywhere' : formatDistance(radius),
+}));
 const FILTERS = [
   { id: 'all', label: 'All' }, { id: 'wha', label: "What's Happening" },
   { id: 'poll', label: 'Polls' }, { id: 'rateme', label: 'Rate Me' },
@@ -32,16 +41,25 @@ const FILTERS = [
 export default function FeedPage() {
   const { user, profile } = useAuth();
   const { coords } = useGeo();
+  const router = useRouter();
   const [wha, setWha] = useState<WhaPost[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [rms, setRms] = useState<RateMeSession[]>([]);
+  const [stories, setStories] = useState<StoryItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme'>('all');
   const [radiusIdx, setRadiusIdx] = useState(2);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   useEffect(() => listenWhaFeed(setWha), []);
   useEffect(() => listenPollFeed(setPolls), []);
   useEffect(() => listenActiveRateMe(setRms), []);
+  useEffect(() => listenActiveStories(setStories), []);
 
   const radius = RADII[radiusIdx];
+  const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
+  const orderedStories = useMemo(() => {
+    const others = stories.filter((story) => story.uid !== user?.uid);
+    return myStory ? [myStory, ...others] : others;
+  }, [stories, myStory, user?.uid]);
   const items: FeedItem[] = useMemo(() => {
     const a: FeedItem[] = [
       ...wha.map((d) => ({ kind: 'wha' as const, data: d })),
@@ -53,42 +71,128 @@ export default function FeedPage() {
       .filter((it) => withinRadius(it, coords, radius));
   }, [wha, polls, rms, filter, coords, radius]);
 
+  const openOwnStory = () => {
+    if (myStory) {
+      const index = orderedStories.findIndex((story) => story.uid === myStory.uid);
+      setViewerIndex(index >= 0 ? index : 0);
+      return;
+    }
+    router.push('/story/create');
+  };
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fff8f8_0%,#fff2f3_18%,#fff8f8_42%,#fff8f8_100%)] pb-24 md:pb-10">
+
+      <section className="sticky top-0 z-20 bg-[linear-gradient(180deg,#fff8f8_0%,#fff8f8_55%,rgba(255,248,248,0.92)_82%,rgba(255,248,248,0)_100%)] px-4 pt-3 pb-6 safe-top md:px-6">
+        <div className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 shadow-[0_10px_30px_-18px_rgba(10,10,10,0.28)] ring-1 ring-white/70 backdrop-blur-xl">
+          <Brand size={26} href="/feed" />
+          <div className="ml-auto inline-flex items-center gap-2">
+            <div className="inline-flex items-center gap-1 rounded-full border border-[#F1D7DC] bg-white/90 pl-3 pr-1 py-1 text-xs">
+              <span className="font-semibold text-muted">{coords ? 'Within' : 'Off'}</span>
+              <Select
+                aria-label="Feed distance filter"
+                value={String(radiusIdx)}
+                onChange={(e) => setRadiusIdx(Number(e.target.value))}
+                className="h-7 w-auto min-w-[92px] rounded-full border-0 bg-brand-light px-2 text-center text-[11px] font-bold text-brand shadow-none [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
+              >
+                {RADIUS_OPTIONS.map((option) => (
+                  <option key={option.index} value={option.index}>{option.label}</option>
+                ))}
+              </Select>
+            </div>
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 transition hover:bg-brand-light hover:text-brand"
+            >
+              <Search size={16} strokeWidth={2.2} />
+            </Link>
+            <Link
+              href="/inbox"
+              aria-label="Inbox"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 transition hover:bg-brand-light hover:text-brand"
+            >
+              <MessageSquare size={16} strokeWidth={2.2} />
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3 overflow-x-auto no-scrollbar">
+          <div className="flex min-w-max gap-3 pb-2">
+            <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
+              <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
+                <div className="rounded-full bg-white p-[3px]">
+                  <div className="relative">
+                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={64} />
+                    <span className="absolute bottom-0 right-0 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand text-white ring-4 ring-white">
+                      {myStory ? <Eye size={12} /> : <Plus size={14} />}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <span className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink/80">{myStory ? 'Your story' : 'Add story'}</span>
+            </button>
+
+            {orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
+              <button
+                key={story.id}
+                type="button"
+                onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === story.id))}
+                className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center"
+              >
+                <div className="rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
+                  <div className="rounded-full bg-white p-[3px]">
+                    <Avatar src={story.authorPhoto ?? null} name={story.authorName} size={64} />
+                  </div>
+                </div>
+                <span className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink/80">{story.authorName}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-1 flex flex-wrap justify-center gap-2">
           {FILTERS.map((f) => (
             <button key={f.id} onClick={() => setFilter(f.id as any)}
-              className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>
+              className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
               {f.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted">{coords ? 'Showing within' : 'Location off — showing all'}</span>
-          <button className="rounded-full px-3 h-8 text-xs font-bold bg-brand-light text-brand"
-            onClick={() => setRadiusIdx((i) => (i + 1) % RADII.length)}>
-            {radius === Infinity ? 'Anywhere' : formatDistance(radius)}
-          </button>
+      </section>
+
+      <section className="mx-auto max-w-2xl px-4 md:px-6">
+        {items.length === 0 && (
+          <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted shadow-[0_18px_36px_-26px_rgba(10,10,10,0.16)]">
+            Nothing here yet. Be the first to post around you.
+          </div>
+        )}
+
+        <div className="space-y-5">
+          {items.map((it) => it.kind === 'wha' ? (
+            <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} />
+          ) : it.kind === 'poll' ? (
+            <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
+          ) : (
+            <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
+          ))}
         </div>
-      </div>
+      </section>
 
-      {items.length === 0 && (
-        <Card className="text-center text-muted">
-          Nothing here yet. Be the first — tap
-          <span className="ml-1 inline-flex items-center gap-1 text-brand font-bold">
-            <Sparkles size={14} /> Create
-          </span>.
-        </Card>
-      )}
-
-      {items.map((it) => it.kind === 'wha' ? (
-        <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} />
-      ) : it.kind === 'poll' ? (
-        <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
-      ) : (
-        <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
-      ))}
+      {viewerIndex !== null && orderedStories[viewerIndex] && user && profile ? (
+        <StoryViewer
+          stories={orderedStories}
+          startIndex={viewerIndex}
+          meUid={user.uid}
+          meName={profile.fullName}
+          mePhoto={profile.photoURL}
+          onClose={() => setViewerIndex(null)}
+          onDelete={async (uid) => {
+            await deleteStory(uid);
+            toast('Story removed', 'success');
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -104,7 +208,7 @@ function withinRadius(it: FeedItem, c: { lat: number; lng: number } | null, r: n
 function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
   const myReact = post.reactionVoters?.[myUid];
   return (
-    <Card>
+    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${post.uid}`}><Avatar src={post.authorPhoto} name={post.authorName} /></Link>
         <div className="flex-1 min-w-0">
@@ -115,12 +219,35 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
       <Link href={`/post/${post.id}`}>
         {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
         {post.mediaUrls?.length ? (
-          <div className={`mt-3 grid gap-2 ${post.mediaUrls.length === 1 ? '' : 'grid-cols-2'}`}>
-            {post.mediaUrls.slice(0, 4).map((u, i) => (
+          post.mediaUrls.length === 1 ? (
+            isVideoUrl(post.mediaUrls[0]) ? (
+              <video
+                src={post.mediaUrls[0]}
+                className="mt-3 w-full h-72 rounded-[24px] bg-black object-cover"
+                controls
+                playsInline
+              />
+            ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={u} alt="" className="w-full h-48 object-cover rounded-xl bg-brand-light" />
-            ))}
-          </div>
+              <img src={post.mediaUrls[0]} alt="" className="mt-3 w-full h-72 object-cover rounded-[24px] bg-brand-light" />
+            )
+          ) : (
+            <div className="mt-3 -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
+              {post.mediaUrls.map((u, i) => (
+                <div key={i} className="relative shrink-0 snap-start">
+                  {isVideoUrl(u) ? (
+                    <video src={u} className="h-72 w-72 rounded-[24px] bg-black object-cover" muted playsInline loop autoPlay />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={u} alt="" className="h-72 w-72 object-cover rounded-[24px] bg-brand-light" />
+                  )}
+                  <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white">
+                    {i + 1}/{post.mediaUrls.length}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
         ) : null}
       </Link>
       <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
@@ -134,7 +261,7 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
           <MessageCircle size={14} /> {post.commentCount ?? 0}
         </Link>
       </div>
-    </Card>
+    </article>
   );
 }
 
@@ -143,7 +270,7 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
   return (
-    <Card>
+    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${poll.uid}`}><Avatar name={poll.authorName} /></Link>
         <div className="flex-1 min-w-0">
@@ -172,7 +299,7 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
         <Link href={`/poll/${poll.id}`} className="rounded-full px-3 h-8 inline-flex items-center font-semibold border border-line bg-white">Open</Link>
         <span className="ml-auto self-center">{total} votes</span>
       </div>
-    </Card>
+    </article>
   );
 }
 
@@ -180,7 +307,7 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   const isOwner = sess.uid === myUid;
   const my = sess.votes?.[myUid];
   return (
-    <Card>
+    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${sess.uid}`}><Avatar src={sess.photoURL} name={sess.authorName} /></Link>
         <div className="flex-1 min-w-0">
@@ -190,7 +317,7 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
       </div>
       {sess.photoURL && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sess.photoURL} alt="" className="mt-3 w-full max-h-96 object-cover rounded-xl" />
+        <img src={sess.photoURL} alt="" className="mt-3 w-full max-h-96 object-cover rounded-[24px]" />
       )}
       <div className="mt-3 flex gap-2">
         <Button variant={my === 'like' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'like'); } catch (e: any) { toast(e.message, 'error'); } }}>
@@ -200,6 +327,6 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
           <ThumbsDown size={16} className="mr-1" /> {sess.dislikes ?? 0}
         </Button>
       </div>
-    </Card>
+    </article>
   );
 }

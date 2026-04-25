@@ -1,17 +1,16 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
-import { Button } from '@/components/Button';
 import { listenHelpFeed } from '@/lib/services/help';
 import { HelpRequest, HelpStatus } from '@/lib/types';
 import { formatDistance, haversineMeters, timeAgo } from '@/lib/utils';
-import { ShieldAlert, AlertTriangle, CircleHelp } from '@/components/icons';
+import { LifeBuoy } from '@/components/icons';
 
 const TYPE_COLOR = { red: 'bg-red2', orange: 'bg-orange2', yellow: 'bg-yellow2' } as const;
+const TYPE_LABEL = { red: 'Red', orange: 'Orange', yellow: 'Yellow' } as const;
 
 export default function HelpFeed() {
   const { coords } = useGeo();
@@ -28,38 +27,37 @@ export default function HelpFeed() {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
-        <Link href="/help/create?type=red">
-          <Button full className="h-14 bg-red2 hover:bg-red2/90 text-white inline-flex items-center justify-center gap-2">
-            <ShieldAlert size={20} /> Red
-          </Button>
-        </Link>
-        <Link href="/help/create?type=orange">
-          <Button full className="h-14 bg-orange2 hover:bg-orange2/90 text-white inline-flex items-center justify-center gap-2">
-            <AlertTriangle size={20} /> Orange
-          </Button>
-        </Link>
-        <Link href="/help/create?type=yellow">
-          <Button full className="h-14 bg-yellow2 hover:bg-yellow2/90 text-ink inline-flex items-center justify-center gap-2">
-            <CircleHelp size={20} /> Yellow
-          </Button>
+      {/* Sticky single CTA */}
+      <div className="sticky top-[68px] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-1 pb-2 bg-candy/85 backdrop-blur-md">
+        <Link href="/help/create" className="block">
+          <button className="w-full h-12 rounded-full bg-brand text-white font-bold inline-flex items-center justify-center gap-2 shadow-[0_8px_20px_-8px_rgba(200,16,46,0.55)] hover:bg-brand-dark active:scale-[0.99] transition">
+            <LifeBuoy size={20} strokeWidth={2.4} /> Request Help
+          </button>
         </Link>
       </div>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+
+      <div className="flex flex-wrap justify-center gap-2">
         {(['all', 'open', 'inProcess', 'closed'] as const).map((s) => (
           <button key={s} onClick={() => setFilter(s)}
-            className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border ${filter === s ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>
+            className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border transition ${filter === s ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line hover:border-ink/30'}`}>
             {s === 'all' ? 'All' : s === 'inProcess' ? 'In Process' : s[0].toUpperCase() + s.slice(1)}
           </button>
         ))}
       </div>
-      {visible.length === 0 && <Card className="text-center text-muted">No help requests in your area.</Card>}
+
+      {visible.length === 0 && (
+        <Card className="text-center text-muted py-10">
+          <div className="text-2xl mb-1">🤝</div>
+          No help requests in your area right now.
+        </Card>
+      )}
+
       {visible.map((h) => (
         <Link key={h.id} href={`/help/${h.id}`}>
           <Card className="hover:shadow-md transition">
             <div className="flex items-start gap-3">
-              <span className={`mt-1 inline-block w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} />
-              <Avatar src={h.authorPhoto} name={h.authorName} />
+              <span className={`mt-1 inline-flex items-center justify-center w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} aria-label={TYPE_LABEL[h.type]} />
+              <Avatar src={h.authorPhoto ?? null} name={h.authorName} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-bold truncate">{h.authorName}</span>
