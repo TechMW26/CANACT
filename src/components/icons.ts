@@ -51,6 +51,7 @@ export {
   Globe2,
   Loader2,
   Filter,
+  SlidersHorizontal,
   Crown,
   Flame,
   ThumbsUp,

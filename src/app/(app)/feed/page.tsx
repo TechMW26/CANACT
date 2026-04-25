@@ -16,9 +16,11 @@ import { listenReels } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
+import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
 import type { LucideIcon } from 'lucide-react';
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
@@ -48,12 +50,16 @@ export default function FeedPage() {
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [stories, setStories] = useState<StoryItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme' | 'reel'>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  useEffect(() => listenWhaFeed(setWha), []);
-  useEffect(() => listenPollFeed(setPolls), []);
-  useEffect(() => listenActiveRateMe(setRms), []);
-  useEffect(() => listenReels(setReels), []);
-  useEffect(() => listenActiveStories(setStories), []);
+  const [loaded, setLoaded] = useState({ wha: false, polls: false, rms: false, reels: false, stories: false });
+  useEffect(() => listenWhaFeed((v) => { setWha(v); setLoaded((s) => ({ ...s, wha: true })); }), []);
+  useEffect(() => listenPollFeed((v) => { setPolls(v); setLoaded((s) => ({ ...s, polls: true })); }), []);
+  useEffect(() => listenActiveRateMe((v) => { setRms(v); setLoaded((s) => ({ ...s, rms: true })); }), []);
+  useEffect(() => listenReels((v) => { setReels(v); setLoaded((s) => ({ ...s, reels: true })); }), []);
+  useEffect(() => listenActiveStories((v) => { setStories(v); setLoaded((s) => ({ ...s, stories: true })); }), []);
+  const isLoading = !loaded.wha || !loaded.polls || !loaded.rms || !loaded.reels;
+  const activeFilter = FILTERS.find((f) => f.id === filter) ?? FILTERS[0];
 
   const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
   const orderedStories = useMemo(() => {
@@ -82,10 +88,11 @@ export default function FeedPage() {
   };
 
   return (
+    <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip -mx-4 px-3 pt-2 pb-3 md:-mx-6 md:px-6">
-        <div className="overflow-x-auto no-scrollbar">
+      <section className="canact-stories-strip relative pt-2 pb-3">
+        <div className="canact-stories-fade overflow-x-auto no-scrollbar pr-12">
           <div className="flex min-w-max gap-3 pb-2">
             <button type="button" onClick={openOwnStory} className="flex w-[78px] shrink-0 flex-col items-center gap-2 text-center">
               <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px] shadow-[0_12px_32px_-18px_rgba(200,16,46,0.45)]">
@@ -100,7 +107,13 @@ export default function FeedPage() {
               </div>
             </button>
 
-            {orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
+            {!loaded.stories && stories.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={`s_skel_${i}`} className="flex w-[78px] shrink-0 flex-col items-center gap-2">
+                  <Skeleton circle width={70} height={70} />
+                </div>
+              ))
+            ) : orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
               <button
                 key={story.id}
                 type="button"
@@ -116,27 +129,46 @@ export default function FeedPage() {
             ))}
           </div>
         </div>
+        {/* Filter trigger pinned to the right edge of the stories row */}
+        <button
+          type="button"
+          onClick={() => setFilterOpen(true)}
+          aria-label="Filter feed"
+          className="absolute right-1 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand border border-line shadow-[0_8px_20px_-10px_rgba(200,16,46,0.55)]"
+        >
+          <SlidersHorizontal size={18} />
+          {filter !== 'all' && (
+            <span className="absolute -top-0.5 -right-0.5 inline-flex h-3 w-3 rounded-full bg-brand ring-2 ring-white" />
+          )}
+        </button>
       </section>
 
-      <div className="canact-filters-wrap -mx-4 md:-mx-6 pb-2">
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="flex w-max gap-2 px-4 py-2 md:px-6">
-            {FILTERS.map((f) => (
-              <button key={f.id} onClick={() => setFilter(f.id as any)}
-                className={`whitespace-nowrap shrink-0 rounded-full px-4 h-9 text-sm font-semibold border shadow-sm ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white/90 text-ink border-line'}`}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="canact-filters-wrap pb-1">
+        <div className="text-xs font-bold text-ink/60 uppercase tracking-wide px-1">{activeFilter.label}</div>
       </div>
 
-      <section className="mx-auto max-w-3xl px-2 pt-4 md:px-4">
-        {items.length === 0 && (
+      <section className="pt-3">
+        {isLoading && items.length === 0 ? (
+          <div className="space-y-6">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <article key={`skel_${i}`} className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)]">
+                <div className="flex items-center gap-3">
+                  <Skeleton circle width={40} height={40} />
+                  <div className="flex-1">
+                    <Skeleton width={120} height={12} />
+                    <Skeleton width={80} height={10} />
+                  </div>
+                </div>
+                <div className="mt-3"><Skeleton height={14} count={2} /></div>
+                <div className="mt-3"><Skeleton height={220} borderRadius={24} /></div>
+              </article>
+            ))}
+          </div>
+        ) : items.length === 0 ? (
           <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted shadow-[0_18px_36px_-26px_rgba(10,10,10,0.16)]">
             Nothing here yet. Be the first to post around you.
           </div>
-        )}
+        ) : null}
 
         <div className="space-y-6">
           {items.map((it) => it.kind === 'wha' ? (
@@ -165,7 +197,33 @@ export default function FeedPage() {
           }}
         />
       ) : null}
+
+      {filterOpen && (
+        <div className="fixed inset-0 z-[55]" onClick={() => setFilterOpen(false)}>
+          <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-4 pb-6 safe-bottom shadow-2xl canact-sheet-slide"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto h-1 w-10 rounded-full bg-line mb-3" />
+            <div className="text-sm font-extrabold mb-3">Filter feed</div>
+            <div className="grid grid-cols-2 gap-2">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => { setFilter(f.id as any); setFilterOpen(false); }}
+                  className={`rounded-2xl px-4 py-3 text-sm font-semibold border ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </SkeletonTheme>
   );
 }
 

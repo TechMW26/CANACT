@@ -106,13 +106,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 md:pl-2">
         <UnifiedHeader />
-        <div className="mx-auto w-full max-w-md px-4 pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="canact-col px-2 pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
       </main>
 
       {/* Floating mobile bottom nav */}
-      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-3 safe-bottom pointer-events-none">
-        <div className="pointer-events-auto mx-auto max-w-md rounded-[28px] bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
+      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pb-3 safe-bottom pointer-events-none">
+        <div className="canact-col pointer-events-auto rounded-[28px] bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
           <div className="grid grid-cols-5 h-16 items-center">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = !isFab && (pathname === href || pathname?.startsWith(href));
@@ -180,9 +180,9 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="sticky top-0 z-30 px-3 pt-3 pb-3 safe-top md:px-6 md:pt-4"
+      className="sticky top-0 z-30 pt-3 pb-3 safe-top md:px-6 md:pt-4"
     >
-      <div className="mx-auto w-full max-w-md md:max-w-none flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+      <div className="canact-col md:max-w-none flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
         <div className="ml-auto inline-flex items-center gap-2">
           <Select

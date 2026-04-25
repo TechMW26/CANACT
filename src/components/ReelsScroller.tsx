@@ -51,11 +51,11 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
       {/* Header — soft top fade, no hard line */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-32 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
       <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between p-4 safe-top">
-        <Link href="/feed" aria-label="Back" className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur">
+        <Link href="/feed" aria-label="Back" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15">
           <ArrowLeft size={18} />
         </Link>
-        <div className="rounded-full bg-black/40 px-3 py-1 text-xs font-extrabold backdrop-blur">Reels</div>
-        <Link href="/reel/create" aria-label="Create" className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur">
+        <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-extrabold backdrop-blur ring-1 ring-white/15">Reels</div>
+        <Link href="/reel/create" aria-label="Create" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15">
           <Plus size={18} />
         </Link>
       </div>
@@ -150,7 +150,7 @@ function ReelTile({
       <video
         ref={videoRef}
         src={reel.videoUrl}
-        className="h-full w-full object-contain"
+        className="h-full w-full object-cover"
         style={{ filter: filterCss(reel.filter) }}
         loop
         playsInline
@@ -165,7 +165,7 @@ function ReelTile({
         type="button"
         onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
         aria-label={muted ? 'Unmute' : 'Mute'}
-        className="absolute right-3 top-20 z-30 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
+        className="absolute right-3 top-20 z-30 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15"
       >
         {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
@@ -243,6 +243,7 @@ function CommentsSheet({
   const [items, setItems] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => listenReelComments(reel.id, setItems), [reel.id]);
@@ -250,35 +251,45 @@ function CommentsSheet({
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [items.length]);
 
-  async function send() {
-    const t = text.trim();
-    if (!t || !myUid || busy) return;
-    setBusy(true);
-    try {
-      await addReelComment(reel.id, myUid, myName, myPhoto, t);
-      setText('');
-    } finally {
-      setBusy(false);
+  // Pause all reel videos in the background while sheet is open; resume on close.
+  useEffect(() => {
+    const vids = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
+    const wasPlaying = vids.filter((v) => !v.paused);
+    if (expanded) {
+      wasPlaying.forEach((v) => v.pause());
     }
+    return () => {
+      // resume on unmount handled by parent close
+    };
+  }, [expanded]);
+
+  // Expand sheet to nearly full height when user scrolls within the comments list.
+  function onListScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!expanded && e.currentTarget.scrollTop > 4) setExpanded(true);
   }
 
   return (
     <div className="absolute inset-0 z-40" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
-        className="absolute inset-x-0 bottom-0 flex max-h-[78dvh] flex-col rounded-t-3xl bg-white text-ink shadow-2xl"
+        className={`absolute inset-x-0 bottom-0 flex flex-col rounded-t-3xl bg-white text-ink shadow-2xl canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[92dvh]' : 'h-[58dvh]'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="mx-auto h-1 w-10 rounded-full bg-line" />
-        </div>
+        <button
+          type="button"
+          aria-label={expanded ? 'Collapse' : 'Expand'}
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center justify-center px-4 pt-3 pb-1"
+        >
+          <span className="h-1 w-10 rounded-full bg-line" />
+        </button>
         <div className="flex items-center justify-between px-4 pb-2">
           <div className="text-sm font-extrabold">Comments</div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1 text-ink/70 hover:bg-brand-light/40">
             <X size={18} />
           </button>
         </div>
-        <div ref={listRef} className="flex-1 overflow-y-auto px-4 pb-3">
+        <div ref={listRef} onScroll={onListScroll} className="flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
           {items.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted">Be the first to comment.</div>
           ) : (
@@ -303,6 +314,7 @@ function CommentsSheet({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onFocus={() => setExpanded(true)}
             placeholder={myUid ? 'Add a comment…' : 'Sign in to comment'}
             disabled={!myUid || busy}
             className="h-10 flex-1 rounded-full border border-line bg-brand-light/40 px-4 text-sm outline-none focus:border-brand"
@@ -319,4 +331,16 @@ function CommentsSheet({
       </div>
     </div>
   );
+
+  async function send() {
+    const t = text.trim();
+    if (!t || !myUid || busy) return;
+    setBusy(true);
+    try {
+      await addReelComment(reel.id, myUid, myName, myPhoto, t);
+      setText('');
+    } finally {
+      setBusy(false);
+    }
+  }
 }

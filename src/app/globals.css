@@ -46,15 +46,37 @@ input[type="time"]::-webkit-date-and-time-value {
 /* ---------- Page entrance: smooth fade + tiny rise ---------- */
 .canact-fade-in {
   opacity: 0;
-  animation: canactFadeIn 420ms cubic-bezier(.22,.85,.3,1) both;
-  will-change: transform, opacity;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
+  animation: canactFadeIn 180ms ease-out both;
+  will-change: opacity;
 }
 @keyframes canactFadeIn {
-  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.985); }
-  60%  { opacity: 1; }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Unified column width used by header pill, page content, and bottom nav so
+   the entire app feels visually centered with consistent edge gutters. */
+.canact-col {
+  width: 98vw;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Right-edge fade mask for the stories scroller so cards fade into the
+   filter button instead of cutting off hard. */
+.canact-stories-fade {
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 56px), transparent 100%);
+          mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 56px), transparent 100%);
+}
+
+/* Comment sheet entrance animation (slide-up + fade) */
+.canact-sheet-slide {
+  animation: canactSheetSlide 280ms cubic-bezier(.22,.85,.3,1) both;
+}
+@keyframes canactSheetSlide {
+  0%   { transform: translate3d(0, 100%, 0); opacity: 0.6; }
+  100% { transform: translate3d(0, 0, 0); opacity: 1; }
 }
 
 /* ---------- Plus sheet: slide-up + body scale-down ---------- */
