@@ -15,7 +15,6 @@ import {
   Music,
   RotateCcw,
   Sparkles,
-  SwitchCamera,
   Trash2,
   Volume2,
   VolumeX,
@@ -36,18 +35,12 @@ export default function ReelCreatePage() {
   const { user, profile } = useAuth();
   const router = useRouter();
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const composeRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState<Step>('capture');
-  const [facing, setFacing] = useState<'user' | 'environment'>('user');
-  const [recording, setRecording] = useState(false);
-  const [seconds, setSeconds] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [music, setMusic] = useState<MusicTrack | null>(null);
@@ -58,70 +51,6 @@ export default function ReelCreatePage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
-
-  // Camera stream lifecycle (only during capture step).
-  useEffect(() => {
-    if (step !== 'capture') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing },
-          audio: true,
-        });
-        if (cancelled) { s.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = s;
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-          videoRef.current.play().catch(() => {});
-        }
-      } catch (e: any) {
-        toast(e?.message ?? 'Camera blocked', 'error');
-      }
-    })();
-    return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, [step, facing]);
-
-  useEffect(() => {
-    if (!recording) return;
-    const id = setInterval(() => {
-      setSeconds((s) => {
-        if (s + 1 >= MAX_DURATION) { stopRecording(); return MAX_DURATION; }
-        return s + 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording]);
-
-  const startRecording = () => {
-    if (!streamRef.current) return;
-    chunksRef.current = [];
-    const mr = new MediaRecorder(streamRef.current, { mimeType: pickMime() });
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    mr.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || 'video/webm' });
-      const reader = new FileReader();
-      reader.onload = () => {
-        setVideoUrl(reader.result as string);
-        setStep('preview');
-      };
-      reader.readAsDataURL(blob);
-    };
-    recorderRef.current = mr;
-    mr.start(200);
-    setSeconds(0);
-    setRecording(true);
-  };
-
-  const stopRecording = () => {
-    recorderRef.current?.stop();
-    setRecording(false);
-  };
 
   const onPickFile = (file: File | null) => {
     if (!file) return;
@@ -138,7 +67,6 @@ export default function ReelCreatePage() {
     setVideoUrl(null);
     setFilter('none');
     setMuted(false);
-    setSeconds(0);
     setStep('capture');
   };
 
@@ -148,66 +76,62 @@ export default function ReelCreatePage() {
   // ────────────────── CAPTURE ──────────────────
   if (step === 'capture') {
     const ui = (
-      <div className="fixed inset-0 z-[100] bg-black text-white">
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          autoPlay
-          className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? 'scale-x-[-1]' : ''}`}
-        />
-
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/55 to-transparent p-4 safe-top">
+      <div className="fixed inset-0 z-[100] bg-gradient-to-b from-[#1a0d10] via-black to-[#1a0d10] text-white">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 p-4 safe-top">
           <button
             onClick={() => router.replace('/create')}
             aria-label="Close"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur"
           >
             <X size={18} />
           </button>
-          <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur">
-            {recording ? `● ${formatTime(seconds)}` : `Up to ${MAX_DURATION}s`}
+          <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold backdrop-blur">
+            New reel · up to {MAX_DURATION}s
           </div>
           <button
             onClick={() => setShowMusic(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur"
+            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold backdrop-blur"
           >
             <Music size={14} /> {music ? 'Music ✓' : 'Music'}
           </button>
         </div>
 
-        {recording && (
-          <div className="absolute left-0 right-0 top-16 px-4">
-            <div className="h-1 overflow-hidden rounded-full bg-white/25">
-              <div className="h-full bg-brand transition-all" style={{ width: `${(seconds / MAX_DURATION) * 100}%` }} />
-            </div>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-8 text-center">
+          <div className="inline-flex h-24 w-24 items-center justify-center rounded-full bg-brand/20 ring-1 ring-brand/40">
+            <Film size={42} />
           </div>
-        )}
+          <div className="space-y-1">
+            <h1 className="text-xl font-extrabold">Record a reel</h1>
+            <p className="text-sm text-white/70">Tap the shutter to use your phone&rsquo;s camera. We&rsquo;ll let you trim, filter, and add music after.</p>
+          </div>
 
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/55 to-transparent px-6 pb-10 pt-8 safe-bottom">
           <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            aria-label="Open camera"
+            className="relative inline-flex h-24 w-24 items-center justify-center rounded-full bg-white/10 backdrop-blur active:scale-95 transition"
+          >
+            <span className="absolute inset-2 rounded-full border-[3px] border-white/85" />
+            <span className="absolute inset-[14px] rounded-full bg-brand" />
+          </button>
+
+          <button
+            type="button"
             onClick={() => fileRef.current?.click()}
-            aria-label="Upload"
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-bold backdrop-blur"
           >
-            <ImageIcon size={20} />
-          </button>
-          <button
-            onClick={recording ? stopRecording : startRecording}
-            aria-label={recording ? 'Stop' : 'Record'}
-            className={`flex h-20 w-20 items-center justify-center rounded-full ring-4 ring-white/85 ${recording ? 'bg-brand' : 'bg-white'}`}
-          >
-            <span className={`block transition-all ${recording ? 'h-6 w-6 rounded-md bg-white' : 'h-14 w-14 rounded-full bg-brand'}`} />
-          </button>
-          <button
-            onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
-            aria-label="Flip camera"
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur"
-          >
-            <SwitchCamera size={20} />
+            <ImageIcon size={16} /> Choose from gallery
           </button>
         </div>
 
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="video/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+        />
         <input
           ref={fileRef}
           type="file"
@@ -398,18 +322,4 @@ export default function ReelCreatePage() {
       <MusicPicker open={showMusic} onClose={() => setShowMusic(false)} onPick={setMusic} />
     </div>
   );
-}
-
-function pickMime() {
-  const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
-  }
-  return '';
-}
-
-function formatTime(s: number) {
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, '0')}`;
 }

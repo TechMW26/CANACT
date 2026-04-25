@@ -26,18 +26,25 @@ export function CameraCapture({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const nativeVideoRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const [facing, setFacing] = useState<Facing>(defaultFacing);
   const [mode, setMode] = useState<Mode>('photo');
   const [error, setError] = useState<string | null>(null);
   const [shots, setShots] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
+    if (mode !== 'photo') {
+      // Video mode hands off to native camera; no live stream needed.
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setReady(true);
+      setError(null);
+      return;
+    }
     let cancelled = false;
     setReady(false);
     setError(null);
@@ -53,7 +60,7 @@ export function CameraCapture({
         }
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: facing }, width: { ideal: 1440 }, height: { ideal: 1920 } },
-          audio: mode === 'video',
+          audio: false,
         });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -79,19 +86,8 @@ export function CameraCapture({
   }, [facing, mode]);
 
   useEffect(() => {
-    if (!recording) return;
-    const id = setInterval(() => {
-      setSeconds((s) => {
-        if (s + 1 >= maxVideoSec) {
-          recorderRef.current?.stop();
-          setRecording(false);
-          return maxVideoSec;
-        }
-        return s + 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [recording, maxVideoSec]);
+    // No timer when using native recorder.
+  }, []);
 
   const capturePhoto = () => {
     const video = videoRef.current;
@@ -117,30 +113,16 @@ export function CameraCapture({
   };
 
   const startRecording = () => {
-    if (!streamRef.current || !ready) return;
-    chunksRef.current = [];
-    const mr = new MediaRecorder(streamRef.current, { mimeType: pickMime() });
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    mr.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || 'video/webm' });
-      const r = new FileReader();
-      r.onload = () => onCapture([r.result as string]);
-      r.readAsDataURL(blob);
-    };
-    recorderRef.current = mr;
-    mr.start(200);
-    setSeconds(0);
-    setRecording(true);
+    // Hand off to native camera app for reliable mp4 capture.
+    nativeVideoRef.current?.click();
   };
 
   const stopRecording = () => {
-    recorderRef.current?.stop();
-    setRecording(false);
+    // No-op: native recorder owns the recording lifecycle.
   };
 
   const onShutter = () => {
     if (mode === 'photo') return capturePhoto();
-    if (recording) return stopRecording();
     return startRecording();
   };
 
@@ -171,15 +153,31 @@ export function CameraCapture({
         className="hidden"
         onChange={(e) => onPickFiles(e.target.files)}
       />
+      <input
+        ref={nativeVideoRef}
+        type="file"
+        accept="video/*"
+        capture={facing === 'user' ? 'user' : 'environment'}
+        className="hidden"
+        onChange={(e) => onPickFiles(e.target.files)}
+      />
       <div className="relative h-full w-full">
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          autoPlay
-          className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? 'scale-x-[-1]' : ''}`}
-        />
-        {!ready && !error && (
+        {mode === 'photo' ? (
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            autoPlay
+            className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? 'scale-x-[-1]' : ''}`}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#1a0d10] via-black to-[#1a0d10] px-8 text-center">
+            <Film size={42} className="opacity-80" />
+            <div className="text-base font-bold">Record with your camera</div>
+            <div className="text-xs text-white/70">Tap the shutter to open your phone&rsquo;s camera. Up to {maxVideoSec}s.</div>
+          </div>
+        )}
+        {!ready && !error && mode === 'photo' && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm">
             Starting camera…
           </div>
@@ -210,33 +208,19 @@ export function CameraCapture({
             <X size={20} />
           </button>
           <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
-            {recording
-              ? `● ${formatTime(seconds)} / ${formatTime(maxVideoSec)}`
-              : `${facing === 'user' ? 'Front' : 'Back'}${multiple && mode === 'photo' ? ` · ${shots.length}/${maxPhotos}` : ''}`}
+            {`${facing === 'user' ? 'Front' : 'Back'}${multiple && mode === 'photo' ? ` · ${shots.length}/${maxPhotos}` : ''}`}
           </span>
           <button
             type="button"
-            onClick={() => !recording && setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
+            onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
             aria-label="Switch camera"
-            disabled={recording}
             className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-40"
           >
             <SwitchCamera size={18} />
           </button>
         </div>
 
-        {recording && (
-          <div className="absolute left-0 right-0 top-16 z-10 px-4">
-            <div className="h-1 overflow-hidden rounded-full bg-white/25">
-              <div
-                className="h-full bg-brand transition-all"
-                style={{ width: `${(seconds / maxVideoSec) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {allowVideo && !recording && (
+        {allowVideo && (
           <div className="absolute bottom-32 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/45 p-1 backdrop-blur">
             {(['photo', 'video'] as const).map((m) => (
               <button
@@ -258,7 +242,6 @@ export function CameraCapture({
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label="Pick from gallery"
-            disabled={recording}
             className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur disabled:opacity-40"
           >
             <ImageIcon size={20} />
@@ -267,15 +250,13 @@ export function CameraCapture({
           <button
             type="button"
             onClick={onShutter}
-            disabled={!ready}
-            aria-label={mode === 'video' ? (recording ? 'Stop recording' : 'Start recording') : 'Capture photo'}
+            disabled={mode === 'photo' && !ready}
+            aria-label={mode === 'video' ? 'Open camera to record' : 'Capture photo'}
             className="relative inline-flex h-20 w-20 items-center justify-center rounded-full bg-white/15 backdrop-blur disabled:opacity-50"
           >
-            <span className={`absolute inset-2 rounded-full border-[3px] ${recording ? 'border-brand' : 'border-white/85'}`} />
+            <span className="absolute inset-2 rounded-full border-[3px] border-white/85" />
             {mode === 'photo' ? (
               <span className="absolute inset-[14px] rounded-full bg-white" />
-            ) : recording ? (
-              <span className="absolute inset-[22px] rounded-md bg-brand" />
             ) : (
               <span className="absolute inset-[14px] rounded-full bg-brand" />
             )}
@@ -309,10 +290,6 @@ export function CameraCapture({
 }
 
 function pickMime() {
-  const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
-  }
   return '';
 }
 
