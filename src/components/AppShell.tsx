@@ -106,7 +106,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 md:pl-2">
         <UnifiedHeader />
-        <div className="canact-col px-2 pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="canact-col pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
       </main>
 

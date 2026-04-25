@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { useDistance } from '@/lib/distance';
@@ -253,29 +253,15 @@ function WhaCard({ post, myUid }: { post: WhaPost; myUid: string }) {
             isVideoUrl(post.mediaUrls[0]) ? (
               <VideoPreview
                 src={post.mediaUrls[0]}
-                className="mt-3 w-full h-72 rounded-[24px]"
-                fit="contain"
+                className="mt-3 w-full aspect-[4/5] rounded-[24px]"
+                fit="cover"
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.mediaUrls[0]} alt="" className="mt-3 w-full h-72 object-cover rounded-[24px] bg-brand-light" />
+              <img src={post.mediaUrls[0]} alt="" className="mt-3 w-full aspect-[4/5] object-cover rounded-[24px] bg-brand-light" />
             )
           ) : (
-            <div className="mt-3 -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 no-scrollbar">
-              {post.mediaUrls.map((u, i) => (
-                <div key={i} className="relative shrink-0 snap-start">
-                  {isVideoUrl(u) ? (
-                    <VideoPreview src={u} className="h-72 w-72 rounded-[24px]" fit="contain" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={u} alt="" className="h-72 w-72 object-cover rounded-[24px] bg-brand-light" />
-                  )}
-                  <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white">
-                    {i + 1}/{post.mediaUrls.length}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <MediaSlider urls={post.mediaUrls} />
           )
         ) : null}
       </Link>
@@ -357,6 +343,45 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
         </Button>
       </div>
     </article>
+  );
+}
+
+function MediaSlider({ urls }: { urls: string[] }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [idx, setIdx] = useState(0);
+  function onScroll() {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.clientWidth || 1;
+    setIdx(Math.round(el.scrollLeft / w));
+  }
+  return (
+    <div className="relative mt-3">
+      <div
+        ref={ref}
+        onScroll={onScroll}
+        className="flex w-full snap-x snap-mandatory overflow-x-auto rounded-[24px] no-scrollbar"
+      >
+        {urls.map((u, i) => (
+          <div key={i} className="relative w-full shrink-0 snap-center">
+            {isVideoUrl(u) ? (
+              <VideoPreview src={u} className="aspect-[4/5] w-full" fit="cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={u} alt="" className="aspect-[4/5] w-full object-cover bg-brand-light" />
+            )}
+          </div>
+        ))}
+      </div>
+      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white">
+        {idx + 1}/{urls.length}
+      </span>
+      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1">
+        {urls.map((_, i) => (
+          <span key={i} className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/55'}`} />
+        ))}
+      </div>
+    </div>
   );
 }
 
