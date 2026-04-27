@@ -4,7 +4,9 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
+  signInWithCredential,
   getRedirectResult,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   deleteUser,
   type User as FbUser,
@@ -12,6 +14,25 @@ import {
 import { onValue, ref, update, get, remove, set } from 'firebase/database';
 import { db, getFirebaseAuth, getGoogleProvider } from './firebase';
 import { UserProfile } from './types';
+
+/**
+ * Detect Capacitor's native Android/iOS WebView. Embedded WebViews are blocked
+ * from hosting Google's OAuth flow, so we use the @capacitor-firebase/authentication
+ * plugin (native Google Sign-In SDK) instead of signInWithRedirect / signInWithPopup.
+ */
+function isCapacitorNative(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap: any = (window as any).Capacitor;
+  if (!cap) return false;
+  if (typeof cap.isNativePlatform === 'function') return cap.isNativePlatform();
+  return cap.platform === 'android' || cap.platform === 'ios';
+}
+
+/** Lazy-loaded plugin reference — only imported on native to keep web bundle small. */
+async function getNativeAuthPlugin() {
+  const mod = await import('@capacitor-firebase/authentication');
+  return mod.FirebaseAuthentication;
+}
 
 interface SessionUser {
   uid: string;
@@ -174,6 +195,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signInWithGoogle: async () => {
       const auth = getFirebaseAuth();
+
+      // Native (Capacitor APK): use the Google Sign-In SDK via the plugin and
+      // exchange the idToken for a Firebase credential. This works inside the
+      // Android WebView where signInWithRedirect / signInWithPopup are blocked.
+      if (isCapacitorNative()) {
+        const FirebaseAuthentication = await getNativeAuthPlugin();
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = result.credential?.idToken;
+        if (!idToken) throw new Error('Google sign-in did not return an id token.');
+        const cred = GoogleAuthProvider.credential(idToken);
+        const r = await signInWithCredential(auth, cred);
+        if (r.user) seedInBackground(r.user);
+        return;
+      }
+
       const provider = getGoogleProvider();
       if (isMobile()) {
         await signInWithRedirect(auth, provider);
@@ -197,6 +233,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     signOut: async () => {
+      if (isCapacitorNative()) {
+        try {
+          const FirebaseAuthentication = await getNativeAuthPlugin();
+          await FirebaseAuthentication.signOut();
+        } catch { /* non-fatal */ }
+      }
       await fbSignOut(getFirebaseAuth());
       setUser(null);
       setProfile(null);

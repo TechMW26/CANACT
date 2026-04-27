@@ -13,6 +13,7 @@
     "android:assets": "@capacitor/assets generate --android --assetPath assets --iconBackgroundColor \"#FFF8F8\" --iconBackgroundColorDark \"#FFF8F8\" --splashBackgroundColor \"#FFF8F8\" --splashBackgroundColorDark \"#FFF8F8\""
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/android": "^7.6.2",
     "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.6.2",
