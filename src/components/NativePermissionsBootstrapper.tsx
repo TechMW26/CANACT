@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { ref, set } from 'firebase/database';
+import { onAuthStateChanged } from 'firebase/auth';
 import { db, getFirebaseAuth } from '@/lib/firebase';
 
 /**
@@ -34,6 +35,16 @@ export default function NativePermissionsBootstrapper() {
   useEffect(() => {
     if (!isNative()) return;
     let cancelled = false;
+    let cachedToken: string | null = null;
+
+    // Re-persist the FCM token whenever the auth state changes so we always
+    // associate the device's current token with the signed-in user — even
+    // if FCM emitted the token before sign-in completed.
+    const auth = getFirebaseAuth();
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      if (cancelled || !u || !cachedToken) return;
+      writeToken(cachedToken).catch(() => { /* noop */ });
+    });
 
     (async () => {
       // --- Notifications + FCM token -------------------------------------
@@ -48,11 +59,25 @@ export default function NativePermissionsBootstrapper() {
           granted = req.receive === 'granted';
         }
         if (granted) {
-          await persistFcmToken(FirebaseMessaging);
+          try {
+            const { token } = await FirebaseMessaging.getToken();
+            if (token) {
+              cachedToken = token;
+              // Try immediately (might already be signed in); the auth
+              // listener above will retry if not.
+              await writeToken(token);
+            }
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[perms] getToken failed:', err);
+          }
           // Keep tokens fresh: refresh handler fires when Google rotates the
           // device token (rare but happens on app reinstall / data wipe).
           await FirebaseMessaging.addListener('tokenReceived', (event: { token: string }) => {
-            if (event?.token) writeToken(event.token).catch(() => { /* noop */ });
+            if (event?.token) {
+              cachedToken = event.token;
+              writeToken(event.token).catch(() => { /* noop */ });
+            }
           });
         }
       } catch (err) {
@@ -83,26 +108,19 @@ export default function NativePermissionsBootstrapper() {
       // — none of which require the user to dig through settings.
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      unsubAuth();
+    };
   }, []);
 
   return null;
 }
 
-async function persistFcmToken(FirebaseMessaging: any) {
-  try {
-    const { token } = await FirebaseMessaging.getToken();
-    if (token) await writeToken(token);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[perms] getToken failed:', err);
-  }
-}
-
 async function writeToken(token: string) {
   const auth = getFirebaseAuth();
   const u = auth.currentUser;
-  if (!u) return; // user not signed in yet; will retry next launch
+  if (!u) return; // user not signed in yet; auth listener will retry
   await set(ref(db, `users/${u.uid}/fcmTokens/${token}`), {
     platform: 'android',
     updatedAt: Date.now(),
