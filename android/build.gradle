@@ -24,6 +24,31 @@ allprojects {
     }
 }
 
+// Force Java 17 source/target across all subprojects (Capacitor 7 declares 21 by default;
+// we are building with Temurin 17, so downgrade for compatibility).
+subprojects {
+    plugins.withId('com.android.application') {
+        android {
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
+    }
+    plugins.withId('com.android.library') {
+        android {
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
+    }
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = '17'
+        targetCompatibility = '17'
+    }
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }

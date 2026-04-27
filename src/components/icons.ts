@@ -6,6 +6,7 @@ export {
   Home,
   Compass,
   LifeBuoy,
+  HandHeart,
   Plus,
   Trophy,
   User as UserIcon,
