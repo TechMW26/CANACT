@@ -21,7 +21,8 @@ export default function PollDetail() {
   useEffect(() => listenPoll(id, setP), [id]);
   useEffect(() => listenPollComments(id, setC), [id]);
   if (!p || !user) return null;
-  const total = p.options.reduce((s, o) => s + (o.votes ?? 0), 0);
+  const options = Array.isArray(p.options) ? p.options : [];
+  const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = p.voters?.[user.uid];
   const myReact = p.reactionVoters?.[user.uid];
   const ended = p.endsAt < Date.now();
@@ -39,7 +40,7 @@ export default function PollDetail() {
         <p className="mt-3 font-semibold">{p.question}</p>
         {!p.openEnded && (
           <div className="mt-2 space-y-2">
-            {p.options.map((o) => {
+            {options.map((o) => {
               const pct = total ? Math.round((o.votes / total) * 100) : 0;
               const sel = mine === o.id;
               return (
@@ -53,6 +54,11 @@ export default function PollDetail() {
             <div className="text-xs text-muted">{total} votes</div>
           </div>
         )}
+        {p.openEnded && options.length === 0 ? (
+          <div className="mt-2 rounded-xl border border-dashed border-line bg-white px-3 py-2 text-xs text-muted">
+            Open-ended poll. Add your response in replies below.
+          </div>
+        ) : null}
         <div className="mt-3 flex gap-2">
           <Button size="sm" variant={myReact === 'like' ? 'primary' : 'outline'} onClick={() => reactPoll(p.id, user.uid, 'like')}>
             <ThumbsUp size={14} className="mr-1" /> {p.likes ?? 0}

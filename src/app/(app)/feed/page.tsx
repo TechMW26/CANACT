@@ -272,7 +272,8 @@ function WhaCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onSha
 }
 
 function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
-  const total = poll.options.reduce((s, o) => s + (o.votes ?? 0), 0);
+  const options = Array.isArray(poll.options) ? poll.options : [];
+  const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
   return (
@@ -286,7 +287,7 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
       </div>
       <p className="mt-2 font-semibold">{poll.question}</p>
       <div className="mt-2 space-y-2">
-        {poll.options.map((o) => {
+        {options.map((o) => {
           const pct = total ? Math.round((o.votes / total) * 100) : 0;
           const selected = mine === o.id;
           return (
@@ -300,6 +301,11 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
             </button>
           );
         })}
+        {poll.openEnded && options.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line bg-white px-3 py-2 text-xs text-muted">
+            Open-ended poll. Reply in comments to participate.
+          </div>
+        ) : null}
       </div>
       <div className="mt-3 flex gap-2 text-xs text-muted">
         <Link href={`/poll/${poll.id}`} className="rounded-full px-3 h-8 inline-flex items-center font-semibold border border-line bg-white">Open</Link>

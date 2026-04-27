@@ -3,6 +3,26 @@ import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
 import { uid as rid } from '../utils';
 
+function normalizeOptions(raw: any): PollOption[] {
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (raw && typeof raw === 'object') {
+    return Object.values(raw).filter(Boolean) as PollOption[];
+  }
+  return [];
+}
+
+function normalizePoll(raw: any): Poll | null {
+  if (!raw || typeof raw !== 'object') return null;
+  return {
+    ...raw,
+    options: normalizeOptions(raw.options),
+    likes: raw.likes ?? 0,
+    dislikes: raw.dislikes ?? 0,
+    createdAt: raw.createdAt ?? Date.now(),
+    endsAt: raw.endsAt ?? Date.now(),
+  } as Poll;
+}
+
 export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options'> & { options: string[] }) {
   const node = push(ref(db, 'polls'));
   const options: PollOption[] = input.options.filter(Boolean).map((t) => ({ id: rid('o_'), text: t, votes: 0 }));
@@ -25,21 +45,26 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
 
 export function listenPollFeed(cb: (items: Poll[]) => void) {
   return onValue(query(ref(db, 'polls'), orderByChild('createdAt')), (snap) => {
-    const out: Poll[] = []; snap.forEach((c) => { out.push(c.val()); });
+    const out: Poll[] = [];
+    snap.forEach((c) => {
+      const p = normalizePoll(c.val());
+      if (p) out.push(p);
+    });
     out.sort((a, b) => b.createdAt - a.createdAt); cb(out);
   });
 }
 export function listenPoll(id: string, cb: (p: Poll | null) => void) {
-  return onValue(ref(db, `polls/${id}`), (s) => cb(s.val()));
+  return onValue(ref(db, `polls/${id}`), (s) => cb(normalizePoll(s.val())));
 }
 
 export async function votePoll(pollId: string, uid: string, optionId: string) {
   const voterRef = ref(db, `polls/${pollId}/voters/${uid}`);
   const prev = (await get(voterRef)).val() as string | null;
   if (prev === optionId) return;
-  await runTransaction(ref(db, `polls/${pollId}/options`), (opts: PollOption[] | null) => {
-    if (!opts) return opts;
-    return opts.map((o) => {
+  await runTransaction(ref(db, `polls/${pollId}/options`), (opts: PollOption[] | Record<string, PollOption> | null) => {
+    const list = normalizeOptions(opts);
+    if (!list.length) return list;
+    return list.map((o) => {
       let v = o.votes ?? 0;
       if (prev && o.id === prev) v = Math.max(0, v - 1);
       if (o.id === optionId) v += 1;
