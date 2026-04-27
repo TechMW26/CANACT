@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.Person;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -143,10 +144,18 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(true)
+            // CallStyle is the official "treat this like a phone call" API
+            // (Android 12+). Renders the proper full-width call UI on the
+            // lockscreen with prominent Answer / Decline buttons — exactly
+            // how WhatsApp / Instagram calls look. NotificationCompat
+            // gracefully falls back to the legacy heads-up + actions on
+            // Android 11 and below.
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(
+                new Person.Builder().setName(fromName).setImportant(true).build(),
+                declinePi,
+                answerPi))
             .setContentIntent(incomingPi)
             .setFullScreenIntent(incomingPi, true)
-            .addAction(android.R.drawable.ic_menu_call, "Answer", answerPi)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Decline", declinePi)
             .build();
 
         NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);

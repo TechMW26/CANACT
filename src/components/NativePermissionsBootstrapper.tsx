@@ -16,15 +16,15 @@ function isNative(): boolean {
   return cap.platform === 'android' || cap.platform === 'ios';
 }
 
-const ASKED_KEY = 'canact:perms:asked:v1';
-
 /**
  * Globally-mounted component that, on first launch (and once per device after
- * sign-in), requests every permission Canact needs to operate while the app
- * is closed:
+ * sign-in), requests permissions Canact needs to deliver calls while closed:
  *  - POST_NOTIFICATIONS (Android 13+): heads-up incoming-call popups.
  *  - Geolocation (fine): help-radius matching.
- *  - Battery optimization exemption: keeps the FCM stream alive while idle.
+ *
+ * Mic / camera permissions are intentionally NOT pre-requested — Android's
+ * getUserMedia prompt fires the first time the user accepts a call, exactly
+ * like Instagram / WhatsApp.
  *
  * It also subscribes to the FCM token (via @capacitor-firebase/messaging) and
  * persists it to RTDB at users/{uid}/fcmTokens/{token} so the Cloud Function
@@ -76,28 +76,11 @@ export default function NativePermissionsBootstrapper() {
         console.warn('[perms] location request failed:', err);
       }
 
-      // --- Battery optimization exemption --------------------------------
-      // Only ask once — opens the system settings dialog. Skip if we've
-      // already prompted for it on this device.
-      try {
-        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_KEY)) {
-          // No first-party Capacitor plugin exists, so we use the documented
-          // intent URL via window.open. Android resolves the intent: scheme
-          // and presents the "Allow Canact to ignore battery optimizations?"
-          // system dialog.
-          const intent =
-            'intent:#Intent;' +
-            'action=android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;' +
-            'package=com.canact.app;' +
-            'end';
-          // Fire-and-forget; user can dismiss.
-          window.open(intent, '_system');
-          localStorage.setItem(ASKED_KEY, '1');
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[perms] battery exemption request failed:', err);
-      }
+      // NOTE: We deliberately do NOT prompt for battery-optimization
+      // exemption or autostart. WhatsApp / Instagram-style call delivery is
+      // achieved entirely through high-priority FCM data messages +
+      // NotificationCompat.CallStyle.forIncomingCall + USE_FULL_SCREEN_INTENT
+      // — none of which require the user to dig through settings.
     })();
 
     return () => { cancelled = true; };
