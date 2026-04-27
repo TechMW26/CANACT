@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { HelpRequest, HelpStatus } from '../types';
 import { pushNotification } from './notifications';
 import { sendPush } from './sendPush';
+import { startOrGetThread, threadIdFor, sendChatMessage } from './chat';
 
 /** Recursively drop undefined fields — Firebase RTDB rejects them. */
 function stripUndefined<T>(value: T): T {
@@ -16,6 +17,10 @@ function stripUndefined<T>(value: T): T {
     return out;
   }
   return value;
+}
+
+async function bumpStat(uid: string, key: 'offered' | 'confirmed' | 'resolved' | 'asked' | 'taken', delta = 1) {
+  await runTransaction(ref(db, `users/${uid}/helpStats/${key}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
 }
 
 export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | 'status'>) {
@@ -35,6 +40,7 @@ export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | '
   try {
     await set(node, help);
     await set(ref(db, `userHelps/${input.uid}/${help.id}`), help.createdAt);
+    await bumpStat(input.uid, 'asked', 1);
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes('PERMISSION_DENIED')) throw new Error('Not allowed to post help here. Try signing in again.');
@@ -57,11 +63,11 @@ export function listenHelp(id: string, cb: (h: HelpRequest | null) => void) {
 export async function acceptHelp(id: string, helper: { uid: string; name: string; photoURL?: string }) {
   const helpSnap = await get(ref(db, `help/${id}`)); const help = helpSnap.val() as HelpRequest;
   await update(ref(db, `help/${id}/acceptedBy/${helper.uid}`), { name: helper.name, photoURL: helper.photoURL ?? null, at: Date.now() });
-  await update(ref(db, `help/${id}`), { status: 'inProcess' });
-  await pushNotification(help.uid, { kind: 'help', title: `${helper.name} accepted your help`, body: help.text.slice(0, 80), data: { helpId: id } });
+  await bumpStat(helper.uid, 'offered', 1);
+  await pushNotification(help.uid, { kind: 'help', title: `${helper.name} offered to help`, body: help.text.slice(0, 80), data: { helpId: id } });
   sendPush({
     toUid: help.uid,
-    title: `${helper.name} accepted your help`,
+    title: `${helper.name} offered to help`,
     body: help.text.slice(0, 120),
     url: `/help/${id}`,
     tag: `help:${id}`,
@@ -69,25 +75,125 @@ export async function acceptHelp(id: string, helper: { uid: string; name: string
 }
 export async function cancelHelpAccept(id: string, helperUid: string) {
   await remove(ref(db, `help/${id}/acceptedBy/${helperUid}`));
+  await remove(ref(db, `help/${id}/confirmedHelpers/${helperUid}`));
   const acc = (await get(ref(db, `help/${id}/acceptedBy`))).val();
   if (!acc || Object.keys(acc).length === 0) await update(ref(db, `help/${id}`), { status: 'open' });
 }
+
+/**
+ * Asker confirms a helper. Flips status to inProcess. For chat-channel helps,
+ * auto-creates a chat thread so the helper can begin work immediately.
+ */
+export async function confirmHelper(
+  id: string,
+  helperUid: string,
+  asker: { uid: string; name: string; photoURL?: string },
+  helper: { name: string; photoURL?: string },
+) {
+  const help = (await get(ref(db, `help/${id}`))).val() as HelpRequest;
+  if (!help) throw new Error('Help request not found.');
+  if (help.uid !== asker.uid) throw new Error('Only the asker can confirm helpers.');
+
+  await update(ref(db, `help/${id}/confirmedHelpers/${helperUid}`), { at: Date.now() });
+  await update(ref(db, `help/${id}`), { status: 'inProcess' });
+  await bumpStat(helperUid, 'confirmed', 1);
+
+  if (help.channel === 'chat') {
+    const thread = await startOrGetThread(
+      { uid: asker.uid, name: asker.name, photoURL: asker.photoURL },
+      { uid: helperUid, name: helper.name, photoURL: helper.photoURL },
+    );
+    const tid = thread.id ?? threadIdFor(asker.uid, helperUid);
+    await set(ref(db, `help/${id}/helpThreads/${helperUid}`), tid);
+    try {
+      await sendChatMessage(tid, asker.uid, helperUid, `📣 Help request: ${help.text}`);
+    } catch { /* non-fatal */ }
+  }
+
+  await pushNotification(helperUid, {
+    kind: 'help',
+    title: `${asker.name} confirmed your help`,
+    body: help.text.slice(0, 80),
+    data: { helpId: id },
+  });
+  sendPush({
+    toUid: helperUid,
+    title: `${asker.name} confirmed your help`,
+    body: help.text.slice(0, 120),
+    url: `/help/${id}`,
+    tag: `help:${id}:confirm`,
+  });
+}
+
+export async function unconfirmHelper(id: string, helperUid: string) {
+  await remove(ref(db, `help/${id}/confirmedHelpers/${helperUid}`));
+  await bumpStat(helperUid, 'confirmed', -1);
+  const conf = (await get(ref(db, `help/${id}/confirmedHelpers`))).val();
+  if (!conf || Object.keys(conf).length === 0) await update(ref(db, `help/${id}`), { status: 'open' });
+}
+
 export async function setHelpStatus(id: string, status: HelpStatus) { await update(ref(db, `help/${id}`), { status }); }
 
 export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tried') {
   const help = (await get(ref(db, `help/${id}`))).val() as HelpRequest;
   await update(ref(db, `help/${id}`), { status: 'closed', closedAt: Date.now(), closeOutcome: outcome });
+  await bumpStat(help.uid, 'taken', 1);
   if (outcome === 'no') return;
   const delta = outcome === 'yes' ? 0.05 : 0.02;
-  for (const helperUid of Object.keys(help.acceptedBy ?? {})) {
+  const targets = Object.keys(help.confirmedHelpers ?? help.acceptedBy ?? {});
+  for (const helperUid of targets) {
     await runTransaction(ref(db, `users/${helperUid}`), (u: any) => {
       if (!u) return u;
       u.rating = Math.min(5, (u.rating ?? 0) + delta);
       return u;
     });
+    if (outcome === 'yes') await bumpStat(helperUid, 'resolved', 1);
     await pushNotification(helperUid, { kind: 'help', title: `+${delta.toFixed(2)} rating from a Help`, body: help.text.slice(0, 80), data: { helpId: id } });
   }
 }
+
 export async function helperCloseHelp(id: string, helperUid: string) {
   await update(ref(db, `help/${id}/acceptedBy/${helperUid}`), { closedByHelper: true, helperClosedAt: Date.now() });
+}
+
+/**
+ * Submit a 1-5 star rating for the other party of a closed help. Updates the
+ * receiver's `rating`, `ratingCount` and like/dislike counts.
+ */
+export async function submitHelpRating(
+  helpId: string,
+  fromUid: string,
+  toUid: string,
+  stars: number,
+  note?: string,
+) {
+  const key = `${fromUid}__${toUid}`;
+  const existing = (await get(ref(db, `help/${helpId}/ratings/${key}`))).val();
+  if (existing) return;
+  const clean = Math.max(1, Math.min(5, Math.round(stars)));
+  await set(ref(db, `help/${helpId}/ratings/${key}`), stripUndefined({
+    fromUid, toUid, stars: clean, note: note?.trim() || undefined, at: Date.now(),
+  }));
+  await runTransaction(ref(db, `users/${toUid}`), (u: any) => {
+    if (!u) return u;
+    const prevCount = u.ratingCount ?? 0;
+    const prevAvg = u.rating ?? 0;
+    const nextCount = prevCount + 1;
+    u.rating = Math.min(5, ((prevAvg * prevCount) + clean) / nextCount);
+    u.ratingCount = nextCount;
+    if (clean >= 4) u.likesCount = (u.likesCount ?? 0) + 1;
+    else if (clean <= 2) u.dislikesCount = (u.dislikesCount ?? 0) + 1;
+    return u;
+  });
+  await pushNotification(toUid, {
+    kind: 'help',
+    title: `New ${clean}★ rating from a Help`,
+    body: note?.slice(0, 100) ?? '',
+    data: { helpId },
+  });
+}
+
+export async function getUserHelpStats(uid: string) {
+  const snap = await get(ref(db, `users/${uid}/helpStats`));
+  return (snap.val() ?? {}) as { offered?: number; confirmed?: number; resolved?: number; asked?: number; taken?: number };
 }

@@ -58,6 +58,14 @@ export interface UserProfile {
   rateMeUntil?: number;
   /** True once the user has filled the post-Google-signin onboarding form. */
   profileComplete?: boolean;
+  /** Aggregate help statistics shown on profile + help cards. */
+  helpStats?: {
+    offered?: number;   // offers extended by this user
+    confirmed?: number; // offers asker confirmed
+    resolved?: number;  // helps closed as resolved that this user worked on
+    asked?: number;     // help requests posted by this user
+    taken?: number;     // their help requests that closed (any outcome)
+  };
   gender?: 'female' | 'male' | 'nonbinary' | 'other';
   createdAt: number;
 }
@@ -171,6 +179,14 @@ export interface HelpRequest {
   status: HelpStatus;
   createdAt: number;
   acceptedBy?: Record<string, { name: string; photoURL?: string; at: number }>;
+  /** Asker explicitly confirms an offering helper to unlock chat/call/location actions. */
+  confirmedHelpers?: Record<string, { at: number }>;
+  /** Auto-created chat thread per confirmed helper (chat-channel helps). */
+  helpThreads?: Record<string, string>;
+  /** Active in-app call id for this help (call-channel helps). */
+  callId?: string;
+  /** Bilateral ratings keyed by `${fromUid}__${toUid}`. */
+  ratings?: Record<string, { fromUid: string; toUid: string; stars: number; note?: string; at: number }>;
   closedAt?: number;
   closeOutcome?: 'yes' | 'no' | 'tried';
 }

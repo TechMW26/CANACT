@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useGeo } from '@/lib/useGeo';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
+import { HelpStatsPills } from '@/components/HelpStatsPills';
 import { listenHelpFeed } from '@/lib/services/help';
 import { HelpRequest, HelpStatus } from '@/lib/types';
 import { formatDistance, haversineMeters, timeAgo } from '@/lib/utils';
@@ -64,6 +65,7 @@ export default function HelpFeed() {
                     <span className="font-bold truncate">{h.authorName}</span>
                     <RatingPill value={h.authorRating ?? 0} />
                   </div>
+                  <div className="mt-1"><HelpStatsPills uid={h.uid} compact /></div>
                   <p className="text-sm mt-1 line-clamp-3">{h.text}</p>
                   <div className="mt-1 text-[11px] text-muted flex items-center gap-2 flex-wrap">
                     <span>{timeAgo(h.createdAt)}</span>

@@ -6,6 +6,7 @@ import { sendPush } from './sendPush';
 function threadIdFor(a: string, b: string) {
   return [a, b].sort().join('__');
 }
+export { threadIdFor };
 
 export async function startOrGetThread(me: { uid: string; name: string; photoURL?: string }, other: { uid: string; name: string; photoURL?: string }) {
   const id = threadIdFor(me.uid, other.uid);
@@ -135,5 +136,3 @@ export function listenMessages(threadId: string, cb: (messages: ChatMessage[]) =
     cb(out);
   });
 }
-
-export { threadIdFor };
