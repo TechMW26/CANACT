@@ -43,7 +43,12 @@ exports.notifyIncomingCall = functions
       return null;
     }
     const fromName = (call.from && call.from.name) || 'Someone';
-    const fromPhoto = (call.from && call.from.photoURL) || '';
+    const rawPhoto = (call.from && call.from.photoURL) || '';
+    // FCM caps each data message at 4KB. Photo URLs from Google
+    // (lh3.googleusercontent.com/...=s96-c-...) or signed Firebase Storage
+    // URLs can easily blow that, and data: URIs definitely will. Drop any
+    // photo that isn't a short http(s) URL.
+    const fromPhoto = rawPhoto.startsWith('http') && rawPhoto.length < 512 ? rawPhoto : '';
 
     // 2. Collect all device tokens for the recipient.
     const tokensSnap = await db.ref(`users/${toUid}/fcmTokens`).get();
