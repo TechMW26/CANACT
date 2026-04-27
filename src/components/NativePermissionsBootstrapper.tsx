@@ -101,11 +101,28 @@ export default function NativePermissionsBootstrapper() {
         console.warn('[perms] location request failed:', err);
       }
 
-      // NOTE: We deliberately do NOT prompt for battery-optimization
-      // exemption or autostart. WhatsApp / Instagram-style call delivery is
-      // achieved entirely through high-priority FCM data messages +
-      // NotificationCompat.CallStyle.forIncomingCall + USE_FULL_SCREEN_INTENT
-      // — none of which require the user to dig through settings.
+      // --- Full-screen-intent special access (Android 14+) ---------------
+      // On Android 14+, USE_FULL_SCREEN_INTENT must be explicitly granted by
+      // the user via Settings → Special access. Without it, our incoming
+      // call activity will NOT auto-launch over the lockscreen — only a
+      // heads-up notification appears. Open the settings page once per
+      // device install so the user can enable it.
+      try {
+        const ASKED_FSI_KEY = 'canact:perms:fsi:asked:v1';
+        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_FSI_KEY)) {
+          // intent: URL to the per-app full-screen intent settings page.
+          const intent =
+            'intent:#Intent;' +
+            'action=android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT;' +
+            'data=package:com.canact.app;' +
+            'end';
+          window.open(intent, '_system');
+          localStorage.setItem(ASKED_FSI_KEY, '1');
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[perms] full-screen intent request failed:', err);
+      }
     })();
 
     return () => {

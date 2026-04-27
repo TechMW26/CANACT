@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { setCallStatus, clearIncoming } from '@/lib/services/calls';
-import { getFirebaseAuth } from '@/lib/firebase';
+import { setCallPreDecision } from './IncomingCallRinger';
 
 function isNative(): boolean {
   if (typeof window === 'undefined') return false;
@@ -32,19 +31,15 @@ export default function NativeCallDeepLinkRouter() {
       if (cancelled) return;
       handle = await App.addListener('appUrlOpen', (data: { url: string }) => {
         if (!data?.url || !data.url.startsWith('canact://call/')) return;
-        // Parse out the callId + action so we can honour an explicit decline
-        // from the notification action button (the OS dismisses the
-        // notification automatically when the action button fires; we only
-        // need to update RTDB so the caller learns the call was declined).
+        // Parse out the callId + action chosen on the native ringer / heads-up
+        // notification, then hand it to IncomingCallRinger as a pre-decision
+        // so the user never has to confirm twice.
         try {
           const u = new URL(data.url);
           const callId = u.pathname.replace(/^\/+/, '').split('/')[0] || u.host;
           const action = u.searchParams.get('action');
-          if (action === 'decline' && callId) {
-            setCallStatus(callId, 'rejected').catch(() => { /* noop */ });
-            const auth = getFirebaseAuth();
-            const me = auth.currentUser;
-            if (me) clearIncoming(me.uid, callId).catch(() => { /* noop */ });
+          if (callId && (action === 'answer' || action === 'decline')) {
+            setCallPreDecision(callId, action);
           }
         } catch { /* noop */ }
         // Bringing the app to foreground is enough — IncomingCallRinger is

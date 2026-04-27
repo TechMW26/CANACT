@@ -7,6 +7,20 @@ import { PhoneCall, PhoneOff } from './icons';
 import { InAppCallSheet } from './InAppCallSheet';
 
 /**
+ * Pre-decisions made by the native ringer (IncomingCallActivity) when the
+ * user taps Answer / Decline before the WebView ringer can render. The
+ * NativeCallDeepLinkRouter fills this map; IncomingCallRinger drains it on
+ * every state change so the user never has to confirm twice.
+ */
+type PreDecision = 'answer' | 'decline';
+const preDecisions = new Map<string, PreDecision>();
+const preDecisionListeners = new Set<() => void>();
+export function setCallPreDecision(callId: string, action: PreDecision) {
+  preDecisions.set(callId, action);
+  preDecisionListeners.forEach((fn) => { try { fn(); } catch { /* noop */ } });
+}
+
+/**
  * Globally mounted listener that watches `incomingCalls/{uid}` and surfaces a
  * full-screen accept/reject ringer. On accept, it hands the call off to
  * `InAppCallSheet` which sets up the WebRTC peer connection.
@@ -24,6 +38,31 @@ export function IncomingCallRinger() {
       setPending(ringing);
     });
   }, [user]);
+
+  // Honour any pre-decision the native ringer made (Answer / Decline tapped
+  // from the lockscreen IncomingCallActivity). Whenever a pending call
+  // appears, immediately accept or reject if the user has already chosen.
+  useEffect(() => {
+    if (!user) return;
+    const apply = () => {
+      const p = pending;
+      if (!p) return;
+      const decision = preDecisions.get(p.id);
+      if (!decision) return;
+      preDecisions.delete(p.id);
+      if (decision === 'answer') {
+        setAccepted(p);
+        setPending(null);
+      } else {
+        setCallStatus(p.id, 'rejected').catch(() => {});
+        clearIncoming(user.uid, p.id).catch(() => {});
+        setPending(null);
+      }
+    };
+    apply();
+    preDecisionListeners.add(apply);
+    return () => { preDecisionListeners.delete(apply); };
+  }, [pending?.id, user]);
 
   // Loop the bundled ringtone while a call is pending. The mp3 lives at
   // /public/ringtone.mp3 and is served from the WebView via the same origin.
