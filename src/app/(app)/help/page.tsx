@@ -45,39 +45,41 @@ export default function HelpFeed() {
         ))}
       </div>
 
-      {visible.length === 0 && (
-        <Card className="text-center text-muted py-10">
-          <div className="text-2xl mb-1">🤝</div>
-          No help requests in your area right now.
-        </Card>
-      )}
+      <div className="pt-2 space-y-3">
+        {visible.length === 0 && (
+          <Card className="text-center text-muted py-10">
+            <div className="text-2xl mb-1">🤝</div>
+            No help requests in your area right now.
+          </Card>
+        )}
 
-      {visible.map((h) => (
-        <Link key={h.id} href={`/help/${h.id}`}>
-          <Card className="hover:shadow-md transition">
-            <div className="flex items-start gap-3">
-              <span className={`mt-1 inline-flex items-center justify-center w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} aria-label={TYPE_LABEL[h.type]} />
-              <Avatar src={h.authorPhoto ?? null} name={h.authorName} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold truncate">{h.authorName}</span>
-                  <RatingPill value={h.authorRating ?? 0} />
-                </div>
-                <p className="text-sm mt-1 line-clamp-3">{h.text}</p>
-                <div className="mt-1 text-[11px] text-muted flex items-center gap-2 flex-wrap">
-                  <span>{timeAgo(h.createdAt)}</span>
-                  <span>• {formatDistance(h.vicinityMeters)} radius</span>
-                  <span>• {h.audience}</span>
-                  <span>• {h.channel}</span>
-                  <span className={`ml-auto rounded-full px-2 py-0.5 font-bold ${h.status === 'open' ? 'bg-emerald-100 text-emerald-700' : h.status === 'inProcess' ? 'bg-amber-100 text-amber-700' : 'bg-line text-muted'}`}>
-                    {h.status === 'inProcess' ? 'In Process' : h.status[0].toUpperCase() + h.status.slice(1)}
-                  </span>
+        {visible.map((h) => (
+          <Link key={h.id} href={`/help/${h.id}`}>
+            <Card className="hover:shadow-md transition">
+              <div className="flex items-start gap-3">
+                <span className={`mt-1 inline-flex items-center justify-center w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} aria-label={TYPE_LABEL[h.type]} />
+                <Avatar src={h.authorPhoto ?? null} name={h.authorName} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold truncate">{h.authorName}</span>
+                    <RatingPill value={h.authorRating ?? 0} />
+                  </div>
+                  <p className="text-sm mt-1 line-clamp-3">{h.text}</p>
+                  <div className="mt-1 text-[11px] text-muted flex items-center gap-2 flex-wrap">
+                    <span>{timeAgo(h.createdAt)}</span>
+                    <span>• {formatDistance(h.vicinityMeters)} radius</span>
+                    <span>• {h.audience}</span>
+                    <span>• {h.channel}</span>
+                    <span className={`ml-auto rounded-full px-2 py-0.5 font-bold ${h.status === 'open' ? 'bg-emerald-100 text-emerald-700' : h.status === 'inProcess' ? 'bg-amber-100 text-amber-700' : 'bg-line text-muted'}`}>
+                      {h.status === 'inProcess' ? 'In Process' : h.status[0].toUpperCase() + h.status.slice(1)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        </Link>
-      ))}
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
