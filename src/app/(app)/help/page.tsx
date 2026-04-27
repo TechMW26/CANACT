@@ -16,11 +16,16 @@ const TYPE_LABEL = { red: 'Red', orange: 'Orange', yellow: 'Yellow' } as const;
 export default function HelpFeed() {
   const { coords } = useGeo();
   const [items, setItems] = useState<HelpRequest[]>([]);
-  const [filter, setFilter] = useState<'all' | HelpStatus>('all');
+  const [filter, setFilter] = useState<'all' | Exclude<HelpStatus, 'closed'>>('all');
 
   useEffect(() => listenHelpFeed(setItems), []);
 
-  const visible = items.filter((h) => filter === 'all' || h.status === filter)
+  // Hide closed help requests from the feed entirely — they're historical and
+  // not actionable for browsers. The author can still reach them via direct
+  // link / their own profile if needed.
+  const visible = items
+    .filter((h) => h.status !== 'closed')
+    .filter((h) => filter === 'all' || h.status === filter)
     .filter((h) => {
       if (h.lat == null || h.lng == null || !coords) return true;
       return haversineMeters(coords, { lat: h.lat, lng: h.lng }) <= h.vicinityMeters;
@@ -38,7 +43,7 @@ export default function HelpFeed() {
       </div>
 
       <div className="flex flex-wrap justify-center gap-2">
-        {(['all', 'open', 'inProcess', 'closed'] as const).map((s) => (
+        {(['all', 'open', 'inProcess'] as const).map((s) => (
           <button key={s} onClick={() => setFilter(s)}
             className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border transition ${filter === s ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line hover:border-ink/30'}`}>
             {s === 'all' ? 'All' : s === 'inProcess' ? 'In Process' : s[0].toUpperCase() + s.slice(1)}
