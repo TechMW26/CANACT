@@ -243,6 +243,20 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         if (mgr != null) {
             mgr.notify(callId.hashCode(), n);
         }
+
+        // setFullScreenIntent only auto-launches when the device is LOCKED.
+        // On an unlocked device Android falls back to a heads-up — which
+        // means the user never sees our full-screen ringer. Posting the
+        // notification first grants this service a temporary background-
+        // activity-launch (BAL) exemption (because the notification is
+        // CATEGORY_CALL + we hold USE_FULL_SCREEN_INTENT), so kicking off
+        // the activity here works in both states. This matches what
+        // WhatsApp / Phone do.
+        try {
+            ctx.startActivity(ringer);
+        } catch (Exception ignored) {
+            // OEM blocked it; the heads-up notification still rings.
+        }
     }
 
     private void ensureGeneralChannel() {
