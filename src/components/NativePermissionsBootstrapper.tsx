@@ -48,9 +48,11 @@ export default function NativePermissionsBootstrapper() {
 
     (async () => {
       // --- Notifications + FCM token -------------------------------------
+      await writeDebug('start');
       try {
         const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
         if (cancelled) return;
+        await writeDebug('plugin-loaded');
 
         const perm = await FirebaseMessaging.checkPermissions();
         let granted = perm.receive === 'granted';
@@ -58,18 +60,20 @@ export default function NativePermissionsBootstrapper() {
           const req = await FirebaseMessaging.requestPermissions();
           granted = req.receive === 'granted';
         }
+        await writeDebug('perm:' + (granted ? 'granted' : perm.receive));
         if (granted) {
           try {
             const { token } = await FirebaseMessaging.getToken();
+            await writeDebug('token:' + (token ? token.slice(0, 20) + '…' : 'EMPTY'));
             if (token) {
               cachedToken = token;
               // Try immediately (might already be signed in); the auth
               // listener above will retry if not.
               await writeToken(token);
+              await writeDebug('persisted');
             }
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn('[perms] getToken failed:', err);
+          } catch (err: any) {
+            await writeDebug('getToken-err:' + (err?.message || String(err)).slice(0, 200));
           }
           // Keep tokens fresh: refresh handler fires when Google rotates the
           // device token (rare but happens on app reinstall / data wipe).
@@ -80,12 +84,8 @@ export default function NativePermissionsBootstrapper() {
             }
           });
         }
-      } catch (err) {
-        // FCM only works when google-services.json is present in
-        // android/app/. Without it the plugin throws here — log and move on
-        // so location + battery prompts still happen.
-        // eslint-disable-next-line no-console
-        console.warn('[perms] FCM init skipped:', err);
+      } catch (err: any) {
+        await writeDebug('init-err:' + (err?.message || String(err)).slice(0, 200));
       }
 
       // --- Location -------------------------------------------------------
@@ -125,4 +125,16 @@ async function writeToken(token: string) {
     platform: 'android',
     updatedAt: Date.now(),
   });
+}
+
+async function writeDebug(stage: string) {
+  try {
+    const auth = getFirebaseAuth();
+    const u = auth.currentUser;
+    if (!u) return;
+    await set(ref(db, `users/${u.uid}/fcmDebug`), {
+      stage,
+      at: Date.now(),
+    });
+  } catch { /* noop */ }
 }
