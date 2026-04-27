@@ -41,7 +41,10 @@ import java.util.Map;
  */
 public class CanactCallMessagingService extends FirebaseMessagingService {
 
-    private static final String CHANNEL_ID = "canact_calls";
+    // Bump the channel id whenever sound/vibration changes — Android does not
+    // allow mutating an existing channel's sound, so a new id is required to
+    // pick up the bundled ringtone on devices that already have the app.
+    private static final String CHANNEL_ID = "canact_calls_v3";
     private static final String CHANNEL_NAME = "Incoming calls";
     private static final String CHANNEL_DESC = "Full-screen incoming voice calls";
 
@@ -84,31 +87,42 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         channel.enableVibration(true);
         channel.setVibrationPattern(new long[] { 0, 1000, 800, 1000, 800, 1000 });
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-        Uri ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+        Uri ringtone = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.canact_ringtone);
         AudioAttributes attrs = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build();
         channel.setSound(ringtone, attrs);
+        channel.setBypassDnd(true);
         mgr.createNotificationChannel(channel);
     }
 
     private void showIncomingCallNotification(String callId, String fromName) {
         Context ctx = getApplicationContext();
 
-        // Tapping the notification body / "Answer" deep-links into the app on
-        // canact://call/<id>. The intent filter on MainActivity routes it to
-        // the WebView which navigates to /call/<id>.
-        Intent answer = new Intent(Intent.ACTION_VIEW,
-            Uri.parse("canact://call/" + callId + "?action=answer"));
-        answer.setPackage(ctx.getPackageName());
+        // Tapping the notification (or the full-screen intent firing while the
+        // device is locked) should bring the user to the in-app ringer UI so
+        // they can choose to answer or decline — it must NOT auto-answer.
+        // Target MainActivity directly so the launch works even when the app
+        // process has been killed (ACTION_VIEW resolution can fail in that
+        // state on some OEM ROMs).
+        Intent incoming = new Intent(ctx, MainActivity.class);
+        incoming.setAction(Intent.ACTION_VIEW);
+        incoming.setData(Uri.parse("canact://call/" + callId + "?action=incoming"));
+        incoming.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        Intent answer = new Intent(ctx, MainActivity.class);
+        answer.setAction(Intent.ACTION_VIEW);
+        answer.setData(Uri.parse("canact://call/" + callId + "?action=answer"));
         answer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
             | Intent.FLAG_ACTIVITY_CLEAR_TOP
             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
-        Intent decline = new Intent(Intent.ACTION_VIEW,
-            Uri.parse("canact://call/" + callId + "?action=decline"));
-        decline.setPackage(ctx.getPackageName());
+        Intent decline = new Intent(ctx, MainActivity.class);
+        decline.setAction(Intent.ACTION_VIEW);
+        decline.setData(Uri.parse("canact://call/" + callId + "?action=decline"));
         decline.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
             | Intent.FLAG_ACTIVITY_CLEAR_TOP
             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -116,9 +130,9 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
 
+        PendingIntent incomingPi = PendingIntent.getActivity(ctx, 1000, incoming, piFlags);
         PendingIntent answerPi = PendingIntent.getActivity(ctx, 1001, answer, piFlags);
         PendingIntent declinePi = PendingIntent.getActivity(ctx, 1002, decline, piFlags);
-        PendingIntent contentPi = PendingIntent.getActivity(ctx, 1003, answer, piFlags);
 
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -129,8 +143,8 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(true)
-            .setContentIntent(contentPi)
-            .setFullScreenIntent(answerPi, true)
+            .setContentIntent(incomingPi)
+            .setFullScreenIntent(incomingPi, true)
             .addAction(android.R.drawable.ic_menu_call, "Answer", answerPi)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Decline", declinePi)
             .build();
@@ -141,5 +155,15 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             // calls don't collapse into one.
             mgr.notify(callId.hashCode(), n);
         }
+
+        // Also launch the activity directly. On a locked device the
+        // setFullScreenIntent above handles this; when the device is unlocked
+        // most ROMs only show a heads-up unless we explicitly start the
+        // activity. FCM-triggered background activity launches are permitted
+        // because this service was started by the system in response to a
+        // user-visible high-priority push.
+        try {
+            ctx.startActivity(incoming);
+        } catch (Exception ignored) { /* OEM may block; notification still fires */ }
     }
 }

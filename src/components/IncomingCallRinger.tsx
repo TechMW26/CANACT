@@ -25,31 +25,31 @@ export function IncomingCallRinger() {
     });
   }, [user]);
 
-  // Auto-play a ringtone using a tiny generated tone (no external asset).
+  // Loop the bundled ringtone while a call is pending. The mp3 lives at
+  // /public/ringtone.mp3 and is served from the WebView via the same origin.
   useEffect(() => {
     if (!pending) return;
-    let ctx: AudioContext | null = null;
-    let osc: OscillatorNode | null = null;
-    let gain: GainNode | null = null;
+    let audio: HTMLAudioElement | null = null;
     let stopped = false;
     try {
-      ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const ring = () => {
-        if (!ctx || stopped) return;
-        osc = ctx.createOscillator();
-        gain = ctx.createGain();
-        osc.frequency.value = 480;
-        osc.connect(gain).connect(ctx.destination);
-        gain.gain.value = 0;
-        gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.05);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2);
-        osc.start();
-        osc.stop(ctx.currentTime + 1.2);
-        setTimeout(ring, 1700);
+      audio = new Audio('/ringtone.mp3');
+      audio.loop = true;
+      audio.volume = 1;
+      const tryPlay = () => {
+        if (stopped || !audio) return;
+        audio.play().catch(() => {
+          // Autoplay may be blocked until user gesture; retry shortly.
+          setTimeout(tryPlay, 600);
+        });
       };
-      ring();
+      tryPlay();
     } catch { /* no audio permission */ }
-    return () => { stopped = true; try { ctx?.close(); } catch {} };
+    return () => {
+      stopped = true;
+      try { audio?.pause(); } catch {}
+      try { if (audio) audio.currentTime = 0; } catch {}
+      audio = null;
+    };
   }, [pending?.id]);
 
   if (!user || !profile) return null;

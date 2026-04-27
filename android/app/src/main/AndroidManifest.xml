@@ -56,7 +56,7 @@
             android:resource="@mipmap/ic_launcher" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="canact_calls" />
+            android:value="canact_calls_v3" />
 
         <!-- Custom FCM service that converts a `type=call` data message into a
              full-screen, high-priority call notification that wakes the device
