@@ -14,10 +14,12 @@
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^7.5.0",
+    "@capacitor-firebase/messaging": "^7.5.0",
     "@capacitor/android": "^7.6.2",
     "@capacitor/app": "^7.1.2",
     "@capacitor/browser": "^7.0.5",
     "@capacitor/core": "^7.6.2",
+    "@capacitor/geolocation": "^7.1.8",
     "@capacitor/network": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.5",
     "@vercel/blob": "^2.3.3",

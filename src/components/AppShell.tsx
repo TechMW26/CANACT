@@ -12,6 +12,8 @@ import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
 import { Select } from './Input';
 import { IncomingCallRinger } from './IncomingCallRinger';
+import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
+import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { haptic } from '@/lib/haptics';
 import type { LucideIcon } from 'lucide-react';
@@ -131,6 +133,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
+        <NativePermissionsBootstrapper />
+        <NativeCallDeepLinkRouter />
       </main>
       </div>{/* /canact-app-content */}
 
