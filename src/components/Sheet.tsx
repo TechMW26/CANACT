@@ -54,13 +54,13 @@ export function Sheet({
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
-      const shell = document.getElementById('canact-app-shell');
+      const shell = document.getElementById('canact-app-content');
       shell?.classList.remove('canact-sheet-zoom-out');
     };
   }, [mounted]);
 
   useEffect(() => {
-    const shell = document.getElementById('canact-app-shell');
+    const shell = document.getElementById('canact-app-content');
     if (!shell) return;
     if (entered) shell.classList.add('canact-sheet-zoom-out');
     else shell.classList.remove('canact-sheet-zoom-out');

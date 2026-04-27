@@ -8,6 +8,14 @@
 html, body { background: #FFF8F8; color: #0A0A0A; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
+/* Lock horizontal scroll app-wide. The mobile shell is centered in a 480px
+   `.canact-col` column and any rogue child overflowing the viewport (long
+   chat lines, wide tables, full-bleed images) would otherwise let the page
+   scroll sideways. Per-page rules can opt in to scrolling via
+   `overflow-x: auto` on a specific element. */
+html, body { overflow-x: hidden; max-width: 100vw; }
+#canact-app-shell { overflow-x: hidden; }
+
 /* Hide scrollbars on horizontal chip rows */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -107,16 +115,11 @@ input[type="time"]::-webkit-date-and-time-value {
   0%   { opacity: 0; transform: translate3d(0, 100%, 0); }
   100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-/* Body scale-down when a sheet is open. The transition lives on the shell
-   itself (not on the toggle class) so the reverse animation plays at the
-   same duration when the class is removed on close.
-
-   Important: do NOT set `will-change: transform/filter` here at baseline —
-   that would make the shell a containing block for `position: fixed`
-   descendants (per the CSS spec), causing the bottom nav to anchor to the
-   shell instead of the viewport. We only opt into will-change while the
-   zoom-out class is active. */
-#canact-app-shell {
+/* Body scale-down when a sheet is open. The transition lives on the content
+   wrapper (#canact-app-content) NOT on the shell, because the bottom nav is a
+   sibling of that wrapper and must not be pulled into the transform's
+   containing block (which would cause it to vanish during sheet open/close). */
+#canact-app-content {
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), filter 320ms ease-out, border-radius 320ms ease-out;
   transform-origin: 50% 0%;
 }

@@ -92,8 +92,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6 md:flex">
+    <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6">
       <ScrollDirectionWatcher />
+      {/* `canact-app-content` is the element that gets the zoom-out transform
+          when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
+          stays anchored to the viewport and never disappears during sheet
+          open / close transitions. */}
+      <div id="canact-app-content" className="md:flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:gap-1 md:py-4 md:pr-2">
         <div className="px-3 py-2 mb-2">
@@ -127,8 +132,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <IncomingCallRinger />
         <HelpAlertManager />
       </main>
+      </div>{/* /canact-app-content */}
 
-      {/* Floating mobile bottom nav */}
+      {/* Floating mobile bottom nav (outside the zoom-target element so it
+          stays put when sheets / popups open) */}
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pb-3 safe-bottom pointer-events-none">
         <div className="canact-col pointer-events-auto rounded-[28px] bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
           <div className="grid grid-cols-5 h-16 items-center">

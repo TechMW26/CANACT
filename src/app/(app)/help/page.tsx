@@ -46,7 +46,7 @@ export default function HelpFeed() {
         ))}
       </div>
 
-      <div className="pt-2 space-y-3">
+      <div className="pt-2 flex flex-col gap-4">
         {visible.length === 0 && (
           <Card className="text-center text-muted py-10">
             <div className="text-2xl mb-1">🤝</div>
@@ -55,7 +55,7 @@ export default function HelpFeed() {
         )}
 
         {visible.map((h) => (
-          <Link key={h.id} href={`/help/${h.id}`}>
+          <Link key={h.id} href={`/help/${h.id}`} className="block">
             <Card className="hover:shadow-md transition">
               <div className="flex items-start gap-3">
                 <span className={`mt-1 inline-flex items-center justify-center w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} aria-label={TYPE_LABEL[h.type]} />
