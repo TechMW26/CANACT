@@ -18,6 +18,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link used by the browser-fallback Google Sign-In flow.
+                 The /auth/native helper page redirects to canact://auth-callback#idToken=...
+                 once Google sign-in completes in the system browser. The app's
+                 App.appUrlOpen listener picks up the URL, extracts the id token,
+                 and exchanges it for a Firebase credential. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="canact" android:host="auth-callback" />
+            </intent-filter>
         </activity>
 
         <provider
