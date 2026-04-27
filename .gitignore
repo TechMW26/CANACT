@@ -12,3 +12,16 @@ dist
 coverage
 tsconfig.tsbuildinfo
 .env*.local
+
+# Capacitor / Android
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.idea/
+android/app/release/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/capacitor-cordova-android-plugins/
+*.iml

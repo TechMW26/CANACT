@@ -7,9 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "android:assets": "@capacitor/assets generate --android --assetPath assets --iconBackgroundColor \"#FFF8F8\" --iconBackgroundColorDark \"#FFF8F8\" --splashBackgroundColor \"#FFF8F8\" --splashBackgroundColorDark \"#FFF8F8\""
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.2",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.2",
+    "@capacitor/network": "^7.0.4",
+    "@capacitor/splash-screen": "^7.0.5",
     "@vercel/blob": "^2.3.3",
     "clsx": "^2.1.1",
     "country-state-city": "^3.2.1",
@@ -24,6 +32,7 @@
     "react-loading-skeleton": "^3.5.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.2",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
