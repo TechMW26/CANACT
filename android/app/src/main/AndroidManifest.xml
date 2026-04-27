@@ -40,6 +40,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="canact" android:host="call" />
             </intent-filter>
+            <!-- Generic deep link used by every non-call notification
+                 (chat, help, ratings, system). Format:
+                 canact://open?to=/inbox/<uid>  -> WebView pushes that route. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="canact" android:host="open" />
+            </intent-filter>
         </activity>
 
         <!-- Native full-screen incoming-call ringer. Launched by
@@ -72,7 +81,7 @@
             android:resource="@mipmap/ic_launcher" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="canact_calls_v3" />
+            android:value="canact_general_v1" />
 
         <!-- Custom FCM service that converts a `type=call` data message into a
              full-screen, high-priority call notification that wakes the device

@@ -30,7 +30,25 @@ export default function NativeCallDeepLinkRouter() {
       const { App } = await import('@capacitor/app');
       if (cancelled) return;
       handle = await App.addListener('appUrlOpen', (data: { url: string }) => {
-        if (!data?.url || !data.url.startsWith('canact://call/')) return;
+        if (!data?.url) return;
+
+        // ---- canact://open?to=/path → push the WebView to that route ----
+        // Used by all general FCM notifications (chat, help, ratings) so a
+        // tap lands the user on the right screen instead of just opening
+        // the app.
+        if (data.url.startsWith('canact://open')) {
+          try {
+            const u = new URL(data.url);
+            const to = u.searchParams.get('to');
+            if (to && to.startsWith('/')) {
+              router.push(to);
+            }
+          } catch { /* noop */ }
+          return;
+        }
+
+        // ---- canact://call/<id>?action=answer|decline ----
+        if (!data.url.startsWith('canact://call/')) return;
         // Parse out the callId + action chosen on the native ringer / heads-up
         // notification, then hand it to IncomingCallRinger as a pre-decision
         // so the user never has to confirm twice.

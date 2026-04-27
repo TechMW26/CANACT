@@ -51,24 +51,33 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
     private static final String CHANNEL_NAME = "Incoming calls";
     private static final String CHANNEL_DESC = "Full-screen incoming voice calls";
 
+    // Default channel used by every non-call push (chat messages, help
+    // alerts, ratings, etc). Bumping the suffix forces Android to recreate
+    // the channel if we ever change its sound/importance.
+    private static final String GENERAL_CHANNEL_ID = "canact_general_v1";
+    private static final String GENERAL_CHANNEL_NAME = "General notifications";
+    private static final String GENERAL_CHANNEL_DESC = "Messages, help requests, ratings and other updates";
+
     @Override
     public void onMessageReceived(RemoteMessage message) {
         super.onMessageReceived(message);
         Map<String, String> data = message.getData();
-        if (data == null || data.isEmpty()) return;
+        if (data == null) data = new java.util.HashMap<>();
 
         String type = data.get("type");
         String callId = data.get("callId");
-        if (callId == null || callId.isEmpty()) return;
 
-        if ("call-cancel".equals(type)) {
-            // Caller hung up, recipient answered/rejected on another device,
-            // or call timed out — dismiss the ringing notification so the
-            // user isn't left with a stale "Incoming call" that no longer
-            // matches reality.
+        // ------------------------------------------------------------------
+        // Call-specific message types come in as a data-only payload so the
+        // service is guaranteed to wake. Everything else (chat, help, rating,
+        // etc.) is delivered with an FCM `notification` field, which the SDK
+        // auto-displays when backgrounded — we only need to handle them here
+        // when the app is in the foreground (to surface a heads-up that the
+        // SDK would otherwise swallow).
+        // ------------------------------------------------------------------
+        if ("call-cancel".equals(type) && callId != null && !callId.isEmpty()) {
             NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (mgr != null) mgr.cancel(callId.hashCode());
-            // Also close the native ringer activity if it's currently up.
             try {
                 Intent cancel = new Intent(getApplicationContext(), IncomingCallActivity.class);
                 cancel.setAction("cancel");
@@ -81,29 +90,34 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             return;
         }
 
-        if (!"call".equals(type)) return;
+        if ("call".equals(type) && callId != null && !callId.isEmpty()) {
+            String fromName = data.get("fromName");
+            if (fromName == null || fromName.isEmpty()) fromName = "Someone";
 
-        String fromName = data.get("fromName");
-        if (fromName == null || fromName.isEmpty()) fromName = "Someone";
+            // If the WebView is in the foreground, IncomingCallRinger.tsx is
+            // already ringing via its RTDB listener — adding a notification
+            // here would just stack a second ringtone on top.
+            if (isAppInForeground()) return;
 
-        // Pick exactly ONE delivery surface based on device state, so the
-        // user never gets multiple ringtones playing at once:
-        //   1. App is in the foreground → do nothing. The web layer's
-        //      RTDB listener will surface the in-app ringer.
-        //   2. Device is locked → launch full-screen IncomingCallActivity
-        //      directly (no notification — it would just compete with the
-        //      activity's ringtone).
-        //   3. Otherwise (unlocked, app backgrounded) → post a heads-up
-        //      CallStyle notification only.
-        if (isAppInForeground()) {
+            ensureCallChannel();
+            postIncomingCallNotification(callId, fromName);
             return;
         }
-        ensureChannel();
-        if (isDeviceLocked()) {
-            launchFullScreenRinger(callId, fromName);
-        } else {
-            postHeadsUpCallNotification(callId, fromName);
-        }
+
+        // -------- Generic push (chat / help / rating / system) --------
+        // Only surface here when the app is foreground; otherwise the FCM
+        // SDK has already shown the system notification using the `notification`
+        // payload + GENERAL_CHANNEL_ID (declared as the default in the
+        // manifest meta-data).
+        if (!isAppInForeground()) return;
+
+        RemoteMessage.Notification n = message.getNotification();
+        String title = n != null ? n.getTitle() : data.get("title");
+        String body = n != null ? n.getBody() : data.get("body");
+        if ((title == null || title.isEmpty()) && (body == null || body.isEmpty())) return;
+
+        ensureGeneralChannel();
+        postGeneralNotification(title, body, data);
     }
 
     private boolean isAppInForeground() {
@@ -141,7 +155,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         // to the user profile. Nothing to do here.
     }
 
-    private void ensureChannel() {
+    private void ensureCallChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager mgr = getSystemService(NotificationManager.class);
         if (mgr == null) return;
@@ -163,8 +177,14 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         mgr.createNotificationChannel(channel);
     }
 
-    private void launchFullScreenRinger(String callId, String fromName) {
+    private void postIncomingCallNotification(String callId, String fromName) {
         Context ctx = getApplicationContext();
+
+        // The full-screen ringer activity that Android will auto-launch when
+        // the device is locked (and that pops as a heads-up otherwise). This
+        // is the *only* place we ask for the activity to be shown — we no
+        // longer call startActivity() ourselves because background activity
+        // launches are restricted on Android 10+ and silently fail.
         Intent ringer = new Intent(ctx, IncomingCallActivity.class);
         ringer.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
         ringer.putExtra(IncomingCallActivity.EXTRA_FROM_NAME, fromName);
@@ -172,17 +192,6 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             | Intent.FLAG_ACTIVITY_CLEAR_TOP
             | Intent.FLAG_ACTIVITY_SINGLE_TOP
             | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
-        try {
-            ctx.startActivity(ringer);
-        } catch (Exception ignored) {
-            // OEM may block background activity launch — fall back to a
-            // heads-up notification so the user still sees something.
-            postHeadsUpCallNotification(callId, fromName);
-        }
-    }
-
-    private void postHeadsUpCallNotification(String callId, String fromName) {
-        Context ctx = getApplicationContext();
 
         // Action-button intents → MainActivity (WebView). The deep-link
         // router stores the user's choice as a pre-decision so the in-app
@@ -204,16 +213,9 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
 
+        PendingIntent ringerPi = PendingIntent.getActivity(ctx, 1000, ringer, piFlags);
         PendingIntent answerPi = PendingIntent.getActivity(ctx, 1001, answer, piFlags);
         PendingIntent declinePi = PendingIntent.getActivity(ctx, 1002, decline, piFlags);
-        // Tapping the body opens the WebView ringer (without a pre-decision).
-        Intent body = new Intent(ctx, MainActivity.class);
-        body.setAction(Intent.ACTION_VIEW);
-        body.setData(Uri.parse("canact://call/" + callId + "?action=incoming"));
-        body.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-            | Intent.FLAG_ACTIVITY_CLEAR_TOP
-            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent bodyPi = PendingIntent.getActivity(ctx, 1003, body, piFlags);
 
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -224,16 +226,76 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(true)
+            // CallStyle renders the proper full-width Answer/Decline UI on
+            // both heads-up and lockscreen.
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(
                 new Person.Builder().setName(fromName).setImportant(true).build(),
                 declinePi,
                 answerPi))
-            .setContentIntent(bodyPi)
+            .setContentIntent(ringerPi)
+            // The critical bit: Android auto-launches the ringer activity
+            // when the device is locked, and falls back to a heads-up
+            // when it isn't — this is the same path WhatsApp / Phone use.
+            .setFullScreenIntent(ringerPi, true)
             .build();
 
         NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (mgr != null) {
             mgr.notify(callId.hashCode(), n);
+        }
+    }
+
+    private void ensureGeneralChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager mgr = getSystemService(NotificationManager.class);
+        if (mgr == null) return;
+        if (mgr.getNotificationChannel(GENERAL_CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(
+            GENERAL_CHANNEL_ID, GENERAL_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription(GENERAL_CHANNEL_DESC);
+        channel.enableVibration(true);
+        channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        mgr.createNotificationChannel(channel);
+    }
+
+    private void postGeneralNotification(String title, String body, Map<String, String> data) {
+        Context ctx = getApplicationContext();
+
+        // Tap → open the relevant screen inside the WebView. We use a
+        // generic deep-link that the in-app router converts into a route
+        // change (e.g. /inbox/<uid>, /help/<id>, /notifications).
+        String deepLink = data.get("deepLink");
+        if (deepLink == null || deepLink.isEmpty()) deepLink = "canact://open";
+
+        Intent open = new Intent(ctx, MainActivity.class);
+        open.setAction(Intent.ACTION_VIEW);
+        open.setData(Uri.parse(deepLink));
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+        // Unique request code per notification so concurrent pushes don't
+        // overwrite each other's intents.
+        int rc = (int) (System.currentTimeMillis() & 0x7fffffff);
+        PendingIntent pi = PendingIntent.getActivity(ctx, rc, open, piFlags);
+
+        Notification notif = new NotificationCompat.Builder(ctx, GENERAL_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title != null ? title : "Canact")
+            .setContentText(body != null ? body : "")
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build();
+
+        NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (mgr != null) {
+            mgr.notify(rc, notif);
         }
     }
 }

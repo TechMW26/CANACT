@@ -4,13 +4,9 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.media.AudioAttributes;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageButton;
@@ -29,9 +25,6 @@ import android.widget.TextView;
 public class IncomingCallActivity extends Activity {
     public static final String EXTRA_CALL_ID = "callId";
     public static final String EXTRA_FROM_NAME = "fromName";
-
-    private MediaPlayer player;
-    private Vibrator vibrator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,7 +69,6 @@ public class IncomingCallActivity extends Activity {
 
         answer.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                stopRinging();
                 Intent open = new Intent(IncomingCallActivity.this, MainActivity.class);
                 open.setAction(Intent.ACTION_VIEW);
                 open.setData(Uri.parse("canact://call/" + callId + "?action=answer"));
@@ -90,7 +82,6 @@ public class IncomingCallActivity extends Activity {
 
         decline.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                stopRinging();
                 // Hand the decline off to MainActivity via deep link — the
                 // NativeCallDeepLinkRouter inside the WebView marks the
                 // call rejected in RTDB, which then triggers the
@@ -106,39 +97,10 @@ public class IncomingCallActivity extends Activity {
             }
         });
 
-        startRinging();
-    }
-
-    private void startRinging() {
-        try {
-            player = MediaPlayer.create(this, R.raw.canact_ringtone);
-            if (player != null) {
-                player.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build());
-                player.setLooping(true);
-                player.setVolume(1f, 1f);
-                player.start();
-            }
-        } catch (Exception ignored) {}
-
-        try {
-            vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-            if (vibrator != null && vibrator.hasVibrator()) {
-                long[] pattern = { 0, 1000, 800, 1000, 800 };
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
-                } else {
-                    vibrator.vibrate(pattern, 0);
-                }
-            }
-        } catch (Exception ignored) {}
-    }
-
-    private void stopRinging() {
-        try { if (player != null) { player.stop(); player.release(); player = null; } } catch (Exception ignored) {}
-        try { if (vibrator != null) vibrator.cancel(); } catch (Exception ignored) {}
+        // Ringtone + vibration come from the call notification channel
+        // (CanactCallMessagingService.CHANNEL_ID). We deliberately do NOT
+        // play our own MediaPlayer here, otherwise the system would ring
+        // twice — once from the channel sound and once from us.
     }
 
     private void finishAndDismiss() {
@@ -159,15 +121,8 @@ public class IncomingCallActivity extends Activity {
         // up, just close — the service will re-launch us if a new call
         // arrives, and a cancel intent means this call is gone.
         if (intent != null && "cancel".equals(intent.getAction())) {
-            stopRinging();
-            finish();
+            finishAndDismiss();
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        stopRinging();
-        super.onDestroy();
     }
 
     @Override
