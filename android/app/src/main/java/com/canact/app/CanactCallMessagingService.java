@@ -56,10 +56,20 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         if (data == null || data.isEmpty()) return;
 
         String type = data.get("type");
-        if (!"call".equals(type)) return;
-
         String callId = data.get("callId");
         if (callId == null || callId.isEmpty()) return;
+
+        if ("call-cancel".equals(type)) {
+            // Caller hung up, recipient answered/rejected on another device,
+            // or call timed out — dismiss the ringing notification so the
+            // user isn't left with a stale "Incoming call" that no longer
+            // matches reality.
+            NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (mgr != null) mgr.cancel(callId.hashCode());
+            return;
+        }
+
+        if (!"call".equals(type)) return;
 
         String fromName = data.get("fromName");
         if (fromName == null || fromName.isEmpty()) fromName = "Someone";

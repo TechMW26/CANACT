@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { setCallStatus, clearIncoming } from '@/lib/services/calls';
+import { getFirebaseAuth } from '@/lib/firebase';
 
 function isNative(): boolean {
   if (typeof window === 'undefined') return false;
@@ -30,6 +32,21 @@ export default function NativeCallDeepLinkRouter() {
       if (cancelled) return;
       handle = await App.addListener('appUrlOpen', (data: { url: string }) => {
         if (!data?.url || !data.url.startsWith('canact://call/')) return;
+        // Parse out the callId + action so we can honour an explicit decline
+        // from the notification action button (the OS dismisses the
+        // notification automatically when the action button fires; we only
+        // need to update RTDB so the caller learns the call was declined).
+        try {
+          const u = new URL(data.url);
+          const callId = u.pathname.replace(/^\/+/, '').split('/')[0] || u.host;
+          const action = u.searchParams.get('action');
+          if (action === 'decline' && callId) {
+            setCallStatus(callId, 'rejected').catch(() => { /* noop */ });
+            const auth = getFirebaseAuth();
+            const me = auth.currentUser;
+            if (me) clearIncoming(me.uid, callId).catch(() => { /* noop */ });
+          }
+        } catch { /* noop */ }
         // Bringing the app to foreground is enough — IncomingCallRinger is
         // globally mounted and re-subscribes to incomingCalls/{uid} the
         // moment the WebView reconnects, so the ringer pops on its own. We

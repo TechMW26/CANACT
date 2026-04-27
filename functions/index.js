@@ -103,3 +103,61 @@ exports.notifyIncomingCall = functions
     }
     return null;
   });
+
+/**
+ * Cloud Function: cancelIncomingCall
+ *
+ * Watches calls/{callId} status changes. When a ringing call transitions to
+ * active / ended / rejected / missed, push a `type: 'call-cancel'` data
+ * message to the recipient's devices so the FCM service can dismiss the
+ * full-screen incoming-call notification (just like WhatsApp / Instagram
+ * cancel the ringer when the caller hangs up or the user accepts on another
+ * device).
+ */
+exports.cancelIncomingCall = functions
+  .region('asia-southeast1')
+  .database
+  .ref('/calls/{callId}/status')
+  .onUpdate(async (change, context) => {
+    const before = change.before.val();
+    const after = change.after.val();
+    if (before === after) return null;
+    if (after === 'ringing') return null; // still ringing, nothing to do
+
+    const { callId } = context.params;
+    const db = admin.database();
+
+    // Need the recipient uid to know whose tokens to push to.
+    const callSnap = await db.ref(`calls/${callId}`).get();
+    const call = callSnap.val();
+    const toUid = call && call.to && call.to.uid;
+    if (!toUid) {
+      console.log(`[cancelIncomingCall] no to.uid for ${callId}`);
+      return null;
+    }
+
+    const tokensSnap = await db.ref(`users/${toUid}/fcmTokens`).get();
+    const tokens = Object.keys(tokensSnap.val() || {});
+    if (tokens.length === 0) return null;
+
+    const message = {
+      data: {
+        type: 'call-cancel',
+        callId: String(callId),
+        reason: String(after),
+      },
+      android: {
+        priority: 'high',
+        ttl: 60 * 1000,
+      },
+      tokens,
+    };
+
+    try {
+      const resp = await admin.messaging().sendEachForMulticast(message);
+      console.log(`[cancelIncomingCall] cancel sent to ${resp.successCount}/${tokens.length} (status=${after})`);
+    } catch (err) {
+      console.warn('[cancelIncomingCall] send failed', err && err.message);
+    }
+    return null;
+  });
