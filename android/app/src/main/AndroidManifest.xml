@@ -42,6 +42,22 @@
             </intent-filter>
         </activity>
 
+        <!-- Native full-screen incoming-call ringer. Launched by
+             CanactCallMessagingService when an FCM data message of
+             type=call arrives. Behaves like the system phone-app: shows
+             over the lockscreen, turns the screen on, presents Answer /
+             Decline. The actual WebRTC call is then handed off to
+             MainActivity via a canact://call/<id> deep link. -->
+        <activity
+            android:name=".IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

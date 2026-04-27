@@ -66,6 +66,16 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             // matches reality.
             NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (mgr != null) mgr.cancel(callId.hashCode());
+            // Also close the native ringer activity if it's currently up.
+            try {
+                Intent cancel = new Intent(getApplicationContext(), IncomingCallActivity.class);
+                cancel.setAction("cancel");
+                cancel.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
+                cancel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                getApplicationContext().startActivity(cancel);
+            } catch (Exception ignored) {}
             return;
         }
 
@@ -111,19 +121,21 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
     private void showIncomingCallNotification(String callId, String fromName) {
         Context ctx = getApplicationContext();
 
-        // Tapping the notification (or the full-screen intent firing while the
-        // device is locked) should bring the user to the in-app ringer UI so
-        // they can choose to answer or decline — it must NOT auto-answer.
-        // Target MainActivity directly so the launch works even when the app
-        // process has been killed (ACTION_VIEW resolution can fail in that
-        // state on some OEM ROMs).
-        Intent incoming = new Intent(ctx, MainActivity.class);
-        incoming.setAction(Intent.ACTION_VIEW);
-        incoming.setData(Uri.parse("canact://call/" + callId + "?action=incoming"));
-        incoming.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+        // Native full-screen ringer activity. Launching this directly gives
+        // an instant phone-app-style call screen on both locked and
+        // unlocked devices — no WebView load latency.
+        Intent ringer = new Intent(ctx, IncomingCallActivity.class);
+        ringer.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
+        ringer.putExtra(IncomingCallActivity.EXTRA_FROM_NAME, fromName);
+        ringer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
             | Intent.FLAG_ACTIVITY_CLEAR_TOP
-            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
 
+        // Action-button intents used by the heads-up notification fallback
+        // (when USE_FULL_SCREEN_INTENT permission is missing). Both route
+        // through MainActivity → WebView so the existing ringer / call UI
+        // takes over, and decline writes status='rejected' to RTDB.
         Intent answer = new Intent(ctx, MainActivity.class);
         answer.setAction(Intent.ACTION_VIEW);
         answer.setData(Uri.parse("canact://call/" + callId + "?action=answer"));
@@ -141,7 +153,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
 
-        PendingIntent incomingPi = PendingIntent.getActivity(ctx, 1000, incoming, piFlags);
+        PendingIntent ringerPi = PendingIntent.getActivity(ctx, 1000, ringer, piFlags);
         PendingIntent answerPi = PendingIntent.getActivity(ctx, 1001, answer, piFlags);
         PendingIntent declinePi = PendingIntent.getActivity(ctx, 1002, decline, piFlags);
 
@@ -164,8 +176,8 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
                 new Person.Builder().setName(fromName).setImportant(true).build(),
                 declinePi,
                 answerPi))
-            .setContentIntent(incomingPi)
-            .setFullScreenIntent(incomingPi, true)
+            .setContentIntent(ringerPi)
+            .setFullScreenIntent(ringerPi, true)
             .build();
 
         NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -175,14 +187,13 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             mgr.notify(callId.hashCode(), n);
         }
 
-        // Also launch the activity directly. On a locked device the
-        // setFullScreenIntent above handles this; when the device is unlocked
-        // most ROMs only show a heads-up unless we explicitly start the
-        // activity. FCM-triggered background activity launches are permitted
-        // because this service was started by the system in response to a
-        // user-visible high-priority push.
+        // Always launch the native ringer activity directly. setFullScreenIntent
+        // alone only fires on a fully-locked device (and only if
+        // USE_FULL_SCREEN_INTENT is granted on Android 14+); starting the
+        // activity here covers the unlocked case so the user always sees
+        // the proper call UI immediately.
         try {
-            ctx.startActivity(incoming);
+            ctx.startActivity(ringer);
         } catch (Exception ignored) { /* OEM may block; notification still fires */ }
     }
 }
