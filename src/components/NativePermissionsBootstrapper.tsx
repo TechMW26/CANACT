@@ -22,10 +22,8 @@ function isNative(): boolean {
  * sign-in), requests permissions Canact needs to deliver calls while closed:
  *  - POST_NOTIFICATIONS (Android 13+): heads-up incoming-call popups.
  *  - Geolocation (fine): help-radius matching.
- *
- * Mic / camera permissions are intentionally NOT pre-requested — Android's
- * getUserMedia prompt fires the first time the user accepts a call, exactly
- * like Instagram / WhatsApp.
+ *  - Microphone (RECORD_AUDIO): so the first incoming voice call can connect
+ *    instantly without a permission dialog interrupting the ringing flow.
  *
  * It also subscribes to the FCM token (via @capacitor-firebase/messaging) and
  * persists it to RTDB at users/{uid}/fcmTokens/{token} so the Cloud Function
@@ -99,6 +97,27 @@ export default function NativePermissionsBootstrapper() {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[perms] location request failed:', err);
+      }
+
+      // --- Microphone (upfront) ------------------------------------------
+      // Trigger Android's RECORD_AUDIO prompt now so the first incoming
+      // voice call connects instantly. We open a short-lived audio track
+      // and immediately stop it; the OS-level grant persists for the app.
+      // Asked once per install via localStorage so we don't nag on every
+      // launch if the user denied.
+      try {
+        const ASKED_MIC_KEY = 'canact:perms:mic:asked:v1';
+        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_MIC_KEY)
+            && navigator?.mediaDevices?.getUserMedia) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            stream.getTracks().forEach((t) => t.stop());
+          } catch { /* user denied — they can re-enable in settings */ }
+          localStorage.setItem(ASKED_MIC_KEY, '1');
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[perms] mic request failed:', err);
       }
 
       // --- Full-screen-intent special access (Android 14+) ---------------
