@@ -10,6 +10,8 @@ import { Avatar, RatingPill } from '@/components/Avatar';
 import { HelpStatsPills } from '@/components/HelpStatsPills';
 import { LiveLocationEmbed } from '@/components/LiveLocationEmbed';
 import { HelpRatingSheet } from '@/components/HelpRatingSheet';
+import { InAppCallSheet } from '@/components/InAppCallSheet';
+import { startLiveLocationShare, listenLiveLocation } from '@/lib/services/liveLocation';
 import { useAuth } from '@/lib/auth';
 import {
   acceptHelp,
@@ -134,7 +136,14 @@ export default function HelpDetailPage() {
 
       {/* Confirmed actions: chat / call / in-person */}
       {confirmedMe && h.status !== 'closed' && (
-        <ConfirmedActions help={h} viewer="helper" otherUid={h.uid} />
+        <ConfirmedActions
+          help={h}
+          viewer="helper"
+          otherUid={h.uid}
+          otherName={h.authorName}
+          otherPhoto={h.authorPhoto}
+          me={{ uid: user.uid, name: profile.fullName, photoURL: profile.photoURL }}
+        />
       )}
 
       {/* Helpers list */}
@@ -234,7 +243,16 @@ function HelperRow({
       )}
 
       {viewerIsAsker && confirmed && help.status !== 'closed' && (
-        <div className="mt-3"><ConfirmedActions help={help} viewer="asker" otherUid={helperUid} /></div>
+        <div className="mt-3">
+          <ConfirmedActions
+            help={help}
+            viewer="asker"
+            otherUid={helperUid}
+            otherName={info.name}
+            otherPhoto={info.photoURL}
+            me={{ uid: viewerUid, name: askerProfile.fullName, photoURL: askerProfile.photoURL }}
+          />
+        </div>
       )}
 
       {isMe && !confirmed && help.status !== 'closed' && (
@@ -246,23 +264,56 @@ function HelperRow({
 
 /**
  * Channel-specific action panel that appears once asker has confirmed a
- * helper. Currently:
+ * helper. Wires up:
  *  - chat:     deep-link to inbox with the counterparty
- *  - call:     placeholder (in-app voice in Phase B)
- *  - inPerson: live-location embed using asker's coordinates + native maps link
+ *  - call:     in-app WebRTC voice call (numbers stay private)
+ *  - inPerson: live-location embed + asker auto-shares own coords while in
+ *              progress, helper can call from the same panel.
  */
 function ConfirmedActions({
   help,
   viewer,
   otherUid,
+  otherName,
+  otherPhoto,
+  me,
 }: {
   help: HelpRequest;
   viewer: 'asker' | 'helper';
   otherUid: string;
+  otherName: string;
+  otherPhoto?: string;
+  me: { uid: string; name: string; photoURL?: string };
 }) {
   const inboxHref = `/inbox/${otherUid}`;
-  const lat = help.lat;
-  const lng = help.lng;
+  const [callOpen, setCallOpen] = useState(false);
+  const [livePoint, setLivePoint] = useState<{ lat: number; lng: number; at: number } | null>(null);
+
+  // Asker auto-shares their location while help is in progress (in-person only).
+  useEffect(() => {
+    if (viewer !== 'asker' || help.channel !== 'inPerson' || help.status !== 'inProcess') return;
+    const stop = startLiveLocationShare(help.id, me.uid);
+    return () => { try { stop(); } catch {} };
+  }, [help.id, help.channel, help.status, viewer, me.uid]);
+
+  // Helper subscribes to the asker's live location.
+  useEffect(() => {
+    if (viewer !== 'helper' || help.channel !== 'inPerson') return;
+    return listenLiveLocation(help.id, help.uid, setLivePoint);
+  }, [help.id, help.uid, help.channel, viewer]);
+
+  const peer = { uid: otherUid, name: otherName, photoURL: otherPhoto };
+
+  const callButton = (
+    <button
+      type="button"
+      onClick={() => setCallOpen(true)}
+      className="flex items-center justify-between gap-2 rounded-2xl bg-brand text-white px-4 py-3 font-bold w-full"
+    >
+      <span className="flex items-center gap-2"><Phone size={16} /> Start in-app call</span>
+      <span className="text-xs opacity-80">numbers stay private</span>
+    </button>
+  );
 
   if (help.channel === 'chat') {
     return (
@@ -280,48 +331,64 @@ function ConfirmedActions({
 
   if (help.channel === 'call') {
     return (
-      <Card className="!p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white"><Phone size={14} /></span>
-            <div>
-              <div className="font-bold">In-app voice call</div>
-              <div className="text-[11px] text-muted">Numbers stay private.</div>
-            </div>
-          </div>
-          <Link href={inboxHref} className="text-brand text-xs font-bold underline">Open chat</Link>
-        </div>
-        <div className="mt-2 text-[11px] text-muted">
-          {viewer === 'helper' ? 'Tap below when ready to ring' : 'Tap below to ring the helper'} — coming in v1.1.
-        </div>
-        <button
-          type="button"
-          disabled
-          className="mt-2 w-full rounded-2xl bg-ink/10 text-ink/60 py-2.5 text-sm font-bold"
-        >
-          Start in-app call (soon)
-        </button>
+      <Card className="!p-3 space-y-2">
+        {callButton}
+        <Link href={inboxHref} className="text-brand text-xs font-bold underline block text-center">or open chat</Link>
+        {callOpen && (
+          <InAppCallSheet
+            open={callOpen}
+            onClose={() => setCallOpen(false)}
+            me={me}
+            peer={peer}
+            helpId={help.id}
+          />
+        )}
       </Card>
     );
   }
 
   // in-person
+  const lat = livePoint?.lat ?? help.lat;
+  const lng = livePoint?.lng ?? help.lng;
   return (
     <div className="space-y-2">
       {typeof lat === 'number' && typeof lng === 'number' ? (
-        <LiveLocationEmbed lat={lat} lng={lng} label={viewer === 'helper' ? `${help.authorName}'s location` : 'Your shared location'} />
+        <LiveLocationEmbed
+          lat={lat}
+          lng={lng}
+          label={viewer === 'helper'
+            ? (livePoint ? `${help.authorName}'s live location` : `${help.authorName}'s location`)
+            : 'Sharing your live location'}
+        />
       ) : (
         <Card className="!p-3 text-sm text-muted flex items-center gap-2">
           <MapPin size={14} /> Location wasn't shared on this request.
         </Card>
       )}
-      <Link
-        href={inboxHref}
-        className="flex items-center justify-between gap-2 rounded-2xl bg-brand-light text-brand px-4 py-3 font-bold"
-      >
-        <span className="flex items-center gap-2"><MessageCircle size={16} /> Coordinate in chat</span>
-        <span className="text-xs opacity-70">→</span>
-      </Link>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setCallOpen(true)}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-brand text-white px-3 py-3 text-sm font-bold"
+        >
+          <Phone size={14} /> In-app call
+        </button>
+        <Link
+          href={inboxHref}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-brand-light text-brand px-3 py-3 text-sm font-bold"
+        >
+          <MessageCircle size={14} /> Chat
+        </Link>
+      </div>
+      {callOpen && (
+        <InAppCallSheet
+          open={callOpen}
+          onClose={() => setCallOpen(false)}
+          me={me}
+          peer={peer}
+          helpId={help.id}
+        />
+      )}
     </div>
   );
 }

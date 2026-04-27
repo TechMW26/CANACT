@@ -11,6 +11,7 @@ import { PlusSheet } from './PlusSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
 import { Select } from './Input';
+import { IncomingCallRinger } from './IncomingCallRinger';
 import { haptic } from '@/lib/haptics';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -121,6 +122,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <UnifiedHeader />
         <div className="canact-col pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
+        <IncomingCallRinger />
       </main>
 
       {/* Floating mobile bottom nav */}
