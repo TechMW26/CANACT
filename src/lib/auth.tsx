@@ -17,8 +17,8 @@ import { UserProfile } from './types';
 
 /**
  * Detect Capacitor's native Android/iOS WebView. Embedded WebViews are blocked
- * from hosting Google's OAuth flow, so we use the @capacitor-firebase/authentication
- * plugin (native Google Sign-In SDK) instead of signInWithRedirect / signInWithPopup.
+ * from hosting Google's OAuth flow, so on native we open the system browser
+ * and bridge the id token back via the canact://auth-callback deep link.
  */
 function isCapacitorNative(): boolean {
   if (typeof window === 'undefined') return false;
@@ -28,91 +28,20 @@ function isCapacitorNative(): boolean {
   return cap.platform === 'android' || cap.platform === 'ios';
 }
 
-/** Lazy-loaded plugin reference — only imported on native to keep web bundle small. */
-async function getNativeAuthPlugin() {
-  const mod = await import('@capacitor-firebase/authentication');
-  return mod.FirebaseAuthentication;
-}
-
 /**
- * Browser-fallback Google sign-in for the Capacitor APK.
- *
- * Used when the native @capacitor-firebase/authentication plugin fails or
- * hangs (commonly: missing google-services.json, SHA-1 not registered, Play
- * Services on the device disabled). We open the system browser to a hosted
- * helper page on canact.vercel.app that performs a real `signInWithPopup`,
- * then redirects back to the app via the `canact://auth-callback#idToken=...`
- * deep link. This function listens for that deep link, extracts the id token
- * and exchanges it for a Firebase credential. Resolves on success, rejects
- * if the user cancels or the helper reports an error.
+ * Open the system browser to the hosted Google sign-in helper page. Returns
+ * as soon as the browser is launched — the actual credential exchange happens
+ * later when Android delivers the canact://auth-callback deep link to the
+ * global listener registered in AuthProvider. This way the spinner on the
+ * sign-in button clears immediately and the user simply sees the splash
+ * screen / signed-in state when they return from the browser.
  */
-async function browserFallbackGoogleSignIn(auth: import('firebase/auth').Auth): Promise<void> {
-  const [{ Browser }, { App }] = await Promise.all([
-    import('@capacitor/browser'),
-    import('@capacitor/app'),
-  ]);
-
+async function openBrowserGoogleSignIn(): Promise<void> {
+  const { Browser } = await import('@capacitor/browser');
   const helperUrl =
     'https://canact.vercel.app/auth/native?return=' +
     encodeURIComponent('canact://auth-callback');
-
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    let urlListener: { remove: () => Promise<void> } | null = null;
-
-    const finish = async (err?: Error) => {
-      if (settled) return;
-      settled = true;
-      try { await urlListener?.remove(); } catch { /* noop */ }
-      try { await Browser.close(); } catch { /* noop */ }
-      if (err) reject(err); else resolve();
-    };
-
-    App.addListener('appUrlOpen', async (data: { url: string }) => {
-      try {
-        if (!data?.url || !data.url.startsWith('canact://auth-callback')) return;
-        // Parse the hash fragment for idToken / error.
-        const hash = data.url.split('#')[1] ?? '';
-        const params = new URLSearchParams(hash);
-        const errorMsg = params.get('error');
-        if (errorMsg) {
-          await finish(new Error(errorMsg));
-          return;
-        }
-        const idToken = params.get('idToken');
-        if (!idToken) {
-          await finish(new Error('No id token returned from browser sign-in.'));
-          return;
-        }
-        const cred = GoogleAuthProvider.credential(idToken);
-        const r = await signInWithCredential(auth, cred);
-        if (r.user) seedInBackground(r.user);
-        await finish();
-      } catch (e: any) {
-        await finish(e instanceof Error ? e : new Error(String(e)));
-      }
-    }).then((handle) => { urlListener = handle; });
-
-    Browser.open({ url: helperUrl, presentationStyle: 'fullscreen' }).catch((e) => {
-      finish(e instanceof Error ? e : new Error('Could not open browser for sign-in.'));
-    });
-
-    // Hard cap so the loader doesn't hang forever if the user closes the
-    // custom tab without coming back.
-    setTimeout(() => {
-      if (!settled) finish(new Error('Sign-in timed out. Please try again.'));
-    }, 5 * 60 * 1000);
-  });
-}
-
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
-    p.then(
-      (v) => { clearTimeout(t); resolve(v); },
-      (e) => { clearTimeout(t); reject(e); },
-    );
-  });
+  await Browser.open({ url: helperUrl, presentationStyle: 'fullscreen' });
 }
 
 interface SessionUser {
@@ -252,6 +181,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, []);
 
+  // Global deep-link listener for the browser-based Google sign-in flow
+  // (Capacitor APK only). The /auth/native helper page redirects to
+  // canact://auth-callback#idToken=... once the user signs in via the system
+  // browser; Android delivers that URL to MainActivity, the @capacitor/app
+  // plugin emits `appUrlOpen`, and we exchange the id token for a Firebase
+  // credential here. Mounted once at app boot so it survives even if the
+  // user closes the welcome page after launching the browser.
+  useEffect(() => {
+    if (!isCapacitorNative()) return;
+    let handle: { remove: () => Promise<void> } | null = null;
+    let cancelled = false;
+    (async () => {
+      const [{ App }, { Browser }] = await Promise.all([
+        import('@capacitor/app'),
+        import('@capacitor/browser'),
+      ]);
+      if (cancelled) return;
+      handle = await App.addListener('appUrlOpen', async (data: { url: string }) => {
+        try {
+          if (!data?.url || !data.url.startsWith('canact://auth-callback')) return;
+          const hash = data.url.split('#')[1] ?? '';
+          const params = new URLSearchParams(hash);
+          const errorMsg = params.get('error');
+          if (errorMsg) {
+            // eslint-disable-next-line no-console
+            console.warn('[auth] browser sign-in returned error:', errorMsg);
+            try { await Browser.close(); } catch { /* noop */ }
+            return;
+          }
+          const idToken = params.get('idToken');
+          if (!idToken) return;
+          const cred = GoogleAuthProvider.credential(idToken);
+          const auth = getFirebaseAuth();
+          const r = await signInWithCredential(auth, cred);
+          if (r.user) seedInBackground(r.user);
+          try { await Browser.close(); } catch { /* noop */ }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[auth] deep-link sign-in handler failed', err);
+        }
+      });
+    })().catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] failed to register deep-link listener', err);
+    });
+    return () => {
+      cancelled = true;
+      handle?.remove().catch(() => { /* noop */ });
+    };
+  }, []);
+
   // Profile subscription — independent of auth `loading`.
   useEffect(() => {
     if (!user) { setProfile(null); return; }
@@ -277,33 +257,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle: async () => {
       const auth = getFirebaseAuth();
 
-      // Native (Capacitor APK): use the Google Sign-In SDK via the plugin and
-      // exchange the idToken for a Firebase credential. This works inside the
-      // Android WebView where signInWithRedirect / signInWithPopup are blocked.
-      // If the native plugin fails or hangs (missing google-services.json,
-      // SHA-1 mismatch, Play Services issue), fall back to the system browser
-      // helper page which performs sign-in and returns the id token via a
-      // canact://auth-callback deep link.
+      // Native (Capacitor APK): open the system browser and let the hosted
+      // helper page (/auth/native) handle Google sign-in. Resolve immediately
+      // — the global deep-link listener mounted in AuthProvider will exchange
+      // the returned id token for a Firebase credential. Awaiting here would
+      // freeze the sign-in button's spinner for the entire browser flow.
       if (isCapacitorNative()) {
-        try {
-          const FirebaseAuthentication = await getNativeAuthPlugin();
-          const result = await withTimeout(
-            FirebaseAuthentication.signInWithGoogle(),
-            15000,
-            'Native Google sign-in',
-          );
-          const idToken = result.credential?.idToken;
-          if (!idToken) throw new Error('Google sign-in did not return an id token.');
-          const cred = GoogleAuthProvider.credential(idToken);
-          const r = await signInWithCredential(auth, cred);
-          if (r.user) seedInBackground(r.user);
-          return;
-        } catch (nativeErr: any) {
-          // eslint-disable-next-line no-console
-          console.warn('[auth] native Google sign-in failed, falling back to browser:', nativeErr);
-          await browserFallbackGoogleSignIn(auth);
-          return;
-        }
+        await openBrowserGoogleSignIn();
+        return;
       }
 
       const provider = getGoogleProvider();
@@ -329,12 +290,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     signOut: async () => {
-      if (isCapacitorNative()) {
-        try {
-          const FirebaseAuthentication = await getNativeAuthPlugin();
-          await FirebaseAuthentication.signOut();
-        } catch { /* non-fatal */ }
-      }
       await fbSignOut(getFirebaseAuth());
       setUser(null);
       setProfile(null);

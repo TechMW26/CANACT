@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { getFirebaseAuth, getGoogleProvider } from '@/lib/firebase';
 
 function defaultReturn() {
@@ -61,39 +61,15 @@ export default function NativeAuthPage() {
           }
         }
       } catch {
-        // ignore — fall through to popup
+        // ignore — fall through to redirect
       }
 
+      // Mobile browsers commonly block popups, so go straight to redirect.
+      // After Google bounces back to this page, the getRedirectResult branch
+      // above forwards the id token to the app via the canact:// deep link.
       try {
-        const result = await signInWithPopup(auth, provider);
-        const cred = GoogleAuthProvider.credentialFromResult(result);
-        const idToken = cred?.idToken;
-        if (!idToken) throw new Error('No id token returned from Google.');
-        setStatus('redirecting');
-        setMessage('Returning to Canact…');
-        window.location.replace(buildReturnUrl(ret, { idToken }));
+        await signInWithRedirect(auth, provider);
       } catch (err: any) {
-        const code = err?.code ?? '';
-        // Mobile browsers often block popups → fall back to redirect, which
-        // returns to this same page; the getRedirectResult branch above will
-        // then forward the token to the app.
-        if (
-          code === 'auth/popup-blocked' ||
-          code === 'auth/popup-closed-by-user' ||
-          code === 'auth/cancelled-popup-request' ||
-          code === 'auth/operation-not-supported-in-this-environment'
-        ) {
-          try {
-            await signInWithRedirect(auth, provider);
-            return;
-          } catch (e: any) {
-            setStatus('error');
-            setMessage(e?.message ?? 'Sign-in failed.');
-            return;
-          }
-        }
-        // Any other failure → bounce back to the app with an error param so the
-        // app can dismiss the loader and surface a message.
         setStatus('error');
         setMessage(err?.message ?? 'Sign-in failed.');
         try {
