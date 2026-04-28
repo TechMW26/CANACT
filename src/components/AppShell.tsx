@@ -129,11 +129,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 md:pl-2">
         <UnifiedHeader />
-        {/* Spacer that occupies the same vertical space as the fixed header
-            so the page content starts below it instead of underneath. The
-            header itself is now position:fixed so it never scrolls away —
-            ScrollDirectionWatcher just toggles its visibility. */}
-        <div data-canact-header-spacer aria-hidden className="h-[64px] safe-top md:h-[72px]" />
+        {/* Spacer that occupies the same vertical space as the fixed
+            header so the page content starts below it instead of
+            underneath. Header total ≈ safe-area-inset-top + 76px (pt-3 +
+            pill 52px + pb-3); we mirror that with safe-top padding + a
+            76px content height so the spacer scales with the notch. */}
+        <div
+          data-canact-header-spacer
+          aria-hidden
+          style={{ height: 'calc(env(safe-area-inset-top, 0px) + 76px)' }}
+        />
         <div className="canact-col pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
