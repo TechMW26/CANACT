@@ -146,15 +146,17 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 
 /* ---------- Auto-hide unified header on scroll-down ----------
-   AppShell toggles `data-header-hidden="true"` on the shell wrapper as the
-   user scrolls down. The sticky header slides up out of view; the sticky
-   stories+filters strip slides up to fill the space. Reverses on any upward
-   scroll (or when near top). */
+   The header is position:fixed at the top of the viewport so it never
+   scrolls with the page. AppShell toggles `data-header-hidden="true"` on
+   the shell wrapper as the user scrolls down; the header slides up out of
+   view (and the sticky filters strip below it fades). Reverses on any
+   upward scroll (or when near top). */
 [data-canact-header] {
-  transition: opacity 200ms ease;
-  will-change: opacity;
+  transition: transform 200ms ease, opacity 200ms ease;
+  will-change: transform, opacity;
 }
 [data-header-hidden="true"] [data-canact-header] {
+  transform: translateY(-110%);
   opacity: 0;
   pointer-events: none;
 }

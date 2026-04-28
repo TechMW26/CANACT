@@ -129,6 +129,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 md:pl-2">
         <UnifiedHeader />
+        {/* Spacer that occupies the same vertical space as the fixed header
+            so the page content starts below it instead of underneath. The
+            header itself is now position:fixed so it never scrolls away —
+            ScrollDirectionWatcher just toggles its visibility. */}
+        <div data-canact-header-spacer aria-hidden className="h-[64px] safe-top md:h-[72px]" />
         <div className="canact-col pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
@@ -227,7 +232,7 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="sticky top-0 z-30 pt-3 pb-3 safe-top md:px-6 md:pt-4"
+      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4"
     >
       <div className="canact-col md:max-w-none flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
