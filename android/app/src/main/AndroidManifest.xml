@@ -94,6 +94,17 @@
             </intent-filter>
         </service>
 
+        <!-- Foreground service that owns the ringer for the duration of an
+             incoming call. Promoted with foregroundServiceType=phoneCall so
+             we get the BAL exemption needed to launch IncomingCallActivity
+             on an unlocked device — without this the full-screen ringer
+             only ever auto-launches when the device is locked, which is
+             exactly the bug WhatsApp / Signal solve the same way. -->
+        <service
+            android:name=".CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+
         <!-- Receives Answer / Decline taps from the call notification and
              from IncomingCallActivity. Decline writes status:'rejected'
              straight to RTDB; Answer cancels the notification then forwards

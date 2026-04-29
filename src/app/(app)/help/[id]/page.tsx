@@ -310,7 +310,7 @@ function ConfirmedActions({
       onClick={() => setCallOpen(true)}
       className="flex items-center justify-between gap-2 rounded-2xl bg-brand text-white px-4 py-3 font-bold w-full"
     >
-      <span className="flex items-center gap-2"><Phone size={16} /> Start in-app call</span>
+      <span className="flex items-center gap-2"><Phone size={16} /> Start call</span>
       <span className="text-xs opacity-80">numbers stay private</span>
     </button>
   );
@@ -371,7 +371,7 @@ function ConfirmedActions({
           onClick={() => setCallOpen(true)}
           className="flex items-center justify-center gap-2 rounded-2xl bg-brand text-white px-3 py-3 text-sm font-bold"
         >
-          <Phone size={14} /> In-app call
+          <Phone size={14} /> Call
         </button>
         <Link
           href={inboxHref}

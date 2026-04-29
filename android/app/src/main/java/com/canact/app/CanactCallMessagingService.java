@@ -76,8 +76,9 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         // SDK would otherwise swallow).
         // ------------------------------------------------------------------
         if ("call-cancel".equals(type) && callId != null && !callId.isEmpty()) {
-            NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (mgr != null) mgr.cancel(callId.hashCode());
+            // Tell the foreground ringer service to stop (it cancels its
+            // own notification + dismisses IncomingCallActivity).
+            CallForegroundService.stopRinging(getApplicationContext(), callId);
             try {
                 Intent cancel = new Intent(getApplicationContext(), IncomingCallActivity.class);
                 cancel.setAction("cancel");
@@ -99,8 +100,10 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             // here would just stack a second ringtone on top.
             if (isAppInForeground()) return;
 
-            ensureCallChannel();
-            postIncomingCallNotification(callId, fromName);
+            // Hand off to the foreground service. It owns the notification
+            // lifecycle AND has the BAL exemption needed to launch the
+            // full-screen IncomingCallActivity even on an unlocked device.
+            CallForegroundService.startRinging(getApplicationContext(), callId, fromName);
             return;
         }
 

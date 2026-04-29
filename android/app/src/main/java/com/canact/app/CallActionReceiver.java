@@ -47,9 +47,12 @@ public class CallActionReceiver extends BroadcastReceiver {
         if (callId == null || callId.isEmpty()) return;
 
         // 1) Always cancel the heads-up notification + dismiss the ringer
-        //    activity immediately so the user sees instant feedback.
+        //    activity immediately so the user sees instant feedback. Stop
+        //    the foreground service if it's running so the ringtone goes
+        //    silent the moment the user taps an action.
         cancelNotification(context, callId);
         dismissRinger(context, callId);
+        CallForegroundService.stopRinging(context, callId);
 
         if (ACTION_DECLINE.equals(intent.getAction())) {
             writeStatus(callId, "rejected");

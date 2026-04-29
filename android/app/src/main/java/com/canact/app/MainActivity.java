@@ -55,6 +55,9 @@ public class MainActivity extends BridgeActivity {
             if (callId.isEmpty()) return;
             NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (mgr != null) mgr.cancel(callId.hashCode());
+            // Also stop the ringer foreground service so the ringtone
+            // stops the moment we land on the in-app call screen.
+            CallForegroundService.stopRinging(this, callId);
         } catch (Exception ignored) {}
     }
 
