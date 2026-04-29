@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { listenIncomingCalls, setCallStatus, clearIncoming, CallRecord } from '@/lib/services/calls';
 import { Avatar } from './Avatar';
-import { PhoneCall, PhoneOff } from './icons';
+import { PhoneCall, PhoneOff, Video } from './icons';
 import { InAppCallSheet } from './InAppCallSheet';
 
 /**
@@ -102,6 +102,7 @@ export function IncomingCallRinger() {
         peer={accepted.from}
         helpId={accepted.helpId}
         incomingCallId={accepted.id}
+        initialKind={accepted.kind ?? 'audio'}
       />
     );
   }
@@ -118,8 +119,9 @@ export function IncomingCallRinger() {
   return (
     <div className="fixed inset-0 z-[200] bg-ink/95 text-white flex flex-col items-center justify-between py-16 px-6">
       <div className="text-center">
-        <div className="text-xs uppercase tracking-widest opacity-60">Incoming call</div>
-        <div className="mt-2 text-base opacity-80">
+        <div className="text-xs uppercase tracking-widest opacity-60">Incoming {pending.kind === 'video' ? 'video call' : 'call'}</div>
+        <div className="mt-2 text-base opacity-80 flex items-center justify-center gap-1">
+          {pending.kind === 'video' && <Video size={14} />}
           {pending.helpId ? 'Help request' : 'Direct call'}
         </div>
       </div>

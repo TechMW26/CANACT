@@ -193,29 +193,31 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             | Intent.FLAG_ACTIVITY_SINGLE_TOP
             | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
 
-        // Action-button intents → MainActivity (WebView). The deep-link
-        // router stores the user's choice as a pre-decision so the in-app
-        // ringer auto-applies it without prompting again.
-        Intent answer = new Intent(ctx, MainActivity.class);
-        answer.setAction(Intent.ACTION_VIEW);
-        answer.setData(Uri.parse("canact://call/" + callId + "?action=answer"));
-        answer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-            | Intent.FLAG_ACTIVITY_CLEAR_TOP
-            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // Action-button intents → CallActionReceiver. The receiver:
+        //   • DECLINE → writes status:'rejected' to RTDB directly (no
+        //     WebView wake), cancels the notification + dismisses the
+        //     ringer activity. Done — user never leaves the lock screen.
+        //   • ANSWER  → cancels the notification, then forwards the user
+        //     into MainActivity with a deep link the in-app router turns
+        //     into an auto-accept pre-decision.
+        Intent answer = new Intent(ctx, CallActionReceiver.class);
+        answer.setAction(CallActionReceiver.ACTION_ANSWER);
+        answer.putExtra(CallActionReceiver.EXTRA_CALL_ID, callId);
 
-        Intent decline = new Intent(ctx, MainActivity.class);
-        decline.setAction(Intent.ACTION_VIEW);
-        decline.setData(Uri.parse("canact://call/" + callId + "?action=decline"));
-        decline.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-            | Intent.FLAG_ACTIVITY_CLEAR_TOP
-            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        Intent decline = new Intent(ctx, CallActionReceiver.class);
+        decline.setAction(CallActionReceiver.ACTION_DECLINE);
+        decline.putExtra(CallActionReceiver.EXTRA_CALL_ID, callId);
 
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
 
         PendingIntent ringerPi = PendingIntent.getActivity(ctx, 1000, ringer, piFlags);
-        PendingIntent answerPi = PendingIntent.getActivity(ctx, 1001, answer, piFlags);
-        PendingIntent declinePi = PendingIntent.getActivity(ctx, 1002, decline, piFlags);
+        // Unique request codes per callId so multiple concurrent calls
+        // don't share the same PendingIntent.
+        int answerRc = ("answer:" + callId).hashCode();
+        int declineRc = ("decline:" + callId).hashCode();
+        PendingIntent answerPi = PendingIntent.getBroadcast(ctx, answerRc, answer, piFlags);
+        PendingIntent declinePi = PendingIntent.getBroadcast(ctx, declineRc, decline, piFlags);
 
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)

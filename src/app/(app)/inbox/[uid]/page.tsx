@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
-import { ArrowLeft, Send, X, CornerUpLeft, Trash2, Pencil, Copy } from '@/components/icons';
+import { ArrowLeft, Send, X, CornerUpLeft, Trash2, Pencil, Copy, Phone, Video } from '@/components/icons';
 import { Sheet } from '@/components/Sheet';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
@@ -24,6 +24,8 @@ import {
 } from '@/lib/services/chat';
 import type { ChatAttachment, ChatMessage, ChatThread, UserProfile } from '@/lib/types';
 import { MessageBubble, QUICK_REACTIONS } from '@/components/MessageBubble';
+import { InAppCallSheet } from '@/components/InAppCallSheet';
+import type { CallKind } from '@/lib/services/calls';
 
 export default function InboxThreadPage() {
   const { user, profile } = useAuth();
@@ -42,6 +44,7 @@ export default function InboxThreadPage() {
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [editText, setEditText] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
+  const [callKind, setCallKind] = useState<CallKind | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -170,6 +173,26 @@ export default function InboxThreadPage() {
             </div>
           </div>
         </Link>
+        {thread?.status === 'accepted' && other && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => { haptic('selection'); setCallKind('audio'); }}
+              aria-label="Voice call"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand hover:bg-brand-light/40"
+            >
+              <Phone size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => { haptic('selection'); setCallKind('video'); }}
+              aria-label="Video call"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-brand hover:bg-brand-light/40"
+            >
+              <Video size={20} />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Messages — anchored to bottom */}
@@ -375,6 +398,16 @@ export default function InboxThreadPage() {
           </div>
         </div>
       </Sheet>
+
+      {callKind && other && (
+        <InAppCallSheet
+          open={!!callKind}
+          onClose={() => setCallKind(null)}
+          me={{ uid: user.uid, name: profile.fullName, photoURL: profile.photoURL ?? undefined }}
+          peer={{ uid: other.uid, name: other.fullName, photoURL: other.photoURL ?? undefined }}
+          initialKind={callKind}
+        />
+      )}
     </div>
   );
 }

@@ -82,6 +82,8 @@ export {
   PhoneOff,
   Mic,
   MicOff,
+  Video,
+  VideoOff,
   Navigation,
   RotateCcw,
   CornerUpLeft,

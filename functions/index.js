@@ -68,6 +68,7 @@ exports.notifyIncomingCall = functions
         callId: String(callId),
         fromName: String(fromName),
         fromPhoto: String(fromPhoto),
+        kind: String((call.kind === 'video') ? 'video' : 'audio'),
       },
       android: {
         priority: 'high',

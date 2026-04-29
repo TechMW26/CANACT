@@ -93,6 +93,19 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Receives Answer / Decline taps from the call notification and
+             from IncomingCallActivity. Decline writes status:'rejected'
+             straight to RTDB; Answer cancels the notification then forwards
+             into MainActivity via canact://call/<id>?action=answer. -->
+        <receiver
+            android:name=".CallActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.canact.app.CALL_ANSWER" />
+                <action android:name="com.canact.app.CALL_DECLINE" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Network -->

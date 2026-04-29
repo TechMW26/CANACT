@@ -69,30 +69,23 @@ public class IncomingCallActivity extends Activity {
 
         answer.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                Intent open = new Intent(IncomingCallActivity.this, MainActivity.class);
-                open.setAction(Intent.ACTION_VIEW);
-                open.setData(Uri.parse("canact://call/" + callId + "?action=answer"));
-                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivity(open);
+                Intent ans = new Intent(IncomingCallActivity.this, CallActionReceiver.class);
+                ans.setAction(CallActionReceiver.ACTION_ANSWER);
+                ans.putExtra(CallActionReceiver.EXTRA_CALL_ID, callId);
+                sendBroadcast(ans);
                 finishAndDismiss();
             }
         });
 
         decline.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                // Hand the decline off to MainActivity via deep link — the
-                // NativeCallDeepLinkRouter inside the WebView marks the
-                // call rejected in RTDB, which then triggers the
-                // cancelIncomingCall Cloud Function.
-                Intent open = new Intent(IncomingCallActivity.this, MainActivity.class);
-                open.setAction(Intent.ACTION_VIEW);
-                open.setData(Uri.parse("canact://call/" + callId + "?action=decline"));
-                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivity(open);
+                // Decline directly via the broadcast receiver — writes
+                // status:'rejected' to RTDB without ever waking the
+                // WebView, so the user never has to unlock.
+                Intent dec = new Intent(IncomingCallActivity.this, CallActionReceiver.class);
+                dec.setAction(CallActionReceiver.ACTION_DECLINE);
+                dec.putExtra(CallActionReceiver.EXTRA_CALL_ID, callId);
+                sendBroadcast(dec);
                 finishAndDismiss();
             }
         });

@@ -28,12 +28,19 @@ import {
 import { db } from '../firebase';
 
 export type CallStatus = 'ringing' | 'active' | 'ended' | 'rejected' | 'missed';
+export type CallKind = 'audio' | 'video';
 
 export interface CallRecord {
   id: string;
   from: { uid: string; name: string; photoURL?: string };
   to: { uid: string; name: string; photoURL?: string };
   helpId?: string;
+  /**
+   * What the caller initiated. Either side can subsequently flip this by
+   * writing `kind` again — that's how mid-call upgrade/downgrade works
+   * (audio ↔ video). InAppCallSheet renegotiates the SDP on every change.
+   */
+  kind?: CallKind;
   status: CallStatus;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
@@ -53,6 +60,7 @@ export async function createCall(args: {
   from: { uid: string; name: string; photoURL?: string };
   to: { uid: string; name: string; photoURL?: string };
   helpId?: string;
+  kind?: CallKind;
 }) {
   const node = push(ref(db, 'calls'));
   const id = node.key as string;
@@ -61,6 +69,7 @@ export async function createCall(args: {
     from: args.from,
     to: args.to,
     helpId: args.helpId,
+    kind: args.kind ?? 'audio',
     status: 'ringing',
     createdAt: Date.now(),
   };
@@ -70,6 +79,12 @@ export async function createCall(args: {
   await set(node, clean);
   await set(ref(db, `incomingCalls/${args.to.uid}/${id}`), true);
   return id;
+}
+
+/** Either side may flip the call kind mid-call (e.g. upgrade voice → video).
+ *  The peer's WebRTC layer reacts via the listenCall subscription. */
+export async function setCallKind(callId: string, kind: CallKind) {
+  await update(ref(db, `calls/${callId}`), { kind });
 }
 
 export async function setCallOffer(callId: string, offer: RTCSessionDescriptionInit) {
