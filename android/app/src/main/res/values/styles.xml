@@ -9,14 +9,28 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <!-- Main app theme.
+         The web UI uses a near-white background (#FFF8F8) so we paint
+         the system status bar the same colour and force DARK icons
+         (windowLightStatusBar=true) \u2014 otherwise the OEM default of
+         white icons becomes invisible against our pale background.
+         Same treatment for the gesture nav bar. -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:statusBarColor">@color/statusBarBackground</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/statusBarBackground</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/statusBarBackground</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/statusBarBackground</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>
