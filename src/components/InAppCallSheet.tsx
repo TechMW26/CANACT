@@ -50,6 +50,11 @@ export function InAppCallSheet({
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const offerSetRef = useRef(false);
   const answerSetRef = useRef(false);
+  // Mirror of `callId` state in a ref so the cleanup closure (which is
+  // captured at mount time) can always reach the latest id — critical for
+  // the caller, whose id is only known after createCall() resolves.
+  const callIdRef = useRef<string | null>(incomingCallId ?? null);
+  const closingRef = useRef(false);
   const [callId, setCallId] = useState<string | null>(incomingCallId ?? null);
   const [status, setStatus] = useState<'connecting' | 'ringing' | 'active' | 'ended'>(
     incomingCallId ? 'connecting' : 'ringing',
@@ -101,6 +106,7 @@ export function InAppCallSheet({
         if (isCaller) {
           id = await createCall({ from: me, to: peer, helpId, kind: wantVideo ? 'video' : 'audio' });
           setCallId(id);
+          callIdRef.current = id;
         }
         if (!id) throw new Error('No call id');
 
@@ -117,7 +123,17 @@ export function InAppCallSheet({
         pc.onconnectionstatechange = () => {
           const st = pc.connectionState;
           if (st === 'connected') setStatus('active');
-          if (st === 'failed' || st === 'disconnected' || st === 'closed') setStatus('ended');
+          if (st === 'failed' || st === 'disconnected' || st === 'closed') {
+            // Peer dropped — tear everything down so the sheet closes
+            // automatically, matching what happens when the *local* user
+            // taps hang-up. Without this, both sides would just freeze
+            // on the call screen forever after the other side ended.
+            setStatus('ended');
+            if (!closingRef.current) {
+              closingRef.current = true;
+              setTimeout(() => onClose(), 600);
+            }
+          }
         };
 
         // Renegotiation — fired when caller adds/removes tracks (kind flip).
@@ -184,9 +200,13 @@ export function InAppCallSheet({
       pcRef.current = null;
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
-      if (callId) {
-        setCallStatus(callId, 'ended').catch(() => {});
-        clearIncoming(me.uid, callId).catch(() => {});
+      // Use the ref — the state captured at mount time is null for the
+      // caller, so without this the call record would never be marked
+      // ended on RTDB and the peer would keep ringing forever.
+      const id = callIdRef.current;
+      if (id) {
+        setCallStatus(id, 'ended').catch(() => {});
+        clearIncoming(me.uid, id).catch(() => {});
       }
     };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -257,7 +277,19 @@ export function InAppCallSheet({
   };
 
   const hangup = () => {
-    if (callId) setCallStatus(callId, 'ended').catch(() => {});
+    if (closingRef.current) return;
+    closingRef.current = true;
+    const id = callIdRef.current ?? callId;
+    // 1) Tell the peer FIRST so their listenCall fires and they tear
+    //    down too, before we close our own pc (which they'd otherwise
+    //    learn about only via ICE timeout, ~30s later).
+    if (id) setCallStatus(id, 'ended').catch(() => {});
+    // 2) Hard-close locally so the mic / camera are freed instantly
+    //    and the user sees the sheet vanish even if RTDB is slow.
+    try { pcRef.current?.close(); } catch {}
+    pcRef.current = null;
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
     onClose();
   };
 

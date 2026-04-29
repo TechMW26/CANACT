@@ -143,6 +143,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Video calling: front + back cameras. The WebView's WebChromeClient
+         needs the manifest declaration before it can grant the WebRTC
+         RESOURCE_VIDEO_CAPTURE prompt; without it getUserMedia({video:true})
+         silently fails inside the bundled webview. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+
     <!-- Background reliability: ask for battery optimization exemption so the
          app can keep its socket / FCM stream alive while idle. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
