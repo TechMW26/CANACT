@@ -247,7 +247,7 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4 pointer-events-none"
+      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 safe-top md:left-60 md:px-6 md:pt-4 pointer-events-none"
     >
       <div className="canact-col md:max-w-none pointer-events-auto flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
