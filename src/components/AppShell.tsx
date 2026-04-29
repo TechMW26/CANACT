@@ -154,39 +154,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           mimicking the "Home" pill in the inspiration design. The smooth
           width transition is what gives it the animated feel without
           pulling in framer-motion. */}
-      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pb-3 safe-bottom pointer-events-none">
-        <div className="canact-col pointer-events-auto rounded-[28px] bg-white/92 backdrop-blur-md border border-white/70 shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
+      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-candy pt-2 pb-3 safe-bottom pointer-events-none">
+        <div className="canact-col pointer-events-auto rounded-[28px] bg-white border border-line shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
           <div className="flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
-              const active = !isFab && (pathname === href || pathname?.startsWith(href));
-              if (isFab) {
-                return (
-                  <button
-                    key={href}
-                    type="button"
-                    onClick={() => { haptic('strong'); setPlusOpen(true); }}
-                    aria-label="Create"
-                    className="flex shrink-0 items-center justify-center"
-                  >
-                    <span className="-mt-8 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-[0_10px_24px_-6px_rgba(200,16,46,0.55)] ring-4 ring-white hover:bg-brand-dark active:scale-95 transition">
-                      <Icon size={26} strokeWidth={2.4} />
-                    </span>
-                  </button>
-                );
-              }
+              const active = (pathname === href || pathname?.startsWith(href));
               const isProfile = href === '/profile';
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-label={label || href}
-                  onClick={() => { if (!active) haptic('selection'); }}
-                  className={`group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color] duration-300 ease-out ${
-                    active
-                      ? 'bg-brand text-white pl-3 pr-4 shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]'
-                      : 'text-ink/65 hover:text-ink'
-                  }`}
-                >
+              const onTap = () => {
+                if (isFab) { haptic('strong'); setPlusOpen(true); return; }
+                if (!active) haptic('selection');
+              };
+              const inner = (
+                <>
                   {isProfile ? (
                     <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-white/80' : ''}`}>
                       <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={24} />
@@ -199,8 +178,25 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                       active ? 'ml-2 max-w-[80px] opacity-100' : 'ml-0 max-w-0 opacity-0'
                     }`}
                   >
-                    {label || (isProfile ? 'Me' : '')}
+                    {label || (isProfile ? 'Me' : isFab ? 'Add' : '')}
                   </span>
+                </>
+              );
+              const cls = `group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color] duration-300 ease-out ${
+                active
+                  ? 'bg-brand text-white pl-3 pr-4 shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]'
+                  : 'text-ink/65 hover:text-ink'
+              }`;
+              if (isFab) {
+                return (
+                  <button key={href} type="button" onClick={onTap} aria-label="Create" className={cls}>
+                    {inner}
+                  </button>
+                );
+              }
+              return (
+                <Link key={href} href={href} aria-label={label || href} onClick={onTap} className={cls}>
+                  {inner}
                 </Link>
               );
             })}
@@ -251,9 +247,9 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4"
+      className="fixed top-0 left-0 right-0 z-30 bg-candy pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4"
     >
-      <div className="canact-col md:max-w-none flex items-center gap-2 rounded-2xl bg-white/85 backdrop-blur-md border border-white/60 shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+      <div className="canact-col md:max-w-none flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
         <div className="ml-auto inline-flex items-center gap-2">
           <Select
