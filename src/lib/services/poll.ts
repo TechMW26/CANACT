@@ -1,4 +1,4 @@
-import { onValue, push, ref, runTransaction, set, get, query, orderByChild } from 'firebase/database';
+import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
 import { uid as rid } from '../utils';
@@ -44,7 +44,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
 }
 
 export function listenPollFeed(cb: (items: Poll[]) => void) {
-  return onValue(query(ref(db, 'polls'), orderByChild('createdAt')), (snap) => {
+  return onValue(query(ref(db, 'polls'), orderByChild('createdAt'), limitToLast(40)), (snap) => {
     const out: Poll[] = [];
     snap.forEach((c) => {
       const p = normalizePoll(c.val());

@@ -53,7 +53,7 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
       <div className="relative aspect-[4/5] bg-brand-light/40">
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumb} alt="" className="h-full w-full object-cover" />
+          <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-ink/50">{label}</div>
         )}

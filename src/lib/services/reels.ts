@@ -1,4 +1,4 @@
-import { onValue, push, ref, remove, set, update, query, orderByChild, runTransaction } from 'firebase/database';
+import { onValue, push, ref, remove, set, update, query, orderByChild, limitToLast, runTransaction } from 'firebase/database';
 import { db } from '../firebase';
 import type { ReelItem } from '../types';
 
@@ -30,7 +30,7 @@ export async function createReel(input: Omit<ReelItem, 'id' | 'createdAt' | 'lik
 }
 
 export function listenReels(cb: (items: ReelItem[]) => void) {
-  const r = query(ref(db, 'reels'), orderByChild('createdAt'));
+  const r = query(ref(db, 'reels'), orderByChild('createdAt'), limitToLast(40));
   return onValue(r, (snap) => {
     const out: ReelItem[] = [];
     snap.forEach((c) => { out.push(c.val() as ReelItem); });

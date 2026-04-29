@@ -116,6 +116,11 @@ function ReelTile({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
+  // Track whether this tile is the currently-visible one so we only
+  // download bytes for the reel the user is actually watching. Off-
+  // screen reels stay at preload="none", which keeps the page-level
+  // bandwidth flat regardless of how long the feed is.
+  const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -124,10 +129,12 @@ function ReelTile({
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
+            setIsActive(true);
             videoRef.current?.play().catch(() => {});
             audioRef.current?.play().catch(() => {});
             bumpReelView(reel.id).catch(() => {});
           } else {
+            setIsActive(false);
             videoRef.current?.pause();
             audioRef.current?.pause();
           }
@@ -165,6 +172,7 @@ function ReelTile({
         style={{ filter: filterCss(reel.filter) }}
         loop
         playsInline
+        preload={isActive ? 'auto' : 'none'}
         muted={!!reel.music || muted}
       />
       {reel.music && (

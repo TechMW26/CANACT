@@ -65,6 +65,7 @@ export function VideoPreview({
         autoPlay={autoPlay}
         loop={loop}
         playsInline
+        preload="metadata"
         muted={muted}
         onClick={toggle}
         className={`h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`}

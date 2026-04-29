@@ -26,7 +26,7 @@ export function MediaSlider({ urls, aspect = '4/5' }: { urls: string[]; aspect?:
           <VideoPreview src={u} className="h-full w-full" fit="cover" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={u} alt="" className="h-full w-full object-cover bg-brand-light" />
+          <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />
         )}
       </div>
     );
@@ -49,7 +49,7 @@ export function MediaSlider({ urls, aspect = '4/5' }: { urls: string[]; aspect?:
               <VideoPreview src={u} className="h-full w-full" fit="cover" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={u} alt="" className="h-full w-full object-cover bg-brand-light" />
+              <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />
             )}
           </div>
         ))}

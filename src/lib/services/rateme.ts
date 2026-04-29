@@ -1,4 +1,4 @@
-import { onValue, push, ref, runTransaction, set, update, get, query, orderByChild } from 'firebase/database';
+import { onValue, push, ref, runTransaction, set, update, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { RateMeSession } from '../types';
 
@@ -24,7 +24,7 @@ export async function stopRateMe(uid: string, sessionId: string) {
 }
 
 export function listenActiveRateMe(cb: (items: RateMeSession[]) => void) {
-  return onValue(query(ref(db, 'ratemeSessions'), orderByChild('endsAt')), (snap) => {
+  return onValue(query(ref(db, 'ratemeSessions'), orderByChild('endsAt'), limitToLast(40)), (snap) => {
     const out: RateMeSession[] = []; snap.forEach((c) => { const v = c.val() as RateMeSession; if (v.endsAt > Date.now()) out.push(v); });
     out.sort((a, b) => a.endsAt - b.endsAt); cb(out);
   });

@@ -60,10 +60,24 @@ export default function FeedPage() {
   const [loaded, setLoaded] = useState({ wha: false, polls: false, rms: false, reels: false, stories: false });
   const [shareAttachment, setShareAttachment] = useState<ChatAttachment | null>(null);
   useEffect(() => listenWhaFeed((v) => { setWha(v); setLoaded((s) => ({ ...s, wha: true })); }), []);
-  useEffect(() => listenPollFeed((v) => { setPolls(v); setLoaded((s) => ({ ...s, polls: true })); }), []);
-  useEffect(() => listenActiveRateMe((v) => { setRms(v); setLoaded((s) => ({ ...s, rms: true })); }), []);
-  useEffect(() => listenReels((v) => { setReels(v); setLoaded((s) => ({ ...s, reels: true })); }), []);
   useEffect(() => listenActiveStories((v) => { setStories(v); setLoaded((s) => ({ ...s, stories: true })); }), []);
+  // Defer the heavier listeners until the browser is idle so the
+  // first paint isn't blocked by 3 extra RTDB round-trips. On most
+  // devices this fires within ~50ms of mount, so the user never sees
+  // a hole \u2014 they just get the most-important content first.
+  useEffect(() => {
+    let cancelled = false;
+    const subs: Array<() => void> = [];
+    const idle = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 60));
+    const cancelIdle = (window as any).cancelIdleCallback || clearTimeout;
+    const handle = idle(() => {
+      if (cancelled) return;
+      subs.push(listenPollFeed((v) => { setPolls(v); setLoaded((s) => ({ ...s, polls: true })); }));
+      subs.push(listenActiveRateMe((v) => { setRms(v); setLoaded((s) => ({ ...s, rms: true })); }));
+      subs.push(listenReels((v) => { setReels(v); setLoaded((s) => ({ ...s, reels: true })); }));
+    });
+    return () => { cancelled = true; cancelIdle(handle); subs.forEach((u) => { try { u(); } catch {} }); };
+  }, []);
   const isLoading = !loaded.wha || !loaded.polls || !loaded.rms || !loaded.reels;
 
   const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
@@ -358,7 +372,7 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
       </div>
       {sess.photoURL && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sess.photoURL} alt="" className="mt-3 w-full max-h-96 object-cover rounded-[24px]" />
+        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="mt-3 w-full max-h-96 object-cover rounded-[24px]" />
       )}
       <div className="mt-3 flex gap-2">
         <Button variant={my === 'like' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'like'); } catch (e: any) { toast(e.message, 'error'); } }}>

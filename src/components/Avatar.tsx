@@ -7,7 +7,7 @@ export function Avatar({ src, name, size = 40, className }: { src?: string | nul
     .split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || '?';
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img key={src} src={src} alt={name ?? ''} width={size} height={size} className={clsx('rounded-full object-cover bg-brand-light', className)} style={{ width: size, height: size }} />;
+    return <img key={src} src={src} alt={name ?? ''} width={size} height={size} loading="lazy" decoding="async" className={clsx('rounded-full object-cover bg-brand-light', className)} style={{ width: size, height: size }} />;
   }
   return (
     <div

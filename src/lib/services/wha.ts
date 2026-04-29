@@ -1,4 +1,4 @@
-import { onValue, push, ref, remove, runTransaction, set, update, get, query, orderByChild } from 'firebase/database';
+import { onValue, push, ref, remove, runTransaction, set, update, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { WhaPost } from '../types';
 
@@ -17,7 +17,9 @@ export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'e
 }
 
 export function listenWhaFeed(cb: (items: WhaPost[]) => void) {
-  const r = query(ref(db, 'wha'), orderByChild('createdAt'));
+  // Cap to the 60 most-recent posts so the initial RTDB payload stays
+  // small even when the global feed has thousands of entries.
+  const r = query(ref(db, 'wha'), orderByChild('createdAt'), limitToLast(60));
   return onValue(r, (snap) => {
     const out: WhaPost[] = [];
     snap.forEach((c) => { const v = c.val() as WhaPost; if (v.expiresAt > Date.now()) out.push(v); });

@@ -225,7 +225,7 @@ export function StoryViewer({
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={story.mediaUrl} alt={story.caption ?? ''} className="h-full w-full object-cover" style={{ filter: filterCss(story.filter) }} draggable={false} />
+            <img src={story.mediaUrl} alt={story.caption ?? ''} decoding="async" className="h-full w-full object-cover" style={{ filter: filterCss(story.filter) }} draggable={false} />
           )}
           {(story.overlays ?? []).map((o) => (
             <div
