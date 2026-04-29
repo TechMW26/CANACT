@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sheet } from './Sheet';
 import { Avatar } from './Avatar';
-import { Mic, MicOff, PhoneOff, Phone, Video, VideoOff, SwitchCamera } from './icons';
+import { Mic, MicOff, PhoneOff, Phone, Video, VideoOff, SwitchCamera, Volume2, VolumeX } from './icons';
 import {
   createCall,
   listenCall,
@@ -16,6 +16,7 @@ import {
   RTC_CONFIG,
   CallKind,
 } from '@/lib/services/calls';
+import { startCallAudio, setCallSpeaker, endCallAudio } from '@/lib/audioRouter';
 
 /**
  * Shared WebRTC voice/video-call sheet for both caller (no `incomingCallId`)
@@ -61,6 +62,10 @@ export function InAppCallSheet({
   );
   const [muted, setMuted] = useState(false);
   const [kind, setKind] = useState<CallKind>(initialKind ?? 'audio');
+  // Voice calls default to the device earpiece (speaker=false) so users can
+  // hold the phone to their ear like a normal call. Video calls default to
+  // the loudspeaker since the phone is held away from the face.
+  const [speakerOn, setSpeakerOn] = useState<boolean>((initialKind ?? 'audio') === 'video');
   const [cameraOff, setCameraOff] = useState(false);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +87,11 @@ export function InAppCallSheet({
 
     (async () => {
       try {
+        // Flip Android into MODE_IN_COMMUNICATION so the WebRTC remote
+        // stream renders out the earpiece (or speaker, for video) instead
+        // of always blasting through MEDIA volume on the loudspeaker.
+        await startCallAudio(wantVideo);
+
         // 1) Local capture matching the requested kind.
         const local = await navigator.mediaDevices.getUserMedia({
           audio: true,
@@ -208,6 +218,9 @@ export function InAppCallSheet({
         setCallStatus(id, 'ended').catch(() => {});
         clearIncoming(me.uid, id).catch(() => {});
       }
+      // Restore Android audio mode so other apps' media playback isn't
+      // stuck on the in-call volume channel after the sheet closes.
+      endCallAudio().catch(() => {});
     };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -245,6 +258,12 @@ export function InAppCallSheet({
     setMuted(next);
   };
 
+  const toggleSpeaker = () => {
+    const next = !speakerOn;
+    setSpeakerOn(next);
+    setCallSpeaker(next).catch(() => {});
+  };
+
   const toggleCamera = () => {
     const tracks = localStreamRef.current?.getVideoTracks() ?? [];
     const next = !cameraOff;
@@ -273,6 +292,12 @@ export function InAppCallSheet({
     if (!callId) return;
     const next: CallKind = kind === 'audio' ? 'video' : 'audio';
     setKind(next);
+    // Mid-call upgrade to video → user almost certainly wants the loud
+    // speaker; downgrade to audio → they want the earpiece back. The
+    // explicit speaker button still lets them override either default.
+    const wantSpeaker = next === 'video';
+    setSpeakerOn(wantSpeaker);
+    setCallSpeaker(wantSpeaker).catch(() => {});
     await setCallKind(callId, next).catch(() => {});
   };
 
@@ -290,6 +315,10 @@ export function InAppCallSheet({
     pcRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    // Restore the device's normal audio mode — mirrors the cleanup in
+    // the open-effect's teardown for the case where the user taps the
+    // hang-up button (which calls onClose synchronously).
+    endCallAudio().catch(() => {});
     onClose();
   };
 
@@ -355,6 +384,15 @@ export function InAppCallSheet({
             aria-label={muted ? 'Unmute' : 'Mute'}
           >
             {muted ? <MicOff size={20} /> : <Mic size={20} />}
+          </button>
+          <button
+            type="button"
+            onClick={toggleSpeaker}
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${speakerOn ? 'bg-brand text-white' : 'bg-ink/10 text-ink'}`}
+            aria-label={speakerOn ? 'Speaker on — tap for earpiece' : 'Earpiece — tap for speaker'}
+            aria-pressed={speakerOn}
+          >
+            {speakerOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
           </button>
           <button
             type="button"

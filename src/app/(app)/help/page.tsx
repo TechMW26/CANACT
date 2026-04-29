@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useGeo } from '@/lib/useGeo';
+import { useAuth } from '@/lib/auth';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
 import { HelpStatsPills } from '@/components/HelpStatsPills';
@@ -13,20 +14,26 @@ import { LifeBuoy } from '@/components/icons';
 const TYPE_COLOR = { red: 'bg-red2', orange: 'bg-orange2', yellow: 'bg-yellow2' } as const;
 const TYPE_LABEL = { red: 'Red', orange: 'Orange', yellow: 'Yellow' } as const;
 
+type HelpFilter = 'all' | Exclude<HelpStatus, 'closed'> | 'mine';
+
 export default function HelpFeed() {
   const { coords } = useGeo();
+  const { user } = useAuth();
   const [items, setItems] = useState<HelpRequest[]>([]);
-  const [filter, setFilter] = useState<'all' | Exclude<HelpStatus, 'closed'>>('all');
+  const [filter, setFilter] = useState<HelpFilter>('all');
 
   useEffect(() => listenHelpFeed(setItems), []);
 
-  // Hide closed help requests from the feed entirely — they're historical and
-  // not actionable for browsers. The author can still reach them via direct
-  // link / their own profile if needed.
+  // The "Mine" tab is the user's own roster — we deliberately bypass the
+  // closed/vicinity filters there so they always see every request they've
+  // ever raised (including resolved ones), without it polluting the public
+  // feeds where users were getting confused between others' and their own.
+  const isMine = filter === 'mine';
   const visible = items
-    .filter((h) => h.status !== 'closed')
-    .filter((h) => filter === 'all' || h.status === filter)
+    .filter((h) => (isMine ? h.uid === user?.uid : h.uid !== user?.uid && h.status !== 'closed'))
+    .filter((h) => isMine || filter === 'all' || h.status === filter)
     .filter((h) => {
+      if (isMine) return true;
       if (h.lat == null || h.lng == null || !coords) return true;
       return haversineMeters(coords, { lat: h.lat, lng: h.lng }) <= h.vicinityMeters;
     });
@@ -43,10 +50,10 @@ export default function HelpFeed() {
       </div>
 
       <div className="flex flex-wrap justify-center gap-2">
-        {(['all', 'open', 'inProcess'] as const).map((s) => (
+        {(['all', 'open', 'inProcess', 'mine'] as const).map((s) => (
           <button key={s} onClick={() => setFilter(s)}
             className={`whitespace-nowrap rounded-full px-4 h-9 text-sm font-semibold border transition ${filter === s ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line hover:border-ink/30'}`}>
-            {s === 'all' ? 'All' : s === 'inProcess' ? 'In Process' : s[0].toUpperCase() + s.slice(1)}
+            {s === 'all' ? 'All' : s === 'inProcess' ? 'In Process' : s === 'mine' ? 'My Requests' : s[0].toUpperCase() + s.slice(1)}
           </button>
         ))}
       </div>
@@ -54,8 +61,10 @@ export default function HelpFeed() {
       <div className="pt-2 flex flex-col gap-4">
         {visible.length === 0 && (
           <Card className="text-center text-muted py-10">
-            <div className="text-2xl mb-1">🤝</div>
-            No help requests in your area right now.
+            <div className="text-2xl mb-1">{isMine ? '📝' : '🤝'}</div>
+            {isMine
+              ? "You haven't raised any help requests yet."
+              : 'No help requests in your area right now.'}
           </Card>
         )}
 
