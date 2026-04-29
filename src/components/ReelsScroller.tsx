@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
+import { PostMenu } from '@/components/PostMenu';
 import {
   ArrowLeft, Heart, MessageCircle, Music, Plus, Send,
   Volume2, VolumeX, Play, X,
@@ -11,7 +12,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import {
   listenReels, toggleReelLike, bumpReelView,
-  addReelComment, listenReelComments,
+  addReelComment, listenReelComments, deleteReel,
 } from '@/lib/services/reels';
 import type { ReelItem } from '@/lib/types';
 import { filterCss } from '@/lib/mediaFilters';
@@ -159,7 +160,8 @@ function ReelTile({
       <video
         ref={videoRef}
         src={reel.videoUrl}
-        className="h-full w-full object-cover"
+        poster={reel.posterUrl ?? '/video-poster.svg'}
+        className="h-full w-full object-cover bg-brand-light/30"
         style={{ filter: filterCss(reel.filter) }}
         loop
         playsInline
@@ -177,6 +179,18 @@ function ReelTile({
           </span>
         </div>
       )}
+
+      {/* Top-right overflow (delete for owner) */}
+      <div
+        className="absolute right-3 top-20 z-30 safe-top"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <PostMenu
+          isOwner={!!myUid && reel.uid === myUid}
+          variant="dark"
+          onDelete={async () => { await deleteReel(reel.id, myUid); }}
+        />
+      </div>
 
       {/* Soft bottom fade — no hard line */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />

@@ -15,6 +15,7 @@ export function VideoPreview({
   loop = true,
   autoPlay = true,
   rounded = '',
+  poster,
 }: {
   src: string;
   className?: string;
@@ -24,6 +25,9 @@ export function VideoPreview({
   loop?: boolean;
   autoPlay?: boolean;
   rounded?: string;
+  /** Optional poster image; falls back to themed placeholder so the
+   *  browser never shows its black play-triangle default. */
+  poster?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [muted, setMuted] = useState(initialMuted);
@@ -53,10 +57,11 @@ export function VideoPreview({
   };
 
   return (
-    <div className={`relative overflow-hidden bg-black ${rounded} ${className}`} style={style}>
+    <div className={`relative overflow-hidden bg-brand-light/40 ${rounded} ${className}`} style={style}>
       <video
         ref={videoRef}
         src={src}
+        poster={poster ?? '/video-poster.svg'}
         autoPlay={autoPlay}
         loop={loop}
         playsInline

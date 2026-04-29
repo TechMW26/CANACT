@@ -149,10 +149,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </div>{/* /canact-app-content */}
 
       {/* Floating mobile bottom nav (outside the zoom-target element so it
-          stays put when sheets / popups open) */}
+          stays put when sheets / popups open).
+          Active tab expands into a brand-tinted pill that shows its label,
+          mimicking the "Home" pill in the inspiration design. The smooth
+          width transition is what gives it the animated feel without
+          pulling in framer-motion. */}
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pb-3 safe-bottom pointer-events-none">
-        <div className="canact-col pointer-events-auto rounded-[28px] bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_12px_32px_-12px_rgba(10,10,10,0.28)]">
-          <div className="grid grid-cols-5 h-16 items-center">
+        <div className="canact-col pointer-events-auto rounded-[28px] bg-white/92 backdrop-blur-md border border-white/70 shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
+          <div className="flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = !isFab && (pathname === href || pathname?.startsWith(href));
               if (isFab) {
@@ -162,7 +166,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => { haptic('strong'); setPlusOpen(true); }}
                     aria-label="Create"
-                    className="flex items-center justify-center"
+                    className="flex shrink-0 items-center justify-center"
                   >
                     <span className="-mt-8 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-[0_10px_24px_-6px_rgba(200,16,46,0.55)] ring-4 ring-white hover:bg-brand-dark active:scale-95 transition">
                       <Icon size={26} strokeWidth={2.4} />
@@ -177,16 +181,26 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   href={href}
                   aria-label={label || href}
                   onClick={() => { if (!active) haptic('selection'); }}
-                  className={`relative flex flex-col items-center justify-center h-16 transition ${active ? 'text-brand' : 'text-ink/60 hover:text-ink'}`}
+                  className={`group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color] duration-300 ease-out ${
+                    active
+                      ? 'bg-brand text-white pl-3 pr-4 shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]'
+                      : 'text-ink/65 hover:text-ink'
+                  }`}
                 >
                   {isProfile ? (
-                    <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-brand ring-offset-2 ring-offset-white' : 'ring-1 ring-line'}`}>
-                      <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={28} />
+                    <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-white/80' : ''}`}>
+                      <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={24} />
                     </span>
                   ) : (
-                    <Icon size={24} strokeWidth={active ? 2.4 : 1.9} />
+                    <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
                   )}
-                  <span className={`absolute bottom-1.5 h-1 w-1 rounded-full bg-brand transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`} />
+                  <span
+                    className={`overflow-hidden whitespace-nowrap text-sm font-extrabold transition-[max-width,margin,opacity] duration-300 ease-out ${
+                      active ? 'ml-2 max-w-[80px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+                    }`}
+                  >
+                    {label || (isProfile ? 'Me' : '')}
+                  </span>
                 </Link>
               );
             })}

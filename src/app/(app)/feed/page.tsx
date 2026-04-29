@@ -8,20 +8,21 @@ import { useDistance } from '@/lib/distance';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { StoryViewer } from '@/components/StoryViewer';
-import { listenWhaFeed, reactWha } from '@/lib/services/wha';
+import { listenWhaFeed, reactWha, deletePost } from '@/lib/services/wha';
 import { listenPollFeed, votePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
-import { listenReels } from '@/lib/services/reels';
+import { listenReels, deleteReel } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal, Send } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal, Send, Play } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
 import { MediaSlider } from '@/components/MediaSlider';
 import { Sheet } from '@/components/Sheet';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
+import { PostMenu } from '@/components/PostMenu';
 import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -149,6 +150,30 @@ export default function FeedPage() {
 
       <div className="canact-filters-wrap" />
 
+      {/* Today's reels banner — drops users straight into the vertical
+          scroller. Hidden when the user has filtered to a non-reel kind
+          or when there are no reels at all. */}
+      {reels.length > 0 && (filter === 'all' || filter === 'reel') && (
+        <Link
+          href="/reels"
+          prefetch
+          className="mt-1 mb-3 flex items-center gap-3 rounded-[28px] border border-[#F1D7DC] bg-gradient-to-r from-white via-brand-light/40 to-white px-4 py-3 shadow-[0_18px_36px_-26px_rgba(10,10,10,0.18)] active:scale-[0.99] transition"
+        >
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]">
+            <Play size={22} fill="currentColor" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-extrabold leading-tight">Today's reels</div>
+            <div className="text-xs text-muted">
+              {reels.length} {reels.length === 1 ? 'reel' : 'reels'} from your circle
+            </div>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand ring-1 ring-brand/20">
+            Watch
+          </span>
+        </Link>
+      )}
+
       <section className="pt-1">
         {isLoading && items.length === 0 ? (
           <div className="space-y-6">
@@ -178,7 +203,7 @@ export default function FeedPage() {
           ) : it.kind === 'poll' ? (
             <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
           ) : it.kind === 'reel' ? (
-            <ReelCard key={`reel_${it.data.id}`} reel={it.data} onShare={setShareAttachment} />
+            <ReelCard key={`reel_${it.data.id}`} reel={it.data} myUid={user!.uid} onShare={setShareAttachment} />
           ) : (
             <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
           ))}
@@ -245,6 +270,10 @@ function WhaCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onSha
           <Link href={`/profile/${post.uid}`} className="font-bold truncate block">{post.authorName}</Link>
           <span className="text-xs text-muted">{timeAgo(post.createdAt)} • What's Happening</span>
         </div>
+        <PostMenu
+          isOwner={post.uid === myUid}
+          onDelete={async () => { await deletePost(post.id, myUid); }}
+        />
       </div>
       <Link href={`/post/${post.id}`} prefetch>
         {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
@@ -343,7 +372,7 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   );
 }
 
-function ReelCard({ reel, onShare }: { reel: ReelItem; onShare: (a: ChatAttachment) => void }) {
+function ReelCard({ reel, myUid, onShare }: { reel: ReelItem; myUid: string; onShare: (a: ChatAttachment) => void }) {
   const likeCount = reel.likes ? Object.keys(reel.likes).length : 0;
   return (
     <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
@@ -357,6 +386,10 @@ function ReelCard({ reel, onShare }: { reel: ReelItem; onShare: (a: ChatAttachme
           </Link>
           <span className="text-xs text-muted">{timeAgo(reel.createdAt)} • Reel</span>
         </div>
+        <PostMenu
+          isOwner={reel.uid === myUid}
+          onDelete={async () => { await deleteReel(reel.id, myUid); }}
+        />
       </div>
       {reel.caption ? <p className="mt-2 whitespace-pre-wrap">{reel.caption}</p> : null}
       <Link href={`/reel/${reel.id}`} prefetch className="mt-3 block">

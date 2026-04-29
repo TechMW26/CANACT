@@ -300,16 +300,32 @@ export function InAppCallSheet({
     <Sheet open={open} onClose={hangup} title={isVideo ? 'Video call' : 'Voice call'}>
       <div className="flex flex-col items-center gap-4 py-2">
         {isVideo ? (
-          <div className="relative w-full overflow-hidden rounded-2xl bg-black aspect-[3/4] max-h-[60vh]">
-            <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+          <div
+            className="relative w-full overflow-hidden rounded-2xl aspect-[3/4] max-h-[60vh]"
+            style={{
+              background:
+                'radial-gradient(120% 80% at 50% 0%, #FFE4E8 0%, #F4B6BF 55%, #C8102E 130%)',
+            }}
+          >
+            {/* Branded waiting backdrop — sits BEHIND the <video>; once the
+                remote stream arrives the cover paints over it, but until
+                then we get a tasteful gradient + the peer's avatar
+                instead of the WebView's black play-triangle default. */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <Avatar src={peer.photoURL} name={peer.name} size={104} />
+              <div className="rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-brand backdrop-blur">
+                {status === 'active' ? 'Connected' : status === 'connecting' ? 'Connecting…' : 'Ringing…'}
+              </div>
+            </div>
+            <video ref={remoteVideoRef} autoPlay playsInline className="relative z-[1] h-full w-full object-cover" />
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="absolute right-2 bottom-2 h-32 w-24 rounded-xl border-2 border-white/80 object-cover"
+              className="absolute right-2 bottom-2 z-[2] h-32 w-24 rounded-xl border-2 border-white/80 object-cover bg-brand-light/40"
             />
-            <div className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-xs font-bold text-white">
+            <div className="absolute left-2 top-2 z-[2] rounded-full bg-black/55 px-2 py-1 text-xs font-bold text-white">
               {peer.name}
             </div>
           </div>

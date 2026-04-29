@@ -88,4 +88,6 @@ export {
   RotateCcw,
   CornerUpLeft,
   Copy,
+  MoreVertical,
+  MoreHorizontal,
 } from 'lucide-react';
