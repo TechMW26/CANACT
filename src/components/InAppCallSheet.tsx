@@ -19,6 +19,34 @@ import {
 import { startCallAudio, setCallSpeaker, endCallAudio } from '@/lib/audioRouter';
 
 /**
+ * Cap a sender's outbound bitrate / framerate so the WebView's encoder
+ * doesn't sit at the codec default ceiling. Tuned for sub-1.5 Mbps mobile
+ * uplinks where staying under-budget keeps frames smooth instead of the
+ * encoder periodically dropping to recover. Best-effort \u2014 some browsers
+ * silently ignore unsupported keys, which is fine.
+ */
+function applySendParameters(
+  sender: RTCRtpSender,
+  encoding: { maxBitrate?: number; maxFramerate?: number },
+) {
+  try {
+    const params = sender.getParameters() as RTCRtpSendParameters & {
+      encodings: RTCRtpEncodingParameters[];
+      degradationPreference?: RTCDegradationPreference;
+    };
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    params.encodings[0] = { ...params.encodings[0], ...encoding };
+    // For video: preserve smooth motion when the network can't sustain
+    // both \u2014 the resolution drops temporarily but the frame rate stays at
+    // 30 fps so the call doesn't feel like a slideshow.
+    params.degradationPreference = 'maintain-framerate';
+    void sender.setParameters(params).catch(() => {});
+  } catch { /* noop */ }
+}
+
+/**
  * Shared WebRTC voice/video-call sheet for both caller (no `incomingCallId`)
  * and callee (passes `incomingCallId`). Either side can flip the call between
  * audio and video mid-call by tapping the upgrade/downgrade button — we write
@@ -45,6 +73,17 @@ export function InAppCallSheet({
 }) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  // Composite stream wired into the local <video> tile. Holds whichever
+  // tracks we're currently capturing (always audio, optionally video).
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  // Senders we hand to the peer connection on day one via addTransceiver.
+  // Pre-creating both audio + video m-sections in the very first SDP
+  // offer means a mid-call audio↔video flip is just `replaceTrack(...)`
+  // — no renegotiation, no second offer/answer round-trip, no race
+  // condition where one side adds a track and the other never sees it.
+  const audioSenderRef = useRef<RTCRtpSender | null>(null);
+  const videoSenderRef = useRef<RTCRtpSender | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -92,25 +131,65 @@ export function InAppCallSheet({
         // of always blasting through MEDIA volume on the loudspeaker.
         await startCallAudio(wantVideo);
 
-        // 1) Local capture matching the requested kind.
-        const local = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: wantVideo ? { facingMode: facing } : false,
-        });
-        if (!active) { local.getTracks().forEach((t) => t.stop()); return; }
+        // 1) Peer connection FIRST so we can pre-create the audio+video
+        //    transceivers before we even capture media. The m-sections
+        //    are now baked into the first SDP offer regardless of whether
+        //    the call started as audio or video, which is what makes a
+        //    mid-call audio→video upgrade just `replaceTrack(track)` on
+        //    both sides instead of a dance of addTrack + renegotiate.
+        const pc = new RTCPeerConnection(RTC_CONFIG);
+        pcRef.current = pc;
+        const audioTx = pc.addTransceiver('audio', { direction: 'sendrecv' });
+        const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' });
+        audioSenderRef.current = audioTx.sender;
+        videoSenderRef.current = videoTx.sender;
+
+        // 2) Local capture. Audio is always on; video only if the call
+        //    started as video.
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (!active) { audioStream.getTracks().forEach((t) => t.stop()); return; }
+        audioStreamRef.current = audioStream;
+        await audioTx.sender.replaceTrack(audioStream.getAudioTracks()[0] ?? null);
+
+        let videoStream: MediaStream | null = null;
+        if (wantVideo) {
+          try {
+            videoStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+            });
+            if (!active) { videoStream.getTracks().forEach((t) => t.stop()); return; }
+            videoStreamRef.current = videoStream;
+            await videoTx.sender.replaceTrack(videoStream.getVideoTracks()[0] ?? null);
+          } catch { /* user denied camera — fall back to audio-only */ }
+        }
+
+        // Composite stream for the local <video> tile.
+        const local = new MediaStream();
+        audioStream.getAudioTracks().forEach((t) => local.addTrack(t));
+        videoStream?.getVideoTracks().forEach((t) => local.addTrack(t));
         localStreamRef.current = local;
         if (localVideoRef.current && wantVideo) localVideoRef.current.srcObject = local;
 
-        // 2) Peer connection
-        const pc = new RTCPeerConnection(RTC_CONFIG);
-        pcRef.current = pc;
-        local.getTracks().forEach((t) => pc.addTrack(t, local));
+        // Cap bitrates so the WebView doesn't sit at the codec's default
+        // multi-megabit ceiling on weaker networks (which on mobile means
+        // dropped frames + crackly audio). Numbers are tuned to stay
+        // smooth on a 3G/LTE link.
+        applySendParameters(audioTx.sender, { maxBitrate: 64_000 });
+        applySendParameters(videoTx.sender, {
+          maxBitrate: 1_500_000, // 1.5 Mbps cap
+          maxFramerate: 30,
+        });
 
         const remoteStream = new MediaStream();
         remoteStreamRef.current = remoteStream;
         if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
-        pc.ontrack = (ev) => ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+        pc.ontrack = (ev) => {
+          ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+          // Re-bind in case the element was created before ontrack fired.
+          if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+        };
 
         let id = incomingCallId ?? '';
         if (isCaller) {
@@ -141,7 +220,7 @@ export function InAppCallSheet({
             setStatus('ended');
             if (!closingRef.current) {
               closingRef.current = true;
-              setTimeout(() => onClose(), 600);
+              setTimeout(() => onClose(), 150);
             }
           }
         };
@@ -165,7 +244,7 @@ export function InAppCallSheet({
             if (!rec) return;
             if (rec.kind && rec.kind !== kind) setKind(rec.kind);
             if (rec.status === 'rejected' || rec.status === 'ended') {
-              setStatus('ended'); setTimeout(onClose, 800); return;
+              setStatus('ended'); setTimeout(onClose, 150); return;
             }
             if (rec.answer && !answerSetRef.current) {
               answerSetRef.current = true;
@@ -180,7 +259,7 @@ export function InAppCallSheet({
             if (!rec) return;
             if (rec.kind && rec.kind !== kind) setKind(rec.kind);
             if (rec.status === 'ended' || rec.status === 'rejected') {
-              setStatus('ended'); setTimeout(onClose, 800); return;
+              setStatus('ended'); setTimeout(onClose, 150); return;
             }
             if (rec.offer) {
               // First offer OR a renegotiated one — apply, answer, push back.
@@ -208,8 +287,25 @@ export function InAppCallSheet({
       cleanup.forEach((fn) => { try { fn(); } catch {} });
       try { pcRef.current?.close(); } catch {}
       pcRef.current = null;
+      // Stop both source streams — freeing mic / camera HW immediately
+      // matters because users will often launch another app right after.
+      audioStreamRef.current?.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      audioStreamRef.current = null;
+      videoStreamRef.current = null;
       localStreamRef.current = null;
+      audioSenderRef.current = null;
+      videoSenderRef.current = null;
+      // Drop the remote stream from the audio/video tags so the WebView
+      // releases its decoder + GPU surface immediately rather than
+      // hanging on for ~1s after pc.close() (which is the visual
+      // "call ended but the screen is still showing" lag).
+      remoteStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+      remoteStreamRef.current = null;
+      try { if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null; } catch {}
+      try { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null; } catch {}
+      try { if (localVideoRef.current) localVideoRef.current.srcObject = null; } catch {}
       // Use the ref — the state captured at mount time is null for the
       // caller, so without this the call record would never be marked
       // ended on RTDB and the peer would keep ringing forever.
@@ -224,30 +320,44 @@ export function InAppCallSheet({
     };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the shared kind flips, ensure local capture matches.
+  // When the shared kind flips, mirror it on local capture using the
+  // pre-created video transceiver — no renegotiation needed since the
+  // m=video section was baked into the first offer.
   useEffect(() => {
     const pc = pcRef.current;
-    const local = localStreamRef.current;
-    if (!pc || !local) return;
-    const hasVideo = local.getVideoTracks().length > 0;
+    const videoSender = videoSenderRef.current;
+    if (!pc || !videoSender) return;
+    const localComposite = localStreamRef.current;
+    const hasVideo = (videoStreamRef.current?.getVideoTracks().length ?? 0) > 0;
+
     if (kind === 'video' && !hasVideo) {
       (async () => {
         try {
-          const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+          const cam = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+          });
+          videoStreamRef.current = cam;
           const track = cam.getVideoTracks()[0];
           if (track) {
-            local.addTrack(track);
-            pc.addTrack(track, local);
-            if (localVideoRef.current) localVideoRef.current.srcObject = local;
+            await videoSender.replaceTrack(track);
+            // Re-apply bitrate cap — setParameters is per-sender state
+            // but some browsers reset it after replaceTrack.
+            applySendParameters(videoSender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+            localComposite?.addTrack(track);
+            if (localVideoRef.current) localVideoRef.current.srcObject = localComposite ?? null;
           }
         } catch { /* user denied camera */ }
       })();
     } else if (kind === 'audio' && hasVideo) {
-      local.getVideoTracks().forEach((t) => { t.stop(); local.removeTrack(t); });
-      pc.getSenders().filter((s) => s.track?.kind === 'video').forEach((s) => {
-        try { pc.removeTrack(s); } catch {}
-      });
-      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      (async () => {
+        try { await videoSender.replaceTrack(null); } catch {}
+        videoStreamRef.current?.getVideoTracks().forEach((t) => {
+          try { t.stop(); } catch {}
+          localComposite?.removeTrack(t);
+        });
+        videoStreamRef.current = null;
+        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      })();
     }
   }, [kind, facing]);
 
@@ -274,17 +384,49 @@ export function InAppCallSheet({
   const switchCamera = async () => {
     const next: 'user' | 'environment' = facing === 'user' ? 'environment' : 'user';
     setFacing(next);
+    const videoSender = videoSenderRef.current;
     const local = localStreamRef.current;
-    const pc = pcRef.current;
-    if (!local || !pc || kind !== 'video') return;
+    if (!videoSender || kind !== 'video') return;
     try {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next } });
+      // Capacitor's Android WebView often ignores the facingMode constraint
+      // — it just hands back whatever camera is currently selected. Stop
+      // the existing track FIRST so the OS releases the camera, then ask
+      // for the other facing; if the resulting track has the wrong
+      // facingMode reported back, fall through to enumerateDevices and
+      // pick the next videoinput device by deviceId, which always works.
+      videoStreamRef.current?.getVideoTracks().forEach((t) => {
+        try { t.stop(); local?.removeTrack(t); } catch {}
+      });
+
+      let cam: MediaStream | null = null;
+      try {
+        cam = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: next }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+        });
+      } catch {
+        // exact-facingMode rejected — enumerate and round-robin instead.
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+        const cams = devices.filter((d) => d.kind === 'videoinput');
+        if (cams.length > 1) {
+          const currentId = videoStreamRef.current?.getVideoTracks()[0]?.getSettings().deviceId;
+          const nextDev = cams.find((d) => d.deviceId !== currentId) ?? cams[0];
+          cam = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: nextDev.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+          });
+        } else {
+          // Single-camera device — nothing to flip to. Restore previous capture.
+          cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+        }
+      }
+
+      videoStreamRef.current = cam;
       const newTrack = cam.getVideoTracks()[0];
-      const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
-      if (sender && newTrack) await sender.replaceTrack(newTrack);
-      local.getVideoTracks().forEach((t) => { t.stop(); local.removeTrack(t); });
-      if (newTrack) local.addTrack(newTrack);
-      if (localVideoRef.current) localVideoRef.current.srcObject = local;
+      if (newTrack) {
+        await videoSender.replaceTrack(newTrack);
+        applySendParameters(videoSender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+        local?.addTrack(newTrack);
+      }
+      if (localVideoRef.current) localVideoRef.current.srcObject = local ?? null;
     } catch { /* noop */ }
   };
 
@@ -313,8 +455,22 @@ export function InAppCallSheet({
     //    and the user sees the sheet vanish even if RTDB is slow.
     try { pcRef.current?.close(); } catch {}
     pcRef.current = null;
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    audioStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+    videoStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+    localStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+    audioStreamRef.current = null;
+    videoStreamRef.current = null;
     localStreamRef.current = null;
+    audioSenderRef.current = null;
+    videoSenderRef.current = null;
+    // Drop the remote stream too so the WebView's video decoder releases
+    // its surface immediately — this is what was making the screen
+    // appear to "hang" for a second after tapping hang-up on a video call.
+    remoteStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+    remoteStreamRef.current = null;
+    try { if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null; } catch {}
+    try { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null; } catch {}
+    try { if (localVideoRef.current) localVideoRef.current.srcObject = null; } catch {}
     // Restore the device's normal audio mode — mirrors the cleanup in
     // the open-effect's teardown for the case where the user taps the
     // hang-up button (which calls onClose synchronously).

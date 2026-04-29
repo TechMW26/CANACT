@@ -42,16 +42,18 @@ public class CallForegroundService extends Service {
     public static final String ACTION_STOP = "com.canact.app.STOP_CALL_RING";
     public static final String EXTRA_CALL_ID = "callId";
     public static final String EXTRA_FROM_NAME = "fromName";
+    public static final String EXTRA_FROM_PHOTO = "fromPhoto";
 
     private static final String CHANNEL_ID = "canact_calls_v3";
     private String currentCallId;
 
     /** Convenience: kick the service into "ringing" state. */
-    public static void startRinging(Context ctx, String callId, String fromName) {
+    public static void startRinging(Context ctx, String callId, String fromName, String fromPhoto) {
         Intent i = new Intent(ctx, CallForegroundService.class);
         i.setAction(ACTION_START_RING);
         i.putExtra(EXTRA_CALL_ID, callId);
         i.putExtra(EXTRA_FROM_NAME, fromName);
+        i.putExtra(EXTRA_FROM_PHOTO, fromPhoto);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ctx.startForegroundService(i);
         } else {
@@ -96,6 +98,7 @@ public class CallForegroundService extends Service {
 
         String fromName = intent.getStringExtra(EXTRA_FROM_NAME);
         if (fromName == null || fromName.isEmpty()) fromName = "Someone";
+        String fromPhoto = intent.getStringExtra(EXTRA_FROM_PHOTO);
 
         currentCallId = callId;
         Notification n = buildCallNotification(callId, fromName);
@@ -129,6 +132,7 @@ public class CallForegroundService extends Service {
         Intent ringer = new Intent(this, IncomingCallActivity.class);
         ringer.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
         ringer.putExtra(IncomingCallActivity.EXTRA_FROM_NAME, fromName);
+        ringer.putExtra(IncomingCallActivity.EXTRA_FROM_PHOTO, fromPhoto);
         ringer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
             | Intent.FLAG_ACTIVITY_CLEAR_TOP
             | Intent.FLAG_ACTIVITY_SINGLE_TOP

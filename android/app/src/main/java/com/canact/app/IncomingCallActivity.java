@@ -4,13 +4,24 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.core.graphics.drawable.RoundedBitmapDrawable;
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory;
+
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * Full-screen native call ringer. Launched by CanactCallMessagingService via
@@ -25,6 +36,7 @@ import android.widget.TextView;
 public class IncomingCallActivity extends Activity {
     public static final String EXTRA_CALL_ID = "callId";
     public static final String EXTRA_FROM_NAME = "fromName";
+    public static final String EXTRA_FROM_PHOTO = "fromPhoto";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,9 +72,21 @@ public class IncomingCallActivity extends Activity {
         Intent i = getIntent();
         final String callId = i.getStringExtra(EXTRA_CALL_ID);
         String fromName = i.getStringExtra(EXTRA_FROM_NAME);
+        String fromPhoto = i.getStringExtra(EXTRA_FROM_PHOTO);
         if (fromName == null || fromName.isEmpty()) fromName = "Someone";
 
         ((TextView) findViewById(R.id.caller_name)).setText(fromName);
+
+        // Avatar: if a photo URL was passed, fetch it off the main thread
+        // and swap the placeholder gradient + initials for the real image.
+        // Otherwise fall back to a brand-coloured disc with the caller's
+        // initials, matching the in-app Avatar component.
+        TextView initialsView = findViewById(R.id.caller_initials);
+        ImageView avatarView = findViewById(R.id.caller_avatar);
+        initialsView.setText(extractInitials(fromName));
+        if (fromPhoto != null && !fromPhoto.isEmpty() && fromPhoto.startsWith("http")) {
+            loadAvatar(fromPhoto, avatarView, initialsView);
+        }
 
         ImageButton answer = findViewById(R.id.btn_answer);
         ImageButton decline = findViewById(R.id.btn_decline);
@@ -121,5 +145,57 @@ public class IncomingCallActivity extends Activity {
     @Override
     public void onBackPressed() {
         // Block back — the user must explicitly answer or decline.
+    }
+
+    private static String extractInitials(String name) {
+        if (name == null) return "?";
+        String trimmed = name.trim();
+        if (trimmed.isEmpty()) return "?";
+        String[] parts = trimmed.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length && sb.length() < 2; i++) {
+            if (parts[i].length() > 0) sb.append(Character.toUpperCase(parts[i].charAt(0)));
+        }
+        return sb.length() == 0 ? "?" : sb.toString();
+    }
+
+    /**
+     * Fetch the caller's avatar off the main thread and render it as a
+     * round bitmap. Kept dependency-free \u2014 a one-shot AsyncTask is far
+     * lighter than pulling Glide / Coil into the APK just for one image.
+     */
+    private void loadAvatar(final String url, final ImageView target, final View initialsOverlay) {
+        new AsyncTask<Void, Void, Bitmap>() {
+            @Override protected Bitmap doInBackground(Void... params) {
+                HttpURLConnection conn = null;
+                InputStream in = null;
+                try {
+                    URL u = new URL(url);
+                    conn = (HttpURLConnection) u.openConnection();
+                    conn.setConnectTimeout(4000);
+                    conn.setReadTimeout(6000);
+                    conn.setInstanceFollowRedirects(true);
+                    in = conn.getInputStream();
+                    return BitmapFactory.decodeStream(in);
+                } catch (Throwable t) {
+                    return null;
+                } finally {
+                    try { if (in != null) in.close(); } catch (Throwable ignored) {}
+                    if (conn != null) conn.disconnect();
+                }
+            }
+
+            @Override protected void onPostExecute(Bitmap bmp) {
+                if (bmp == null || isFinishing()) return;
+                try {
+                    RoundedBitmapDrawable drawable =
+                        RoundedBitmapDrawableFactory.create(getResources(), bmp);
+                    drawable.setCircular(true);
+                    target.setImageDrawable(drawable);
+                    target.setVisibility(View.VISIBLE);
+                    initialsOverlay.setVisibility(View.GONE);
+                } catch (Throwable ignored) {}
+            }
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 }

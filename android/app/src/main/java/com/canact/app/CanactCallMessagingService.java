@@ -94,6 +94,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         if ("call".equals(type) && callId != null && !callId.isEmpty()) {
             String fromName = data.get("fromName");
             if (fromName == null || fromName.isEmpty()) fromName = "Someone";
+            String fromPhoto = data.get("fromPhoto");
 
             // If the WebView is in the foreground, IncomingCallRinger.tsx is
             // already ringing via its RTDB listener — adding a notification
@@ -103,7 +104,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             // Hand off to the foreground service. It owns the notification
             // lifecycle AND has the BAL exemption needed to launch the
             // full-screen IncomingCallActivity even on an unlocked device.
-            CallForegroundService.startRinging(getApplicationContext(), callId, fromName);
+            CallForegroundService.startRinging(getApplicationContext(), callId, fromName, fromPhoto);
             return;
         }
 
