@@ -15,11 +15,10 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Register the AudioRouter custom plugin BEFORE super.onCreate
-        // so the Capacitor bridge picks it up during initial plugin
-        // discovery; otherwise calls to AudioRouter.* from JS resolve
-        // to "Plugin AudioRouter is not registered".
+        // Register custom plugins BEFORE super.onCreate so the Capacitor
+        // bridge picks them up during initial plugin discovery.
         registerPlugin(AudioRouterPlugin.class);
+        registerPlugin(CallPermissionsPlugin.class);
         super.onCreate(savedInstanceState);
         // Pre-create both notification channels at first launch so:
         //   * The FCM SDK has a real channel to attach auto-displayed

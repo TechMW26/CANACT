@@ -121,21 +121,18 @@ export default function NativePermissionsBootstrapper() {
       }
 
       // --- Full-screen-intent special access (Android 14+) ---------------
-      // On Android 14+, USE_FULL_SCREEN_INTENT must be explicitly granted by
-      // the user via Settings → Special access. Without it, our incoming
-      // call activity will NOT auto-launch over the lockscreen — only a
-      // heads-up notification appears. Open the settings page once per
-      // device install so the user can enable it.
+      // Without USE_FULL_SCREEN_INTENT granted, our incoming-call
+      // CallStyle notification gets downgraded to a plain heads-up and
+      // IncomingCallActivity never auto-launches over the lockscreen \u2014
+      // the user just sees a small banner and has to manually tap it.
+      // Bounce the user once into the per-app Settings page so they can
+      // flip the toggle. We never nag again once granted.
       try {
-        const ASKED_FSI_KEY = 'canact:perms:fsi:asked:v1';
-        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_FSI_KEY)) {
-          // intent: URL to the per-app full-screen intent settings page.
-          const intent =
-            'intent:#Intent;' +
-            'action=android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT;' +
-            'data=package:com.canact.app;' +
-            'end';
-          window.open(intent, '_system');
+        const ASKED_FSI_KEY = 'canact:perms:fsi:asked:v2';
+        const { canUseFullScreenIntent, openFullScreenIntentSettings } = await import('@/lib/callPermissions');
+        const granted = await canUseFullScreenIntent();
+        if (!granted && typeof window !== 'undefined' && !localStorage.getItem(ASKED_FSI_KEY)) {
+          await openFullScreenIntentSettings();
           localStorage.setItem(ASKED_FSI_KEY, '1');
         }
       } catch (err) {

@@ -26,51 +26,59 @@ export default function NativeCallDeepLinkRouter() {
     if (!isNative()) return;
     let handle: { remove: () => Promise<void> } | null = null;
     let cancelled = false;
+
+    // Single dispatcher for both cold-start launch URLs and warm appUrlOpen
+    // events \u2014 the cold-start path is the one that fixes "I tap Answer on
+    // the notification but the app still asks me to confirm again". When
+    // the app is killed, tapping the CallStyle Answer action launches
+    // MainActivity with the canact://call/<id>?action=answer intent, but
+    // the @capacitor/app appUrlOpen listener doesn't get a chance to
+    // register before the WebView starts loading \u2014 so the URL was being
+    // dropped on the floor. Polling getLaunchUrl() at startup catches it.
+    const handleUrl = (url: string | null | undefined) => {
+      if (!url) return;
+
+      if (url.startsWith('canact://open')) {
+        try {
+          const u = new URL(url);
+          const to = u.searchParams.get('to');
+          if (to && to.startsWith('/')) router.push(to);
+        } catch { /* noop */ }
+        return;
+      }
+
+      if (!url.startsWith('canact://call/')) return;
+      try {
+        const u = new URL(url);
+        const callId = u.pathname.replace(/^\/+/, '').split('/')[0] || u.host;
+        const action = u.searchParams.get('action');
+        if (callId && (action === 'answer' || action === 'decline')) {
+          setCallPreDecision(callId, action);
+        }
+      } catch { /* noop */ }
+      try {
+        if (typeof window !== 'undefined' && window.location.pathname === '/welcome') {
+          router.replace('/');
+        }
+      } catch { /* noop */ }
+    };
+
     (async () => {
       const { App } = await import('@capacitor/app');
       if (cancelled) return;
+
+      // 1) Cold-start: the URL the OS used to launch us.
+      try {
+        const launch = await App.getLaunchUrl();
+        if (launch?.url) handleUrl(launch.url);
+      } catch { /* noop */ }
+
+      // 2) Warm-start: subsequent appUrlOpen events while the app is alive.
       handle = await App.addListener('appUrlOpen', (data: { url: string }) => {
-        if (!data?.url) return;
-
-        // ---- canact://open?to=/path → push the WebView to that route ----
-        // Used by all general FCM notifications (chat, help, ratings) so a
-        // tap lands the user on the right screen instead of just opening
-        // the app.
-        if (data.url.startsWith('canact://open')) {
-          try {
-            const u = new URL(data.url);
-            const to = u.searchParams.get('to');
-            if (to && to.startsWith('/')) {
-              router.push(to);
-            }
-          } catch { /* noop */ }
-          return;
-        }
-
-        // ---- canact://call/<id>?action=answer|decline ----
-        if (!data.url.startsWith('canact://call/')) return;
-        // Parse out the callId + action chosen on the native ringer / heads-up
-        // notification, then hand it to IncomingCallRinger as a pre-decision
-        // so the user never has to confirm twice.
-        try {
-          const u = new URL(data.url);
-          const callId = u.pathname.replace(/^\/+/, '').split('/')[0] || u.host;
-          const action = u.searchParams.get('action');
-          if (callId && (action === 'answer' || action === 'decline')) {
-            setCallPreDecision(callId, action);
-          }
-        } catch { /* noop */ }
-        // Bringing the app to foreground is enough — IncomingCallRinger is
-        // globally mounted and re-subscribes to incomingCalls/{uid} the
-        // moment the WebView reconnects, so the ringer pops on its own. We
-        // simply route to '/' if the user wasn't already inside the app.
-        try {
-          if (typeof window !== 'undefined' && window.location.pathname === '/welcome') {
-            router.replace('/');
-          }
-        } catch { /* noop */ }
+        handleUrl(data?.url);
       });
     })().catch(() => { /* noop */ });
+
     return () => {
       cancelled = true;
       handle?.remove().catch(() => { /* noop */ });
