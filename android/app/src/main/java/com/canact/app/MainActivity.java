@@ -3,6 +3,8 @@ package com.canact.app;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Context;
+import android.content.Intent;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
@@ -21,6 +23,63 @@ public class MainActivity extends BridgeActivity {
         //   * The user sees both Calls + General categories in App Info →
         //     Notifications immediately, and can tweak each independently.
         ensureNotificationChannels();
+        cancelCallNotificationFor(getIntent());
+        dismissRingerActivityFor(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // singleTask launchMode means re-entries land here. Clear the
+        // ringer notification + dismiss the lock-screen ringer activity
+        // the moment the user taps Answer.
+        cancelCallNotificationFor(intent);
+        dismissRingerActivityFor(intent);
+    }
+
+    /**
+     * If we were launched from a `canact://call/<id>?action=answer` deep
+     * link (notification action button or IncomingCallActivity Answer),
+     * cancel the heads-up call notification so it doesn't linger on top
+     * of the in-app call screen.
+     */
+    private void cancelCallNotificationFor(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        if (!"canact".equals(data.getScheme()) || !"call".equals(data.getHost())) return;
+        try {
+            String path = data.getPath();
+            if (path == null) return;
+            String callId = path.replaceAll("^/+", "").split("/")[0];
+            if (callId.isEmpty()) return;
+            NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (mgr != null) mgr.cancel(callId.hashCode());
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Also tell IncomingCallActivity (if visible on the lock screen) to
+     * close itself, otherwise the user lands behind the ringer overlay.
+     */
+    private void dismissRingerActivityFor(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        if (!"canact".equals(data.getScheme()) || !"call".equals(data.getHost())) return;
+        try {
+            String path = data.getPath();
+            if (path == null) return;
+            String callId = path.replaceAll("^/+", "").split("/")[0];
+            if (callId.isEmpty()) return;
+            Intent cancel = new Intent(this, IncomingCallActivity.class);
+            cancel.setAction("cancel");
+            cancel.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
+            cancel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(cancel);
+        } catch (Exception ignored) {}
     }
 
     private void ensureNotificationChannels() {

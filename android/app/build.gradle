@@ -20,6 +20,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Sign release with the debug keystore so the SHA-1 already
+            // registered for this app in Firebase (Google Sign-In, etc.)
+            // continues to work. Swap to a real upload key before listing
+            // on the Play Store.
+            signingConfig signingConfigs.debug
         }
     }
 }

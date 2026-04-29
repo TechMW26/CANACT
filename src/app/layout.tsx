@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/lib/auth';
 import { Toaster } from '@/components/Toaster';
+import EarlyPermissionsPrompt from '@/components/EarlyPermissionsPrompt';
 
 export const metadata: Metadata = {
   title: 'Canact',
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen w-screen max-w-[100vw] overflow-x-hidden bg-candy text-ink antialiased">
         <AuthProvider>
+          <EarlyPermissionsPrompt />
           <div className="mx-auto max-w-screen-md md:max-w-screen-lg">
             {children}
           </div>

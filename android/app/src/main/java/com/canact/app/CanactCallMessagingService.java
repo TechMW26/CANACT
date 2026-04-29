@@ -193,16 +193,23 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             | Intent.FLAG_ACTIVITY_SINGLE_TOP
             | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
 
-        // Action-button intents → CallActionReceiver. The receiver:
-        //   • DECLINE → writes status:'rejected' to RTDB directly (no
-        //     WebView wake), cancels the notification + dismisses the
-        //     ringer activity. Done — user never leaves the lock screen.
-        //   • ANSWER  → cancels the notification, then forwards the user
-        //     into MainActivity with a deep link the in-app router turns
-        //     into an auto-accept pre-decision.
-        Intent answer = new Intent(ctx, CallActionReceiver.class);
-        answer.setAction(CallActionReceiver.ACTION_ANSWER);
-        answer.putExtra(CallActionReceiver.EXTRA_CALL_ID, callId);
+        // Action-button intents.
+        //   • DECLINE → BroadcastReceiver writes status:'rejected' to RTDB
+        //     directly without ever waking the WebView. The user never has
+        //     to leave the lock screen.
+        //   • ANSWER  → must launch an Activity to bring the WebView
+        //     forward (WebRTC lives in JS). Notification action taps that
+        //     start an Activity get a foreground-launch exemption from
+        //     Android's BAL restrictions, so we use getActivity() here.
+        //     Background `BroadcastReceiver.startActivity()` would be
+        //     blocked silently on Android 10+, which is why answer used
+        //     to dismiss the notification but never bring the app up.
+        Intent answer = new Intent(ctx, MainActivity.class);
+        answer.setAction(Intent.ACTION_VIEW);
+        answer.setData(Uri.parse("canact://call/" + callId + "?action=answer&accepted=1"));
+        answer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         Intent decline = new Intent(ctx, CallActionReceiver.class);
         decline.setAction(CallActionReceiver.ACTION_DECLINE);
@@ -216,7 +223,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         // don't share the same PendingIntent.
         int answerRc = ("answer:" + callId).hashCode();
         int declineRc = ("decline:" + callId).hashCode();
-        PendingIntent answerPi = PendingIntent.getBroadcast(ctx, answerRc, answer, piFlags);
+        PendingIntent answerPi = PendingIntent.getActivity(ctx, answerRc, answer, piFlags);
         PendingIntent declinePi = PendingIntent.getBroadcast(ctx, declineRc, decline, piFlags);
 
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_ID)
