@@ -154,7 +154,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           mimicking the "Home" pill in the inspiration design. The smooth
           width transition is what gives it the animated feel without
           pulling in framer-motion. */}
-      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 bg-candy pt-2 pb-3 safe-bottom pointer-events-none">
+      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pt-2 pb-3 safe-bottom pointer-events-none">
         <div className="canact-col pointer-events-auto rounded-[28px] bg-white border border-line shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
           <div className="flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
@@ -247,9 +247,9 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="fixed top-0 left-0 right-0 z-30 bg-candy pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4"
+      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 px-3 safe-top md:left-60 md:px-6 md:pt-4 pointer-events-none"
     >
-      <div className="canact-col md:max-w-none flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+      <div className="canact-col md:max-w-none pointer-events-auto flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />
         <div className="ml-auto inline-flex items-center gap-2">
           <Select
