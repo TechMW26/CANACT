@@ -77,6 +77,31 @@ export default function NativeCallDeepLinkRouter() {
       handle = await App.addListener('appUrlOpen', (data: { url: string }) => {
         handleUrl(data?.url);
       });
+
+      // 3) Tap on a system-tray FCM notification \u2014 the @capacitor-firebase
+      //    plugin emits notificationActionPerformed with the original data
+      //    payload, which carries our deep-link URL (e.g. /post/<id>).
+      try {
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
+        if (cancelled) return;
+        const tapHandle = await FirebaseMessaging.addListener(
+          'notificationActionPerformed',
+          (event: any) => {
+            const url = event?.notification?.data?.url;
+            if (typeof url === 'string' && url.startsWith('/')) {
+              router.push(url);
+            }
+          },
+        );
+        // Compose with the existing handle so cleanup removes both.
+        const prev = handle;
+        handle = {
+          remove: async () => {
+            try { await prev?.remove(); } catch { /* noop */ }
+            try { await tapHandle.remove(); } catch { /* noop */ }
+          },
+        };
+      } catch { /* plugin missing on web \u2014 ignore */ }
     })().catch(() => { /* noop */ });
 
     return () => {

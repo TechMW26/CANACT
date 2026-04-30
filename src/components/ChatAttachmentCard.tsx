@@ -12,9 +12,12 @@ import type { ChatAttachment } from '@/lib/types';
 export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment; mine?: boolean }) {
   const [thumb, setThumb] = useState<string | undefined>(attachment.thumbUrl);
   const [text, setText] = useState<string | undefined>(
-    attachment.kind === 'post' ? attachment.text : attachment.caption,
+    attachment.kind === 'post' ? attachment.text
+      : attachment.kind === 'reel' ? attachment.caption
+      : undefined,
   );
   const [author, setAuthor] = useState<string | undefined>(attachment.authorName);
+  const [authorUid, setAuthorUid] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,21 +31,31 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
           if (!thumb && v.mediaUrls?.[0]) setThumb(v.mediaUrls[0]);
           if (!text && v.text) setText(v.text);
           if (!author && v.authorName) setAuthor(v.authorName);
-        } else {
+        } else if (attachment.kind === 'reel') {
           const snap = await get(ref(db, `reels/${attachment.reelId}`));
           const v = snap.val();
           if (cancelled || !v) return;
           if (!thumb && (v.posterUrl || v.videoUrl)) setThumb(v.posterUrl || v.videoUrl);
           if (!text && v.caption) setText(v.caption);
           if (!author && v.authorName) setAuthor(v.authorName);
+        } else {
+          const snap = await get(ref(db, `ratemeSessions/${attachment.sessionId}`));
+          const v = snap.val();
+          if (cancelled || !v) return;
+          if (!thumb && v.photoURL) setThumb(v.photoURL);
+          if (!author && v.authorName) setAuthor(v.authorName);
+          if (v.uid) setAuthorUid(v.uid);
         }
       } catch { /* noop */ }
     })();
     return () => { cancelled = true; };
   }, [attachment, thumb, text, author]);
 
-  const href = attachment.kind === 'post' ? `/post/${attachment.postId}` : `/reel/${attachment.reelId}`;
-  const label = attachment.kind === 'post' ? 'Post' : 'Reel';
+  const href =
+    attachment.kind === 'post' ? `/post/${attachment.postId}`
+    : attachment.kind === 'reel' ? `/reel/${attachment.reelId}`
+    : authorUid ? `/profile/${authorUid}` : '/feed';
+  const label = attachment.kind === 'post' ? 'Post' : attachment.kind === 'reel' ? 'Reel' : 'Rate Me';
 
   return (
     <Link

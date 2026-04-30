@@ -1,5 +1,8 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
+import { ref, update } from 'firebase/database';
+import { db } from './firebase';
+import { useAuth } from './auth';
 import { formatDistance } from './utils';
 
 export const RADII = [1000, 5000, 10000, 25000, 100000, Infinity];
@@ -18,6 +21,7 @@ const DistanceCtx = createContext<Ctx | null>(null);
 const STORAGE_KEY = 'canact:radiusIdx';
 
 export function DistanceProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [radiusIdx, setRadiusIdxState] = useState(2);
   // Hydrate from localStorage on mount.
   useEffect(() => {
@@ -29,6 +33,15 @@ export function DistanceProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
   }, []);
+  // Mirror the active radius onto the user's profile so the server can
+  // honour each recipient's preference when fanning out nearby-friend
+  // notifications (Infinity is stored as 0 = "anywhere").
+  useEffect(() => {
+    if (!user?.uid) return;
+    const meters = RADII[radiusIdx];
+    const stored = Number.isFinite(meters) ? Math.round(meters as number) : 0;
+    update(ref(db, `users/${user.uid}/notifPrefs`), { nearbyRadius: stored }).catch(() => {});
+  }, [user?.uid, radiusIdx]);
   const setRadiusIdx = (n: number) => {
     setRadiusIdxState(n);
     try { window.localStorage.setItem(STORAGE_KEY, String(n)); } catch {}

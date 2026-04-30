@@ -7,6 +7,7 @@ import { Input, Select, Textarea } from '@/components/Input';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { createPoll } from '@/lib/services/poll';
+import { notifyNearbyFriends } from '@/lib/services/sendPush';
 import { toast } from '@/components/Toaster';
 
 const HOURS = [1, 4, 8, 12, 24, 48];
@@ -56,7 +57,7 @@ export default function PollCreatePage() {
         if (!openEnded && options.filter(Boolean).length < 2) return toast('Add at least two options', 'error');
         setBusy(true);
         try {
-          await createPoll({
+          const created = await createPoll({
             uid: user.uid,
             authorName: profile.fullName,
             question: q.trim(),
@@ -65,6 +66,16 @@ export default function PollCreatePage() {
             endsAt: Date.now() + hours * 3600 * 1000,
             lat: coords?.lat, lng: coords?.lng,
           });
+          if (typeof coords?.lat === 'number' && typeof coords?.lng === 'number' && created?.id) {
+            notifyNearbyFriends({
+              lat: coords.lat,
+              lng: coords.lng,
+              title: `${profile.fullName} started a poll nearby`,
+              body: q.trim().slice(0, 120),
+              url: `/feed?poll=${created.id}`,
+              tag: `poll:${created.id}`,
+            });
+          }
           router.replace('/feed');
         } catch (e: any) { toast(e?.message ?? 'Failed', 'error'); }
         finally { setBusy(false); }

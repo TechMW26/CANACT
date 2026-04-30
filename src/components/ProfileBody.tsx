@@ -7,11 +7,12 @@ import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, ReelItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
 import { listenUserWhaPosts } from '@/lib/services/wha';
 import { listenUserReels } from '@/lib/services/reels';
-import { deletePoll, listenUserPolls } from '@/lib/services/poll';
+import { listenUserPolls, deletePoll } from '@/lib/services/poll';
+import { listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
 import { toast } from '@/components/Toaster';
 import { PostMenu } from '@/components/PostMenu';
 import { requestFollow } from '@/lib/services/favourites';
@@ -71,6 +72,14 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   }, [uid]);
   useEffect(() => {
     return listenUserPolls(uid, setPolls);
+  }, [uid]);
+  // Surface the user's Rate Me sessions on their profile so a finished
+  // round still has a permanent home (matches the wall behaviour). We
+  // include both active and recently-ended sessions; voting is locked
+  // automatically once `endsAt` passes.
+  const [ratemes, setRatemes] = useState<RateMeSession[]>([]);
+  useEffect(() => {
+    return listenUserRateMe(uid, setRatemes);
   }, [uid]);
 
   if (!u) {
@@ -243,6 +252,18 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
           </div>
         </div>
       </Card>
+
+      {/* Rate Me sessions (active + recently ended) — gives finished
+          rounds a permanent home on the author's profile, mirroring the
+          wall card. Voting is locked once endsAt passes; we render a
+          results bar instead of buttons in that state. */}
+      {ratemes.length > 0 && user ? (
+        <div className="space-y-3">
+          {ratemes.map((s) => (
+            <ProfileRateMeCard key={s.id} sess={s} myUid={user.uid} />
+          ))}
+        </div>
+      ) : null}
 
       {/* Instagram-style posts grid */}
       <Card className="!p-0 overflow-hidden">
@@ -504,5 +525,91 @@ function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { titl
         })}
       </div>
     </div>
+  );
+}
+
+/** Profile-page Rate Me card. Mirrors the wall-card design (full-bleed
+ *  photo, pastel up/down vote pills, share-only action row) and gracefully
+ *  flips to a results-only layout once the session has ended so the
+ *  finished round stays visible without allowing further votes. */
+function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
+  const isOwner = sess.uid === myUid;
+  const ended = sess.endsAt <= Date.now();
+  const locked = ended || isOwner;
+  const my = sess.votes?.[myUid];
+  const likes = sess.likes ?? 0;
+  const dislikes = sess.dislikes ?? 0;
+  const total = likes + dislikes;
+  const upPct = total ? Math.round((likes / total) * 100) : 0;
+  const downPct = total ? 100 - upPct : 0;
+  const cast = async (kind: 'like' | 'dislike') => {
+    try { await voteRateMe(sess.id, myUid, kind); }
+    catch (e: any) { toast(e?.message ?? 'Could not vote', 'error'); }
+  };
+  const remaining = sess.endsAt - Date.now();
+  const timeLabel = ended
+    ? 'Voting closed'
+    : remaining > 3600 * 1000
+      ? `${Math.ceil(remaining / 3_600_000)}h left`
+      : `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
+  return (
+    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Rate Me</div>
+        <div className="text-[11px] font-semibold text-muted">{timeLabel}</div>
+      </div>
+      {sess.photoURL ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={sess.photoURL}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="mt-3 block w-full max-h-[480px] object-cover"
+        />
+      ) : null}
+      {locked ? (
+        <div className="px-4 pt-3">
+          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            <span className="text-rose-500">Down · {dislikes}</span>
+            <span className="text-emerald-600">Up · {likes}</span>
+          </div>
+          <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-ink/5">
+            <div style={{ width: `${downPct}%` }} className="bg-rose-300" />
+            <div style={{ width: `${upPct}%` }} className="bg-emerald-300" />
+          </div>
+          <div className="mt-1 pb-3 text-[11px] text-muted">
+            {total === 0 ? 'No votes' : `${total} vote${total === 1 ? '' : 's'} · ${upPct}% positive`}
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 pt-3 pb-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => cast('dislike')}
+            aria-pressed={my === 'dislike'}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
+              my === 'dislike'
+                ? 'bg-rose-500 text-white border-rose-500'
+                : 'bg-rose-50 text-rose-600 border-rose-100 active:bg-rose-100'
+            }`}
+          >
+            <ThumbsDown size={16} /> Down vote · {dislikes}
+          </button>
+          <button
+            type="button"
+            onClick={() => cast('like')}
+            aria-pressed={my === 'like'}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
+              my === 'like'
+                ? 'bg-emerald-500 text-white border-emerald-500'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-100 active:bg-emerald-100'
+            }`}
+          >
+            <ThumbsUp size={16} /> Up vote · {likes}
+          </button>
+        </div>
+      )}
+    </article>
   );
 }

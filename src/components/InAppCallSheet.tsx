@@ -126,6 +126,11 @@ export function InAppCallSheet({
   // is the peer's uid, we render the Accept / Decline overlay. When it's
   // our own uid, we render a "Waiting for X to accept video..." indicator.
   const [videoRequest, setVideoRequest] = useState<{ from: string; at: number } | null>(null);
+  // True only once we actually have a live local video track wired into
+  // the picture-in-picture self-view. Prevents the empty black tile from
+  // flashing in during incoming-call setup.
+  const [hasLocalVideo, setHasLocalVideo] = useState(false);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
 
   useEffect(() => {
     if (status !== 'active') return;
@@ -196,6 +201,7 @@ export function InAppCallSheet({
         videoStream?.getVideoTracks().forEach((t) => local.addTrack(t));
         localStreamRef.current = local;
         if (localVideoRef.current && wantVideo) localVideoRef.current.srcObject = local;
+        setHasLocalVideo(!!videoStream && (videoStream.getVideoTracks().length > 0));
 
         // 2) Peer connection. Add tracks straight away so the very first
         //    SDP offer carries the SSRCs/MSIDs of our real audio (and
@@ -250,6 +256,7 @@ export function InAppCallSheet({
           if (ev.track && !remoteStream.getTracks().includes(ev.track)) {
             try { remoteStream.addTrack(ev.track); } catch {}
           }
+          if (ev.track?.kind === 'video') setHasRemoteVideo(true);
           kick();
         };
 
@@ -349,6 +356,22 @@ export function InAppCallSheet({
               // First offer OR a renegotiated one — apply, answer, push back.
               try {
                 if (pc.signalingState === 'stable' || !offerSetRef.current) {
+                  // Mid-call video upgrade hand-off: if we have a camera
+                  // stream queued from acceptVideoRequest but no video
+                  // sender yet, attach it BEFORE setRemoteDescription so
+                  // WebRTC pairs our outbound video with the m-line in
+                  // the caller's incoming offer instead of orphaning it.
+                  if (videoStreamRef.current && !videoSenderRef.current) {
+                    const track = videoStreamRef.current.getVideoTracks()[0];
+                    if (track) {
+                      const local = localStreamRef.current ?? videoStreamRef.current;
+                      try {
+                        const sender = pc.addTrack(track, local);
+                        videoSenderRef.current = sender;
+                        applySendParameters(sender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+                      } catch { /* track may already be added */ }
+                    }
+                  }
                   await pc.setRemoteDescription(new RTCSessionDescription(rec.offer));
                   offerSetRef.current = true;
                   lastOfferSdpRef.current = rec.offer.sdp ?? null;
@@ -393,6 +416,8 @@ export function InAppCallSheet({
       try { if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null; } catch {}
       try { if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null; } catch {}
       try { if (localVideoRef.current) localVideoRef.current.srcObject = null; } catch {}
+      setHasLocalVideo(false);
+      setHasRemoteVideo(false);
       // Use the ref — the state captured at mount time is null for the
       // caller, so without this the call record would never be marked
       // ended on RTDB and the peer would keep ringing forever.
@@ -432,6 +457,7 @@ export function InAppCallSheet({
             applySendParameters(sender, { maxBitrate: 1_500_000, maxFramerate: 30 });
             localComposite?.addTrack(track);
             if (localVideoRef.current) localVideoRef.current.srcObject = localComposite ?? null;
+            setHasLocalVideo(true);
           }
         } catch { /* user denied camera */ }
       })();
@@ -450,6 +476,7 @@ export function InAppCallSheet({
         });
         videoStreamRef.current = null;
         if (localVideoRef.current) localVideoRef.current.srcObject = null;
+        setHasLocalVideo(false);
       })();
     }
   }, [kind, facing]);
@@ -548,12 +575,14 @@ export function InAppCallSheet({
     await clearVideoRequest(callId).catch(() => {});
   };
 
-  /** Callee-side accept: ADD the local video track FIRST so by the time
-   *  the renegotiated SDP arrives we already have our camera in the
-   *  peer connection — without this the peer's offer/answer round-trip
-   *  completes with only one side's video and the other camera never
-   *  reaches the wire. Once our track is in, write `kind: 'video'` to
-   *  signal both sides to upgrade together. */
+  /** Callee-side accept: pre-acquire the camera stream and stash it in
+   *  videoStreamRef so the listenCall offer-handler below can attach it
+   *  to the peer connection JUST BEFORE answering the renegotiated offer
+   *  the caller is about to push. We DO NOT addTrack here — adding the
+   *  track in stable state creates a free-floating transceiver that
+   *  doesn't get paired with the m-line in the caller's incoming offer,
+   *  which is exactly the bug that left the accepter watching a black
+   *  placeholder while the caller's camera streamed nowhere. */
   const acceptVideoRequest = async () => {
     if (!callId) return;
     const pc = pcRef.current;
@@ -563,15 +592,17 @@ export function InAppCallSheet({
         video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
       });
       videoStreamRef.current = cam;
-      const track = cam.getVideoTracks()[0];
-      const local = localStreamRef.current ?? cam;
-      if (track) {
-        const sender = pc.addTrack(track, local);
-        videoSenderRef.current = sender;
-        applySendParameters(sender, { maxBitrate: 1_500_000, maxFramerate: 30 });
-        if (localStreamRef.current) localStreamRef.current.addTrack(track);
-        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current ?? cam;
+      // Light up the local self-view immediately so the user gets visual
+      // confirmation their camera is on, even before the renegotiated
+      // offer arrives.
+      const local = localStreamRef.current;
+      if (local) {
+        cam.getVideoTracks().forEach((t) => {
+          if (!local.getVideoTracks().includes(t)) local.addTrack(t);
+        });
       }
+      if (localVideoRef.current) localVideoRef.current.srcObject = local ?? cam;
+      setHasLocalVideo(true);
     } catch (e: any) {
       setError(e?.message ?? 'Camera unavailable');
       await clearVideoRequest(callId).catch(() => {});
@@ -684,19 +715,34 @@ export function InAppCallSheet({
       <div className="relative flex-1 overflow-hidden">
         {isVideo ? (
           <>
-            {status !== 'active' && (
-              <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
-                <Loader2 size={48} className="animate-spin text-white/70" />
+            {/* Pretty backdrop while the remote camera isn't streaming
+                yet — peer avatar + name on a soft gradient. Beats the
+                old empty-black-rectangle + bare spinner placeholder. */}
+            {!hasRemoteVideo && (
+              <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A]">
+                <Avatar src={peer.photoURL} name={peer.name} size={120} />
+                <div className="text-lg font-extrabold">{peer.name}</div>
+                <div className="inline-flex items-center gap-2 text-xs text-white/70">
+                  <Loader2 size={14} className="animate-spin" />
+                  {status === 'active' ? 'Waiting for camera…' : 'Connecting…'}
+                </div>
               </div>
             )}
-            <video ref={remoteVideoRef} autoPlay playsInline className="relative z-[2] h-full w-full object-cover bg-black" />
             <video
-              ref={localVideoRef}
+              ref={remoteVideoRef}
               autoPlay
               playsInline
-              muted
-              className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg"
+              className={`relative z-[2] h-full w-full object-cover bg-transparent transition-opacity ${hasRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
             />
+            {hasLocalVideo && !cameraOff && (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg"
+              />
+            )}
           </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A]">

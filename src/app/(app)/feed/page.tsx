@@ -281,7 +281,7 @@ export default function FeedPage() {
                   return <div key={`poll_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"><PollCard poll={it.data} myUid={user!.uid} /></div>;
                 }
                 if (it.kind === 'rateme') {
-                  return <div key={`rm_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_360px]"><RateMeCard sess={it.data} myUid={user!.uid} /></div>;
+                  return <div key={`rm_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_360px]"><RateMeCard sess={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
                 }
                 return <div key={`wha_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_220px]"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
               }
@@ -602,29 +602,107 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
   );
 }
 
-function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
+function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: string; onShare: (a: ChatAttachment) => void }) {
   const isOwner = sess.uid === myUid;
   const my = sess.votes?.[myUid];
+  const ended = sess.endsAt <= Date.now();
+  // Lock voting if the session is over OR the viewer is the author. After
+  // the deadline we still keep the card around (in feed and on the
+  // author's profile) so people can see the final tally.
+  const locked = ended || isOwner;
+  const likes = sess.likes ?? 0;
+  const dislikes = sess.dislikes ?? 0;
+  const total = likes + dislikes;
+  const upPct = total ? Math.round((likes / total) * 100) : 0;
+  const downPct = total ? 100 - upPct : 0;
+  const cast = async (kind: 'like' | 'dislike') => {
+    try { await voteRateMe(sess.id, myUid, kind); }
+    catch (e: any) { toast(e?.message ?? 'Could not vote', 'error'); }
+  };
   return (
-    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
-      <div className="flex items-center gap-3">
+    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
+      {/* Header row — same anatomy as WhaTextCard / PollCard. */}
+      <div className="flex items-center gap-3 px-4 pt-4">
         <Link href={`/profile/${sess.uid}`}><Avatar src={sess.photoURL} name={sess.authorName} /></Link>
         <div className="flex-1 min-w-0">
           <Link href={`/profile/${sess.uid}`} className="font-bold truncate block">{sess.authorName}</Link>
-          <span className="text-xs text-muted">Rate Me \u2022 {timeLeft(sess.endsAt)}</span>
+          <span className="text-xs text-muted">
+            Rate Me · {ended ? 'Voting closed' : timeLeft(sess.endsAt)}
+          </span>
         </div>
       </div>
+
+      {/* Full-bleed photo (matches the new media-tile style — no inner
+          padding so the photo runs edge-to-edge inside the card). */}
       {sess.photoURL && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="mt-3 w-full max-h-96 object-cover rounded-[20px]" />
+        <img
+          src={sess.photoURL}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="mt-3 block w-full max-h-[480px] object-cover"
+        />
       )}
-      <div className="mt-3 flex gap-2">
-        <Button variant={my === 'like' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'like'); } catch (e: any) { toast(e.message, 'error'); } }}>
-          <ThumbsUp size={16} className="mr-1" /> {sess.likes ?? 0}
-        </Button>
-        <Button variant={my === 'dislike' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'dislike'); } catch (e: any) { toast(e.message, 'error'); } }}>
-          <ThumbsDown size={16} className="mr-1" /> {sess.dislikes ?? 0}
-        </Button>
+
+      {/* Once voting is locked we ditch the buttons entirely and just
+          render a results bar so the card stays useful as a permanent
+          record on the wall and on the author's profile. */}
+      {locked ? (
+        <div className="px-4 pt-3">
+          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-ink/60">
+            <span className="text-rose-500">Down · {dislikes}</span>
+            <span className="text-emerald-600">Up · {likes}</span>
+          </div>
+          <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-ink/5">
+            <div style={{ width: `${downPct}%` }} className="bg-rose-300" />
+            <div style={{ width: `${upPct}%` }} className="bg-emerald-300" />
+          </div>
+          <div className="mt-1 text-[11px] text-muted">
+            {total === 0 ? 'No votes' : `${total} vote${total === 1 ? '' : 's'} · ${upPct}% positive`}
+          </div>
+        </div>
+      ) : (
+        // Active voting: pastel colour-coded pills, full-width, equal
+        // halves. Down-vote left, Up-vote right per spec.
+        <div className="px-4 pt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => cast('dislike')}
+            aria-pressed={my === 'dislike'}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
+              my === 'dislike'
+                ? 'bg-rose-500 text-white border-rose-500'
+                : 'bg-rose-50 text-rose-600 border-rose-100 active:bg-rose-100'
+            }`}
+          >
+            <ThumbsDown size={16} /> Down vote · {dislikes}
+          </button>
+          <button
+            type="button"
+            onClick={() => cast('like')}
+            aria-pressed={my === 'like'}
+            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
+              my === 'like'
+                ? 'bg-emerald-500 text-white border-emerald-500'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-100 active:bg-emerald-100'
+            }`}
+          >
+            <ThumbsUp size={16} /> Up vote · {likes}
+          </button>
+        </div>
+      )}
+
+      {/* Action row — share only, per spec (no like / comment here). */}
+      <div className="flex items-center justify-end px-4 pb-3 pt-3">
+        <button
+          type="button"
+          onClick={() => onShare({ kind: 'rateme', sessionId: sess.id })}
+          aria-label="Share"
+          className="inline-flex items-center gap-1 rounded-full px-3 h-9 text-xs font-semibold border border-line bg-white"
+        >
+          <Send size={14} /> Share
+        </button>
       </div>
     </article>
   );

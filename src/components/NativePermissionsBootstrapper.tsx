@@ -44,94 +44,122 @@ export default function NativePermissionsBootstrapper() {
       writeToken(cachedToken).catch(() => { /* noop */ });
     });
 
-    (async () => {
-      // --- Notifications + FCM token -------------------------------------
-      await writeDebug('start');
+    // ---- Per-permission helpers -----------------------------------------
+    // Each helper RETURNS a boolean indicating whether the permission is
+    // granted right now. They're idempotent: safe to call repeatedly.
+    // The runner below chains them sequentially and only advances to the
+    // next one once the previous resolved as granted, so the user sees
+    // one OS dialog at a time instead of three stacked on top of each
+    // other (which on first launch caused users to miss prompts entirely).
+    const ensureNotifications = async (): Promise<boolean> => {
       try {
         const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
-        if (cancelled) return;
-        await writeDebug('plugin-loaded');
-
-        const perm = await FirebaseMessaging.checkPermissions();
-        let granted = perm.receive === 'granted';
-        if (!granted) {
-          const req = await FirebaseMessaging.requestPermissions();
-          granted = req.receive === 'granted';
-        }
-        await writeDebug('perm:' + (granted ? 'granted' : perm.receive));
-        if (granted) {
-          try {
-            const { token } = await FirebaseMessaging.getToken();
-            await writeDebug('token:' + (token ? token.slice(0, 20) + '…' : 'EMPTY'));
-            if (token) {
-              cachedToken = token;
-              // Try immediately (might already be signed in); the auth
-              // listener above will retry if not.
-              await writeToken(token);
-              await writeDebug('persisted');
-            }
-          } catch (err: any) {
-            await writeDebug('getToken-err:' + (err?.message || String(err)).slice(0, 200));
-          }
-          // Keep tokens fresh: refresh handler fires when Google rotates the
-          // device token (rare but happens on app reinstall / data wipe).
-          await FirebaseMessaging.addListener('tokenReceived', (event: { token: string }) => {
-            if (event?.token) {
-              cachedToken = event.token;
-              writeToken(event.token).catch(() => { /* noop */ });
-            }
-          });
-        }
+        if (cancelled) return false;
+        const cur = await FirebaseMessaging.checkPermissions();
+        if (cur.receive === 'granted') return true;
+        const req = await FirebaseMessaging.requestPermissions();
+        return req.receive === 'granted';
       } catch (err: any) {
-        await writeDebug('init-err:' + (err?.message || String(err)).slice(0, 200));
+        await writeDebug('notif-err:' + (err?.message || String(err)).slice(0, 120));
+        return false;
       }
+    };
 
-      // --- Location -------------------------------------------------------
+    const ensureLocation = async (): Promise<boolean> => {
       try {
         const { Geolocation } = await import('@capacitor/geolocation');
-        if (cancelled) return;
-        const status = await Geolocation.checkPermissions();
-        if (status.location !== 'granted' && status.coarseLocation !== 'granted') {
-          await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[perms] location request failed:', err);
+        if (cancelled) return false;
+        const cur = await Geolocation.checkPermissions();
+        if (cur.location === 'granted' || cur.coarseLocation === 'granted') return true;
+        const req = await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
+        return req.location === 'granted' || req.coarseLocation === 'granted';
+      } catch (err: any) {
+        await writeDebug('loc-err:' + (err?.message || String(err)).slice(0, 120));
+        return false;
       }
+    };
 
-      // --- Microphone (upfront) ------------------------------------------
-      // Trigger Android's RECORD_AUDIO prompt now so the first incoming
-      // voice call connects instantly. We open a short-lived audio track
-      // and immediately stop it; the OS-level grant persists for the app.
-      // Asked once per install via localStorage so we don't nag on every
-      // launch if the user denied.
+    const ensureMic = async (): Promise<boolean> => {
+      // Capacitor doesn't ship a first-class permissions plugin for the
+      // microphone, so we rely on getUserMedia to trigger the OS dialog.
+      // A successful resolve == granted; instantly stop the track to
+      // release the mic. Any reject == denied / dismissed.
       try {
-        const ASKED_MIC_KEY = 'canact:perms:mic:asked:v1';
-        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_MIC_KEY)
-            && navigator?.mediaDevices?.getUserMedia) {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            stream.getTracks().forEach((t) => t.stop());
-          } catch { /* user denied — they can re-enable in settings */ }
-          localStorage.setItem(ASKED_MIC_KEY, '1');
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[perms] mic request failed:', err);
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return false;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((t) => t.stop());
+        return true;
+      } catch {
+        return false;
       }
+    };
+
+    type Step = { id: 'notif' | 'location' | 'mic'; ensure: () => Promise<boolean> };
+    const steps: Step[] = [
+      { id: 'notif', ensure: ensureNotifications },
+      { id: 'location', ensure: ensureLocation },
+      { id: 'mic', ensure: ensureMic },
+    ];
+
+    // Tracks which steps are still ungranted across retry cycles so we
+    // know when to stop nagging.
+    const granted: Record<string, boolean> = { notif: false, location: false, mic: false };
+    const RETRY_DELAY_MS = 8_000;
+    const MAX_RETRIES = 6;
+    let retries = 0;
+
+    /**
+     * Walk the steps in order. After a step is granted, run its
+     * post-grant follow-up (FCM token write, etc.). If a step is denied
+     * we BREAK the chain — the next permission isn't requested until
+     * the user grants the current one (or a retry fires).
+     */
+    const runChain = async () => {
+      await writeDebug('chain-start:' + retries);
+      for (const step of steps) {
+        if (cancelled) return;
+        if (granted[step.id]) continue;
+        const ok = await step.ensure();
+        granted[step.id] = ok;
+        await writeDebug(step.id + ':' + (ok ? 'granted' : 'denied'));
+        if (step.id === 'notif' && ok) {
+          // Now safe to fetch the FCM token (would have failed before
+          // the user granted POST_NOTIFICATIONS on Android 13+).
+          await registerFcmToken((t) => { cachedToken = t; }).catch(() => {});
+        }
+        if (!ok) break; // sequential gate — stop here, retry will pick up
+      }
+    };
+
+    /** Re-run the chain on a timer until everything is granted or we
+     *  hit the retry cap. This catches the case where the user swipes
+     *  away a system dialog by mistake — we re-prompt a few seconds
+     *  later instead of leaving the permission silently broken. */
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      if (granted.notif && granted.location && granted.mic) return; // done
+      if (retries >= MAX_RETRIES) return;
+      retryTimer = setTimeout(async () => {
+        retries += 1;
+        await runChain();
+        scheduleRetry();
+      }, RETRY_DELAY_MS);
+    };
+
+    (async () => {
+      await writeDebug('start');
+      await runChain();
+      scheduleRetry();
 
       // --- Full-screen-intent special access (Android 14+) ---------------
-      // Without USE_FULL_SCREEN_INTENT granted, our incoming-call
-      // CallStyle notification gets downgraded to a plain heads-up and
-      // IncomingCallActivity never auto-launches over the lockscreen \u2014
-      // the user just sees a small banner and has to manually tap it.
-      // Bounce the user once into the per-app Settings page so they can
-      // flip the toggle. We never nag again once granted.
+      // Independent of the core trio above; runs after them so the user
+      // isn't bounced to Settings before the in-app prompts finish.
       try {
         const ASKED_FSI_KEY = 'canact:perms:fsi:asked:v2';
         const { canUseFullScreenIntent, openFullScreenIntentSettings } = await import('@/lib/callPermissions');
-        const granted = await canUseFullScreenIntent();
-        if (!granted && typeof window !== 'undefined' && !localStorage.getItem(ASKED_FSI_KEY)) {
+        const okFsi = await canUseFullScreenIntent();
+        if (!okFsi && typeof window !== 'undefined' && !localStorage.getItem(ASKED_FSI_KEY)) {
           await openFullScreenIntentSettings();
           localStorage.setItem(ASKED_FSI_KEY, '1');
         }
@@ -141,23 +169,13 @@ export default function NativePermissionsBootstrapper() {
       }
 
       // --- Battery-optimisation exemption (post-login only) --------------
-      // Doze / App Standby will eventually freeze our process when the
-      // screen is off, dropping the FCM socket so incoming-call pushes
-      // arrive late or not at all. Wait until the user is signed in
-      // (no point asking on the splash/login screen) then surface the
-      // system "Allow background" dialog once. We never nag again — if
-      // they decline they can still re-enable it from Android Settings.
       try {
         const ASKED_BAT_KEY = 'canact:perms:battery:asked:v1';
         if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_BAT_KEY)) {
-          // Wait for an authenticated user so the prompt appears in
-          // context ("so we can ring you for new requests") rather than
-          // as a confusing pop-up on the splash screen.
           await new Promise<void>((resolve) => {
             const off = onAuthStateChanged(getFirebaseAuth(), (u) => {
               if (u) { off(); resolve(); }
             });
-            // Bail out after 90s so an unsigned-in session doesn't leak the listener.
             setTimeout(() => { try { off(); } catch {} resolve(); }, 90_000);
           });
           if (cancelled) return;
@@ -177,11 +195,42 @@ export default function NativePermissionsBootstrapper() {
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       unsubAuth();
     };
   }, []);
 
   return null;
+}
+
+/**
+ * Fetch the FCM token, persist it under the signed-in user, and register
+ * a `tokenReceived` listener so future rotations are also captured.
+ * Split out so it can be invoked the moment notification permission is
+ * actually granted (not before — the plugin returns an empty string on
+ * Android 13+ if POST_NOTIFICATIONS hasn't been granted yet).
+ */
+async function registerFcmToken(remember: (t: string) => void) {
+  const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
+  try {
+    const { token } = await FirebaseMessaging.getToken();
+    await writeDebug('token:' + (token ? token.slice(0, 20) + '…' : 'EMPTY'));
+    if (token) {
+      remember(token);
+      await writeToken(token);
+      await writeDebug('persisted');
+    }
+  } catch (err: any) {
+    await writeDebug('getToken-err:' + (err?.message || String(err)).slice(0, 200));
+  }
+  try {
+    await FirebaseMessaging.addListener('tokenReceived', (event: { token: string }) => {
+      if (event?.token) {
+        remember(event.token);
+        writeToken(event.token).catch(() => { /* noop */ });
+      }
+    });
+  } catch { /* noop */ }
 }
 
 async function writeToken(token: string) {

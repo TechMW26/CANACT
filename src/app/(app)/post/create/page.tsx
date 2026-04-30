@@ -11,6 +11,7 @@ import { ArrowLeft, Camera, MapPin, Plus, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { createWhaPost } from '@/lib/services/wha';
+import { notifyNearbyFriends } from '@/lib/services/sendPush';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 
@@ -136,7 +137,7 @@ export default function PostCreatePage() {
                 const isVideo = prepared.mime.startsWith('video/');
                 hostedPosters.push(isVideo ? (posterUrl ?? '') : url);
               }
-              await createWhaPost({
+              const created = await createWhaPost({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
@@ -146,6 +147,22 @@ export default function PostCreatePage() {
                 lat: coords?.lat,
                 lng: coords?.lng,
               });
+              // Tap nearby friends on the shoulder — fire-and-forget so a
+              // push outage never blocks the create flow. Server-side
+              // filters by friend.lastLocation against friend.notifPrefs.
+              if (typeof coords?.lat === 'number' && typeof coords?.lng === 'number') {
+                const thumb = hostedPosters.find(Boolean) || hostedUrls[0];
+                const preview = (text.trim() || 'shared a new post').slice(0, 120);
+                notifyNearbyFriends({
+                  lat: coords.lat,
+                  lng: coords.lng,
+                  title: `${profile.fullName} posted nearby`,
+                  body: preview,
+                  url: `/post/${created.id}`,
+                  image: thumb || undefined,
+                  tag: `post:${created.id}`,
+                });
+              }
               router.replace('/feed');
             } catch (e: any) {
               toast(e?.message ?? 'Failed', 'error');

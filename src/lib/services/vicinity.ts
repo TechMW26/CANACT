@@ -200,6 +200,14 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
           lat: lastFix.lat, lng: lastFix.lng, accuracy: lastFix.accuracy,
           updatedAt: now,
         });
+        // Persist a stable last-known location separately from presence so
+        // server-side fan-out (e.g. nearby-friend post notifications) can
+        // still reach friends who are offline / not currently tracking.
+        try {
+          await update(ref(db, `users/${uid}/lastLocation`), {
+            lat: lastFix.lat, lng: lastFix.lng, at: now,
+          });
+        } catch { /* ignore */ }
 
         // 2) Find people in vicinity right now.
         const me = { lat: lastFix.lat, lng: lastFix.lng };

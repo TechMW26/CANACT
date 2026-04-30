@@ -35,6 +35,7 @@ const TABS: Tab[] = [
 
 const SIDE_LINKS = [
   { href: '/feed',         label: 'Feed',          Icon: Home },
+  { href: '/inbox',        label: 'Inbox',         Icon: MessageSquare },
   { href: '/help',         label: 'Help',          Icon: LifeBuoy },
   { href: '/leaderboard',  label: 'Leaderboard',   Icon: Trophy },
   { href: '/notifications',label: 'Notifications', Icon: Bell },
@@ -115,16 +116,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6">
+    <div id="canact-app-shell" className="min-h-screen pb-28 lg:pb-6">
       <ScrollDirectionWatcher />
       <ScrollRestoration />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
           open / close transitions. */}
-      <div id="canact-app-content" className="md:flex">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 md:gap-1 md:py-4 md:pr-2">
+      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-4 lg:max-w-[1280px] lg:mx-auto lg:px-4">
+      {/* Desktop sidebar — sticky to the viewport top so it stays in view
+          while the main column scrolls. Hidden under lg (i.e. tablet
+          portrait still gets the floating mobile header + bottom nav). */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 lg:gap-1 lg:py-4 lg:pr-2 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/feed" />
         </div>
@@ -149,7 +152,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </Link>
       </aside>
 
-      <main className="flex-1 md:pl-2">
+      <main className="flex-1 min-w-0 lg:pl-2">
         <UnifiedHeader />
         {/* Spacer that occupies the same vertical space as the fixed
             header so the page content starts below it instead of
@@ -159,9 +162,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <div
           data-canact-header-spacer
           aria-hidden
+          className="lg:hidden"
           style={{ height: 'calc(env(safe-area-inset-top, 0px) + 76px)' }}
         />
-        <div className="canact-col pb-4 md:max-w-none md:px-6 md:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="canact-col pb-4 lg:max-w-2xl lg:mx-auto lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
@@ -176,7 +180,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           mimicking the "Home" pill in the inspiration design. The smooth
           width transition is what gives it the animated feel without
           pulling in framer-motion. */}
-      <nav className="md:hidden fixed inset-x-0 bottom-0 z-40 pt-2 pb-3 safe-bottom pointer-events-none">
+      <nav className="lg:hidden fixed inset-x-0 bottom-0 z-40 pt-2 pb-3 safe-bottom pointer-events-none">
         <div className="canact-col pointer-events-auto rounded-[28px] bg-white border border-line shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
           <div className="flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
@@ -269,7 +273,7 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 safe-top md:left-60 md:px-6 md:pt-4 pointer-events-none"
+      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 safe-top lg:hidden pointer-events-none"
     >
       <div className="canact-col md:max-w-none pointer-events-auto flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
         <Brand size={26} href="/feed" />

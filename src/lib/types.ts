@@ -234,6 +234,12 @@ export type ChatAttachment =
       caption?: string;
       thumbUrl?: string;
       videoUrl?: string;
+    }
+  | {
+      kind: 'rateme';
+      sessionId: string;
+      authorName?: string;
+      thumbUrl?: string;
     };
 
 export type ChatThreadStatus = 'pending' | 'accepted' | 'declined';

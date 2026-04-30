@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   try { payload = await req.json(); } catch {
     return NextResponse.json({ ok: false, reason: 'bad-json' }, { status: 400 });
   }
-  const { toUid, title, body, url, tag } = payload || {};
+  const { toUid, title, body, url, tag, image } = payload || {};
   if (!toUid || !title) {
     return NextResponse.json({ ok: false, reason: 'missing-fields' }, { status: 400 });
   }
@@ -79,16 +79,33 @@ export async function POST(req: Request) {
       .replace(/\s+/g, ' ')
       .trim();
 
-  const data: Record<string, string> = {
-    title: stripEmoji(title).slice(0, 80) || 'Canact',
-    body: stripEmoji(body || '').slice(0, 200),
-    url: typeof url === 'string' ? url : '/',
-  };
+  const cleanTitle = stripEmoji(title).slice(0, 80) || 'Canact';
+  const cleanBody = stripEmoji(body || '').slice(0, 200);
+  const safeUrl = typeof url === 'string' ? url : '/';
+  const safeImage = typeof image === 'string' && /^https?:\/\//.test(image) ? image : undefined;
+
+  const data: Record<string, string> = { title: cleanTitle, body: cleanBody, url: safeUrl };
   if (tag) data.tag = String(tag).slice(0, 60);
+  if (safeImage) data.image = safeImage;
 
   const res = await getMessaging(app).sendEachForMulticast({
     tokens,
+    // Notification block ensures Android/iOS render in the system tray
+    // even when the app is backgrounded or killed. The data block carries
+    // the deep-link URL the click handler navigates to.
+    notification: { title: cleanTitle, body: cleanBody, ...(safeImage ? { imageUrl: safeImage } : {}) },
     data,
+    android: {
+      priority: 'high',
+      notification: {
+        // Channel id is registered in AndroidManifest as the default
+        // FCM channel; leaving it explicit guards against the platform
+        // falling back to 'Miscellaneous'.
+        channelId: 'canact_general_v1',
+        clickAction: 'FCM_PLUGIN_ACTIVITY',
+        ...(safeImage ? { imageUrl: safeImage } : {}),
+      },
+    },
     webpush: { headers: { Urgency: 'high' } },
   });
 
