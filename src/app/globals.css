@@ -176,4 +176,26 @@ input[type="time"]::-webkit-date-and-time-value {
 @media (prefers-reduced-motion: reduce) {
   .canact-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
   .canact-splash-pulse { animation: none !important; }
+  .canact-glow-border { animation: none !important; }
+}
+
+/* Story-ring "breathing" border. A thin animated highlight sweeps across
+   a pink gradient used as the border of the story icon, matching the
+   Instagram-Stories effect of "this row is alive". The inner 2px white
+   pad gives the ring a glass-like edge. */
+.canact-glow-border {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 107, 122, 0.3) 0%,
+    rgba(255, 107, 122, 0.85) 40%,
+    rgba(255, 200, 205, 1) 50%,
+    rgba(255, 107, 122, 0.85) 60%,
+    rgba(255, 107, 122, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: canactBorderMove 3.2s linear infinite;
+}
+@keyframes canactBorderMove {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
 }

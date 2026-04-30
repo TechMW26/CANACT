@@ -19,7 +19,6 @@ import { toast } from '@/components/Toaster';
 import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal, Send, Play } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
-import { MediaSlider } from '@/components/MediaSlider';
 import { Sheet } from '@/components/Sheet';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
 import { PostMenu } from '@/components/PostMenu';
@@ -112,24 +111,34 @@ export default function FeedPage() {
 
       <section className="canact-stories-strip flex items-center gap-2 py-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
-          <div className="flex min-w-max items-center gap-2.5 pr-2">
-            <button type="button" onClick={openOwnStory} className="flex w-[64px] shrink-0 items-center justify-center">
-              <div className="relative rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px]">
-                <div className="rounded-full bg-white p-[2px]">
-                  <div className="relative">
-                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={56} />
-                    <span className="absolute bottom-0 right-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white">
+          <div className="flex min-w-max items-center gap-3 pr-2">
+            {/* Own story \u2014 soft pink ring without the breathing animation
+                so the user's own avatar doesn't pull attention away from
+                friends' fresh stories. */}
+            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
+              <div className="rounded-[18px] bg-gradient-to-br from-[#FFD8DD] to-[#FFB3B8] p-[2px]">
+                <div className="rounded-[16px] bg-white p-[2px]">
+                  <div className="relative h-16 w-14 overflow-hidden rounded-[14px] bg-brand-light/40">
+                    {profile?.photoURL ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={profile.photoURL} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-bold text-brand">{(profile?.fullName?.[0] ?? '?').toUpperCase()}</div>
+                    )}
+                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white shadow-sm">
                       {myStory ? <Eye size={10} /> : <Plus size={12} />}
                     </span>
                   </div>
                 </div>
               </div>
+              <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">Your Story</span>
             </button>
 
             {!loaded.stories && stories.length === 0 ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={`s_skel_${i}`} className="flex w-[64px] shrink-0 items-center justify-center">
-                  <Skeleton circle width={60} height={60} />
+                <div key={`s_skel_${i}`} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
+                  <Skeleton width={56} height={64} borderRadius={16} />
+                  <Skeleton width={40} height={8} />
                 </div>
               ))
             ) : orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
@@ -137,18 +146,26 @@ export default function FeedPage() {
                 key={story.id}
                 type="button"
                 onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === story.id))}
-                className="flex w-[64px] shrink-0 items-center justify-center"
+                className="flex w-[68px] shrink-0 flex-col items-center gap-1"
               >
-                <div className="rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#C8102E,#FFD8DD,#FECACA,#C8102E)] p-[2px]">
-                  <div className="rounded-full bg-white p-[2px]">
-                    <Avatar src={story.authorPhoto ?? null} name={story.authorName} size={56} />
+                <div className="canact-glow-border rounded-[18px] p-[2px]">
+                  <div className="rounded-[16px] bg-white p-[2px]">
+                    <div className="h-16 w-14 overflow-hidden rounded-[14px] bg-brand-light/40">
+                      {story.authorPhoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={story.authorPhoto} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs font-bold text-brand">{(story.authorName?.[0] ?? '?').toUpperCase()}</div>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">{story.authorName?.split(' ')[0] ?? ''}</span>
               </button>
             ))}
           </div>
         </div>
-        {/* Filter trigger — same visual size as a story ring, inline so it always sits in line */}
+        {/* Filter trigger \u2014 same visual size as a story ring, inline so it always sits in line */}
         <button
           type="button"
           onClick={() => setFilterOpen(true)}
@@ -164,22 +181,21 @@ export default function FeedPage() {
 
       <div className="canact-filters-wrap" />
 
-      {/* Today's reels banner — drops users straight into the vertical
-          scroller. Hidden when the user has filtered to a non-reel kind
-          or when there are no reels at all. */}
+      {/* Today's reels banner \u2014 compact, gradient, taps into the vertical
+          reels scroller. Hidden when filter excludes reels or none exist. */}
       {reels.length > 0 && (filter === 'all' || filter === 'reel') && (
         <Link
           href="/reels"
           prefetch
-          className="mt-1 mb-3 flex items-center gap-3 rounded-[28px] border border-[#F1D7DC] bg-gradient-to-r from-white via-brand-light/40 to-white px-4 py-3 shadow-[0_18px_36px_-26px_rgba(10,10,10,0.18)] active:scale-[0.99] transition"
+          className="mt-1 mb-3 flex items-center gap-3 rounded-2xl border border-[#FFE4E6] bg-gradient-to-r from-[#FFF1F2] to-white px-3 py-2.5 active:scale-[0.99] transition"
         >
-          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]">
-            <Play size={22} fill="currentColor" />
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FF6B7A] text-white">
+            <Play size={20} fill="currentColor" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-extrabold leading-tight">Today's reels</div>
-            <div className="text-xs text-muted">
-              {reels.length} {reels.length === 1 ? 'reel' : 'reels'} from your circle
+            <div className="text-[11px] text-muted">
+              {reels.length} new {reels.length === 1 ? 'reel' : 'reels'} from your circle
             </div>
           </div>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand ring-1 ring-brand/20">
@@ -190,20 +206,10 @@ export default function FeedPage() {
 
       <section className="pt-1">
         {isLoading && items.length === 0 ? (
-          <div className="space-y-6">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <article key={`skel_${i}`} className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)]">
-                <div className="flex items-center gap-3">
-                  <Skeleton circle width={40} height={40} />
-                  <div className="flex-1">
-                    <Skeleton width={120} height={12} />
-                    <Skeleton width={80} height={10} />
-                  </div>
-                </div>
-                <div className="mt-3"><Skeleton height={14} count={2} /></div>
-                <div className="mt-3"><Skeleton height={220} borderRadius={24} /></div>
-              </article>
-            ))}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2"><Skeleton height={288} borderRadius={24} /></div>
+            <Skeleton height={224} borderRadius={24} />
+            <Skeleton height={224} borderRadius={24} />
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted shadow-[0_18px_36px_-26px_rgba(10,10,10,0.16)]">
@@ -211,16 +217,45 @@ export default function FeedPage() {
           </div>
         ) : null}
 
-        <div className="space-y-6">
-          {items.map((it) => it.kind === 'wha' ? (
-            <WhaCard key={`wha_${it.data.id}`} post={it.data} myUid={user!.uid} onShare={setShareAttachment} />
-          ) : it.kind === 'poll' ? (
-            <PollCard key={`poll_${it.data.id}`} poll={it.data} myUid={user!.uid} />
-          ) : it.kind === 'reel' ? (
-            <ReelCard key={`reel_${it.data.id}`} reel={it.data} myUid={user!.uid} onShare={setShareAttachment} />
-          ) : (
-            <RateMeCard key={`rm_${it.data.id}`} sess={it.data} myUid={user!.uid} />
-          ))}
+        {/* Two-column Instagram-style grid. Polls / Rate-Me / text-only
+            posts always span both columns (they don't compress well into
+            half tiles). Among media-bearing posts, every third (starting
+            at the first) takes the full row; the rest pair up. */}
+        <div className="grid grid-cols-2 gap-3">
+          {(() => {
+            let mediaIdx = 0;
+            return items.map((it) => {
+              const hasMedia =
+                (it.kind === 'wha' && (it.data.mediaUrls?.length ?? 0) > 0) ||
+                it.kind === 'reel';
+              if (!hasMedia) {
+                if (it.kind === 'poll') {
+                  return <div key={`poll_${it.data.id}`} className="col-span-2"><PollCard poll={it.data} myUid={user!.uid} /></div>;
+                }
+                if (it.kind === 'rateme') {
+                  return <div key={`rm_${it.data.id}`} className="col-span-2"><RateMeCard sess={it.data} myUid={user!.uid} /></div>;
+                }
+                // wha without media \u2014 text-only tile, full-width
+                return <div key={`wha_${it.data.id}`} className="col-span-2"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
+              }
+              const isFull = mediaIdx % 3 === 0;
+              mediaIdx += 1;
+              const span = isFull ? 'col-span-2' : 'col-span-1';
+              const height = isFull ? 'h-72' : 'h-56';
+              if (it.kind === 'reel') {
+                return (
+                  <div key={`reel_${it.data.id}`} className={span}>
+                    <ReelTile reel={it.data} myUid={user!.uid} onShare={setShareAttachment} heightClass={height} />
+                  </div>
+                );
+              }
+              return (
+                <div key={`wha_${it.data.id}`} className={span}>
+                  <WhaTile post={it.data} myUid={user!.uid} onShare={setShareAttachment} heightClass={height} />
+                </div>
+              );
+            });
+          })()}
         </div>
       </section>
 
@@ -274,26 +309,20 @@ function withinRadius(it: FeedItem, c: { lat: number; lng: number } | null, r: n
   return haversineMeters(c, { lat: d.lat, lng: d.lng }) <= r;
 }
 
-function WhaCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void }) {
+function WhaTextCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void }) {
   const myReact = post.reactionVoters?.[myUid];
   return (
-    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
+    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${post.uid}`}><Avatar src={post.authorPhoto} name={post.authorName} /></Link>
         <div className="flex-1 min-w-0">
           <Link href={`/profile/${post.uid}`} className="font-bold truncate block">{post.authorName}</Link>
-          <span className="text-xs text-muted">{timeAgo(post.createdAt)} • What's Happening</span>
+          <span className="text-xs text-muted">{timeAgo(post.createdAt)} \u2022 What's Happening</span>
         </div>
-        <PostMenu
-          isOwner={post.uid === myUid}
-          onDelete={async () => { await deletePost(post.id, myUid); }}
-        />
+        <PostMenu isOwner={post.uid === myUid} onDelete={async () => { await deletePost(post.id, myUid); }} />
       </div>
       <Link href={`/post/${post.id}`} prefetch>
         {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
-        {post.mediaUrls?.length ? (
-          <div className="mt-3"><MediaSlider urls={post.mediaUrls} /></div>
-        ) : null}
       </Link>
       <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
         {REACTIONS.map(({ id, Icon, label }) => (
@@ -314,18 +343,140 @@ function WhaCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onSha
   );
 }
 
+/** A square-ish image-overlay tile shared by media Wha posts and Reels.
+ *  The first image is the hero; user pill sits top-left, action stack
+ *  on the right, caption bottom-left over a soft black gradient.
+ *  Tapping the tile opens the post detail; the action buttons stop
+ *  propagation so they don't double-fire. */
+function MediaOverlayTile({
+  href,
+  heightClass,
+  topRight,
+  authorPhoto,
+  authorName,
+  authorUid,
+  caption,
+  liked,
+  likeCount,
+  commentCount,
+  onLike,
+  onShare,
+  onDelete,
+  isOwner,
+  children,
+}: {
+  href: string;
+  heightClass: string;
+  topRight?: React.ReactNode;
+  authorPhoto?: string | null;
+  authorName: string;
+  authorUid: string;
+  caption?: string | null;
+  liked: boolean;
+  likeCount: number;
+  commentCount: number;
+  onLike: () => void;
+  onShare: () => void;
+  onDelete?: () => Promise<void> | void;
+  isOwner: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link href={href} prefetch className={`relative block w-full ${heightClass} overflow-hidden rounded-[24px] bg-[#0E0E10] active:scale-[0.99] transition`}>
+      {/* Media layer */}
+      <div className="absolute inset-0">{children}</div>
+      {/* Bottom shadow gradient \u2014 keeps caption legible without
+          darkening the whole image. */}
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 50%)' }} />
+      {/* Top-left author pill */}
+      <div className="absolute left-2 top-2 right-2 flex items-start justify-between gap-2">
+        <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
+          <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-1.5 py-1 pr-2.5 max-w-[60vw] shadow-sm">
+            <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-1 ring-brand/40">
+              <Avatar src={authorPhoto} name={authorName} size={24} />
+            </span>
+            <span className="text-[11px] font-bold text-ink truncate">{authorName}</span>
+          </Link>
+        </div>
+        <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto flex items-center gap-1.5">
+          {topRight}
+          {isOwner && onDelete ? (
+            <span className="inline-flex items-center justify-center rounded-full bg-white/90 backdrop-blur h-7 w-7 shadow-sm">
+              <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {/* Bottom-left caption */}
+      {caption ? (
+        <div className="absolute left-2 right-12 bottom-2 text-white text-[12px] font-medium leading-tight line-clamp-2 drop-shadow">
+          {caption}
+        </div>
+      ) : null}
+      {/* Right action stack */}
+      <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto absolute right-2 bottom-2 flex flex-col items-center gap-1.5">
+        <button onClick={(e) => { e.preventDefault(); onLike(); }} aria-label="Like" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
+          <Heart size={16} className={liked ? 'text-[#FF6B7A]' : 'text-ink/70'} fill={liked ? '#FF6B7A' : 'none'} />
+        </button>
+        {likeCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{likeCount}</span>}
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
+          <MessageCircle size={16} className="text-ink/70" />
+        </span>
+        {commentCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{commentCount}</span>}
+        <button onClick={(e) => { e.preventDefault(); onShare(); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
+          <Send size={16} className="text-ink/70" />
+        </button>
+      </div>
+    </Link>
+  );
+}
+
+function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void; heightClass: string }) {
+  const myReact = post.reactionVoters?.[myUid];
+  const liked = myReact === 'love';
+  const totalReactions = post.reactions
+    ? Object.values(post.reactions).reduce((a, b) => a + (b ?? 0), 0)
+    : 0;
+  const cover = post.mediaUrls?.[0];
+  const isVideo = cover ? isVideoUrl(cover) : false;
+  return (
+    <MediaOverlayTile
+      href={`/post/${post.id}`}
+      heightClass={heightClass}
+      authorPhoto={post.authorPhoto}
+      authorName={post.authorName}
+      authorUid={post.uid}
+      caption={post.text}
+      liked={liked}
+      likeCount={totalReactions}
+      commentCount={post.commentCount ?? 0}
+      onLike={() => reactWha(post.id, myUid, 'love')}
+      onShare={() => onShare({ kind: 'post', postId: post.id })}
+      isOwner={post.uid === myUid}
+      onDelete={async () => { await deletePost(post.id, myUid); }}
+    >
+      {cover && isVideo ? (
+        <VideoPreview src={cover} className="h-full w-full" fit="cover" autoPlay={false} initialMuted />
+      ) : cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      ) : null}
+    </MediaOverlayTile>
+  );
+}
+
 function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
   const options = Array.isArray(poll.options) ? poll.options : [];
   const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
   return (
-    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
+    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${poll.uid}`}><Avatar name={poll.authorName} /></Link>
         <div className="flex-1 min-w-0">
           <Link href={`/profile/${poll.uid}`} className="font-bold truncate block">{poll.authorName}</Link>
-          <span className="text-xs text-muted">{timeAgo(poll.createdAt)} • Poll • {ended ? 'Ended' : timeLeft(poll.endsAt)}</span>
+          <span className="text-xs text-muted">{timeAgo(poll.createdAt)} \u2022 Poll \u2022 {ended ? 'Ended' : timeLeft(poll.endsAt)}</span>
         </div>
       </div>
       <p className="mt-2 font-semibold">{poll.question}</p>
@@ -339,7 +490,7 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
               <div className="absolute inset-y-0 left-0 bg-brand-light/70" style={{ width: `${pct}%` }} />
               <div className="relative flex justify-between items-center">
                 <span className="font-medium">{o.text}</span>
-                <span className="text-xs text-muted">{pct}% • {o.votes}</span>
+                <span className="text-xs text-muted">{pct}% \u2022 {o.votes}</span>
               </div>
             </button>
           );
@@ -362,17 +513,17 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   const isOwner = sess.uid === myUid;
   const my = sess.votes?.[myUid];
   return (
-    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
+    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${sess.uid}`}><Avatar src={sess.photoURL} name={sess.authorName} /></Link>
         <div className="flex-1 min-w-0">
           <Link href={`/profile/${sess.uid}`} className="font-bold truncate block">{sess.authorName}</Link>
-          <span className="text-xs text-muted">Rate Me • {timeLeft(sess.endsAt)}</span>
+          <span className="text-xs text-muted">Rate Me \u2022 {timeLeft(sess.endsAt)}</span>
         </div>
       </div>
       {sess.photoURL && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="mt-3 w-full max-h-96 object-cover rounded-[24px]" />
+        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="mt-3 w-full max-h-96 object-cover rounded-[20px]" />
       )}
       <div className="mt-3 flex gap-2">
         <Button variant={my === 'like' ? 'primary' : 'outline'} disabled={isOwner} onClick={async () => { try { await voteRateMe(sess.id, myUid, 'like'); } catch (e: any) { toast(e.message, 'error'); } }}>
@@ -386,49 +537,31 @@ function RateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   );
 }
 
-function ReelCard({ reel, myUid, onShare }: { reel: ReelItem; myUid: string; onShare: (a: ChatAttachment) => void }) {
+function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid: string; onShare: (a: ChatAttachment) => void; heightClass: string }) {
+  const liked = !!(reel.likes && reel.likes[myUid]);
   const likeCount = reel.likes ? Object.keys(reel.likes).length : 0;
   return (
-    <article className="rounded-[30px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_22px_44px_-28px_rgba(10,10,10,0.22)] backdrop-blur-sm">
-      <div className="flex items-center gap-3">
-        <Link href={`/profile/${reel.uid}`}>
-          <Avatar src={reel.authorPhoto} name={reel.authorName} />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <Link href={`/profile/${reel.uid}`} className="block truncate font-bold">
-            {reel.authorName}
-          </Link>
-          <span className="text-xs text-muted">{timeAgo(reel.createdAt)} • Reel</span>
-        </div>
-        <PostMenu
-          isOwner={reel.uid === myUid}
-          onDelete={async () => { await deleteReel(reel.id, myUid); }}
-        />
-      </div>
-      {reel.caption ? <p className="mt-2 whitespace-pre-wrap">{reel.caption}</p> : null}
-      <Link href={`/reel/${reel.id}`} prefetch className="mt-3 block">
-        <VideoPreview
-          src={reel.videoUrl}
-          className="aspect-[9/16] w-full rounded-[24px]"
-          fit="cover"
-        />
-      </Link>
-      <div className="mt-3 flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-brand-light px-3 py-1 text-xs font-bold text-brand">
-          <Heart size={14} /> {likeCount}
+    <MediaOverlayTile
+      href={`/reel/${reel.id}`}
+      heightClass={heightClass}
+      authorPhoto={reel.authorPhoto}
+      authorName={reel.authorName}
+      authorUid={reel.uid}
+      caption={reel.caption}
+      liked={liked}
+      likeCount={likeCount}
+      commentCount={0}
+      onLike={() => { /* like-toggle requires reels service \u2014 fall back to detail */ }}
+      onShare={() => onShare({ kind: 'reel', reelId: reel.id })}
+      isOwner={reel.uid === myUid}
+      onDelete={async () => { await deleteReel(reel.id, myUid); }}
+      topRight={(
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-7 text-[10px] font-bold shadow-sm">
+          <Play size={10} fill="currentColor" /> Reel
         </span>
-        <Link
-          href={`/reel/${reel.id}`}
-          prefetch
-          className="inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75"
-        >
-          Watch in Reels
-        </Link>
-        <button onClick={() => onShare({ kind: 'reel', reelId: reel.id })} aria-label="Share"
-          className="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-bold text-ink/75">
-          <Send size={14} />
-        </button>
-      </div>
-    </article>
+      )}
+    >
+      <VideoPreview src={reel.videoUrl} className="h-full w-full" fit="cover" autoPlay={false} initialMuted />
+    </MediaOverlayTile>
   );
 }

@@ -57,7 +57,7 @@ export function VideoPreview({
   };
 
   return (
-    <div className={`relative overflow-hidden bg-brand-light/40 ${rounded} ${className}`} style={style}>
+    <div className={`relative overflow-hidden bg-[#0E0E10] ${rounded} ${className}`} style={style}>
       <video
         ref={videoRef}
         src={src}

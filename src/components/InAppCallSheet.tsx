@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sheet } from './Sheet';
 import { Avatar } from './Avatar';
-import { Mic, MicOff, PhoneOff, Phone, Video, VideoOff, SwitchCamera, Volume2, VolumeX } from './icons';
+import { Mic, MicOff, PhoneOff, Phone, Video, VideoOff, SwitchCamera, Volume2, VolumeX, Loader2 } from './icons';
 import {
   createCall,
   listenCall,
@@ -204,13 +204,40 @@ export function InAppCallSheet({
 
         const remoteStream = new MediaStream();
         remoteStreamRef.current = remoteStream;
-        if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
-        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+        // Helper that (re)binds the remote stream to the audio + video
+        // tags AND explicitly calls .play(). Capacitor's Android WebView
+        // ignores the autoplay attribute on a srcObject set after mount
+        // — so the connection succeeds, ICE connects, RTP flows, and yet
+        // the user hears / sees nothing because the element is paused.
+        // We call play() in a microtask after every ontrack and again
+        // when loadedmetadata fires, then swallow the inevitable
+        // NotAllowedError that browsers raise when no user gesture has
+        // happened yet (the original sheet-open tap counts on most
+        // platforms but not all).
+        const kick = () => {
+          const a = remoteAudioRef.current;
+          const v = remoteVideoRef.current;
+          if (a) {
+            try { a.srcObject = remoteStream; } catch {}
+            try { a.muted = false; a.volume = 1; } catch {}
+            const p = a.play(); if (p && typeof p.catch === 'function') p.catch(() => {});
+          }
+          if (v) {
+            try { v.srcObject = remoteStream; } catch {}
+            const p = v.play(); if (p && typeof p.catch === 'function') p.catch(() => {});
+          }
+        };
+        kick();
         pc.ontrack = (ev) => {
-          ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
-          // Re-bind in case the element was created before ontrack fired.
-          if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream;
-          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+          ev.streams[0]?.getTracks().forEach((t) => {
+            try { remoteStream.addTrack(t); } catch {}
+          });
+          // Some WebRTC stacks send each track in its own stream rather
+          // than the unified `streams[0]` — also pick up the bare track.
+          if (ev.track && !remoteStream.getTracks().includes(ev.track)) {
+            try { remoteStream.addTrack(ev.track); } catch {}
+          }
+          kick();
         };
 
         let id = incomingCallId ?? '';
@@ -475,13 +502,34 @@ export function InAppCallSheet({
     if (closingRef.current) return;
     closingRef.current = true;
     const id = callIdRef.current ?? callId;
-    // 1) Tell the peer FIRST so their listenCall fires and they tear
-    //    down too, before we close our own pc (which they'd otherwise
-    //    learn about only via ICE timeout, ~30s later).
-    if (id) setCallStatus(id, 'ended').catch(() => {});
+    // 1) Tell the peer FIRST and AWAIT the write so we don't lose it to
+    //    a process death when the user is on a flaky link. Fire-and-
+    //    forget the close-and-cleanup work in parallel so the UI still
+    //    snaps shut instantly.
+    if (id) {
+      // Try to write 'ended' three times spaced ~250ms apart — RTDB on
+      // a half-broken connection silently buffers the write but never
+      // ships it, and the peer is then stuck on the call screen until
+      // their own ICE timeout fires (~30s). Triple-tapping makes the
+      // signal land as soon as the radio recovers.
+      const writeEnded = (attempt = 0): void => {
+        setCallStatus(id, 'ended').catch(() => {
+          if (attempt < 2) setTimeout(() => writeEnded(attempt + 1), 250);
+        });
+      };
+      writeEnded();
+      clearIncoming(me.uid, id).catch(() => {});
+    }
     // 2) Hard-close locally so the mic / camera are freed instantly
     //    and the user sees the sheet vanish even if RTDB is slow.
-    try { pcRef.current?.close(); } catch {}
+    try {
+      // Stopping each sender's track BEFORE pc.close() makes the peer
+      // see an immediate ICE 'disconnected' even when our 'ended' write
+      // hasn't arrived yet — their connectionstatechange handler will
+      // tear down on its own within 150ms.
+      pcRef.current?.getSenders().forEach((s) => { try { s.track?.stop(); } catch {} });
+      pcRef.current?.close();
+    } catch {}
     pcRef.current = null;
     audioStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
     videoStreamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch {} });
@@ -514,33 +562,27 @@ export function InAppCallSheet({
       <div className="flex flex-col items-center gap-4 py-2">
         {isVideo ? (
           <div
-            className="relative w-full overflow-hidden rounded-2xl aspect-[3/4] max-h-[60vh]"
-            style={{
-              background:
-                'radial-gradient(120% 80% at 50% 0%, #FFE4E8 0%, #F4B6BF 55%, #C8102E 130%)',
-            }}
+            className="relative w-full overflow-hidden rounded-2xl aspect-[3/4] max-h-[60vh] bg-[#0A0A0A]"
           >
-            {/* Branded waiting backdrop — sits BEHIND the <video>; once the
-                remote stream arrives the cover paints over it, but until
-                then we get a tasteful gradient + the peer's avatar
-                instead of the WebView's black play-triangle default. */}
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <Avatar src={peer.photoURL} name={peer.name} size={104} />
-              <div className="rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-brand backdrop-blur">
-                {status === 'active' ? 'Connected' : status === 'connecting' ? 'Connecting…' : 'Ringing…'}
+            {/* Minimalist waiting backdrop \u2014 a single brand-coloured spinner
+                centred on a flat dark canvas. Sits BEHIND the <video>; the
+                moment the remote stream starts painting it covers the
+                spinner. No avatar, no text, no gradient \u2014 the cleanest
+                possible "waiting" state, matching iOS / WhatsApp video
+                calls. */}
+            {status !== 'active' && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <Loader2 size={36} className="animate-spin text-white/70" />
               </div>
-            </div>
+            )}
             <video ref={remoteVideoRef} autoPlay playsInline className="relative z-[1] h-full w-full object-cover" />
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="absolute right-2 bottom-2 z-[2] h-32 w-24 rounded-xl border-2 border-white/80 object-cover bg-brand-light/40"
+              className="absolute right-2 bottom-2 z-[2] h-32 w-24 rounded-xl border-2 border-white/80 object-cover bg-black/40"
             />
-            <div className="absolute left-2 top-2 z-[2] rounded-full bg-black/55 px-2 py-1 text-xs font-bold text-white">
-              {peer.name}
-            </div>
           </div>
         ) : (
           <Avatar src={peer.photoURL} name={peer.name} size={88} />
