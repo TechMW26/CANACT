@@ -18,6 +18,7 @@ import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { haptic } from '@/lib/haptics';
+import { useInboxBadges } from '@/lib/useInboxBadges';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -61,6 +62,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const [plusOpen, setPlusOpen] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
+  // Live counters for the chat icon (header) and Inbox sidebar entry.
+  const { total: inboxTotal } = useInboxBadges();
 
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return; }
@@ -137,17 +140,29 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop layout: full viewport width with a sticky sidebar on the
           left and the main content stretching to fill the remaining space.
           Previously capped at 1280px which left large empty gutters on
-          wide monitors. */}
-      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-6 lg:w-full lg:px-6">
+          wide monitors. `lg:pt-6` adds breathing room from the top so the
+          sidebar (and main column) don't hug the very edge of the window. */}
+      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-6 lg:w-full lg:px-6 lg:pt-6">
       {/* Desktop sidebar — sticky to the viewport top so it stays in view
           while the main column scrolls. Hidden under lg (i.e. tablet
           portrait still gets the floating mobile header + bottom nav). */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 lg:gap-1 lg:py-4 lg:pr-2 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
+      {/* Desktop sidebar — sticky to the viewport top so it stays in view
+          while the main column scrolls. Hidden under lg (i.e. tablet
+          portrait still gets the floating mobile header + bottom nav).
+          `lg:top-6` gives the column a comfortable gap from the top of the
+          viewport once it sticks; `lg:max-h-[calc(100vh-3rem)]` keeps it
+          scrollable internally if the link list ever grows past the
+          viewport height. */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 lg:gap-1 lg:py-4 lg:pr-2 lg:pl-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/feed" />
         </div>
         {SIDE_LINKS.map(({ href, label, Icon }) => {
           const active = pathname === href || (href !== '/' && pathname?.startsWith(href));
+          // Inbox link gets a live badge that includes both unread
+          // messages and pending chat requests so the user can see at
+          // a glance there's something to deal with.
+          const inboxBadge = href === '/inbox' ? inboxTotal : 0;
           return (
             <Link
               key={href}
@@ -155,7 +170,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${active ? 'bg-brand-light text-brand font-bold' : 'text-ink hover:bg-brand-light/60'}`}
             >
               <Icon size={20} strokeWidth={active ? 2.4 : 1.9} />
-              <span>{label}</span>
+              <span className="flex-1">{label}</span>
+              {inboxBadge > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-extrabold leading-none text-white">
+                  {inboxBadge > 99 ? '99+' : inboxBadge}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -269,6 +289,10 @@ function UnifiedHeader() {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  // Combined unread + pending request count for the chat icon. Uses the
+  // same listener as the rest of the inbox UI so all three badges (header
+  // icon, sidebar link, inbox tab pills) update in lockstep.
+  const { total: inboxTotal } = useInboxBadges();
 
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
@@ -314,8 +338,13 @@ function UnifiedHeader() {
               </span>
             )}
           </Link>
-          <Link href="/inbox" aria-label="Inbox" prefetch onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
+          <Link href="/inbox" aria-label="Inbox" prefetch onClick={() => haptic('subtle')} className="relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
             <MessageSquare size={16} strokeWidth={2.2} />
+            {inboxTotal > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
+                {inboxTotal > 9 ? '9+' : inboxTotal}
+              </span>
+            )}
           </Link>
         </div>
       </div>

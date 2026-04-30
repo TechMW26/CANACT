@@ -34,27 +34,44 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
   const title = (data.title || 'Canact').slice(0, 80);
+  // Cloud Functions populate deepLink (canact://open?to=/path). The web
+  // notification handler below converts that to a plain in-app path.
+  const link = data.deepLink || data.url || '/';
   self.registration.showNotification(title, {
     body: (data.body || '').slice(0, 200),
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-72.png',
-    data: { url: data.url || '/' },
+    data: { url: link },
     tag: data.tag || undefined,
   });
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  // Stored as either a relative path ('/inbox/<uid>') or a canact:// URL
+  // ('canact://open?to=/inbox/<uid>'). Normalise to a same-origin URL so
+  // we can navigate / open it from the SW.
+  let raw = (event.notification.data && event.notification.data.url) || '/';
+  let target = raw;
+  try {
+    if (raw.startsWith('canact://open')) {
+      const u = new URL(raw);
+      const to = u.searchParams.get('to');
+      target = to && to.startsWith('/') ? to : '/';
+    } else if (raw.startsWith('canact://')) {
+      target = '/';
+    }
+  } catch (_) { target = '/'; }
+  const finalUrl = new URL(target, self.location.origin).toString();
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const c of clients) {
         if ('focus' in c) {
-          try { c.navigate(url); } catch (_) {}
+          try { c.navigate(finalUrl); } catch (_) {}
           return c.focus();
         }
       }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
+      if (self.clients.openWindow) return self.clients.openWindow(finalUrl);
     }),
   );
 });

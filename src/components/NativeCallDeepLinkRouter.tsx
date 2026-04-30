@@ -87,10 +87,15 @@ export default function NativeCallDeepLinkRouter() {
         const tapHandle = await FirebaseMessaging.addListener(
           'notificationActionPerformed',
           (event: any) => {
-            const url = event?.notification?.data?.url;
-            if (typeof url === 'string' && url.startsWith('/')) {
-              router.push(url);
-            }
+            // Cloud Functions send the target route under `deepLink` as a
+            // canact:// URL (canact://open?to=/inbox/<uid>). Older code
+            // also used `data.url` so we accept either for backwards
+            // compatibility while users are still on cached service
+            // workers / older builds.
+            const data = event?.notification?.data || {};
+            const raw: string | undefined = data.deepLink || data.url;
+            if (!raw || typeof raw !== 'string') return;
+            handleUrl(raw);
           },
         );
         // Compose with the existing handle so cleanup removes both.

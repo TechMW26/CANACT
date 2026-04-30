@@ -51,11 +51,16 @@ export async function enableWebPush(uid: string): Promise<{ ok: boolean; reason?
   onMessage(messaging, (payload) => {
     const data = payload.data || {};
     if (Notification.permission === 'granted') {
+      // Match the background SW format — store the canact:// or relative
+      // URL under `data.url` so notificationclick can route correctly.
+      const link = (data as Record<string, string>).deepLink
+        || (data as Record<string, string>).url
+        || '/';
       reg.showNotification(data.title || 'Canact', {
         body: data.body || '',
         icon: '/icons/icon-192.png',
         badge: '/icons/badge-72.png',
-        data: { url: data.url || '/' },
+        data: { url: link },
         tag: data.tag || undefined,
       });
     }

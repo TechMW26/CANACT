@@ -12,9 +12,13 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
    `.canact-col` column and any rogue child overflowing the viewport (long
    chat lines, wide tables, full-bleed images) would otherwise let the page
    scroll sideways. Per-page rules can opt in to scrolling via
-   `overflow-x: auto` on a specific element. */
-html, body { overflow-x: hidden; max-width: 100vw; }
-#canact-app-shell { overflow-x: hidden; }
+   `overflow-x: auto` on a specific element.
+   IMPORTANT: we use `overflow-x: clip` on the shell instead of `hidden`
+   because `hidden` would establish a new scroll container and break
+   `position: sticky` on the desktop sidebar. `clip` blocks horizontal
+   overflow without creating a scrollport. */
+html, body { overflow-x: clip; max-width: 100vw; }
+#canact-app-shell { overflow-x: clip; }
 
 /* Hide scrollbars on horizontal chip rows */
 .no-scrollbar::-webkit-scrollbar { display: none; }

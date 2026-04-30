@@ -41,15 +41,32 @@ export default function InboxPage() {
       </header>
 
       <div className="mb-3 inline-flex rounded-full bg-white/80 p-1 ring-1 ring-line">
-        {(['chats', 'requests'] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`rounded-full px-4 py-1.5 text-xs font-extrabold capitalize ${tab === k ? 'bg-brand text-white' : 'text-ink/70'}`}
-          >
-            {k}
-          </button>
-        ))}
+        {(['chats', 'requests'] as const).map((k) => {
+          // Per-tab counters so the pill itself shows where the
+          // attention is needed, not just the global header bubble.
+          const count = k === 'chats'
+            ? threads.reduce((acc, t) => {
+                const incoming = t.initiator !== user.uid;
+                if (t.status === 'pending' && incoming) return acc;
+                return acc + (t.unread?.[user.uid] ?? 0);
+              }, 0)
+            : threads.filter((t) => t.status === 'pending' && t.initiator !== user.uid).length;
+          const active = tab === k;
+          return (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`relative inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-extrabold capitalize ${active ? 'bg-brand text-white' : 'text-ink/70'}`}
+            >
+              <span>{k}</span>
+              {count > 0 && (
+                <span className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-extrabold leading-none ${active ? 'bg-white text-brand' : 'bg-brand text-white'}`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="rounded-[28px] bg-white/92 p-2 ring-1 ring-[#F1D7DC]">
