@@ -558,7 +558,7 @@ export function InAppCallSheet({
   const isVideo = kind === 'video';
 
   return (
-    <Sheet open={open} onClose={hangup} title={isVideo ? 'Video call' : 'Voice call'}>
+    <Sheet open={open} onClose={hangup} title={isVideo ? 'Video call' : 'Voice call'} topmost>
       <div className="flex flex-col items-center gap-4 py-2">
         {isVideo ? (
           <div

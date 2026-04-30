@@ -18,11 +18,18 @@ export function Sheet({
   onClose,
   title,
   children,
+  topmost,
 }: {
   open: boolean;
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  /** When true, renders ABOVE every other overlay including the
+   *  fullscreen incoming-call ringer (z-[200]) and the splash screen.
+   *  Used by the in-app call sheet so an outgoing call started from a
+   *  page that already has open modals (e.g. the chat composer) is
+   *  guaranteed to be visible. */
+  topmost?: boolean;
 }) {
   const [mounted, setMounted] = useState(open);
   const [entered, setEntered] = useState(false);
@@ -70,7 +77,7 @@ export function Sheet({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-end justify-center" role="dialog" aria-modal="true">
+    <div className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center`} role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Close"
