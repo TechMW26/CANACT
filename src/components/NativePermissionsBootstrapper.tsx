@@ -139,6 +139,40 @@ export default function NativePermissionsBootstrapper() {
         // eslint-disable-next-line no-console
         console.warn('[perms] full-screen intent request failed:', err);
       }
+
+      // --- Battery-optimisation exemption (post-login only) --------------
+      // Doze / App Standby will eventually freeze our process when the
+      // screen is off, dropping the FCM socket so incoming-call pushes
+      // arrive late or not at all. Wait until the user is signed in
+      // (no point asking on the splash/login screen) then surface the
+      // system "Allow background" dialog once. We never nag again — if
+      // they decline they can still re-enable it from Android Settings.
+      try {
+        const ASKED_BAT_KEY = 'canact:perms:battery:asked:v1';
+        if (typeof window !== 'undefined' && !localStorage.getItem(ASKED_BAT_KEY)) {
+          // Wait for an authenticated user so the prompt appears in
+          // context ("so we can ring you for new requests") rather than
+          // as a confusing pop-up on the splash screen.
+          await new Promise<void>((resolve) => {
+            const off = onAuthStateChanged(getFirebaseAuth(), (u) => {
+              if (u) { off(); resolve(); }
+            });
+            // Bail out after 90s so an unsigned-in session doesn't leak the listener.
+            setTimeout(() => { try { off(); } catch {} resolve(); }, 90_000);
+          });
+          if (cancelled) return;
+          const { isIgnoringBatteryOptimizations, requestIgnoreBatteryOptimizations } =
+            await import('@/lib/callPermissions');
+          const ignoring = await isIgnoringBatteryOptimizations();
+          if (!ignoring) {
+            await requestIgnoreBatteryOptimizations();
+          }
+          localStorage.setItem(ASKED_BAT_KEY, '1');
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[perms] battery-opt request failed:', err);
+      }
     })();
 
     return () => {

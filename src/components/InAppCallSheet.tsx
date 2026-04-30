@@ -88,6 +88,10 @@ export function InAppCallSheet({
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  // Outbound ringback tone the caller hears while waiting for the
+  // callee to pick up. Plays on a loop, stops the moment status flips
+  // to 'active' (peer answered) or 'ended' (peer rejected / hung up).
+  const ringbackRef = useRef<HTMLAudioElement | null>(null);
   const offerSetRef = useRef(false);
   const answerSetRef = useRef(false);
   // Mirror of `callId` state in a ref so the cleanup closure (which is
@@ -116,6 +120,25 @@ export function InAppCallSheet({
     return () => clearInterval(i);
   }, [status]);
 
+  // Drive the outbound ringback tone purely off status. Caller-only
+  // (callee never plays ringback — they hear the actual ringtone via
+  // the native foreground service / IncomingCallRinger).
+  useEffect(() => {
+    if (incomingCallId) return; // we are the callee; no ringback
+    const el = ringbackRef.current;
+    if (!el) return;
+    if (status === 'ringing' || status === 'connecting') {
+      el.loop = true;
+      el.volume = 0.6;
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay may be blocked until user gesture */ });
+    } else {
+      try { el.pause(); el.currentTime = 0; } catch { /* noop */ }
+    }
+    return () => { try { el.pause(); } catch {} };
+  }, [status, incomingCallId]);
+
   // Wire the entire call flow once when sheet opens.
   useEffect(() => {
     if (!open) return;
@@ -131,25 +154,17 @@ export function InAppCallSheet({
         // of always blasting through MEDIA volume on the loudspeaker.
         await startCallAudio(wantVideo);
 
-        // 1) Peer connection FIRST so we can pre-create the audio+video
-        //    transceivers before we even capture media. The m-sections
-        //    are now baked into the first SDP offer regardless of whether
-        //    the call started as audio or video, which is what makes a
-        //    mid-call audio→video upgrade just `replaceTrack(track)` on
-        //    both sides instead of a dance of addTrack + renegotiate.
-        const pc = new RTCPeerConnection(RTC_CONFIG);
-        pcRef.current = pc;
-        const audioTx = pc.addTransceiver('audio', { direction: 'sendrecv' });
-        const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' });
-        audioSenderRef.current = audioTx.sender;
-        videoSenderRef.current = videoTx.sender;
-
-        // 2) Local capture. Audio is always on; video only if the call
-        //    started as video.
+        // 1) Local capture FIRST. We have to use plain addTrack(track,
+        //    stream) instead of pre-allocating transceivers + replaceTrack
+        //    because Capacitor's Android WebView (Chromium-derived but
+        //    older) silently drops the encoder pipeline when a sender
+        //    starts life trackless and a track is bolted on later — the
+        //    SDP looks correct but no RTP ever flows. addTrack on the
+        //    other hand is the path the WebView is actually exercised on
+        //    in WebRTC conformance tests, so it Just Works.
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (!active) { audioStream.getTracks().forEach((t) => t.stop()); return; }
         audioStreamRef.current = audioStream;
-        await audioTx.sender.replaceTrack(audioStream.getAudioTracks()[0] ?? null);
 
         let videoStream: MediaStream | null = null;
         if (wantVideo) {
@@ -159,7 +174,6 @@ export function InAppCallSheet({
             });
             if (!active) { videoStream.getTracks().forEach((t) => t.stop()); return; }
             videoStreamRef.current = videoStream;
-            await videoTx.sender.replaceTrack(videoStream.getVideoTracks()[0] ?? null);
           } catch { /* user denied camera — fall back to audio-only */ }
         }
 
@@ -170,15 +184,23 @@ export function InAppCallSheet({
         localStreamRef.current = local;
         if (localVideoRef.current && wantVideo) localVideoRef.current.srcObject = local;
 
-        // Cap bitrates so the WebView doesn't sit at the codec's default
-        // multi-megabit ceiling on weaker networks (which on mobile means
-        // dropped frames + crackly audio). Numbers are tuned to stay
-        // smooth on a 3G/LTE link.
-        applySendParameters(audioTx.sender, { maxBitrate: 64_000 });
-        applySendParameters(videoTx.sender, {
-          maxBitrate: 1_500_000, // 1.5 Mbps cap
-          maxFramerate: 30,
-        });
+        // 2) Peer connection. Add tracks straight away so the very first
+        //    SDP offer carries the SSRCs/MSIDs of our real audio (and
+        //    video, if this started as a video call) — no track-less
+        //    m-section workaround.
+        const pc = new RTCPeerConnection(RTC_CONFIG);
+        pcRef.current = pc;
+        const audioSender = pc.addTrack(audioStream.getAudioTracks()[0], local);
+        audioSenderRef.current = audioSender;
+        applySendParameters(audioSender, { maxBitrate: 64_000 });
+        if (videoStream) {
+          const vTrack = videoStream.getVideoTracks()[0];
+          if (vTrack) {
+            const videoSender = pc.addTrack(vTrack, local);
+            videoSenderRef.current = videoSender;
+            applySendParameters(videoSender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+          }
+        }
 
         const remoteStream = new MediaStream();
         remoteStreamRef.current = remoteStream;
@@ -320,13 +342,14 @@ export function InAppCallSheet({
     };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the shared kind flips, mirror it on local capture using the
-  // pre-created video transceiver — no renegotiation needed since the
-  // m=video section was baked into the first offer.
+  // When the shared kind flips, mirror it on local capture. We addTrack
+  // (or removeTrack + stop) so the existing peer connection picks up the
+  // change; the caller's onnegotiationneeded handler will fire and push
+  // a fresh offer/answer round-trip. Both sides run this hook so they
+  // each adjust their own outbound media independently.
   useEffect(() => {
     const pc = pcRef.current;
-    const videoSender = videoSenderRef.current;
-    if (!pc || !videoSender) return;
+    if (!pc) return;
     const localComposite = localStreamRef.current;
     const hasVideo = (videoStreamRef.current?.getVideoTracks().length ?? 0) > 0;
 
@@ -339,10 +362,9 @@ export function InAppCallSheet({
           videoStreamRef.current = cam;
           const track = cam.getVideoTracks()[0];
           if (track) {
-            await videoSender.replaceTrack(track);
-            // Re-apply bitrate cap — setParameters is per-sender state
-            // but some browsers reset it after replaceTrack.
-            applySendParameters(videoSender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+            const sender = pc.addTrack(track, localComposite ?? cam);
+            videoSenderRef.current = sender;
+            applySendParameters(sender, { maxBitrate: 1_500_000, maxFramerate: 30 });
             localComposite?.addTrack(track);
             if (localVideoRef.current) localVideoRef.current.srcObject = localComposite ?? null;
           }
@@ -350,7 +372,13 @@ export function InAppCallSheet({
       })();
     } else if (kind === 'audio' && hasVideo) {
       (async () => {
-        try { await videoSender.replaceTrack(null); } catch {}
+        try {
+          const sender = videoSenderRef.current;
+          if (sender) {
+            try { pc.removeTrack(sender); } catch {}
+            videoSenderRef.current = null;
+          }
+        } catch {}
         videoStreamRef.current?.getVideoTracks().forEach((t) => {
           try { t.stop(); } catch {}
           localComposite?.removeTrack(t);
@@ -532,6 +560,8 @@ export function InAppCallSheet({
           </div>
         </div>
         <audio ref={remoteAudioRef} autoPlay playsInline />
+        {/* Outbound ringback tone for the caller (see effect above). */}
+        <audio ref={ringbackRef} src="/ringer.mp3" preload="auto" playsInline />
         <div className="flex items-center gap-3 mt-2 flex-wrap justify-center">
           <button
             type="button"

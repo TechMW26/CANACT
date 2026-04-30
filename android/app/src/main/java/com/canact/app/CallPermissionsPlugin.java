@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 
 import com.getcapacitor.JSObject;
@@ -72,6 +73,59 @@ public class CallPermissionsPlugin extends Plugin {
                 call.resolve();
             } catch (Throwable t2) {
                 call.reject("Could not open settings: " + t2.getMessage());
+            }
+        }
+    }
+
+    /**
+     * IGNORE_BATTERY_OPTIMIZATIONS — without this, Doze / App Standby will
+     * eventually freeze our process when the screen is off, dropping the
+     * FCM socket so incoming-call pushes arrive minutes late or not at all.
+     * The user must grant it through the system dialog (we can't grant it
+     * silently). Returns true on pre-M devices where the concept doesn't
+     * exist yet.
+     */
+    @PluginMethod
+    public void isIgnoringBatteryOptimizations(PluginCall call) {
+        Context ctx = getContext();
+        boolean ignoring = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+                ignoring = pm != null && pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
+            } catch (Throwable t) {
+                ignoring = false;
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("granted", ignoring);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        Context ctx = getContext();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            call.resolve();
+            return;
+        }
+        // Prefer the direct "Allow" prompt (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+        // is declared in the manifest). Falls back to the full settings
+        // list on OEMs (Xiaomi, OPPO…) that block the direct intent.
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            i.setData(Uri.parse("package:" + ctx.getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(i);
+            call.resolve();
+        } catch (Throwable t) {
+            try {
+                Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(fallback);
+                call.resolve();
+            } catch (Throwable t2) {
+                call.reject("Could not open battery settings: " + t2.getMessage());
             }
         }
     }
