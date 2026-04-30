@@ -22,7 +22,7 @@ import { VideoPreview } from '@/components/VideoPreview';
 import { Sheet } from '@/components/Sheet';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
 import { PostMenu } from '@/components/PostMenu';
-import { PullToRefresh } from '@/components/PullToRefresh';
+import { CANACT_REFRESH_EVENT } from '@/components/PullToRefresh';
 import { readFeedCache, writeFeedCachePart } from '@/lib/feedCache';
 import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -73,6 +73,14 @@ export default function FeedPage() {
   // Bumping this re-runs the listener effects below, which is how the
   // pull-to-refresh gesture forces fresh subscriptions.
   const [refreshTick, setRefreshTick] = useState(0);
+  // Listen for the global pull-to-refresh event dispatched by AppShell's
+  // <PullToRefresh /> so this page re-arms its RTDB listeners whenever
+  // the user swipes down from anywhere in the app while on /feed.
+  useEffect(() => {
+    const onRefresh = () => setRefreshTick((n) => n + 1);
+    window.addEventListener(CANACT_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(CANACT_REFRESH_EVENT, onRefresh);
+  }, []);
   useEffect(() => listenWhaFeed((v) => {
     setWha(v); writeFeedCachePart(user?.uid, 'wha', v);
     setLoaded((s) => ({ ...s, wha: true }));
@@ -164,7 +172,6 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
-    <PullToRefresh onRefresh={() => { setRefreshTick((n) => n + 1); }}>
     <div className="min-h-screen pb-24 md:pb-10">
 
       <section className="canact-stories-strip flex items-center gap-2 pt-1 pb-2">
@@ -345,7 +352,6 @@ export default function FeedPage() {
         attachment={shareAttachment}
       />
     </div>
-    </PullToRefresh>
     </SkeletonTheme>
   );
 }

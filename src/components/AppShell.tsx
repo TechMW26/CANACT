@@ -7,6 +7,7 @@ import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Avatar } from './Avatar';
 import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
+import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
@@ -108,6 +109,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return (
       <div id="canact-app-shell" className="min-h-screen">
         <ScrollRestoration />
+        {/* Pull-to-refresh is intentionally NOT mounted on chat threads:
+            those use their own scroll container and a downward swipe at the
+            top of a conversation should never reload the page mid-message. */}
         <PageTransition>{children}</PageTransition>
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <HelpAlertManager />
@@ -121,11 +125,20 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     <div id="canact-app-shell" className="min-h-screen pb-28 lg:pb-6">
       <ScrollDirectionWatcher />
       <ScrollRestoration />
+      {/* Global swipe-down-to-refresh — mounted once for the whole app so
+          every page (feed, profile, leaderboard, etc.) gets the gesture
+          without having to wrap its own root. Pages that maintain client
+          subscriptions can listen for the `canact:pull-refresh` event. */}
+      <PullToRefresh />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
           open / close transitions. */}
-      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-4 lg:max-w-[1280px] lg:mx-auto lg:px-4">
+      {/* Desktop layout: full viewport width with a sticky sidebar on the
+          left and the main content stretching to fill the remaining space.
+          Previously capped at 1280px which left large empty gutters on
+          wide monitors. */}
+      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-6 lg:w-full lg:px-6">
       {/* Desktop sidebar — sticky to the viewport top so it stays in view
           while the main column scrolls. Hidden under lg (i.e. tablet
           portrait still gets the floating mobile header + bottom nav). */}
@@ -167,7 +180,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           className="lg:hidden"
           style={{ height: 'calc(env(safe-area-inset-top, 0px) + 76px)' }}
         />
-        <div className="canact-col pb-4 lg:max-w-2xl lg:mx-auto lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="canact-col pb-4 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
