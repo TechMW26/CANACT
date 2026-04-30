@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, Fragment } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { ArrowLeft, Send, X, CornerUpLeft, Trash2, Pencil, Copy, Phone, Video } from '@/components/icons';
 import { Sheet } from '@/components/Sheet';
@@ -23,7 +23,7 @@ import {
   threadIdFor,
 } from '@/lib/services/chat';
 import type { ChatAttachment, ChatMessage, ChatThread, UserProfile } from '@/lib/types';
-import { MessageBubble, QUICK_REACTIONS } from '@/components/MessageBubble';
+import { MessageBubble, QUICK_REACTIONS, ChatDateDivider, isDifferentDay } from '@/components/MessageBubble';
 import { InAppCallSheet } from '@/components/InAppCallSheet';
 import type { CallKind } from '@/lib/services/calls';
 
@@ -240,18 +240,22 @@ export default function InboxThreadPage() {
             const mine = m.fromUid === user.uid;
             const prev = messages[i - 1];
             const showGap = !prev || (m.createdAt - prev.createdAt) > 5 * 60 * 1000;
+            const showDateDivider = !prev || isDifferentDay(prev.createdAt, m.createdAt);
             return (
-              <li key={m.id} className={showGap ? 'mt-3' : ''}>
-                <MessageBubble
-                  message={m}
-                  mine={mine}
-                  myUid={user.uid}
-                  onReply={(msg) => { setReplyTo(msg); inputRef.current?.focus(); }}
-                  onReact={handleReact}
-                  onLongPress={(msg) => setActionMsg(msg)}
-                  onDoubleTap={handleDoubleTap}
-                />
-              </li>
+              <Fragment key={m.id}>
+                {showDateDivider && <ChatDateDivider ts={m.createdAt} />}
+                <li className={`${showGap && !showDateDivider ? 'mt-3' : ''} [content-visibility:auto] [contain-intrinsic-size:auto_72px]`}>
+                  <MessageBubble
+                    message={m}
+                    mine={mine}
+                    myUid={user.uid}
+                    onReply={(msg) => { setReplyTo(msg); inputRef.current?.focus(); }}
+                    onReact={handleReact}
+                    onLongPress={(msg) => setActionMsg(msg)}
+                    onDoubleTap={handleDoubleTap}
+                  />
+                </li>
+              </Fragment>
             );
           })}
         </ul>

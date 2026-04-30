@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { CornerUpLeft, Heart } from './icons';
 import { ChatAttachmentCard } from './ChatAttachmentCard';
 import { haptic } from '@/lib/haptics';
@@ -7,21 +7,65 @@ import type { ChatMessage } from '@/lib/types';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👍'];
 
+/** Format a timestamp as 24-hour HH:MM in the user's locale. */
+function formatTime(ts: number): string {
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+/** Centered date divider used between message groups. Renders nothing when
+ *  the next message is on the same calendar day as the previous one. */
+export function ChatDateDivider({ ts }: { ts: number }) {
+  const label = formatDateLabel(ts);
+  return (
+    <li className="my-3 flex items-center justify-center">
+      <span className="rounded-full bg-ink/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink/55">
+        {label}
+      </span>
+    </li>
+  );
+}
+
+/** "Today" / "Yesterday" / "Wednesday" (for last 7 days) / "12 May 2025". */
+function formatDateLabel(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfToday - startOfTarget) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays > 1 && diffDays < 7) {
+    return d.toLocaleDateString([], { weekday: 'long' });
+  }
+  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/** Returns true if `a` and `b` fall on different calendar days. */
+export function isDifferentDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() !== db.getFullYear() ||
+    da.getMonth() !== db.getMonth() ||
+    da.getDate() !== db.getDate()
+  );
+}
+
 /**
  * Single chat message row with full Instagram-style gestures:
  *  - Swipe right → reply
  *  - Double-tap → quick ❤️ (toggle)
  *  - Long-press → reaction picker + actions menu (Reply / Copy / Edit / Delete)
  */
-export function MessageBubble({
-  message,
-  mine,
-  myUid,
-  onReply,
-  onReact,
-  onLongPress,
-  onDoubleTap,
-}: {
+export function MessageBubble(props: MessageBubbleProps) {
+  return <MessageBubbleInner {...props} />;
+}
+
+type MessageBubbleProps = {
   message: ChatMessage;
   mine: boolean;
   myUid: string;
@@ -29,7 +73,19 @@ export function MessageBubble({
   onReact: (m: ChatMessage, emoji: string | null) => void;
   onLongPress: (m: ChatMessage, anchor: { x: number; y: number }) => void;
   onDoubleTap: (m: ChatMessage) => void;
-}) {
+};
+
+/** Memoised heavy renderer — keeps long chats from rerendering every
+ *  bubble whenever a sibling state (composer, reply target, etc.) changes. */
+const MessageBubbleInner = memo(function MessageBubbleInner({
+  message,
+  mine,
+  myUid,
+  onReply,
+  onReact,
+  onLongPress,
+  onDoubleTap,
+}: MessageBubbleProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState(0);
   const startX = useRef(0);
@@ -169,6 +225,13 @@ export function MessageBubble({
           </div>
         ) : null}
 
+        {/* Per-message HH:MM timestamp, Instagram-style — small, muted,
+            aligned to the bubble side. The full date lives on the
+            divider row above so this stays unobtrusive. */}
+        <span className={`text-[10px] text-ink/40 ${mine ? 'self-end pr-1' : 'self-start pl-1'}`}>
+          {formatTime(message.createdAt)}
+        </span>
+
         {reactionEntries.length > 0 && (
           <div className={`relative h-3 ${mine ? 'self-end' : 'self-start'}`}>
             <div
@@ -192,6 +255,6 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 export { QUICK_REACTIONS };

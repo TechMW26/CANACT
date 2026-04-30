@@ -7,11 +7,13 @@ import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, ReelItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, ReelItem, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
 import { listenUserWhaPosts } from '@/lib/services/wha';
 import { listenUserReels } from '@/lib/services/reels';
+import { deletePoll, listenUserPolls } from '@/lib/services/poll';
 import { toast } from '@/components/Toaster';
+import { PostMenu } from '@/components/PostMenu';
 import { requestFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest,
@@ -32,6 +34,7 @@ import {
   Camera,
   Film,
   Bookmark,
+  BarChart3,
   Settings as SettingsIcon,
 } from '@/components/icons';
 
@@ -58,12 +61,16 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   // Instagram-style posts grid (user's authored WHA posts).
   const [posts, setPosts] = useState<WhaPost[]>([]);
   const [reels, setReels] = useState<ReelItem[]>([]);
-  const [tab, setTab] = useState<'posts' | 'reels' | 'tagged'>('posts');
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [tab, setTab] = useState<'posts' | 'reels' | 'polls' | 'tagged'>('posts');
   useEffect(() => {
     return listenUserWhaPosts(uid, setPosts);
   }, [uid]);
   useEffect(() => {
     return listenUserReels(uid, setReels);
+  }, [uid]);
+  useEffect(() => {
+    return listenUserPolls(uid, setPolls);
   }, [uid]);
 
   if (!u) {
@@ -239,10 +246,11 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
 
       {/* Instagram-style posts grid */}
       <Card className="!p-0 overflow-hidden">
-        <div className="grid grid-cols-3 border-b border-line">
+        <div className="grid grid-cols-4 border-b border-line">
           {([
             { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
             { id: 'reels', label: 'Reels', Icon: Film, count: reels.length },
+            { id: 'polls', label: 'Polls', Icon: BarChart3, count: polls.length },
             { id: 'tagged', label: 'Tagged', Icon: Bookmark, count: 0 },
           ] as const).map(({ id, label, Icon, count }) => {
             const active = tab === id;
@@ -332,6 +340,57 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
                   </span>
                 </Link>
               ))}
+            </div>
+          )
+        ) : tab === 'polls' ? (
+          polls.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+                <BarChart3 size={20} />
+              </span>
+              <div className="text-sm font-bold text-ink">No polls yet</div>
+              <div className="text-xs text-muted">{isSelf ? 'Tap + to start a poll.' : 'Nothing here yet.'}</div>
+            </div>
+          ) : (
+            <div className="divide-y divide-line">
+              {polls.map((p) => {
+                const opts = Array.isArray(p.options) ? p.options : [];
+                const total = opts.reduce((s, o) => s + (o.votes ?? 0), 0);
+                const ended = p.endsAt < Date.now();
+                return (
+                  <div key={p.id} className="relative px-4 py-3">
+                    <Link href={`/poll/${p.id}`} className="block pr-10">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold text-ink/55">
+                        <BarChart3 size={12} className="text-brand" />
+                        <span>{ended ? 'Ended' : 'Active'}</span>
+                        <span>·</span>
+                        <span>{total} votes</span>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-ink line-clamp-2">{p.question}</div>
+                      {opts.length > 0 ? (
+                        <div className="mt-1 text-[11px] text-ink/55 line-clamp-1">
+                          {opts.map((o) => o.text).join(' · ')}
+                        </div>
+                      ) : null}
+                    </Link>
+                    {isSelf ? (
+                      <div className="absolute right-3 top-3">
+                        <PostMenu
+                          isOwner
+                          onDelete={async () => {
+                            try {
+                              await deletePoll(p.id, uid);
+                              toast('Poll deleted', 'success');
+                            } catch (e: any) {
+                              toast(e?.message ?? 'Could not delete poll', 'error');
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )
         ) : (

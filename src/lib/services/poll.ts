@@ -1,4 +1,4 @@
-import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limitToLast } from 'firebase/database';
+import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limitToLast, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
 import { uid as rid } from '../utils';
@@ -101,4 +101,26 @@ export function listenPollComments(pollId: string, cb: (items: any[]) => void) {
     const out: any[] = []; snap.forEach((c) => { out.push(c.val()); });
     out.sort((a, b) => a.createdAt - b.createdAt); cb(out);
   });
+}
+
+/** Stream the polls authored by a single user, newest first. */
+export function listenUserPolls(authorUid: string, cb: (items: Poll[]) => void) {
+  return onValue(ref(db, `userPolls/${authorUid}`), async (snap) => {
+    const ids: string[] = [];
+    snap.forEach((c) => { if (c.key) ids.push(c.key); });
+    if (ids.length === 0) { cb([]); return; }
+    const polls = await Promise.all(ids.map((id) => get(ref(db, `polls/${id}`)).then((s) => normalizePoll(s.val()))));
+    const out = polls.filter((p): p is Poll => !!p).sort((a, b) => b.createdAt - a.createdAt);
+    cb(out);
+  });
+}
+
+/** Owner-only delete: removes the poll, the user-poll index entry, and any
+ *  comments. We don't enforce ownership here \u2014 the caller does. */
+export async function deletePoll(pollId: string, authorUid: string) {
+  await Promise.all([
+    remove(ref(db, `polls/${pollId}`)),
+    remove(ref(db, `userPolls/${authorUid}/${pollId}`)),
+    remove(ref(db, `pollComments/${pollId}`)),
+  ]);
 }

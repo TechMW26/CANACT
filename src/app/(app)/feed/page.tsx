@@ -9,7 +9,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenWhaFeed, reactWha, deletePost } from '@/lib/services/wha';
-import { listenPollFeed, votePoll } from '@/lib/services/poll';
+import { listenPollFeed, votePoll, deletePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
 import { listenReels, deleteReel } from '@/lib/services/reels';
@@ -136,21 +136,23 @@ export default function FeedPage() {
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip flex items-center gap-2 py-3">
+      <section className="canact-stories-strip flex items-center gap-2 pt-1 pb-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
           <div className="flex min-w-max items-center gap-3 pr-2">
             {/* Own story tile. The avatar fills the rounded square; a
                 centered plus badge sits at the bottom-middle when the
                 user has no active story (tap to create), otherwise the
                 tile shows the same accent / grey ring rules as friends'
-                stories so the user can tell at a glance whether anything\n                fresh is sitting in their archive. */}
-            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 items-center justify-center">
+                stories so the user can tell at a glance whether anything
+                fresh is sitting in their archive. */}
+            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
               <StoryRing
                 state={myStoryGroup ? 'unwatched' : 'none'}
                 src={profile?.photoURL ?? null}
                 fallback={(profile?.fullName?.[0] ?? '?').toUpperCase()}
                 showPlus={!myStoryGroup}
               />
+              <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">Your Story</span>
             </button>
 
             {!loaded.stories && stories.length === 0 ? (
@@ -245,26 +247,27 @@ export default function FeedPage() {
                 it.kind === 'reel';
               if (!hasMedia) {
                 if (it.kind === 'poll') {
-                  return <div key={`poll_${it.data.id}`} className="col-span-2"><PollCard poll={it.data} myUid={user!.uid} /></div>;
+                  return <div key={`poll_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"><PollCard poll={it.data} myUid={user!.uid} /></div>;
                 }
                 if (it.kind === 'rateme') {
-                  return <div key={`rm_${it.data.id}`} className="col-span-2"><RateMeCard sess={it.data} myUid={user!.uid} /></div>;
+                  return <div key={`rm_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_360px]"><RateMeCard sess={it.data} myUid={user!.uid} /></div>;
                 }
-                return <div key={`wha_${it.data.id}`} className="col-span-2"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
+                return <div key={`wha_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_220px]"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
               }
               const isFull = mediaIdx % 3 === 0;
               mediaIdx += 1;
               const span = isFull ? 'col-span-2' : 'col-span-1';
               const height = isFull ? 'h-72' : 'h-56';
+              const cv = '[content-visibility:auto] [contain-intrinsic-size:auto_360px]';
               if (it.kind === 'reel') {
                 return (
-                  <div key={`reel_${it.data.id}`} className={span}>
+                  <div key={`reel_${it.data.id}`} className={`${span} ${cv}`}>
                     <ReelTile reel={it.data} myUid={user!.uid} onShare={setShareAttachment} heightClass={height} />
                   </div>
                 );
               }
               return (
-                <div key={`wha_${it.data.id}`} className={span}>
+                <div key={`wha_${it.data.id}`} className={`${span} ${cv}`}>
                   <WhaTile post={it.data} myUid={user!.uid} onShare={setShareAttachment} heightClass={height} />
                 </div>
               );
@@ -517,14 +520,24 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
   const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
+  const isOwner = poll.uid === myUid;
   return (
-    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
+    <article className="relative rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
       <div className="flex items-center gap-3">
         <Link href={`/profile/${poll.uid}`}><Avatar name={poll.authorName} /></Link>
         <div className="flex-1 min-w-0">
           <Link href={`/profile/${poll.uid}`} className="font-bold truncate block">{poll.authorName}</Link>
           <span className="text-xs text-muted">{timeAgo(poll.createdAt)} \u2022 Poll \u2022 {ended ? 'Ended' : timeLeft(poll.endsAt)}</span>
         </div>
+        {isOwner ? (
+          <PostMenu
+            isOwner
+            onDelete={async () => {
+              try { await deletePoll(poll.id, myUid); toast('Poll deleted', 'success'); }
+              catch (e: any) { toast(e?.message ?? 'Could not delete poll', 'error'); }
+            }}
+          />
+        ) : null}
       </div>
       <p className="mt-2 font-semibold">{poll.question}</p>
       <div className="mt-2 space-y-2">
