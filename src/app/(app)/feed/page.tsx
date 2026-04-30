@@ -483,6 +483,7 @@ function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: 
     ? Object.values(post.reactions).reduce((a, b) => a + (b ?? 0), 0)
     : 0;
   const cover = post.mediaUrls?.[0];
+  const coverPoster = post.mediaPosters?.[0] || undefined;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
     <MediaOverlayTile
@@ -506,10 +507,10 @@ function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: 
       ) : undefined}
     >
       {cover && isVideo ? (
-        <VideoPreview src={cover} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
+        <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
       ) : cover ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : null}
     </MediaOverlayTile>
   );
@@ -621,7 +622,7 @@ function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid
         </span>
       )}
     >
-      <VideoPreview src={reel.videoUrl} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
+      <VideoPreview src={reel.videoUrl} poster={reel.posterUrl} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
     </MediaOverlayTile>
   );
 }

@@ -77,6 +77,12 @@ export interface WhaPost {
   authorPhoto?: string;
   text: string;
   mediaUrls: string[];
+  /** Optional thumbnail URLs aligned 1:1 with `mediaUrls`. For images we
+   *  reuse the image URL itself; for videos we upload a JPEG poster from
+   *  the first frame so feed grid tiles paint instantly without having to
+   *  download the video. Sparse array — index `i` may be missing if poster
+   *  generation failed for that item. */
+  mediaPosters?: string[];
   lat?: number;
   lng?: number;
   createdAt: number;

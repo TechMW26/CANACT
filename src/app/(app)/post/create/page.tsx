@@ -126,9 +126,15 @@ export default function PostCreatePage() {
               // Upload each captured shot to Vercel Blob and persist only the
               // returned public URLs in RTDB (data URLs would blow up the DB).
               const hostedUrls: string[] = [];
+              const hostedPosters: string[] = [];
               for (const s of shots) {
-                const { url } = await uploadMedia(s, { kind: 'post', uid: user.uid });
+                const { url, posterUrl, prepared } = await uploadMedia(s, { kind: 'post', uid: user.uid });
                 hostedUrls.push(url);
+                // Images: reuse the image as its own thumbnail. Videos: use
+                // the uploaded first-frame JPEG. Empty string = poster gen
+                // failed; consumers fall back to the media URL itself.
+                const isVideo = prepared.mime.startsWith('video/');
+                hostedPosters.push(isVideo ? (posterUrl ?? '') : url);
               }
               await createWhaPost({
                 uid: user.uid,
@@ -136,6 +142,7 @@ export default function PostCreatePage() {
                 authorPhoto: profile.photoURL,
                 text: text.trim(),
                 mediaUrls: hostedUrls,
+                mediaPosters: hostedPosters.some(Boolean) ? hostedPosters : undefined,
                 lat: coords?.lat,
                 lng: coords?.lng,
               });

@@ -7,7 +7,7 @@ import { VideoPreview } from './VideoPreview';
  * Full-card-width image/video carousel with snap-scroll, page indicator pill
  * (e.g. "2/4"), and an animated dot bar. Used by feed cards and post detail.
  */
-export function MediaSlider({ urls, aspect = '4/5' }: { urls: string[]; aspect?: string }) {
+export function MediaSlider({ urls, posters, aspect = '4/5' }: { urls: string[]; posters?: string[]; aspect?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
 
@@ -20,10 +20,11 @@ export function MediaSlider({ urls, aspect = '4/5' }: { urls: string[]; aspect?:
 
   if (urls.length === 1) {
     const u = urls[0];
+    const p = posters?.[0] || undefined;
     return (
       <div className="overflow-hidden rounded-[24px]" style={{ aspectRatio: aspect }}>
         {isVideoUrl(u) ? (
-          <VideoPreview src={u} className="h-full w-full" fit="cover" />
+          <VideoPreview src={u} poster={p} className="h-full w-full" fit="cover" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />
@@ -46,7 +47,7 @@ export function MediaSlider({ urls, aspect = '4/5' }: { urls: string[]; aspect?:
             style={{ aspectRatio: aspect }}
           >
             {isVideoUrl(u) ? (
-              <VideoPreview src={u} className="h-full w-full" fit="cover" />
+              <VideoPreview src={u} poster={posters?.[i] || undefined} className="h-full w-full" fit="cover" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />

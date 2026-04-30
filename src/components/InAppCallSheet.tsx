@@ -250,10 +250,25 @@ export function InAppCallSheet({
 
         const myCandSide: 'caller' | 'callee' = isCaller ? 'caller' : 'callee';
         const peerCandSide: 'caller' | 'callee' = isCaller ? 'callee' : 'caller';
+        // Buffer remote ICE candidates that arrive BEFORE setRemoteDescription
+        // — Firebase RTDB delivers signaling messages in arbitrary order, so
+        // on a slow network the callee can easily receive a few candidates
+        // before the SDP offer lands. Calling addIceCandidate() in that
+        // window throws silently and we lose the candidate forever, which
+        // is one of the main causes of "connected but no media".
+        const pendingCands: RTCIceCandidateInit[] = [];
+        let remoteDescSet = false;
+        const drainCands = async () => {
+          while (pendingCands.length) {
+            const c = pendingCands.shift()!;
+            try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch { /* noop */ }
+          }
+        };
         pc.onicecandidate = (ev) => {
           if (ev.candidate) pushIceCandidate(id, myCandSide, ev.candidate.toJSON());
         };
         const offCands = listenIceCandidates(id, peerCandSide, async (c) => {
+          if (!remoteDescSet) { pendingCands.push(c); return; }
           try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch { /* noop */ }
         });
         cleanup.push(offCands);
@@ -298,6 +313,8 @@ export function InAppCallSheet({
             if (rec.answer && !answerSetRef.current) {
               answerSetRef.current = true;
               await pc.setRemoteDescription(new RTCSessionDescription(rec.answer));
+              remoteDescSet = true;
+              await drainCands();
               setStatus('active');
             }
           });
@@ -316,6 +333,8 @@ export function InAppCallSheet({
                 if (pc.signalingState === 'stable' || !offerSetRef.current) {
                   await pc.setRemoteDescription(new RTCSessionDescription(rec.offer));
                   offerSetRef.current = true;
+                  remoteDescSet = true;
+                  await drainCands();
                   const ans = await pc.createAnswer();
                   await pc.setLocalDescription(ans);
                   await setCallAnswer(id, { type: ans.type, sdp: ans.sdp });

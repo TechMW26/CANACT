@@ -329,12 +329,13 @@ export default function ReelCreatePage() {
             try {
               // Process the recorded/picked video on-device, then upload the
               // final blob to Vercel Blob. Only the public URL is stored in RTDB.
-              const { url: hostedUrl } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
+              const { url: hostedUrl, posterUrl } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
               await createReel({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
                 videoUrl: hostedUrl,
+                posterUrl: posterUrl,
                 caption: caption.trim() || undefined,
                 filter: filter === 'none' ? undefined : filter,
                 music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url } : undefined,

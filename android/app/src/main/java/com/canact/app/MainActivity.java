@@ -29,6 +29,11 @@ public class MainActivity extends BridgeActivity {
         ensureNotificationChannels();
         cancelCallNotificationFor(getIntent());
         dismissRingerActivityFor(getIntent());
+        // Start the persistent keep-alive foreground service so the
+        // process survives the user swiping the app off recents —
+        // without it Android tears the process down within minutes,
+        // killing FCM + RTDB listeners and missing incoming calls.
+        try { KeepAliveService.start(this); } catch (Exception ignored) {}
     }
 
     @Override

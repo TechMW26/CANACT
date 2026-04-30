@@ -195,10 +195,46 @@ export async function uploadPreparedMedia(prepared: PreparedMedia, opts: { kind:
   return result.url;
 }
 
-/** Convenience: prepare + upload in one call. */
-export async function uploadMedia(input: Blob | File | string, opts: { kind: 'story' | 'reel' | 'post' | 'avatar'; uid: string }): Promise<{ url: string; prepared: PreparedMedia }> {
+/** Upload the on-device video poster (data URL → JPEG blob) so we can store
+ *  a real CDN URL on the post / reel record instead of a giant base64 blob
+ *  inside RTDB. Returns null if the poster is missing or the upload fails —
+ *  callers should treat poster as best-effort and fall back to the video
+ *  itself or a placeholder. */
+async function uploadPoster(posterDataUrl: string, opts: { kind: 'story' | 'reel' | 'post'; uid: string }): Promise<string | null> {
+  try {
+    const blob = await dataUrlToBlob(posterDataUrl);
+    if (!blob || blob.size === 0) return null;
+    const ts = Date.now();
+    const pathname = `${opts.kind}/${opts.uid}/${ts}-poster.jpg`;
+    const result = await upload(pathname, blob, {
+      access: 'public',
+      handleUploadUrl: '/api/blob/upload',
+      contentType: 'image/jpeg',
+    });
+    return result.url;
+  } catch {
+    return null;
+  }
+}
+
+/** Convenience: prepare + upload in one call. For videos we also upload the
+ *  first-frame poster as a separate JPEG so consumers can render an instant
+ *  thumbnail without having to download the whole video for its first frame
+ *  — critical for feed grid tiles, reels rail and chat attachments on slow
+ *  networks. */
+export async function uploadMedia(input: Blob | File | string, opts: { kind: 'story' | 'reel' | 'post' | 'avatar'; uid: string }): Promise<{ url: string; posterUrl?: string; prepared: PreparedMedia }> {
   const blob = typeof input === 'string' ? await dataUrlToBlob(input) : input;
   const prepared = await prepareMedia(blob);
+  // Run the main upload + poster upload in parallel for videos so the user
+  // doesn't pay the latency twice.
+  const isVideo = prepared.mime.startsWith('video/');
+  if (isVideo && prepared.posterDataUrl && opts.kind !== 'avatar') {
+    const [url, posterUrl] = await Promise.all([
+      uploadPreparedMedia(prepared, opts),
+      uploadPoster(prepared.posterDataUrl, opts as { kind: 'story' | 'reel' | 'post'; uid: string }),
+    ]);
+    return { url, posterUrl: posterUrl ?? undefined, prepared };
+  }
   const url = await uploadPreparedMedia(prepared, opts);
   return { url, prepared };
 }

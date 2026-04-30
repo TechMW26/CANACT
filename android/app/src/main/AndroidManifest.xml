@@ -109,6 +109,19 @@
                 android:value="Incoming voice/video call ringer" />
         </service>
 
+        <!-- Persistent foreground service that keeps the Canact process
+             alive even after the user swipes the app from recents. Uses
+             dataSync as the foreground service type — the safest broad
+             category that does not require user-prompted exemptions on
+             Android 14+. stopWithTask=false is the critical flag here:
+             without it Android stops the service the moment the task is
+             removed, defeating the entire purpose. -->
+        <service
+            android:name=".KeepAliveService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- Receives Answer / Decline taps from the call notification and
              from IncomingCallActivity. Decline writes status:'rejected'
              straight to RTDB; Answer cancels the notification then forwards
@@ -119,6 +132,20 @@
             <intent-filter>
                 <action android:name="com.canact.app.CALL_ANSWER" />
                 <action android:name="com.canact.app.CALL_DECLINE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-start the persistent keep-alive foreground service after a
+             device reboot or app update so the user never has to open the
+             app once before incoming calls / messages start working. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
     </application>
@@ -169,6 +196,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <!-- DISABLE_KEYGUARD lets the IncomingCallActivity dismiss the
          lockscreen so the user can hit Answer / Decline without unlocking. -->

@@ -48,11 +48,44 @@ export interface CallRecord {
   endedAt?: number;
 }
 
+/**
+ * ICE server config used by every call. We deliberately ship multiple STUN
+ * servers AND a public TURN relay because STUN alone fails on the majority
+ * of mobile carriers (symmetric NAT, CGNAT) — the symptom is exactly what
+ * users were reporting: signaling completes, the call "connects", but no
+ * audio or video ever flows because the peer connection can't find a
+ * working candidate pair. The TURN servers below are the public Open
+ * Relay Project (metered.ca) endpoints — free, no signup, used by many
+ * production apps as a baseline. For higher-volume production traffic
+ * swap in a paid TURN account (e.g. Twilio NTS, Xirsys, Cloudflare TURN).
+ *
+ * `iceTransportPolicy: 'all'` keeps the peer-to-peer path preferred when
+ * available and only falls back to TURN when needed.
+ * `iceCandidatePoolSize` pre-gathers candidates so the first offer goes
+ * out faster — important on cold-start calls.
+ * `bundlePolicy: 'max-bundle'` and `rtcpMuxPolicy: 'require'` keep the
+ * SDP single-port and minimise NAT hole-punching surface.
+ */
 export const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 4,
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
 };
 
 /** Caller — create a new call record + incoming pointer. */

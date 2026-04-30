@@ -71,7 +71,7 @@ export default function PostDetail() {
         </div>
         {post.text && <p className="mt-3 whitespace-pre-wrap">{post.text}</p>}
         {post.mediaUrls?.length ? (
-          <div className="mt-3"><MediaSlider urls={post.mediaUrls} /></div>
+          <div className="mt-3"><MediaSlider urls={post.mediaUrls} posters={post.mediaPosters} /></div>
         ) : null}
         <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
           {REACTIONS.map(({ id, Icon }) => (
