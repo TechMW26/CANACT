@@ -536,15 +536,32 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
   const isOwner = sess.uid === myUid;
   const ended = sess.endsAt <= Date.now();
   const locked = ended || isOwner;
-  const my = sess.votes?.[myUid];
-  const likes = sess.likes ?? 0;
-  const dislikes = sess.dislikes ?? 0;
+  // Optimistic overlay so the vote pill flips + counters bump
+  // immediately on tap instead of waiting for the RTDB transaction
+  // round-trip. Cleared once the server snapshot confirms our vote.
+  const [optimistic, setOptimistic] = useState<{ kind: 'like' | 'dislike'; prev: 'like' | 'dislike' | undefined } | null>(null);
+  const serverMy = sess.votes?.[myUid];
+  useEffect(() => {
+    if (optimistic && serverMy === optimistic.kind) setOptimistic(null);
+  }, [serverMy, optimistic]);
+  const my = optimistic ? optimistic.kind : serverMy;
+  let likes = sess.likes ?? 0;
+  let dislikes = sess.dislikes ?? 0;
+  if (optimistic) {
+    if (optimistic.prev === 'like') likes = Math.max(0, likes - 1);
+    if (optimistic.prev === 'dislike') dislikes = Math.max(0, dislikes - 1);
+    if (optimistic.kind === 'like') likes += 1; else dislikes += 1;
+  }
   const total = likes + dislikes;
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
-  const cast = async (kind: 'like' | 'dislike') => {
-    try { await voteRateMe(sess.id, myUid, kind); }
-    catch (e: any) { toast(e?.message ?? 'Could not vote', 'error'); }
+  const cast = (kind: 'like' | 'dislike') => {
+    if (locked || my === kind) return;
+    setOptimistic({ kind, prev: serverMy });
+    voteRateMe(sess.id, myUid, kind).catch((e: any) => {
+      setOptimistic(null);
+      toast(e?.message ?? 'Could not vote', 'error');
+    });
   };
   const remaining = sess.endsAt - Date.now();
   const timeLabel = ended

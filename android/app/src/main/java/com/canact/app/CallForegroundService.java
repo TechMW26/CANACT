@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
@@ -46,7 +47,7 @@ public class CallForegroundService extends Service {
     public static final String EXTRA_FROM_NAME = "fromName";
     public static final String EXTRA_FROM_PHOTO = "fromPhoto";
 
-    private static final String CHANNEL_ID = "canact_calls_v3";
+    private static final String CHANNEL_ID = "canact_calls_v4";
     private static final String TAG = "CallFgSvc";
     private String currentCallId;
     private PowerManager.WakeLock wakeLock;
@@ -262,7 +263,10 @@ public class CallForegroundService extends Service {
         channel.enableVibration(true);
         channel.setVibrationPattern(new long[] { 0, 1000, 800, 1000, 800, 1000 });
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-        Uri ringtone = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.canact_ringtone);
+        // Use the user's system phone ringtone — same UX as a real call.
+        Uri ringtone = RingtoneManager.getActualDefaultRingtoneUri(getApplicationContext(), RingtoneManager.TYPE_RINGTONE);
+        if (ringtone == null) ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+        if (ringtone == null) ringtone = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.canact_ringtone);
         AudioAttributes attrs = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

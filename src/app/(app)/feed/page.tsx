@@ -604,20 +604,42 @@ function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
 
 function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: string; onShare: (a: ChatAttachment) => void }) {
   const isOwner = sess.uid === myUid;
-  const my = sess.votes?.[myUid];
   const ended = sess.endsAt <= Date.now();
-  // Lock voting if the session is over OR the viewer is the author. After
-  // the deadline we still keep the card around (in feed and on the
-  // author's profile) so people can see the final tally.
   const locked = ended || isOwner;
-  const likes = sess.likes ?? 0;
-  const dislikes = sess.dislikes ?? 0;
+  // Optimistic local overlay: when the user taps a vote we immediately
+  // bump the counters + flip `my` so the UI reacts instantly. The RTDB
+  // round-trip (get → transaction → set) used to take ~600-1200ms, all
+  // of which felt like the app was frozen. Once the live snapshot
+  // arrives, the server values take over because we read straight off
+  // `sess` again.
+  const [optimistic, setOptimistic] = useState<{ kind: 'like' | 'dislike'; prev: 'like' | 'dislike' | undefined } | null>(null);
+  const serverMy = sess.votes?.[myUid];
+  // Reset the optimistic overlay once the server confirms our vote so
+  // we don't double-count when subsequent snapshots arrive.
+  useEffect(() => {
+    if (optimistic && serverMy === optimistic.kind) setOptimistic(null);
+  }, [serverMy, optimistic]);
+  const my = optimistic ? optimistic.kind : serverMy;
+  const baseLikes = sess.likes ?? 0;
+  const baseDislikes = sess.dislikes ?? 0;
+  let likes = baseLikes;
+  let dislikes = baseDislikes;
+  if (optimistic) {
+    if (optimistic.prev === 'like') likes = Math.max(0, likes - 1);
+    if (optimistic.prev === 'dislike') dislikes = Math.max(0, dislikes - 1);
+    if (optimistic.kind === 'like') likes += 1; else dislikes += 1;
+  }
   const total = likes + dislikes;
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
-  const cast = async (kind: 'like' | 'dislike') => {
-    try { await voteRateMe(sess.id, myUid, kind); }
-    catch (e: any) { toast(e?.message ?? 'Could not vote', 'error'); }
+  const cast = (kind: 'like' | 'dislike') => {
+    if (locked) return;
+    if (my === kind) return;
+    setOptimistic({ kind, prev: serverMy });
+    voteRateMe(sess.id, myUid, kind).catch((e: any) => {
+      setOptimistic(null);
+      toast(e?.message ?? 'Could not vote', 'error');
+    });
   };
   return (
     <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">

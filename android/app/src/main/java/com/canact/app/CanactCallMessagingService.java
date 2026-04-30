@@ -9,6 +9,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 
@@ -47,7 +48,10 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
     // Bump the channel id whenever sound/vibration changes — Android does not
     // allow mutating an existing channel's sound, so a new id is required to
     // pick up the bundled ringtone on devices that already have the app.
-    private static final String CHANNEL_ID = "canact_calls_v3";
+    // v4 switches the channel sound from our bundled mp3 to the user's
+    // chosen system phone ringtone so incoming Canact calls ring exactly
+    // like a normal cellular call.
+    private static final String CHANNEL_ID = "canact_calls_v4";
     private static final String CHANNEL_NAME = "Incoming calls";
     private static final String CHANNEL_DESC = "Full-screen incoming voice calls";
 
@@ -171,7 +175,13 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         channel.enableVibration(true);
         channel.setVibrationPattern(new long[] { 0, 1000, 800, 1000, 800, 1000 });
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-        Uri ringtone = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.canact_ringtone);
+        // Use the user's chosen system phone ringtone so Canact calls ring
+        // identically to a normal cellular call. Falls back to the
+        // notification default and finally our bundled mp3 if the device
+        // can't resolve a system ringtone (rare — emulators / kiosk ROMs).
+        Uri ringtone = RingtoneManager.getActualDefaultRingtoneUri(getApplicationContext(), RingtoneManager.TYPE_RINGTONE);
+        if (ringtone == null) ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+        if (ringtone == null) ringtone = Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.canact_ringtone);
         AudioAttributes attrs = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

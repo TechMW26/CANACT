@@ -138,6 +138,22 @@ export function InAppCallSheet({
     return () => clearInterval(i);
   }, [status]);
 
+  // Re-bind the local stream to the self-view <video> whenever
+  // hasLocalVideo flips on. The original code set srcObject inside the
+  // setup effect *before* the React state update mounted the element,
+  // so the ref was null and the tile stayed black. Doing it here in a
+  // dedicated effect guarantees the element is mounted by the time we
+  // try to attach the stream.
+  useEffect(() => {
+    if (!hasLocalVideo) return;
+    const el = localVideoRef.current;
+    const stream = localStreamRef.current;
+    if (!el || !stream) return;
+    try { el.srcObject = stream; } catch { /* noop */ }
+    const p = el.play();
+    if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay may be blocked */ });
+  }, [hasLocalVideo, cameraOff]);
+
   // Drive the outbound ringback tone purely off status. Caller-only
   // (callee never plays ringback — they hear the actual ringtone via
   // the native foreground service / IncomingCallRinger).
@@ -734,14 +750,36 @@ export function InAppCallSheet({
               playsInline
               className={`relative z-[2] h-full w-full object-cover bg-transparent transition-opacity ${hasRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
             />
-            {hasLocalVideo && !cameraOff && (
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg"
-              />
+            {/* Always-mount the self-view <video> so the React ref is
+                live the instant getUserMedia resolves — the original
+                `hasLocalVideo && !cameraOff` gate meant the element
+                hadn't mounted yet when we tried to set srcObject, so
+                the camera tile stayed black. We hide it via opacity
+                until the local stream is wired and the camera is on. */}
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg transition-opacity ${hasLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            />
+            {/* Custom self-view placeholder shown while the camera
+                spins up — replaces the empty black box that the
+                browser shows when a <video> has no srcObject. */}
+            {(!hasLocalVideo || cameraOff) && (
+              <div className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 bg-gradient-to-br from-brand/40 to-ink/80 shadow-lg flex flex-col items-center justify-center gap-1 text-white">
+                {cameraOff ? (
+                  <>
+                    <VideoOff size={20} />
+                    <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">Camera off</span>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">You</span>
+                  </>
+                )}
+              </div>
             )}
           </>
         ) : (
