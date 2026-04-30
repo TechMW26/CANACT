@@ -58,15 +58,13 @@ input[type="time"]::-webkit-date-and-time-value {
    an instant content swap. */
 .canact-fade-in {
   opacity: 0;
-  transform: translate3d(18px, 0, 0);
-  animation: canactFadeIn 260ms cubic-bezier(0.22, 0.85, 0.3, 1) both;
-  will-change: opacity, transform;
+  animation: canactFadeIn 420ms ease-out both;
+  will-change: opacity;
   backface-visibility: hidden;
 }
 @keyframes canactFadeIn {
-  0%   { opacity: 0; transform: translate3d(18px, 0, 0); }
-  60%  { opacity: 1; }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* Unified column width used by header pill, page content, and bottom nav so
