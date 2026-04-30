@@ -71,6 +71,26 @@ export async function reportPost(postId: string, uid: string, reason: string) {
   await push(ref(db, `reports/wha/${postId}`), { uid, reason, at: Date.now() });
 }
 export async function deletePost(postId: string, uid: string) {
+  // Read the post first so we can tell the service worker which media URLs
+  // to drop from the on-device cache (those CDN objects will 404 once
+  // we wipe the RTDB record). Best-effort \u2014 if the read fails for any
+  // reason we still proceed with the delete; cache will GC by TTL.
+  let urls: string[] = [];
+  try {
+    const snap = await get(ref(db, `wha/${postId}`));
+    const v = snap.val() as WhaPost | null;
+    if (v) {
+      if (Array.isArray(v.mediaUrls)) urls = urls.concat(v.mediaUrls.filter(Boolean));
+      if (Array.isArray(v.mediaPosters)) urls = urls.concat(v.mediaPosters.filter(Boolean));
+    }
+  } catch { /* ignore \u2014 deletion is the priority */ }
+
   await remove(ref(db, `wha/${postId}`));
   await remove(ref(db, `userPosts/${uid}/${postId}`));
+
+  if (urls.length && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+    try {
+      navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls });
+    } catch { /* ignore */ }
+  }
 }

@@ -737,7 +737,7 @@ export function InAppCallSheet({
             {!hasRemoteVideo && (
               <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center gap-4 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A]">
                 <Avatar src={peer.photoURL} name={peer.name} size={120} />
-                <div className="text-lg font-extrabold">{peer.name}</div>
+                <div className="text-lg font-extrabold text-center px-6">{peer.name}</div>
                 <div className="inline-flex items-center gap-2 text-xs text-white/70">
                   <Loader2 size={14} className="animate-spin" />
                   {status === 'active' ? 'Waiting for camera…' : 'Connecting…'}
@@ -783,10 +783,10 @@ export function InAppCallSheet({
             )}
           </>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A]">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A] px-6 text-center">
             <Avatar src={peer.photoURL} name={peer.name} size={140} />
-            <div className="text-2xl font-extrabold">{peer.name}</div>
-            <div className="text-xs text-white/55">Numbers stay private</div>
+            <div className="text-2xl font-extrabold text-center w-full max-w-md">{peer.name}</div>
+            <div className="text-xs text-white/55 text-center">Numbers stay private</div>
           </div>
         )}
 

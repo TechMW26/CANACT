@@ -137,23 +137,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
           open / close transitions. */}
-      {/* Desktop layout: full viewport width with a sticky sidebar on the
-          left and the main content stretching to fill the remaining space.
-          Previously capped at 1280px which left large empty gutters on
-          wide monitors. `lg:pt-6` adds breathing room from the top so the
-          sidebar (and main column) don't hug the very edge of the window. */}
-      <div id="canact-app-content" className="lg:flex lg:items-start lg:gap-6 lg:w-full lg:px-6 lg:pt-6">
-      {/* Desktop sidebar — sticky to the viewport top so it stays in view
-          while the main column scrolls. Hidden under lg (i.e. tablet
-          portrait still gets the floating mobile header + bottom nav). */}
-      {/* Desktop sidebar — sticky to the viewport top so it stays in view
-          while the main column scrolls. Hidden under lg (i.e. tablet
-          portrait still gets the floating mobile header + bottom nav).
-          `lg:top-6` gives the column a comfortable gap from the top of the
-          viewport once it sticks; `lg:max-h-[calc(100vh-3rem)]` keeps it
-          scrollable internally if the link list ever grows past the
-          viewport height. */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 lg:gap-1 lg:py-4 lg:pr-2 lg:pl-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+      {/* Desktop layout: full viewport width with a FIXED sidebar pinned
+          to the left edge and the main content stretching to fill the
+          remaining space (offset by `lg:pl-60` so it doesn't slide under
+          the sidebar). We use `fixed` instead of `sticky` because the
+          shell has multiple ancestors with `overflow` set, and even the
+          slightest CSS containment / transform on any of them silently
+          breaks `position: sticky`. Fixed has none of those constraints. */}
+      <div id="canact-app-content" className="lg:w-full lg:pl-60">
+      {/* Desktop sidebar — fixed to the viewport so it's always in view
+          regardless of how far the main column scrolls. Hidden under lg
+          (tablet portrait still gets the floating mobile header + bottom nav). */}
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white/60 lg:backdrop-blur lg:border-r lg:border-line lg:z-20">
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/feed" />
         </div>
@@ -187,7 +182,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </Link>
       </aside>
 
-      <main className="flex-1 min-w-0 lg:pl-2">
+      <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
         <UnifiedHeader />
         {/* Spacer that occupies the same vertical space as the fixed
             header so the page content starts below it instead of

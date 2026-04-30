@@ -28,6 +28,15 @@ try {
 
 const SHELL_CACHE = `canact-shell-${BUILD_ID}`;
 const RUNTIME_CACHE = `canact-runtime-${BUILD_ID}`;
+// Media cache lives across deploys (BUILD_ID is intentionally NOT in the
+// name) so users keep their downloaded posts when a new app version ships.
+// Entries are individually TTL'd via the `x-canact-cached-at` header we
+// stamp at write time and culled to MEDIA_CACHE_MAX entries (LRU-ish:
+// oldest entry by stored timestamp wins eviction).
+const MEDIA_CACHE = 'canact-media-v1';
+const MEDIA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MEDIA_CACHE_MAX = 250;
+const MEDIA_HOSTS = ['public.blob.vercel-storage.com'];
 
 // Hostnames that must always hit the network.
 const DATA_HOSTS = [
@@ -38,7 +47,6 @@ const DATA_HOSTS = [
   'firebaseinstallations.googleapis.com',
   'identitytoolkit.googleapis.com',
   'securetoken.googleapis.com',
-  'public.blob.vercel-storage.com',
 ];
 
 // Same-origin paths that must always hit the network.
@@ -55,13 +63,19 @@ self.addEventListener('activate', (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter((n) => n !== SHELL_CACHE && n !== RUNTIME_CACHE)
+          .filter((n) => n !== SHELL_CACHE && n !== RUNTIME_CACHE && n !== MEDIA_CACHE)
           .map((n) => caches.delete(n))
       );
       await self.clients.claim();
+      // Opportunistic GC: evict media entries that exceeded TTL.
+      try { await pruneMediaCache(); } catch {}
     })()
   );
 });
+
+function isMediaRequest(url) {
+  return MEDIA_HOSTS.some((h) => url.hostname.endsWith(h));
+}
 
 function isDataRequest(url) {
   if (DATA_HOSTS.some((h) => url.hostname.endsWith(h))) return true;
@@ -69,6 +83,95 @@ function isDataRequest(url) {
     return DATA_PATH_PREFIXES.some((p) => url.pathname.startsWith(p));
   }
   return false;
+}
+
+/** Cache-first with TTL for media (post images / videos / avatars). On HIT
+ *  we serve from cache instantly without any network round-trip — that's
+ *  the whole point of "download to device storage". On MISS or expired
+ *  entry we fetch, stamp `x-canact-cached-at`, and store. After a write we
+ *  schedule a prune so the cache doesn't grow without bound. */
+async function cacheFirstMedia(req) {
+  const cache = await caches.open(MEDIA_CACHE);
+  const cached = await cache.match(req, { ignoreVary: true });
+  if (cached) {
+    const ts = Number(cached.headers.get('x-canact-cached-at') || 0);
+    if (ts && Date.now() - ts < MEDIA_TTL_MS) {
+      return cached;
+    }
+    // Stale: drop and re-fetch.
+    cache.delete(req, { ignoreVary: true }).catch(() => {});
+  }
+  let res;
+  try {
+    res = await fetch(req);
+  } catch (err) {
+    // Offline: serve the stale copy if we still have one (better than a
+    // broken-image icon while the user is on the subway).
+    if (cached) return cached;
+    throw err;
+  }
+  // Only cache 200/206 — skip range partials with non-OK status, redirects, errors.
+  if (res && res.ok && (res.status === 200 || res.status === 206)) {
+    try {
+      const cloned = res.clone();
+      const buf = await cloned.arrayBuffer();
+      const headers = new Headers(res.headers);
+      headers.set('x-canact-cached-at', String(Date.now()));
+      const stamped = new Response(buf, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+      });
+      cache.put(req, stamped).catch(() => {});
+      // Fire-and-forget eviction sweep so we stay under MEDIA_CACHE_MAX.
+      pruneMediaCache().catch(() => {});
+    } catch { /* cache failure is non-fatal */ }
+  }
+  return res;
+}
+
+/** Evict expired entries first, then trim oldest until we're under cap. */
+async function pruneMediaCache() {
+  const cache = await caches.open(MEDIA_CACHE);
+  const reqs = await cache.keys();
+  const entries = [];
+  for (const r of reqs) {
+    const m = await cache.match(r, { ignoreVary: true });
+    const ts = Number((m && m.headers.get('x-canact-cached-at')) || 0);
+    entries.push({ req: r, ts });
+  }
+  const now = Date.now();
+  // Hard-evict expired entries.
+  await Promise.all(
+    entries
+      .filter((e) => e.ts && now - e.ts > MEDIA_TTL_MS)
+      .map((e) => cache.delete(e.req, { ignoreVary: true }).catch(() => {}))
+  );
+  // Re-fetch survivors and trim if still over cap (oldest first).
+  const surviving = entries.filter((e) => !(e.ts && now - e.ts > MEDIA_TTL_MS));
+  if (surviving.length <= MEDIA_CACHE_MAX) return;
+  surviving.sort((a, b) => a.ts - b.ts);
+  const overflow = surviving.length - MEDIA_CACHE_MAX;
+  await Promise.all(
+    surviving
+      .slice(0, overflow)
+      .map((e) => cache.delete(e.req, { ignoreVary: true }).catch(() => {}))
+  );
+}
+
+/** Drop a specific URL (or list of URLs) from the media cache. Called from
+ *  the page when a post is deleted by its owner — the URL is no longer
+ *  reachable on the CDN so there's no point keeping it around taking up
+ *  user storage. */
+async function invalidateMedia(urls) {
+  if (!urls || !urls.length) return;
+  const cache = await caches.open(MEDIA_CACHE);
+  await Promise.all(
+    urls.map((u) => {
+      try { return cache.delete(new Request(u), { ignoreVary: true }); }
+      catch { return Promise.resolve(false); }
+    })
+  );
 }
 
 function isShellRequest(req, url) {
@@ -136,6 +239,14 @@ self.addEventListener('fetch', (event) => {
   let url;
   try { url = new URL(req.url); } catch { return; }
 
+  // Media (Vercel Blob CDN): cache-first with TTL so the user only ever
+  // downloads each post's image/video once. This is the perf win — feeds
+  // re-render instantly from disk on revisit instead of re-hitting the CDN.
+  if (isMediaRequest(url)) {
+    event.respondWith(cacheFirstMedia(req));
+    return;
+  }
+
   // Always-fresh data \u2014 do not touch the cache.
   if (isDataRequest(url)) return;
 
@@ -150,9 +261,19 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Allow the page to ask the SW to skip the waiting step manually
-// (used when we want to apply a pending update immediately).
+// (used when we want to apply a pending update immediately) or to
+// invalidate cached media URLs (used when a post is deleted).
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  const data = event.data || {};
+  if (data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  if (data.type === 'INVALIDATE_MEDIA' && Array.isArray(data.urls)) {
+    event.waitUntil(invalidateMedia(data.urls));
+    return;
+  }
+  if (data.type === 'PRUNE_MEDIA') {
+    event.waitUntil(pruneMediaCache());
   }
 });
