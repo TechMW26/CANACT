@@ -4,9 +4,17 @@
 // to their own app domain and still have the handler work).
 const FIREBASE_AUTH_HOST = 'canact-94ad6.firebaseapp.com';
 
+// Stable per-build identifier exposed to the client. The service worker uses
+// it to namespace its caches and trigger silent updates whenever a new build
+// ships, so users never see a stale shell.
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || String(Date.now());
+
 const nextConfig = {
   reactStrictMode: true,
   images: { unoptimized: true },
+  env: {
+    NEXT_PUBLIC_BUILD_ID: BUILD_ID,
+  },
   // Same-origin Firebase Auth: proxy /__/auth/* and /__/firebase/* to the real
   // Firebase Hosting handler. With NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN set to your
   // app's own domain (e.g. canact.vercel.app), Google sign-in completes on the

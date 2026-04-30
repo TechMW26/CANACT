@@ -81,9 +81,7 @@ export default function PostDetail() {
             </button>
           ))}
           <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setShareOpen(true)} aria-label="Send to chat"><Share2 size={14} /></Button>
             {!isMine && <Button size="sm" variant="outline" onClick={() => { reportPost(post.id, user.uid, 'inappropriate'); toast('Reported', 'success'); }}>Report</Button>}
-            {isMine && <Button size="sm" variant="danger" onClick={async () => { await deletePost(post.id, user.uid); router.replace('/feed'); }}>Delete</Button>}
           </div>
         </div>
       </Card>

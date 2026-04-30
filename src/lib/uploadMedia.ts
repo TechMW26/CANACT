@@ -20,6 +20,49 @@ export const MAX_VIDEO_SEC = 60;
 const SUPPORTED_VIDEO = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 const SUPPORTED_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+/** Re-encode a still image to WebP at near-lossless quality.
+ *  WebP is roughly 30-50% smaller than JPEG / PNG at perceptually equivalent
+ *  quality, which is the cheapest way to make the wall feel snappy without
+ *  touching the original capture pipeline. We deliberately keep the source
+ *  pixel dimensions intact so camera quality is preserved. If anything goes
+ *  wrong (e.g. browser without WebP encoder, OffscreenCanvas blocked,
+ *  decode failure) we fall back to the original blob unchanged. */
+async function transcodeImageToWebp(blob: Blob, quality = 0.92): Promise<{ blob: Blob; mime: string } | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error('image decode failed'));
+        el.src = url;
+      });
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      if (!w || !h) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+      const out = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/webp', quality);
+      });
+      if (!out || out.size === 0) return null;
+      // If WebP somehow ended up larger than the original (rare for tiny PNGs),
+      // keep the original — no point shipping a bigger file.
+      if (out.size >= blob.size) return null;
+      return { blob: out, mime: 'image/webp' };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    return null;
+  }
+}
+
 /** Convert a `data:` URL to a Blob. */
 export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
@@ -98,6 +141,16 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
   if (isImage && !SUPPORTED_IMAGE.has(mime)) {
     mime = 'image/jpeg';
     blob = blob.slice(0, blob.size, mime);
+  }
+  // Re-encode JPEG / PNG stills as WebP at high quality so the upload, the
+  // CDN response, and every subsequent feed paint move less data without
+  // visibly degrading the camera capture. WebP-in / WebP-out is a no-op.
+  if (isImage && mime !== 'image/webp') {
+    const webp = await transcodeImageToWebp(blob);
+    if (webp) {
+      blob = webp.blob;
+      mime = webp.mime;
+    }
   }
   if (blob.size > MAX_UPLOAD_BYTES) {
     throw new Error(`File too large (${(blob.size / 1024 / 1024).toFixed(1)} MB). Limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);

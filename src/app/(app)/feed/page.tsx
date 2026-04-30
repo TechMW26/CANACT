@@ -105,7 +105,19 @@ export default function FeedPage() {
       ...rms.map((d) => ({ kind: 'rateme' as const, data: d })),
       ...reels.map((d) => ({ kind: 'reel' as const, data: d })),
     ];
-    a.sort((x, y) => tsOf(y) - tsOf(x));
+    // Effective timestamp: polls sort by createdAt while open, but get
+    // demoted to their endsAt once they're past it so finished polls
+    // naturally drift down the wall as fresh content comes in.
+    const now = Date.now();
+    const effTs = (it: FeedItem): number => {
+      if (it.kind === 'poll') {
+        const p = it.data;
+        if (p.endsAt && p.endsAt < now) return p.endsAt; // ended -> use end time, not createdAt
+        return p.createdAt;
+      }
+      return tsOf(it);
+    };
+    a.sort((x, y) => effTs(y) - effTs(x));
     return a.filter((it) => filter === 'all' || it.kind === filter)
       .filter((it) => withinRadius(it, coords, radius));
   }, [wha, polls, rms, reels, filter, coords, radius]);
@@ -124,7 +136,7 @@ export default function FeedPage() {
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
     <div className="min-h-screen pb-24 md:pb-10">
 
-      <section className="canact-stories-strip flex items-center gap-2 py-2">
+      <section className="canact-stories-strip flex items-center gap-2 py-3">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
           <div className="flex min-w-max items-center gap-3 pr-2">
             {/* Own story tile. The avatar fills the rounded square; a
@@ -132,14 +144,13 @@ export default function FeedPage() {
                 user has no active story (tap to create), otherwise the
                 tile shows the same accent / grey ring rules as friends'
                 stories so the user can tell at a glance whether anything\n                fresh is sitting in their archive. */}
-            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
+            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 items-center justify-center">
               <StoryRing
                 state={myStoryGroup ? 'unwatched' : 'none'}
                 src={profile?.photoURL ?? null}
                 fallback={(profile?.fullName?.[0] ?? '?').toUpperCase()}
                 showPlus={!myStoryGroup}
               />
-              <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">Your Story</span>
             </button>
 
             {!loaded.stories && stories.length === 0 ? (
@@ -222,9 +233,9 @@ export default function FeedPage() {
         ) : null}
 
         {/* Two-column Instagram-style grid. Polls / Rate-Me / text-only
-            posts always span both columns (they don't compress well into
-            half tiles). Among media-bearing posts, every third (starting
-            at the first) takes the full row; the rest pair up. */}
+            posts always span both columns. Among media-bearing tiles we
+            keep an Insta-like rhythm: every third media post (starting
+            with the first) is full-width, the rest pair up. */}
         <div className="grid grid-cols-2 gap-3">
           {(() => {
             let mediaIdx = 0;
@@ -239,7 +250,6 @@ export default function FeedPage() {
                 if (it.kind === 'rateme') {
                   return <div key={`rm_${it.data.id}`} className="col-span-2"><RateMeCard sess={it.data} myUid={user!.uid} /></div>;
                 }
-                // wha without media \u2014 text-only tile, full-width
                 return <div key={`wha_${it.data.id}`} className="col-span-2"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
               }
               const isFull = mediaIdx % 3 === 0;
@@ -413,9 +423,7 @@ function MediaOverlayTile({
           </div>
           {isOwner && onDelete ? (
             <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
-              <span className="inline-flex items-center justify-center rounded-full bg-white/90 backdrop-blur h-7 w-7 shadow-sm">
-                <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
-              </span>
+              <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
             </div>
           ) : null}
         </div>
@@ -425,43 +433,42 @@ function MediaOverlayTile({
             {badge}
           </div>
         ) : null}
+        {/* Bottom-right vertical action stack — like / comment / share
+            sit inside the media area itself so the layout stays Insta-like.
+            Each button has a translucent dark pill background so it stays
+            legible against any photo. */}
+        <div onClick={(e) => e.stopPropagation()} className="absolute right-2 bottom-2 flex flex-col items-center gap-1.5 pointer-events-auto">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }} aria-label="Like" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
+            <Heart size={16} className={liked ? 'text-[#FF6B7A]' : 'text-white'} fill={liked ? '#FF6B7A' : 'none'} />
+          </button>
+          {likeCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{likeCount}</span>}
+          <Link href={href} prefetch onClick={(e) => e.stopPropagation()} aria-label="Comments" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
+            <MessageCircle size={16} />
+          </Link>
+          {commentCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{commentCount}</span>}
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }} aria-label="Share" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
+            <Send size={16} />
+          </button>
+        </div>
       </Link>
 
-      {/* Caption + actions strip on a white background so the media is
-          never overlapped by text or buttons. */}
-      <div className="flex items-start gap-2 px-3 py-2.5">
-        <div className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
-          {trimmed ? (
-            <>
-              <span className="line-clamp-2 whitespace-pre-wrap">{trimmed}</span>
-              {isLong ? (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); router.push(href); }}
-                  className="mt-0.5 text-[11px] font-bold text-brand"
-                >
-                  Read more
-                </button>
-              ) : null}
-            </>
-          ) : (
-            <span className="text-ink/40">\u00a0</span>
-          )}
+      {/* Caption-only strip on a white background. Action buttons live
+          inside the media block (Insta-style) so they remain anchored to
+          the visual itself. */}
+      {trimmed ? (
+        <div className="px-3 py-2 text-[12px] leading-snug text-ink">
+          <span className="line-clamp-2 whitespace-pre-wrap">{trimmed}</span>
+          {isLong ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); router.push(href); }}
+              className="mt-0.5 text-[11px] font-bold text-brand"
+            >
+              Read more
+            </button>
+          ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }} aria-label="Like" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
-            <Heart size={14} className={liked ? 'text-[#FF6B7A]' : 'text-ink/70'} fill={liked ? '#FF6B7A' : 'none'} />
-          </button>
-          {likeCount > 0 && <span className="text-[10px] font-bold text-ink/70 -ml-0.5 mr-0.5">{likeCount}</span>}
-          <Link href={href} prefetch onClick={(e) => e.stopPropagation()} aria-label="Comments" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
-            <MessageCircle size={14} className="text-ink/70" />
-          </Link>
-          {commentCount > 0 && <span className="text-[10px] font-bold text-ink/70 -ml-0.5 mr-0.5">{commentCount}</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
-            <Send size={14} className="text-ink/70" />
-          </button>
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }
