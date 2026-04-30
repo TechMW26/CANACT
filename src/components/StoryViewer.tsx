@@ -28,7 +28,10 @@ export function StoryViewer({
   meName: string;
   mePhoto?: string | null;
   onClose: () => void;
-  onDelete: (uid: string) => Promise<void>;
+  /** Called when the owner taps the trash icon. The implementation
+   *  should remove just this single story (identified by storyId), not
+   *  the user's entire archive. */
+  onDelete: (authorUid: string, storyId: string) => Promise<void>;
 }) {
   const [index, setIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
@@ -57,7 +60,7 @@ export function StoryViewer({
     const target = stories[index];
     if (!target) return;
     setLiveStory(target);
-    return listenStory(target.uid, (s) => setLiveStory(s ?? target));
+    return listenStory(target.uid, target.id, (s) => setLiveStory(s ?? target));
   }, [index, stories]);
 
   // Mark view + reset progress when index changes
@@ -65,7 +68,7 @@ export function StoryViewer({
     const target = stories[index];
     if (!target) return;
     if (target.uid !== meUid) {
-      void markStoryView(target.uid, { uid: meUid, name: meName, photoURL: mePhoto ?? undefined });
+      void markStoryView(target.uid, target.id, { uid: meUid, name: meName, photoURL: mePhoto ?? undefined });
     }
     setProgress(0);
     elapsedRef.current = 0;
@@ -125,7 +128,7 @@ export function StoryViewer({
     if (!text || !story || isMine) return;
     setSending(true);
     try {
-      await replyToStory(story.uid, {
+      await replyToStory(story.uid, story.id, {
         fromUid: meUid,
         fromName: meName,
         fromPhoto: mePhoto ?? undefined,
@@ -144,19 +147,28 @@ export function StoryViewer({
     <PortalWrap>
       <div className="fixed inset-0 z-[100] bg-black text-white">
       <div className="mx-auto flex h-full max-w-md flex-col px-2 pb-3 pt-2 safe-top safe-bottom">
-        {/* Segmented progress */}
+        {/* Segmented progress — only the CURRENT user's stories show up
+            as bars, so the counter at the top accurately reflects "how
+            many of THIS person's stories am I watching" rather than the
+            total feed. When the viewer auto-advances to the next user
+            the bar resets to that user's segments. */}
         <div className="mb-2 flex gap-1 px-1">
-          {stories.map((_, i) => (
-            <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
-              <div
-                className="h-full rounded-full bg-white"
-                style={{
-                  width: i < index ? '100%' : i === index ? `${progress * 100}%` : '0%',
-                  transition: i === index ? 'none' : 'width 120ms linear',
-                }}
-              />
-            </div>
-          ))}
+          {(() => {
+            const segs: number[] = [];
+            stories.forEach((s, i) => { if (s.uid === story.uid) segs.push(i); });
+            const myPos = segs.indexOf(index);
+            return segs.map((origIdx, segIdx) => (
+              <div key={origIdx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+                <div
+                  className="h-full rounded-full bg-white"
+                  style={{
+                    width: segIdx < myPos ? '100%' : segIdx === myPos ? `${progress * 100}%` : '0%',
+                    transition: segIdx === myPos ? 'none' : 'width 120ms linear',
+                  }}
+                />
+              </div>
+            ));
+          })()}
         </div>
 
         {/* Header */}
@@ -175,7 +187,7 @@ export function StoryViewer({
               type="button"
               onClick={async () => {
                 if (!confirm('Delete this story?')) return;
-                await onDelete(story.uid);
+                await onDelete(story.uid, story.id);
                 onClose();
               }}
               aria-label="Delete story"
@@ -296,7 +308,7 @@ export function StoryViewer({
               />
               <button
                 type="button"
-                onClick={() => void toggleStoryLike(story.uid, meUid, !liked)}
+                onClick={() => void toggleStoryLike(story.uid, story.id, meUid, !liked)}
                 aria-label={liked ? 'Unlike' : 'Like'}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"
               >

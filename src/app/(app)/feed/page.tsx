@@ -79,11 +79,25 @@ export default function FeedPage() {
   }, []);
   const isLoading = !loaded.wha || !loaded.polls || !loaded.rms || !loaded.reels;
 
-  const myStory = stories.find((story) => story.uid === user?.uid) ?? null;
-  const orderedStories = useMemo(() => {
-    const others = stories.filter((story) => story.uid !== user?.uid);
-    return myStory ? [myStory, ...others] : others;
-  }, [stories, myStory, user?.uid]);
+  // Group all active stories by author for the strip. The first story
+  // chronologically per user determines the slot's position; ordering
+  // follows the service (newest poster first) but the user's own group
+  // is always pinned to the front.
+  const storyGroups = useMemo(() => {
+    const map = new Map<string, { uid: string; authorName: string; authorPhoto?: string; items: StoryItem[] }>();
+    for (const s of stories) {
+      const g = map.get(s.uid) ?? { uid: s.uid, authorName: s.authorName, authorPhoto: s.authorPhoto, items: [] };
+      g.items.push(s);
+      map.set(s.uid, g);
+    }
+    const all = Array.from(map.values());
+    all.forEach((g) => g.items.sort((a, b) => a.createdAt - b.createdAt));
+    const me = user?.uid ? all.find((g) => g.uid === user.uid) ?? null : null;
+    const others = all.filter((g) => g.uid !== user?.uid);
+    return me ? [me, ...others] : others;
+  }, [stories, user?.uid]);
+  const myStoryGroup = storyGroups.find((g) => g.uid === user?.uid) ?? null;
+  const orderedStories = useMemo(() => storyGroups.flatMap((g) => g.items), [storyGroups]);
   const items: FeedItem[] = useMemo(() => {
     const a: FeedItem[] = [
       ...wha.map((d) => ({ kind: 'wha' as const, data: d })),
@@ -97,8 +111,9 @@ export default function FeedPage() {
   }, [wha, polls, rms, reels, filter, coords, radius]);
 
   const openOwnStory = () => {
-    if (myStory) {
-      const index = orderedStories.findIndex((story) => story.uid === myStory.uid);
+    if (myStoryGroup && myStoryGroup.items[0]) {
+      const firstId = myStoryGroup.items[0].id;
+      const index = orderedStories.findIndex((s) => s.id === firstId);
       setViewerIndex(index >= 0 ? index : 0);
       return;
     }
@@ -112,25 +127,24 @@ export default function FeedPage() {
       <section className="canact-stories-strip flex items-center gap-2 py-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
           <div className="flex min-w-max items-center gap-3 pr-2">
-            {/* Own story \u2014 soft pink ring without the breathing animation
-                so the user's own avatar doesn't pull attention away from
-                friends' fresh stories. */}
+            {/* Own story tile. The avatar fills the rounded square; a
+                centered plus badge sits at the bottom-middle when the
+                user has no active story (tap to create), otherwise the
+                tile shows the same accent / grey ring rules as friends'
+                stories so the user can tell at a glance whether anything\n                fresh is sitting in their archive. */}
             <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
-              <div className="rounded-[18px] bg-gradient-to-br from-[#FFD8DD] to-[#FFB3B8] p-[2px]">
-                <div className="rounded-[16px] bg-white p-[2px]">
-                  <div className="relative h-16 w-14 overflow-hidden rounded-[14px] bg-brand-light/40">
-                    {profile?.photoURL ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={profile.photoURL} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs font-bold text-brand">{(profile?.fullName?.[0] ?? '?').toUpperCase()}</div>
-                    )}
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white shadow-sm">
-                      {myStory ? <Eye size={10} /> : <Plus size={12} />}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <StoryRing
+                state={
+                  myStoryGroup
+                    ? (myStoryGroup.items.some((s) => !s.viewers?.[user!.uid] && s.uid !== user!.uid) || myStoryGroup.items.some((s) => !s.viewers?.[user!.uid]))
+                      ? 'unwatched'
+                      : 'watched'
+                    : 'none'
+                }
+                src={profile?.photoURL ?? null}
+                fallback={(profile?.fullName?.[0] ?? '?').toUpperCase()}
+                showPlus={!myStoryGroup}
+              />
               <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">Your Story</span>
             </button>
 
@@ -141,28 +155,24 @@ export default function FeedPage() {
                   <Skeleton width={40} height={8} />
                 </div>
               ))
-            ) : orderedStories.filter((story) => story.uid !== user?.uid).map((story) => (
-              <button
-                key={story.id}
-                type="button"
-                onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === story.id))}
-                className="flex w-[68px] shrink-0 flex-col items-center gap-1"
-              >
-                <div className="canact-glow-border rounded-[18px] p-[2px]">
-                  <div className="rounded-[16px] bg-white p-[2px]">
-                    <div className="h-16 w-14 overflow-hidden rounded-[14px] bg-brand-light/40">
-                      {story.authorPhoto ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={story.authorPhoto} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-bold text-brand">{(story.authorName?.[0] ?? '?').toUpperCase()}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">{story.authorName?.split(' ')[0] ?? ''}</span>
-              </button>
-            ))}
+            ) : storyGroups.filter((g) => g.uid !== user?.uid).map((group) => {
+              const allWatched = group.items.every((s) => !!s.viewers?.[user!.uid]);
+              return (
+                <button
+                  key={group.uid}
+                  type="button"
+                  onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === group.items[0].id))}
+                  className="flex w-[68px] shrink-0 flex-col items-center gap-1"
+                >
+                  <StoryRing
+                    state={allWatched ? 'watched' : 'unwatched'}
+                    src={group.authorPhoto ?? null}
+                    fallback={(group.authorName?.[0] ?? '?').toUpperCase()}
+                  />
+                  <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">{group.authorName?.split(' ')[0] ?? ''}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         {/* Filter trigger \u2014 same visual size as a story ring, inline so it always sits in line */}
@@ -267,8 +277,8 @@ export default function FeedPage() {
           meName={profile.fullName}
           mePhoto={profile.photoURL}
           onClose={() => setViewerIndex(null)}
-          onDelete={async (uid) => {
-            await deleteStory(uid);
+          onDelete={async (uid, storyId) => {
+            await deleteStory(uid, storyId);
             toast('Story removed', 'success');
           }}
         />

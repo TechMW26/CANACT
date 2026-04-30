@@ -17,36 +17,93 @@ function stripUndef<T>(v: T): T {
   return v;
 }
 
-export async function upsertStory(input: Omit<StoryItem, 'id' | 'createdAt' | 'expiresAt' | 'viewers' | 'likes' | 'replies'>) {
+/** Append a new story for the user. Each user can have many active stories
+ *  at once (24h window) — they're stored under `stories/{uid}/{storyId}`
+ *  where storyId is a Firebase push key. The legacy single-doc layout
+ *  (`stories/{uid}` holding one StoryItem directly) is still readable by
+ *  `listenActiveStories`, but every newly-posted story now lands in the
+ *  per-user collection so adding a second story before the first expires
+ *  no longer overwrites it. */
+export async function addStory(
+  input: Omit<StoryItem, 'id' | 'createdAt' | 'expiresAt' | 'viewers' | 'likes' | 'replies'>,
+) {
+  const storyRef = push(child(ref(db), `stories/${input.uid}`));
+  const id = storyRef.key as string;
   const story: StoryItem = stripUndef({
     ...input,
-    id: input.uid,
+    id,
     createdAt: Date.now(),
     expiresAt: Date.now() + 24 * 3600 * 1000,
   });
-  await set(ref(db, `stories/${input.uid}`), story);
+  await set(storyRef, story);
   return story;
 }
 
-export async function deleteStory(uid: string) {
-  await remove(ref(db, `stories/${uid}`));
+/** Back-compat alias used by the create-story page. */
+export const upsertStory = addStory;
+
+/** Delete one specific story belonging to `authorUid`. When `storyId` is
+ *  omitted (or matches the uid) we treat it as the legacy single-doc
+ *  layout and remove the entire user node. */
+export async function deleteStory(authorUid: string, storyId?: string) {
+  if (!storyId || storyId === authorUid) {
+    await remove(ref(db, `stories/${authorUid}`));
+    return;
+  }
+  await remove(ref(db, `stories/${authorUid}/${storyId}`));
 }
 
+/** Stream all active stories from every user. Handles both schemas:
+ *  - new: `stories/{uid}/{storyId}` → object with `id`, `uid`, `mediaUrl`…
+ *  - legacy: `stories/{uid}` → a single StoryItem directly under the uid
+ *  Each user's stories are sorted oldest-first so the segmented progress
+ *  bar plays them in posting order; users are sorted by their newest
+ *  story (latest first) so fresh creators surface to the left. */
 export function listenActiveStories(cb: (items: StoryItem[]) => void) {
   return onValue(ref(db, 'stories'), (snap) => {
-    const out: StoryItem[] = [];
-    snap.forEach((c) => {
-      const value = c.val() as StoryItem;
-      if (value?.expiresAt > Date.now()) out.push(value);
+    const now = Date.now();
+    const groups: Array<{ uid: string; latest: number; items: StoryItem[] }> = [];
+    snap.forEach((userNode) => {
+      const uid = userNode.key as string;
+      const value = userNode.val();
+      if (!value || typeof value !== 'object') return;
+      const list: StoryItem[] = [];
+      // Detect legacy single-doc: the value itself looks like a StoryItem.
+      if (typeof (value as any).mediaUrl === 'string' && typeof (value as any).expiresAt === 'number') {
+        const v = value as StoryItem;
+        if (v.expiresAt > now) list.push({ ...v, id: v.id || uid, uid });
+      } else {
+        for (const [storyId, raw] of Object.entries(value as Record<string, StoryItem>)) {
+          if (!raw || typeof raw !== 'object') continue;
+          if (typeof (raw as any).mediaUrl !== 'string' || typeof (raw as any).expiresAt !== 'number') continue;
+          if (raw.expiresAt > now) list.push({ ...raw, id: raw.id || storyId, uid });
+        }
+      }
+      if (list.length === 0) return;
+      list.sort((a, b) => a.createdAt - b.createdAt);
+      groups.push({ uid, latest: list[list.length - 1].createdAt, items: list });
     });
-    out.sort((a, b) => b.createdAt - a.createdAt);
+    groups.sort((a, b) => b.latest - a.latest);
+    const out: StoryItem[] = [];
+    for (const g of groups) out.push(...g.items);
     cb(out);
   });
 }
 
-export async function markStoryView(storyUid: string, viewer: { uid: string; name: string; photoURL?: string }) {
-  if (storyUid === viewer.uid) return;
-  await update(ref(db, `stories/${storyUid}/viewers/${viewer.uid}`), {
+/** Path resolver that handles both schemas — legacy single-doc lives at
+ *  `stories/{uid}`, new collection at `stories/{uid}/{storyId}`. */
+function storyPath(authorUid: string, storyId: string): string {
+  if (storyId === authorUid) return `stories/${authorUid}`;
+  return `stories/${authorUid}/${storyId}`;
+}
+
+export async function markStoryView(
+  authorUid: string,
+  storyId: string,
+  viewer: { uid: string; name: string; photoURL?: string },
+) {
+  if (authorUid === viewer.uid) return;
+  await update(ref(db, `${storyPath(authorUid, storyId)}/viewers/${viewer.uid}`), {
     uid: viewer.uid,
     name: viewer.name,
     photoURL: viewer.photoURL ?? null,
@@ -54,22 +111,35 @@ export async function markStoryView(storyUid: string, viewer: { uid: string; nam
   });
 }
 
-export async function toggleStoryLike(storyUid: string, viewerUid: string, liked: boolean) {
-  await update(ref(db, `stories/${storyUid}`), {
+export async function toggleStoryLike(
+  authorUid: string,
+  storyId: string,
+  viewerUid: string,
+  liked: boolean,
+) {
+  await update(ref(db, storyPath(authorUid, storyId)), {
     [`likes/${viewerUid}`]: liked ? Date.now() : null,
     [`viewers/${viewerUid}/liked`]: liked,
   });
 }
 
-export async function replyToStory(storyUid: string, reply: Omit<StoryReply, 'id' | 'createdAt'>) {
-  const replyRef = push(child(ref(db), `stories/${storyUid}/replies`));
+export async function replyToStory(
+  authorUid: string,
+  storyId: string,
+  reply: Omit<StoryReply, 'id' | 'createdAt'>,
+) {
+  const replyRef = push(child(ref(db), `${storyPath(authorUid, storyId)}/replies`));
   const item: StoryReply = { ...reply, id: replyRef.key as string, createdAt: Date.now() };
   await set(replyRef, item);
   return item;
 }
 
-export function listenStory(uid: string, cb: (story: StoryItem | null) => void) {
-  return onValue(ref(db, `stories/${uid}`), (snap) => {
+export function listenStory(
+  authorUid: string,
+  storyId: string,
+  cb: (story: StoryItem | null) => void,
+) {
+  return onValue(ref(db, storyPath(authorUid, storyId)), (snap) => {
     cb((snap.val() as StoryItem) ?? null);
   });
 }
