@@ -44,21 +44,24 @@ export function ScrollRestoration() {
   // Restore on entering a new route. Wait one frame so the new page
   // tree has had a chance to mount; if data still hasn't loaded yet
   // the page itself can stash an explicit min-height to avoid layout
-  // collapse.
+  // collapse. When no saved value exists (i.e. the user is opening
+  // the page for the first time) we explicitly scroll to the top —
+  // SPA navigation otherwise keeps the previous page's scroll
+  // position, which made every freshly-opened page feel like it had
+  // mysteriously skipped past its own header.
   useEffect(() => {
     if (!pathname || pathname === lastPath.current) return;
     lastPath.current = pathname;
     if (restoredFor.current === pathname) return;
     let raw: string | null = null;
     try { raw = sessionStorage.getItem(`canact:scroll:${pathname}`); } catch {}
-    if (!raw) return;
-    const y = Number(raw);
-    if (!Number.isFinite(y) || y <= 0) return;
+    const y = raw ? Number(raw) : 0;
+    const target = Number.isFinite(y) && y > 0 ? y : 0;
     restoredFor.current = pathname;
     // Two RAFs: first lets React commit the new tree, second lets the
     // browser lay it out before we scroll.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      window.scrollTo({ top: y, behavior: 'auto' });
+      window.scrollTo({ top: target, behavior: 'auto' });
     }));
   }, [pathname]);
 

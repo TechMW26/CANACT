@@ -79,10 +79,41 @@ export default function InboxThreadPage() {
     return () => { off?.(); offMsgs?.(); };
   }, [user, profile, other]);
 
+  // Scroll the message list to the bottom on every change. We do it on
+  // a triple-rAF schedule (current frame + next two) because:
+  //   1. The first scroll happens before MessageBubble children measure
+  //      their text + media; their final height isn't known yet.
+  //   2. Image/poster loads bump scrollHeight again a frame or two later.
+  //   3. The Android WebView occasionally swallows a single scrollTop
+  //      assignment when it coincides with layout invalidation, so we
+  //      retry on the next frame to be safe.
+  // Without this, opening a chat for the first time used to drop the
+  // user near the top of the history instead of at the latest message.
   useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    const stick = () => { el.scrollTop = el.scrollHeight; };
+    stick();
+    const r1 = requestAnimationFrame(() => {
+      stick();
+      const r2 = requestAnimationFrame(stick);
+      (stick as any)._r2 = r2;
+    });
+    return () => cancelAnimationFrame(r1);
   }, [messages.length, replyTo, pendingAttachment]);
+
+  // Also scroll once when the thread first resolves (i.e. messages
+  // arrive after the initial render with length 0). This catches the
+  // race where the dependency array above doesn't fire because length
+  // happened to start at 0 and the very first listener snapshot is
+  // also empty.
+  useEffect(() => {
+    if (!thread) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const id = setTimeout(() => { el.scrollTop = el.scrollHeight; }, 50);
+    return () => clearTimeout(id);
+  }, [thread?.id]);
 
   if (!user || !profile) return null;
 

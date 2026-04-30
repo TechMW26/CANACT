@@ -77,24 +77,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [user, profile, loading, pathname, router, profileTimedOut]);
 
-  // Cold-start route restore: if the WebView was killed by Android while
-  // the user was deep in /inbox/<uid> or /post/<id>, dropping them on
-  // /feed makes the app feel like it 'truly closed'. Send them back to
-  // exactly where they were instead. We only do this once per process,
-  // and only when we wake up on the default landing route.
-  const restoredRouteRef = useRef(false);
-  useEffect(() => {
-    if (restoredRouteRef.current) return;
-    if (loading || !user) return;
-    if (!profile && !profileTimedOut) return;
-    restoredRouteRef.current = true;
-    if (pathname !== '/feed') return;
-    let last: string | null = null;
-    try { last = localStorage.getItem('canact:lastRoute'); } catch {}
-    if (!last || last === '/feed' || last === pathname) return;
-    if (last.startsWith('/welcome') || last.startsWith('/onboard') || last.startsWith('/login')) return;
-    router.replace(last);
-  }, [loading, user, profile, profileTimedOut, pathname, router]);
+  // Cold-start route restore was sending users back to /inbox/<uid>
+  // (or whatever screen they had open last) when they reopened the
+  // app — which the user expects to feel like a fresh launch and land
+  // on /feed. We keep recording `canact:lastRoute` for in-session
+  // recovery (e.g. WebView reload mid-call) but no longer hijack the
+  // first navigation after a cold start.
+  const restoredRouteRef = useRef(true);
 
   if (loading || !user || (!profile && !profileTimedOut)) {
     // Mount the ringer + deep-link router OUTSIDE the splash return so a
@@ -119,7 +108,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return (
       <div id="canact-app-shell" className="min-h-screen">
         <ScrollRestoration />
-        {children}
+        <PageTransition>{children}</PageTransition>
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <HelpAlertManager />
         <IncomingCallRinger />

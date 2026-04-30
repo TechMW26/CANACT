@@ -51,19 +51,22 @@ input[type="time"]::-webkit-date-and-time-value {
 /* utility focus ring in brand red */
 .focus-ring:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
 
-/* ---------- Page entrance: smooth fade + tiny rise ---------- */
+/* ---------- Page entrance: slide-in from the right + fade.
+   Fires on every route change via <PageTransition key={pathname}>.
+   Distance + duration tuned to feel snappy (250ms) but visible enough
+   that users perceive the navigation as a real "page push" instead of
+   an instant content swap. */
 .canact-fade-in {
   opacity: 0;
-  transform: translate3d(0, 8px, 0) scale(0.992);
-  animation: canactFadeIn 320ms cubic-bezier(0.22, 0.85, 0.3, 1) both;
+  transform: translate3d(18px, 0, 0);
+  animation: canactFadeIn 260ms cubic-bezier(0.22, 0.85, 0.3, 1) both;
   will-change: opacity, transform;
   backface-visibility: hidden;
-  transform-origin: 50% 0;
 }
 @keyframes canactFadeIn {
-  0%   { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.992); }
+  0%   { opacity: 0; transform: translate3d(18px, 0, 0); }
   60%  { opacity: 1; }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* Unified column width used by header pill, page content, and bottom nav so

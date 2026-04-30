@@ -857,7 +857,11 @@ export function InAppCallSheet({
             aria-label={speakerOn ? 'Speaker on — tap for earpiece' : 'Earpiece — tap for speaker'}
             aria-pressed={speakerOn}
           >
-            {speakerOn ? <Volume2 size={22} /> : <VolumeX size={22} />}
+            {/* Always show the speaker icon — active state is conveyed by
+                the brand-fill background, not by swapping in a muted
+                glyph (which read as "speaker disabled" rather than
+                "earpiece routing"). */}
+            <Volume2 size={22} />
           </button>
           <button
             type="button"

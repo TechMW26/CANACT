@@ -186,6 +186,26 @@ public class CallForegroundService extends Service {
         // succeeded with phoneCall/specialUse we have BAL exemption; if it
         // didn't, the call is still better off trying than not. Android
         // will silently no-op when the launch is blocked.
+        //
+        // Pre-warm MainActivity (the WebView) FIRST so it ends up below
+        // the ringer in the back stack. Cold-launching MainActivity
+        // AFTER the user taps Answer means they have to wait for the
+        // WebView + JS bundle + React hydration (~1-3s on mid-range
+        // Android) before WebRTC even starts. By pre-warming here we
+        // move that work into the few seconds of ringing — when the
+        // user accepts, the deep-link arrives as an onNewIntent on the
+        // already-hydrated MainActivity and InAppCallSheet mounts in
+        // milliseconds.
+        try {
+            Intent warm = new Intent(this, MainActivity.class);
+            warm.setAction("com.canact.app.PREWARM");
+            warm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+            startActivity(warm);
+        } catch (Throwable t) {
+            Log.w(TAG, "MainActivity pre-warm blocked", t);
+        }
+
         Intent ringer = new Intent(this, IncomingCallActivity.class);
         ringer.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
         ringer.putExtra(IncomingCallActivity.EXTRA_FROM_NAME, fromName);
