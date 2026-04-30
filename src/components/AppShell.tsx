@@ -97,7 +97,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [loading, user, profile, profileTimedOut, pathname, router]);
 
   if (loading || !user || (!profile && !profileTimedOut)) {
-    return <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />;
+    // Mount the ringer + deep-link router OUTSIDE the splash return so a
+    // call answered from the lockscreen notification doesn't have to wait
+    // for the WebView to finish loading the full app + profile data
+    // before WebRTC can start. As soon as the user object resolves the
+    // ringer can subscribe to incomingCalls and pick up the pre-decision.
+    return (
+      <>
+        <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />
+        <NativeCallDeepLinkRouter />
+        {user ? <IncomingCallRinger /> : null}
+      </>
+    );
   }
 
   // Full-screen routes: hide the unified header, page transition wrapper, and
@@ -111,6 +122,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <HelpAlertManager />
+        <IncomingCallRinger />
+        <NativeCallDeepLinkRouter />
       </div>
     );
   }

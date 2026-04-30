@@ -632,24 +632,36 @@ function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: stri
         </div>
       </div>
 
-      {/* Full-bleed photo (matches the new media-tile style — no inner
-          padding so the photo runs edge-to-edge inside the card). */}
+      {/* Full-bleed photo with floating share button to match the
+          MediaOverlayTile design language used by posts and reels. */}
       {sess.photoURL && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={sess.photoURL}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="mt-3 block w-full max-h-[480px] object-cover"
-        />
+        <div className="relative mt-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={sess.photoURL}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="block w-full max-h-[480px] object-cover"
+          />
+          <div className="absolute right-2 bottom-2 z-[2]">
+            <button
+              type="button"
+              onClick={() => onShare({ kind: 'rateme', sessionId: sess.id })}
+              aria-label="Share"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white"
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Once voting is locked we ditch the buttons entirely and just
           render a results bar so the card stays useful as a permanent
           record on the wall and on the author's profile. */}
       {locked ? (
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3 pb-4">
           <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-ink/60">
             <span className="text-rose-500">Down · {dislikes}</span>
             <span className="text-emerald-600">Up · {likes}</span>
@@ -665,7 +677,7 @@ function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: stri
       ) : (
         // Active voting: pastel colour-coded pills, full-width, equal
         // halves. Down-vote left, Up-vote right per spec.
-        <div className="px-4 pt-3 grid grid-cols-2 gap-2">
+        <div className="px-4 pt-3 pb-4 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => cast('dislike')}
@@ -692,18 +704,6 @@ function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: stri
           </button>
         </div>
       )}
-
-      {/* Action row — share only, per spec (no like / comment here). */}
-      <div className="flex items-center justify-end px-4 pb-3 pt-3">
-        <button
-          type="button"
-          onClick={() => onShare({ kind: 'rateme', sessionId: sess.id })}
-          aria-label="Share"
-          className="inline-flex items-center gap-1 rounded-full px-3 h-9 text-xs font-semibold border border-line bg-white"
-        >
-          <Send size={14} /> Share
-        </button>
-      </div>
     </article>
   );
 }

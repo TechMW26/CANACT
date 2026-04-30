@@ -91,14 +91,21 @@ export function IncomingCallRinger() {
     };
   }, [pending?.id]);
 
-  if (!user || !profile) return null;
+  if (!user) return null;
+  // We intentionally do NOT block on `profile` loading here — calls answered
+  // from the lockscreen need to start their WebRTC handshake the instant
+  // the user taps Accept, not after Firestore round-trips for the full
+  // profile. We fall back to a placeholder display name; the call signaling
+  // doesn't depend on profile fields, only on `user.uid`.
+  const meName = profile?.fullName ?? 'You';
+  const mePhoto = profile?.photoURL ?? undefined;
 
   if (accepted) {
     return (
       <InAppCallSheet
         open={!!accepted}
         onClose={() => setAccepted(null)}
-        me={{ uid: user.uid, name: profile.fullName, photoURL: profile.photoURL }}
+        me={{ uid: user.uid, name: meName, photoURL: mePhoto }}
         peer={accepted.from}
         helpId={accepted.helpId}
         incomingCallId={accepted.id}
