@@ -34,7 +34,7 @@ import {
   ThumbsUp,
   Camera,
   Film,
-  Bookmark,
+  Heart,
   BarChart3,
   Settings as SettingsIcon,
 } from '@/components/icons';
@@ -63,7 +63,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [posts, setPosts] = useState<WhaPost[]>([]);
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [tab, setTab] = useState<'posts' | 'reels' | 'polls' | 'tagged'>('posts');
+  const [tab, setTab] = useState<'posts' | 'reels' | 'polls' | 'rateme'>('posts');
   useEffect(() => {
     return listenUserWhaPosts(uid, setPosts);
   }, [uid]);
@@ -253,26 +253,17 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
         </div>
       </Card>
 
-      {/* Rate Me sessions (active + recently ended) — gives finished
-          rounds a permanent home on the author's profile, mirroring the
-          wall card. Voting is locked once endsAt passes; we render a
-          results bar instead of buttons in that state. */}
-      {ratemes.length > 0 && user ? (
-        <div className="space-y-3">
-          {ratemes.map((s) => (
-            <ProfileRateMeCard key={s.id} sess={s} myUid={user.uid} />
-          ))}
-        </div>
-      ) : null}
-
-      {/* Instagram-style posts grid */}
+      {/* Instagram-style posts grid. The 4th tab ("Rate Me") replaced the
+          old "Tagged" stub — the user's active + recently-ended Rate Me
+          sessions now live inside this grid instead of as a separate strip
+          above it, so all of a user's content is in one place. */}
       <Card className="!p-0 overflow-hidden">
         <div className="grid grid-cols-4 border-b border-line">
           {([
             { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
             { id: 'reels', label: 'Reels', Icon: Film, count: reels.length },
             { id: 'polls', label: 'Polls', Icon: BarChart3, count: polls.length },
-            { id: 'tagged', label: 'Tagged', Icon: Bookmark, count: 0 },
+            { id: 'rateme', label: 'Rate Me', Icon: Heart, count: ratemes.length },
           ] as const).map(({ id, label, Icon, count }) => {
             const active = tab === id;
             return (
@@ -415,13 +406,24 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
             </div>
           )
         ) : (
-          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-              <Bookmark size={20} />
-            </span>
-            <div className="text-sm font-bold text-ink">Coming soon</div>
-            <div className="text-xs text-muted">This tab will light up soon.</div>
-          </div>
+          // Rate Me tab — active + recently-ended sessions. Voting is
+          // locked once endsAt passes; ProfileRateMeCard renders the
+          // results bar in that state instead of buttons.
+          ratemes.length === 0 || !user ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+                <Heart size={20} />
+              </span>
+              <div className="text-sm font-bold text-ink">No Rate Me yet</div>
+              <div className="text-xs text-muted">{isSelf ? 'Tap + to start one.' : 'Nothing here yet.'}</div>
+            </div>
+          ) : (
+            <div className="space-y-3 p-3">
+              {ratemes.map((s) => (
+                <ProfileRateMeCard key={s.id} sess={s} myUid={user.uid} />
+              ))}
+            </div>
+          )
         )}
       </Card>
 
