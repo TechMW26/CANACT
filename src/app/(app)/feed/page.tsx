@@ -16,7 +16,7 @@ import { listenReels, deleteReel } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, Eye, SlidersHorizontal, Send, Play } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, SlidersHorizontal, Send, Play } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
 import { Sheet } from '@/components/Sheet';
@@ -134,13 +134,7 @@ export default function FeedPage() {
                 stories so the user can tell at a glance whether anything\n                fresh is sitting in their archive. */}
             <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
               <StoryRing
-                state={
-                  myStoryGroup
-                    ? (myStoryGroup.items.some((s) => !s.viewers?.[user!.uid] && s.uid !== user!.uid) || myStoryGroup.items.some((s) => !s.viewers?.[user!.uid]))
-                      ? 'unwatched'
-                      : 'watched'
-                    : 'none'
-                }
+                state={myStoryGroup ? 'unwatched' : 'none'}
                 src={profile?.photoURL ?? null}
                 fallback={(profile?.fullName?.[0] ?? '?').toUpperCase()}
                 showPlus={!myStoryGroup}
@@ -353,15 +347,17 @@ function WhaTextCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; o
   );
 }
 
-/** A square-ish image-overlay tile shared by media Wha posts and Reels.
- *  The first image is the hero; user pill sits top-left, action stack
- *  on the right, caption bottom-left over a soft black gradient.
- *  Tapping the tile opens the post detail; the action buttons stop
+/** A media tile composed of two stacked sections inside a single white
+ *  card: the media on top (image / autoplaying muted video) with a small
+ *  pill badge floating bottom-left, and a white caption strip below
+ *  showing 2-3 lines of caption + a "Read more" link, plus the like /
+ *  comment / share row on the right so action buttons NEVER overlap the
+ *  media. The whole tile is tappable; the action buttons stop
  *  propagation so they don't double-fire. */
 function MediaOverlayTile({
   href,
   heightClass,
-  topRight,
+  badge,
   authorPhoto,
   authorName,
   authorUid,
@@ -377,7 +373,7 @@ function MediaOverlayTile({
 }: {
   href: string;
   heightClass: string;
-  topRight?: React.ReactNode;
+  badge?: React.ReactNode;
   authorPhoto?: string | null;
   authorName: string;
   authorUid: string;
@@ -391,53 +387,82 @@ function MediaOverlayTile({
   isOwner: boolean;
   children: React.ReactNode;
 }) {
+  const trimmed = (caption ?? '').trim();
+  // ~70 chars per line × 2 → showLong threshold; CSS line-clamp also
+  // limits wrap height so the "Read more" toggle always lines up.
+  const isLong = trimmed.length > 90;
+  const router = useRouter();
   return (
-    <Link href={href} prefetch className={`relative block w-full ${heightClass} overflow-hidden rounded-[24px] bg-[#0E0E10] active:scale-[0.99] transition`}>
-      {/* Media layer */}
-      <div className="absolute inset-0">{children}</div>
-      {/* Bottom shadow gradient \u2014 keeps caption legible without
-          darkening the whole image. */}
-      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 50%)' }} />
-      {/* Top-left author pill */}
-      <div className="absolute left-2 top-2 right-2 flex items-start justify-between gap-2">
-        <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
-          <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-1.5 py-1 pr-2.5 max-w-[60vw] shadow-sm">
-            <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-1 ring-brand/40">
-              <Avatar src={authorPhoto} name={authorName} size={24} />
-            </span>
-            <span className="text-[11px] font-bold text-ink truncate">{authorName}</span>
-          </Link>
-        </div>
-        <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto flex items-center gap-1.5">
-          {topRight}
+    <div className={`flex w-full flex-col overflow-hidden rounded-[24px] bg-white border border-[#F1D7DC] shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]`}>
+      {/* Media block \u2014 fixed height, the only place where overlays sit. */}
+      <Link
+        href={href}
+        prefetch
+        className={`relative block w-full ${heightClass} overflow-hidden bg-[#0E0E10] active:opacity-95 transition`}
+      >
+        <div className="absolute inset-0">{children}</div>
+        {/* Top-left author pill */}
+        <div className="absolute left-2 top-2 right-2 flex items-start justify-between gap-2">
+          <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
+            <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-1.5 py-1 pr-2.5 max-w-[60vw] shadow-sm">
+              <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-1 ring-brand/40">
+                <Avatar src={authorPhoto} name={authorName} size={24} />
+              </span>
+              <span className="text-[11px] font-bold text-ink truncate">{authorName}</span>
+            </Link>
+          </div>
           {isOwner && onDelete ? (
-            <span className="inline-flex items-center justify-center rounded-full bg-white/90 backdrop-blur h-7 w-7 shadow-sm">
-              <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
-            </span>
+            <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
+              <span className="inline-flex items-center justify-center rounded-full bg-white/90 backdrop-blur h-7 w-7 shadow-sm">
+                <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
+              </span>
+            </div>
           ) : null}
         </div>
-      </div>
-      {/* Bottom-left caption */}
-      {caption ? (
-        <div className="absolute left-2 right-12 bottom-2 text-white text-[12px] font-medium leading-tight line-clamp-2 drop-shadow">
-          {caption}
+        {/* Bottom-left type badge (Reel / Photo / etc.) */}
+        {badge ? (
+          <div className="absolute left-2 bottom-2">
+            {badge}
+          </div>
+        ) : null}
+      </Link>
+
+      {/* Caption + actions strip on a white background so the media is
+          never overlapped by text or buttons. */}
+      <div className="flex items-start gap-2 px-3 py-2.5">
+        <div className="min-w-0 flex-1 text-[12px] leading-snug text-ink">
+          {trimmed ? (
+            <>
+              <span className="line-clamp-2 whitespace-pre-wrap">{trimmed}</span>
+              {isLong ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); router.push(href); }}
+                  className="mt-0.5 text-[11px] font-bold text-brand"
+                >
+                  Read more
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-ink/40">\u00a0</span>
+          )}
         </div>
-      ) : null}
-      {/* Right action stack */}
-      <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto absolute right-2 bottom-2 flex flex-col items-center gap-1.5">
-        <button onClick={(e) => { e.preventDefault(); onLike(); }} aria-label="Like" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
-          <Heart size={16} className={liked ? 'text-[#FF6B7A]' : 'text-ink/70'} fill={liked ? '#FF6B7A' : 'none'} />
-        </button>
-        {likeCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{likeCount}</span>}
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
-          <MessageCircle size={16} className="text-ink/70" />
-        </span>
-        {commentCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{commentCount}</span>}
-        <button onClick={(e) => { e.preventDefault(); onShare(); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-sm">
-          <Send size={16} className="text-ink/70" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }} aria-label="Like" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
+            <Heart size={14} className={liked ? 'text-[#FF6B7A]' : 'text-ink/70'} fill={liked ? '#FF6B7A' : 'none'} />
+          </button>
+          {likeCount > 0 && <span className="text-[10px] font-bold text-ink/70 -ml-0.5 mr-0.5">{likeCount}</span>}
+          <Link href={href} prefetch onClick={(e) => e.stopPropagation()} aria-label="Comments" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
+            <MessageCircle size={14} className="text-ink/70" />
+          </Link>
+          {commentCount > 0 && <span className="text-[10px] font-bold text-ink/70 -ml-0.5 mr-0.5">{commentCount}</span>}
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white border border-line">
+            <Send size={14} className="text-ink/70" />
+          </button>
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -464,9 +489,14 @@ function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: 
       onShare={() => onShare({ kind: 'post', postId: post.id })}
       isOwner={post.uid === myUid}
       onDelete={async () => { await deletePost(post.id, myUid); }}
+      badge={isVideo ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-black/60 backdrop-blur text-white px-2 h-6 text-[10px] font-bold shadow-sm">
+          <Play size={10} fill="currentColor" /> Video
+        </span>
+      ) : undefined}
     >
       {cover && isVideo ? (
-        <VideoPreview src={cover} className="h-full w-full" fit="cover" autoPlay={false} initialMuted />
+        <VideoPreview src={cover} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
       ) : cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
@@ -565,13 +595,59 @@ function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid
       onShare={() => onShare({ kind: 'reel', reelId: reel.id })}
       isOwner={reel.uid === myUid}
       onDelete={async () => { await deleteReel(reel.id, myUid); }}
-      topRight={(
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-7 text-[10px] font-bold shadow-sm">
+      badge={(
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-6 text-[10px] font-bold shadow-sm">
           <Play size={10} fill="currentColor" /> Reel
         </span>
       )}
     >
-      <VideoPreview src={reel.videoUrl} className="h-full w-full" fit="cover" autoPlay={false} initialMuted />
+      <VideoPreview src={reel.videoUrl} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
     </MediaOverlayTile>
+  );
+}
+
+/** Story-strip avatar tile. The visual ring around the avatar communicates
+ *  story state: solid brand-coloured for unwatched (animated breathing
+ *  highlight), flat grey for watched, and no ring at all when the user
+ *  has nothing to show. The optional plus badge hangs centred below the
+ *  avatar so users can post their first story without taking screen
+ *  estate from the actual visual ring state. */
+function StoryRing({
+  state,
+  src,
+  fallback,
+  showPlus,
+}: {
+  state: 'unwatched' | 'watched' | 'none';
+  src?: string | null;
+  fallback: string;
+  showPlus?: boolean;
+}) {
+  const ringClass =
+    state === 'unwatched'
+      ? 'canact-glow-border p-[2px]'
+      : state === 'watched'
+        ? 'bg-[#E5E0E1] p-[2px]'
+        : 'p-0';
+  return (
+    <div className="relative">
+      <div className={`rounded-[18px] ${ringClass}`}>
+        <div className={state === 'none' ? 'rounded-[18px] bg-white p-[2px]' : 'rounded-[16px] bg-white p-[2px]'}>
+          <div className={`h-16 w-14 overflow-hidden ${state === 'none' ? 'rounded-[16px]' : 'rounded-[14px]'} bg-brand-light/40`}>
+            {src ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={src} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs font-bold text-brand">{fallback}</div>
+            )}
+          </div>
+        </div>
+      </div>
+      {showPlus ? (
+        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white shadow-sm">
+          <Plus size={12} />
+        </span>
+      ) : null}
+    </div>
   );
 }
