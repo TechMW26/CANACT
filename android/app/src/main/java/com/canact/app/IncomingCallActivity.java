@@ -40,32 +40,40 @@ public class IncomingCallActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Window flags MUST be set before super.onCreate / setContentView
+        // on some OEM ROMs, otherwise the activity briefly draws behind the
+        // keyguard and the user sees a flash of black before the ringer.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        }
+        getWindow().addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON);
+
         super.onCreate(savedInstanceState);
 
+        // Ask the OS to drop the lockscreen so Answer/Decline are tappable
+        // without unlocking. Best-effort \u2014 if the user has a secure
+        // lockscreen they'll still be prompted on Answer (which is correct).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            try {
+                KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+                if (km != null) km.requestDismissKeyguard(this, null);
+            } catch (Throwable ignored) {}
+        }
+
         // If we're being launched with a cancel intent (only happens when the
-        // activity wasn't already running), bail out immediately — there's
+        // activity wasn't already running), bail out immediately \u2014 there's
         // nothing to ring for.
         Intent launchIntent = getIntent();
         if (launchIntent != null && "cancel".equals(launchIntent.getAction())) {
             finish();
             return;
         }
-
-        // Show over the lockscreen + turn the screen on the moment the
-        // activity launches, identical to a system phone-app ringer.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true);
-            setTurnScreenOn(true);
-            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
-            if (km != null) km.requestDismissKeyguard(this, null);
-        } else {
-            getWindow().addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
-        }
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.activity_incoming_call);
 

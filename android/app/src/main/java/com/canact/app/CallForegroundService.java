@@ -12,6 +12,8 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.Person;
@@ -45,7 +47,9 @@ public class CallForegroundService extends Service {
     public static final String EXTRA_FROM_PHOTO = "fromPhoto";
 
     private static final String CHANNEL_ID = "canact_calls_v3";
+    private static final String TAG = "CallFgSvc";
     private String currentCallId;
+    private PowerManager.WakeLock wakeLock;
 
     /** Convenience: kick the service into "ringing" state. */
     public static void startRinging(Context ctx, String callId, String fromName, String fromPhoto) {
@@ -101,34 +105,86 @@ public class CallForegroundService extends Service {
         String fromPhoto = intent.getStringExtra(EXTRA_FROM_PHOTO);
 
         currentCallId = callId;
+
+        // Wake the CPU + screen the moment FCM hands us the message. Without
+        // this, on Android 12+ the screen often stays off when an FCM
+        // foreground service launches an activity from a cold-start — the
+        // notification rings but the lockscreen ringer never appears.
+        // Using SCREEN_BRIGHT_WAKE_LOCK | ACQUIRE_CAUSES_WAKEUP because
+        // FULL_WAKE_LOCK is deprecated since API 17.
+        try {
+            if (wakeLock == null) {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                if (pm != null) {
+                    //noinspection deprecation — SCREEN_BRIGHT is the only flag
+                    // that reliably wakes the display from a service.
+                    wakeLock = pm.newWakeLock(
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                            | PowerManager.ON_AFTER_RELEASE,
+                        "canact:incomingCall");
+                    wakeLock.setReferenceCounted(false);
+                }
+            }
+            if (wakeLock != null && !wakeLock.isHeld()) {
+                // Auto-release after 60s — ringtone duration cap.
+                wakeLock.acquire(60_000L);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "wake lock failed", t);
+        }
+
         Notification n = buildCallNotification(callId, fromName);
 
-        // Promote to foreground with serviceType=phoneCall — the magic that
-        // gives us BAL exemption for the activity launch below.
+        // Promote to foreground. Try phoneCall first (BAL exemption + most
+        // accurate UX), then specialUse (Android 14+ fall-back when
+        // MANAGE_OWN_CALLS isn't fully recognised by the OEM ROM), then
+        // a plain startForeground without a type (pre-Q). On any failure
+        // we still post the notification + try to launch the activity —
+        // a half-working ringer is better than no ringer at all.
+        boolean foregroundOk = false;
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(callId.hashCode(), n,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(callId.hashCode(), n,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    startForeground(callId.hashCode(), n,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+                    foregroundOk = true;
+                } catch (Throwable t1) {
+                    Log.w(TAG, "phoneCall fgs failed, trying specialUse", t1);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        try {
+                            startForeground(callId.hashCode(), n,
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                            foregroundOk = true;
+                        } catch (Throwable t2) {
+                            Log.w(TAG, "specialUse fgs failed, trying plain", t2);
+                            startForeground(callId.hashCode(), n);
+                            foregroundOk = true;
+                        }
+                    } else {
+                        startForeground(callId.hashCode(), n);
+                        foregroundOk = true;
+                    }
+                }
             } else {
                 startForeground(callId.hashCode(), n);
+                foregroundOk = true;
             }
-        } catch (Exception ignored) {
-            // Some OEMs reject FOREGROUND_SERVICE_TYPE_PHONE_CALL — fall
-            // back to a plain notification. The activity launch below
-            // may not work in that state but the heads-up still rings.
+        } catch (Throwable t) {
+            Log.w(TAG, "all startForeground variants failed", t);
+            // Plain notify so the heads-up + sound + setFullScreenIntent at
+            // least fire — the OS will auto-launch the activity from FSI
+            // on a locked device.
             try {
                 NotificationManager mgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
                 if (mgr != null) mgr.notify(callId.hashCode(), n);
-            } catch (Exception ignored2) {}
+            } catch (Throwable ignored) {}
         }
 
-        // With the foreground service running we are now allowed to launch
-        // the full-screen ringer activity even on an unlocked device. This
-        // is what makes the call screen actually appear (instead of just a
-        // heads-up that the user might miss).
+        // Always attempt the explicit activity launch — if startForeground
+        // succeeded with phoneCall/specialUse we have BAL exemption; if it
+        // didn't, the call is still better off trying than not. Android
+        // will silently no-op when the launch is blocked.
         Intent ringer = new Intent(this, IncomingCallActivity.class);
         ringer.putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId);
         ringer.putExtra(IncomingCallActivity.EXTRA_FROM_NAME, fromName);
@@ -139,9 +195,11 @@ public class CallForegroundService extends Service {
             | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
         try {
             startActivity(ringer);
-        } catch (Exception ignored) {
-            // Notification + setFullScreenIntent will still ring on lock.
+        } catch (Throwable t) {
+            Log.w(TAG, "startActivity blocked, relying on FSI from notification", t);
         }
+        // Suppress the unused-warning while keeping the local readable.
+        if (!foregroundOk) Log.w(TAG, "Service is not in true foreground state");
 
         return START_NOT_STICKY;
     }
@@ -223,6 +281,12 @@ public class CallForegroundService extends Service {
 
     private void stopSelfSafely() {
         try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Throwable ignored) {}
+        wakeLock = null;
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE);
             } else {
@@ -230,6 +294,15 @@ public class CallForegroundService extends Service {
             }
         } catch (Exception ignored) {}
         stopSelf();
+    }
+
+    @Override
+    public void onDestroy() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+        } catch (Throwable ignored) {}
+        wakeLock = null;
+        super.onDestroy();
     }
 
     @Override

@@ -103,7 +103,11 @@
         <service
             android:name=".CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="phoneCall" />
+            android:foregroundServiceType="phoneCall|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Incoming voice/video call ringer" />
+        </service>
 
         <!-- Receives Answer / Decline taps from the call notification and
              from IncomingCallActivity. Decline writes status:'rejected'
@@ -156,8 +160,20 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Foreground service used while a voice call is active so the OS does
-         not kill the WebRTC connection if the user backgrounds the app. -->
+         not kill the WebRTC connection if the user backgrounds the app.
+         FOREGROUND_SERVICE_TYPE_PHONE_CALL on Android 14+ additionally
+         requires MANAGE_OWN_CALLS — without it startForeground() throws
+         SecurityException and the call screen never appears on the
+         lockscreen. SPECIAL_USE is declared as a fall-back for OEMs that
+         silently reject the phoneCall type. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!-- DISABLE_KEYGUARD lets the IncomingCallActivity dismiss the
+         lockscreen so the user can hit Answer / Decline without unlocking. -->
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <!-- TURN_SCREEN_ON (declared on Android 8.1+ via window flags only
+         needs WAKE_LOCK in the manifest — already declared above). -->
 </manifest>
 
