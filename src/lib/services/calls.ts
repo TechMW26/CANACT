@@ -41,6 +41,16 @@ export interface CallRecord {
    * (audio ↔ video). InAppCallSheet renegotiates the SDP on every change.
    */
   kind?: CallKind;
+  /**
+   * Pending mid-call video upgrade request. The party that wants to add
+   * video writes `{ from: <their uid>, at: <ts> }`; the peer's UI surfaces
+   * an Accept / Decline prompt. On Accept the peer FIRST adds its own local
+   * video track, then writes `kind: 'video'` and clears `videoRequest` so
+   * both sides upgrade together — without this race the SDP renegotiation
+   * sees only one side's video track and the other side's camera never
+   * makes it across.
+   */
+  videoRequest?: { from: string; at: number } | null;
   status: CallStatus;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
@@ -117,7 +127,20 @@ export async function createCall(args: {
 /** Either side may flip the call kind mid-call (e.g. upgrade voice → video).
  *  The peer's WebRTC layer reacts via the listenCall subscription. */
 export async function setCallKind(callId: string, kind: CallKind) {
-  await update(ref(db, `calls/${callId}`), { kind });
+  await update(ref(db, `calls/${callId}`), { kind, videoRequest: null });
+}
+
+/** Request a mid-call video upgrade from the peer. Writes a videoRequest
+ *  marker the other side observes via listenCall. The peer must explicitly
+ *  Accept (which calls setCallKind) or Decline (which calls clearVideoRequest). */
+export async function requestVideoUpgrade(callId: string, fromUid: string) {
+  await update(ref(db, `calls/${callId}`), { videoRequest: { from: fromUid, at: Date.now() } });
+}
+
+/** Drop a pending video upgrade request — used by Decline AND when the
+ *  requester cancels their own outstanding request. */
+export async function clearVideoRequest(callId: string) {
+  await update(ref(db, `calls/${callId}`), { videoRequest: null });
 }
 
 export async function setCallOffer(callId: string, offer: RTCSessionDescriptionInit) {

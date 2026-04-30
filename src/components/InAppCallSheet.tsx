@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Sheet } from './Sheet';
+import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 import { Mic, MicOff, PhoneOff, Phone, Video, VideoOff, SwitchCamera, Volume2, VolumeX, Loader2 } from './icons';
 import {
@@ -12,6 +12,8 @@ import {
   setCallOffer,
   setCallStatus,
   setCallKind,
+  requestVideoUpgrade,
+  clearVideoRequest,
   clearIncoming,
   RTC_CONFIG,
   CallKind,
@@ -94,6 +96,13 @@ export function InAppCallSheet({
   const ringbackRef = useRef<HTMLAudioElement | null>(null);
   const offerSetRef = useRef(false);
   const answerSetRef = useRef(false);
+  // SDP fingerprints of the last offer/answer we applied so we can
+  // distinguish a fresh renegotiated offer/answer from the original one
+  // that's still sitting in RTDB. Without this the caller would happily
+  // skip the renegotiated answer (because answerSetRef was already true)
+  // and the upgraded video tracks would never connect.
+  const lastOfferSdpRef = useRef<string | null>(null);
+  const lastAnswerSdpRef = useRef<string | null>(null);
   // Mirror of `callId` state in a ref so the cleanup closure (which is
   // captured at mount time) can always reach the latest id — critical for
   // the caller, whose id is only known after createCall() resolves.
@@ -113,6 +122,10 @@ export function InAppCallSheet({
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
+  // Mid-call video upgrade: who requested + when. When `videoRequest.from`
+  // is the peer's uid, we render the Accept / Decline overlay. When it's
+  // our own uid, we render a "Waiting for X to accept video..." indicator.
+  const [videoRequest, setVideoRequest] = useState<{ from: string; at: number } | null>(null);
 
   useEffect(() => {
     if (status !== 'active') return;
@@ -307,15 +320,19 @@ export function InAppCallSheet({
           const offCall = listenCall(id, async (rec) => {
             if (!rec) return;
             if (rec.kind && rec.kind !== kind) setKind(rec.kind);
+            setVideoRequest(rec.videoRequest ?? null);
             if (rec.status === 'rejected' || rec.status === 'ended') {
               setStatus('ended'); setTimeout(onClose, 150); return;
             }
-            if (rec.answer && !answerSetRef.current) {
+            if (rec.answer && rec.answer.sdp !== lastAnswerSdpRef.current) {
               answerSetRef.current = true;
-              await pc.setRemoteDescription(new RTCSessionDescription(rec.answer));
-              remoteDescSet = true;
-              await drainCands();
-              setStatus('active');
+              lastAnswerSdpRef.current = rec.answer.sdp ?? null;
+              try {
+                await pc.setRemoteDescription(new RTCSessionDescription(rec.answer));
+                remoteDescSet = true;
+                await drainCands();
+                setStatus('active');
+              } catch { /* ignore stale or duplicate */ }
             }
           });
           cleanup.push(offCall);
@@ -324,15 +341,17 @@ export function InAppCallSheet({
           const offCall = listenCall(id, async (rec) => {
             if (!rec) return;
             if (rec.kind && rec.kind !== kind) setKind(rec.kind);
+            setVideoRequest(rec.videoRequest ?? null);
             if (rec.status === 'ended' || rec.status === 'rejected') {
               setStatus('ended'); setTimeout(onClose, 150); return;
             }
-            if (rec.offer) {
+            if (rec.offer && rec.offer.sdp !== lastOfferSdpRef.current) {
               // First offer OR a renegotiated one — apply, answer, push back.
               try {
                 if (pc.signalingState === 'stable' || !offerSetRef.current) {
                   await pc.setRemoteDescription(new RTCSessionDescription(rec.offer));
                   offerSetRef.current = true;
+                  lastOfferSdpRef.current = rec.offer.sdp ?? null;
                   remoteDescSet = true;
                   await drainCands();
                   const ans = await pc.createAnswer();
@@ -506,15 +525,69 @@ export function InAppCallSheet({
 
   const flipKind = async () => {
     if (!callId) return;
-    const next: CallKind = kind === 'audio' ? 'video' : 'audio';
-    setKind(next);
-    // Mid-call upgrade to video → user almost certainly wants the loud
-    // speaker; downgrade to audio → they want the earpiece back. The
-    // explicit speaker button still lets them override either default.
-    const wantSpeaker = next === 'video';
-    setSpeakerOn(wantSpeaker);
-    setCallSpeaker(wantSpeaker).catch(() => {});
-    await setCallKind(callId, next).catch(() => {});
+    // Downgrade video → audio is unilateral and instantaneous (the peer
+    // just stops receiving video; no consent required).
+    if (kind === 'video') {
+      const next: CallKind = 'audio';
+      setKind(next);
+      setSpeakerOn(false);
+      setCallSpeaker(false).catch(() => {});
+      await setCallKind(callId, next).catch(() => {});
+      return;
+    }
+    // Upgrade audio → video must be accepted by the peer. We write a
+    // `videoRequest` marker and wait — only when the peer flips `kind`
+    // to 'video' (which they do *after* adding their own local video
+    // track) does our own kind effect kick in and add ours too.
+    await requestVideoUpgrade(callId, me.uid).catch(() => {});
+  };
+
+  /** Caller-side cancel: drop our outstanding upgrade request. */
+  const cancelVideoRequest = async () => {
+    if (!callId) return;
+    await clearVideoRequest(callId).catch(() => {});
+  };
+
+  /** Callee-side accept: ADD the local video track FIRST so by the time
+   *  the renegotiated SDP arrives we already have our camera in the
+   *  peer connection — without this the peer's offer/answer round-trip
+   *  completes with only one side's video and the other camera never
+   *  reaches the wire. Once our track is in, write `kind: 'video'` to
+   *  signal both sides to upgrade together. */
+  const acceptVideoRequest = async () => {
+    if (!callId) return;
+    const pc = pcRef.current;
+    if (!pc) return;
+    try {
+      const cam = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+      });
+      videoStreamRef.current = cam;
+      const track = cam.getVideoTracks()[0];
+      const local = localStreamRef.current ?? cam;
+      if (track) {
+        const sender = pc.addTrack(track, local);
+        videoSenderRef.current = sender;
+        applySendParameters(sender, { maxBitrate: 1_500_000, maxFramerate: 30 });
+        if (localStreamRef.current) localStreamRef.current.addTrack(track);
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current ?? cam;
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Camera unavailable');
+      await clearVideoRequest(callId).catch(() => {});
+      return;
+    }
+    setKind('video');
+    setSpeakerOn(true);
+    setCallSpeaker(true).catch(() => {});
+    await setCallKind(callId, 'video').catch(() => {});
+  };
+
+  /** Callee-side decline: just drop the request marker. Peer's UI hides
+   *  the "waiting for accept" indicator and stays on voice. */
+  const declineVideoRequest = async () => {
+    if (!callId) return;
+    await clearVideoRequest(callId).catch(() => {});
   };
 
   const hangup = () => {
@@ -575,113 +648,176 @@ export function InAppCallSheet({
 
   const fmt = (n: number) => `${Math.floor(n / 60)}:${(n % 60).toString().padStart(2, '0')}`;
   const isVideo = kind === 'video';
+  // True when the PEER asked us to enable video — show Accept / Decline.
+  const peerWantsVideo = !!videoRequest && videoRequest.from !== me.uid && kind !== 'video';
+  // True when WE asked the peer and we're waiting for their answer.
+  const waitingForPeer = !!videoRequest && videoRequest.from === me.uid && kind !== 'video';
 
-  return (
-    <Sheet open={open} onClose={hangup} title={isVideo ? 'Video call' : 'Voice call'} topmost>
-      <div className="flex flex-col items-center gap-4 py-2">
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[2147483000] flex flex-col bg-[#0A0A0A] text-white safe-top safe-bottom"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Top status bar */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="text-[11px] uppercase tracking-widest text-white/55">
+          {isVideo ? 'Video call' : 'Voice call'}
+        </div>
+        <div className="text-[11px] text-white/55">
+          {error
+            ? `Error: ${error}`
+            : status === 'ringing'
+            ? 'Ringing…'
+            : status === 'connecting'
+            ? 'Connecting…'
+            : status === 'active'
+            ? `In call · ${fmt(seconds)}`
+            : 'Call ended'}
+        </div>
+      </div>
+
+      {/* Main stage — fills the screen. Video for video calls, big avatar
+          + name for voice calls. */}
+      <div className="relative flex-1 overflow-hidden">
         {isVideo ? (
-          <div
-            className="relative w-full overflow-hidden rounded-2xl aspect-[3/4] max-h-[60vh] bg-[#0A0A0A]"
-          >
-            {/* Minimalist waiting backdrop \u2014 a single brand-coloured spinner
-                centred on a flat dark canvas. Sits BEHIND the <video>; the
-                moment the remote stream starts painting it covers the
-                spinner. No avatar, no text, no gradient \u2014 the cleanest
-                possible "waiting" state, matching iOS / WhatsApp video
-                calls. */}
+          <>
             {status !== 'active' && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <Loader2 size={36} className="animate-spin text-white/70" />
+              <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+                <Loader2 size={48} className="animate-spin text-white/70" />
               </div>
             )}
-            <video ref={remoteVideoRef} autoPlay playsInline className="relative z-[1] h-full w-full object-cover" />
+            <video ref={remoteVideoRef} autoPlay playsInline className="relative z-[2] h-full w-full object-cover bg-black" />
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="absolute right-2 bottom-2 z-[2] h-32 w-24 rounded-xl border-2 border-white/80 object-cover bg-black/40"
+              className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg"
             />
-          </div>
+          </>
         ) : (
-          <Avatar src={peer.photoURL} name={peer.name} size={88} />
-        )}
-        <div className="text-center">
-          {!isVideo && <div className="text-lg font-extrabold">{peer.name}</div>}
-          <div className="text-xs text-muted mt-0.5">
-            {error
-              ? `Error: ${error}`
-              : status === 'ringing'
-              ? 'Ringing…'
-              : status === 'connecting'
-              ? 'Connecting…'
-              : status === 'active'
-              ? `In call · ${fmt(seconds)}`
-              : 'Call ended'}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-b from-brand/30 via-[#0A0A0A] to-[#0A0A0A]">
+            <Avatar src={peer.photoURL} name={peer.name} size={140} />
+            <div className="text-2xl font-extrabold">{peer.name}</div>
+            <div className="text-xs text-white/55">Numbers stay private</div>
           </div>
-        </div>
-        <audio ref={remoteAudioRef} autoPlay playsInline />
-        {/* Outbound ringback tone for the caller (see effect above). */}
-        <audio ref={ringbackRef} src="/ringer.mp3" preload="auto" playsInline />
-        <div className="flex items-center gap-3 mt-2 flex-wrap justify-center">
+        )}
+
+        {/* Peer is asking us to enable video — Accept / Decline overlay. */}
+        {peerWantsVideo && (
+          <div className="absolute inset-x-4 bottom-32 z-[5] rounded-3xl bg-white/95 p-4 text-ink shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand/15 text-brand">
+                <Video size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold">{peer.name} wants to start video</div>
+                <div className="text-xs text-ink/55">They&apos;ll see your camera once you accept.</div>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={declineVideoRequest}
+                className="rounded-full bg-ink/5 px-4 py-2 text-sm font-bold text-ink"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                onClick={acceptVideoRequest}
+                className="rounded-full bg-brand px-4 py-2 text-sm font-bold text-white"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* We asked the peer — show a small waiting chip. */}
+        {waitingForPeer && (
+          <div className="absolute inset-x-4 bottom-32 z-[5] flex items-center justify-between gap-3 rounded-full bg-white/15 px-4 py-2 text-xs text-white backdrop-blur">
+            <span className="inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              Waiting for {peer.name} to accept video…
+            </span>
+            <button type="button" onClick={cancelVideoRequest} className="text-[11px] font-bold text-white/85 underline">
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
+      <audio ref={remoteAudioRef} autoPlay playsInline />
+      {/* Outbound ringback tone for the caller. */}
+      <audio ref={ringbackRef} src="/ringer.mp3" preload="auto" playsInline />
+
+      {/* Bottom control bar */}
+      <div className="px-4 pb-6 pt-3">
+        <div className="mx-auto flex max-w-md items-center justify-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={toggleMute}
-            className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${muted ? 'bg-amber-100 text-amber-700' : 'bg-ink/10 text-ink'}`}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${muted ? 'bg-amber-100 text-amber-700' : 'bg-white/10 text-white'} backdrop-blur`}
             aria-label={muted ? 'Unmute' : 'Mute'}
           >
-            {muted ? <MicOff size={20} /> : <Mic size={20} />}
+            {muted ? <MicOff size={22} /> : <Mic size={22} />}
           </button>
           <button
             type="button"
             onClick={toggleSpeaker}
-            className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${speakerOn ? 'bg-brand text-white' : 'bg-ink/10 text-ink'}`}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${speakerOn ? 'bg-brand text-white' : 'bg-white/10 text-white'} backdrop-blur`}
             aria-label={speakerOn ? 'Speaker on — tap for earpiece' : 'Earpiece — tap for speaker'}
             aria-pressed={speakerOn}
           >
-            {speakerOn ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            {speakerOn ? <Volume2 size={22} /> : <VolumeX size={22} />}
           </button>
           <button
             type="button"
             onClick={flipKind}
-            className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${isVideo ? 'bg-brand text-white' : 'bg-ink/10 text-ink'}`}
+            disabled={waitingForPeer}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${isVideo ? 'bg-brand text-white' : 'bg-white/10 text-white'} backdrop-blur disabled:opacity-50`}
             aria-label={isVideo ? 'Switch to voice' : 'Switch to video'}
           >
-            {isVideo ? <Phone size={20} /> : <Video size={20} />}
+            {isVideo ? <Phone size={22} /> : <Video size={22} />}
           </button>
           {isVideo && (
             <>
               <button
                 type="button"
                 onClick={toggleCamera}
-                className={`inline-flex h-12 w-12 items-center justify-center rounded-full ${cameraOff ? 'bg-amber-100 text-amber-700' : 'bg-ink/10 text-ink'}`}
+                className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${cameraOff ? 'bg-amber-100 text-amber-700' : 'bg-white/10 text-white'} backdrop-blur`}
                 aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
               >
-                {cameraOff ? <VideoOff size={20} /> : <Video size={20} />}
+                {cameraOff ? <VideoOff size={22} /> : <Video size={22} />}
               </button>
               <button
                 type="button"
                 onClick={switchCamera}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-ink/10 text-ink"
+                className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
                 aria-label="Flip camera"
               >
-                <SwitchCamera size={20} />
+                <SwitchCamera size={22} />
               </button>
             </>
           )}
           <button
             type="button"
             onClick={hangup}
-            className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white"
+            className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg"
             aria-label="Hang up"
           >
-            <PhoneOff size={24} />
+            <PhoneOff size={26} />
           </button>
         </div>
-        <div className="text-[11px] text-muted mt-1 flex items-center gap-1">
-          <Phone size={10} /> Numbers stay private — calls route through Canact.
+        <div className="mt-3 text-center text-[11px] text-white/45">
+          Numbers stay private — routed through Canact
         </div>
       </div>
-    </Sheet>
+    </div>,
+    document.body,
   );
 }

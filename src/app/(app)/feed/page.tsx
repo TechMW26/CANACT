@@ -22,6 +22,8 @@ import { VideoPreview } from '@/components/VideoPreview';
 import { Sheet } from '@/components/Sheet';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
 import { PostMenu } from '@/components/PostMenu';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { readFeedCache, writeFeedCachePart } from '@/lib/feedCache';
 import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -48,18 +50,37 @@ export default function FeedPage() {
   const { coords } = useGeo();
   const { radius } = useDistance();
   const router = useRouter();
-  const [wha, setWha] = useState<WhaPost[]>([]);
-  const [polls, setPolls] = useState<Poll[]>([]);
-  const [rms, setRms] = useState<RateMeSession[]>([]);
-  const [reels, setReels] = useState<ReelItem[]>([]);
-  const [stories, setStories] = useState<StoryItem[]>([]);
+  // Seed every list from the in-memory feed cache so a back-nav into
+  // /feed paints with the EXACT data the user saw last time — no
+  // skeleton flash, no scroll jump. The live listeners below then
+  // patch in the freshest values without ever clearing the visible UI.
+  const initial = readFeedCache(user?.uid);
+  const [wha, setWha] = useState<WhaPost[]>(initial.wha);
+  const [polls, setPolls] = useState<Poll[]>(initial.polls);
+  const [rms, setRms] = useState<RateMeSession[]>(initial.rms);
+  const [reels, setReels] = useState<ReelItem[]>(initial.reels);
+  const [stories, setStories] = useState<StoryItem[]>(initial.stories);
   const [filter, setFilter] = useState<'all' | 'wha' | 'poll' | 'rateme' | 'reel'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [loaded, setLoaded] = useState({ wha: false, polls: false, rms: false, reels: false, stories: false });
+  // If we already have cached content, treat each list as 'loaded' so
+  // the page doesn't show a skeleton while the listeners catch up.
+  const seeded = initial.uid === user?.uid && initial.ts > 0;
+  const [loaded, setLoaded] = useState({
+    wha: seeded, polls: seeded, rms: seeded, reels: seeded, stories: seeded,
+  });
   const [shareAttachment, setShareAttachment] = useState<ChatAttachment | null>(null);
-  useEffect(() => listenWhaFeed((v) => { setWha(v); setLoaded((s) => ({ ...s, wha: true })); }), []);
-  useEffect(() => listenActiveStories((v) => { setStories(v); setLoaded((s) => ({ ...s, stories: true })); }), []);
+  // Bumping this re-runs the listener effects below, which is how the
+  // pull-to-refresh gesture forces fresh subscriptions.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => listenWhaFeed((v) => {
+    setWha(v); writeFeedCachePart(user?.uid, 'wha', v);
+    setLoaded((s) => ({ ...s, wha: true }));
+  }), [refreshTick, user?.uid]);
+  useEffect(() => listenActiveStories((v) => {
+    setStories(v); writeFeedCachePart(user?.uid, 'stories', v);
+    setLoaded((s) => ({ ...s, stories: true }));
+  }), [refreshTick, user?.uid]);
   // Defer the heavier listeners until the browser is idle so the
   // first paint isn't blocked by 3 extra RTDB round-trips. On most
   // devices this fires within ~50ms of mount, so the user never sees
@@ -71,12 +92,21 @@ export default function FeedPage() {
     const cancelIdle = (window as any).cancelIdleCallback || clearTimeout;
     const handle = idle(() => {
       if (cancelled) return;
-      subs.push(listenPollFeed((v) => { setPolls(v); setLoaded((s) => ({ ...s, polls: true })); }));
-      subs.push(listenActiveRateMe((v) => { setRms(v); setLoaded((s) => ({ ...s, rms: true })); }));
-      subs.push(listenReels((v) => { setReels(v); setLoaded((s) => ({ ...s, reels: true })); }));
+      subs.push(listenPollFeed((v) => {
+        setPolls(v); writeFeedCachePart(user?.uid, 'polls', v);
+        setLoaded((s) => ({ ...s, polls: true }));
+      }));
+      subs.push(listenActiveRateMe((v) => {
+        setRms(v); writeFeedCachePart(user?.uid, 'rms', v);
+        setLoaded((s) => ({ ...s, rms: true }));
+      }));
+      subs.push(listenReels((v) => {
+        setReels(v); writeFeedCachePart(user?.uid, 'reels', v);
+        setLoaded((s) => ({ ...s, reels: true }));
+      }));
     });
     return () => { cancelled = true; cancelIdle(handle); subs.forEach((u) => { try { u(); } catch {} }); };
-  }, []);
+  }, [refreshTick, user?.uid]);
   const isLoading = !loaded.wha || !loaded.polls || !loaded.rms || !loaded.reels;
 
   // Group all active stories by author for the strip. The first story
@@ -134,6 +164,7 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
+    <PullToRefresh onRefresh={() => { setRefreshTick((n) => n + 1); }}>
     <div className="min-h-screen pb-24 md:pb-10">
 
       <section className="canact-stories-strip flex items-center gap-2 pt-1 pb-2">
@@ -314,6 +345,7 @@ export default function FeedPage() {
         attachment={shareAttachment}
       />
     </div>
+    </PullToRefresh>
     </SkeletonTheme>
   );
 }

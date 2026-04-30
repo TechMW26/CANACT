@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Avatar } from './Avatar';
@@ -12,6 +12,7 @@ import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
 import { Select } from './Input';
 import { IncomingCallRinger } from './IncomingCallRinger';
+import { ScrollRestoration } from './ScrollRestoration';
 import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
@@ -75,6 +76,25 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }
   }, [user, profile, loading, pathname, router, profileTimedOut]);
 
+  // Cold-start route restore: if the WebView was killed by Android while
+  // the user was deep in /inbox/<uid> or /post/<id>, dropping them on
+  // /feed makes the app feel like it 'truly closed'. Send them back to
+  // exactly where they were instead. We only do this once per process,
+  // and only when we wake up on the default landing route.
+  const restoredRouteRef = useRef(false);
+  useEffect(() => {
+    if (restoredRouteRef.current) return;
+    if (loading || !user) return;
+    if (!profile && !profileTimedOut) return;
+    restoredRouteRef.current = true;
+    if (pathname !== '/feed') return;
+    let last: string | null = null;
+    try { last = localStorage.getItem('canact:lastRoute'); } catch {}
+    if (!last || last === '/feed' || last === pathname) return;
+    if (last.startsWith('/welcome') || last.startsWith('/onboard') || last.startsWith('/login')) return;
+    router.replace(last);
+  }, [loading, user, profile, profileTimedOut, pathname, router]);
+
   if (loading || !user || (!profile && !profileTimedOut)) {
     return <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />;
   }
@@ -86,6 +106,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   if (isFullScreen) {
     return (
       <div id="canact-app-shell" className="min-h-screen">
+        <ScrollRestoration />
         {children}
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <HelpAlertManager />
@@ -96,6 +117,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   return (
     <div id="canact-app-shell" className="min-h-screen pb-28 md:pb-6">
       <ScrollDirectionWatcher />
+      <ScrollRestoration />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
