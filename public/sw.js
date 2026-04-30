@@ -36,7 +36,7 @@ const RUNTIME_CACHE = `canact-runtime-${BUILD_ID}`;
 const MEDIA_CACHE = 'canact-media-v1';
 const MEDIA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MEDIA_CACHE_MAX = 250;
-const MEDIA_HOSTS = ['public.blob.vercel-storage.com'];
+const MEDIA_HOSTS = ['public.blob.vercel-storage.com', 'googleusercontent.com'];
 
 // Hostnames that must always hit the network.
 const DATA_HOSTS = [

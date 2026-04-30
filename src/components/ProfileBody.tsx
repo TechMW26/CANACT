@@ -36,6 +36,9 @@ import {
   Film,
   Heart,
   BarChart3,
+  Pencil,
+  Star,
+  Users as UsersIcon,
   Settings as SettingsIcon,
 } from '@/components/icons';
 
@@ -81,6 +84,18 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   useEffect(() => {
     return listenUserRateMe(uid, setRatemes);
   }, [uid]);
+
+  // Friends count (self only) — used in the redesigned clean hero stats
+  // card. Non-self profiles don't show a friend count to avoid the
+  // privacy concern of broadcasting your social graph size.
+  const [friendsCount, setFriendsCount] = useState(0);
+  useEffect(() => {
+    if (!isSelf) return;
+    return onValue(ref(db, `friends/${uid}`), (s) => {
+      let n = 0; s.forEach(() => { n += 1; });
+      setFriendsCount(n);
+    });
+  }, [uid, isSelf]);
 
   if (!u) {
     return (
@@ -130,13 +145,110 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     else await giveCard(uid, user.uid, c);
   };
 
+  const locationText = [u.city, u.country].filter(Boolean).join(', ');
+  const isVerified = !!u.profileVerified;
+
+  // Compute age from dateOfBirth (stored as YYYY-MM-DD or similar). Used in
+  // the clean self-hero "Name · 26" line in the reference design.
+  const age = (() => {
+    if (!u.dateOfBirth) return undefined;
+    const d = new Date(u.dateOfBirth);
+    if (Number.isNaN(d.getTime())) return undefined;
+    const diff = Date.now() - d.getTime();
+    const a = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+    return a > 0 && a < 130 ? a : undefined;
+  })();
+
+  // SELF profile renders a clean, reference-matching hero (big avatar with
+  // camera badge, name + age, location, bio, single Edit Profile pill, and
+  // a white stats card with three cells). Other-user profiles keep their
+  // existing card with rating / like / friend / message affordances.
+  if (isSelf) {
+    return (
+      <div className="space-y-4">
+        {/* Section caption + actions row, matches "MY PROFILE  ⋯" header. */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-xs font-extrabold uppercase tracking-[0.32em] text-brand">My Profile</h1>
+          <Link
+            href="/profile/settings"
+            prefetch
+            aria-label="Profile settings"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.55)]"
+          >
+            <SettingsIcon size={18} />
+          </Link>
+        </div>
+
+        {/* Hero card: soft pastel backdrop + big centred avatar with the
+            camera-shutter badge for quick photo change. */}
+        <Card className="relative overflow-hidden border border-[#F1D7DC] bg-[radial-gradient(circle_at_50%_30%,_rgba(255,216,221,0.85),_rgba(255,248,248,0.95)_55%,_rgba(255,255,255,1)_100%)] shadow-[0_24px_60px_-32px_rgba(200,16,46,0.3)]">
+          <div className="flex flex-col items-center pt-6 pb-2">
+            <div className="relative">
+              <div className="rounded-full bg-white p-1.5 shadow-[0_10px_24px_-12px_rgba(10,10,10,0.25)] ring-1 ring-white/70">
+                <Avatar src={u.photoURL} name={u.fullName} size={128} />
+              </div>
+              <Link
+                href="/edit-profile"
+                prefetch
+                aria-label="Change photo"
+                className="absolute bottom-1 right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.55)] ring-4 ring-white"
+              >
+                <Camera size={16} />
+              </Link>
+            </div>
+            <div className="mt-5 flex items-center gap-2 px-4 text-center">
+              <h2 className="text-2xl font-black tracking-tight text-ink">{u.fullName}</h2>
+              {age ? <span className="text-2xl font-bold text-ink/45">{age}</span> : null}
+            </div>
+            {isVerified ? <div className="mt-2"><VerifiedBadge compact /></div> : null}
+            {locationText ? (
+              <div className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-ink/65">
+                <MapPin size={14} className="text-brand" />
+                <span>{locationText}</span>
+              </div>
+            ) : null}
+            {u.bio ? (
+              <p className="mt-4 max-w-md px-6 text-center text-sm leading-6 text-ink/70 whitespace-pre-wrap">{u.bio}</p>
+            ) : (
+              <p className="mt-4 max-w-md px-6 text-center text-sm text-ink/40 italic">Add a short bio so people know what you’re about.</p>
+            )}
+            <Link href="/edit-profile" prefetch className="mt-5 inline-flex">
+              <Button size="md" icon={<Pencil size={14} />}>Edit Profile</Button>
+            </Link>
+          </div>
+        </Card>
+
+        {/* Stats card — three pastel cells (Likes / Friends / Rating). */}
+        <Card className="!p-0 overflow-hidden border border-[#F1D7DC] bg-white">
+          <div className="grid grid-cols-3 divide-x divide-[#F4E0E4] py-4">
+            <SelfStatCell icon={<Heart size={16} />} value={String(u.likesCount ?? 0)} label="Likes" />
+            <SelfStatCell icon={<UsersIcon size={16} />} value={String(friendsCount)} label="Friends" />
+            <SelfStatCell icon={<Star size={16} />} value={(u.rating ?? 0).toFixed(1)} label="Rating" />
+          </div>
+        </Card>
+
+        {/* Tabs + content. Same component used on the non-self profile
+            below so behaviour stays identical. */}
+        <ProfileTabsCard
+          tab={tab}
+          setTab={setTab}
+          posts={posts}
+          reels={reels}
+          polls={polls}
+          ratemes={ratemes}
+          isSelf={isSelf}
+          uid={uid}
+          userUid={user?.uid}
+        />
+      </div>
+    );
+  }
+
   const statCards = [
     { label: 'Rating', value: (u.rating ?? 0).toFixed(1), tone: 'text-brand bg-brand-light/70' },
     { label: 'Likes', value: String(u.likesCount ?? 0), tone: 'text-emerald-700 bg-emerald-50' },
     { label: 'Cards', value: String(CARD_KEYS.reduce((sum, key) => sum + (u.cardsReceived?.[key] ?? 0), 0)), tone: 'text-amber-700 bg-amber-50' },
   ];
-  const locationText = [u.city, u.country].filter(Boolean).join(', ');
-  const isVerified = !!u.profileVerified;
 
   return (
     <div className="space-y-4">
@@ -257,175 +369,17 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
           old "Tagged" stub — the user's active + recently-ended Rate Me
           sessions now live inside this grid instead of as a separate strip
           above it, so all of a user's content is in one place. */}
-      <Card className="!p-0 overflow-hidden">
-        <div className="grid grid-cols-4 border-b border-line">
-          {([
-            { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
-            { id: 'reels', label: 'Reels', Icon: Film, count: reels.length },
-            { id: 'polls', label: 'Polls', Icon: BarChart3, count: polls.length },
-            { id: 'rateme', label: 'Rate Me', Icon: Heart, count: ratemes.length },
-          ] as const).map(({ id, label, Icon, count }) => {
-            const active = tab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={`relative flex items-center justify-center gap-2 py-3 text-xs font-bold uppercase tracking-[0.18em] transition ${active ? 'text-brand' : 'text-ink/45 hover:text-ink/70'}`}
-              >
-                <Icon size={14} strokeWidth={2.2} />
-                <span className="hidden sm:inline">{label}</span>
-                <span>{count}</span>
-                {active ? <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-brand" /> : null}
-              </button>
-            );
-          })}
-        </div>
-        {tab === 'posts' ? (
-          posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-                <Camera size={20} />
-              </span>
-              <div className="text-sm font-bold text-ink">No posts yet</div>
-              <div className="text-xs text-muted">{isSelf ? 'Tap + to share something.' : 'Nothing here yet.'}</div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-[2px] bg-line">
-              {posts.map((p) => {
-                const cover = p.mediaUrls?.[0];
-                return (
-                  <Link
-                    key={p.id}
-                    href={`/post/${p.id}`}
-                    className="relative aspect-square overflow-hidden bg-brand-light"
-                  >
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-light to-white p-2 text-center text-[11px] font-semibold leading-tight text-ink/70">
-                        <span className="line-clamp-5">{p.text || 'Untitled'}</span>
-                      </div>
-                    )}
-                    {p.mediaUrls && p.mediaUrls.length > 1 ? (
-                      <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        {p.mediaUrls.length}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
-          )
-        ) : tab === 'reels' ? (
-          reels.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-                <Film size={20} />
-              </span>
-              <div className="text-sm font-bold text-ink">No reels yet</div>
-              <div className="text-xs text-muted">{isSelf ? 'Tap + to share a reel.' : 'Nothing here yet.'}</div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-[2px] bg-line">
-              {reels.map((r) => (
-                <Link
-                  key={r.id}
-                  href="/reels"
-                  className="relative aspect-[9/16] overflow-hidden bg-black"
-                >
-                  {r.posterUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <video
-                      src={r.videoUrl}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                  <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    <Film size={10} className="inline -mt-0.5 mr-0.5" />
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )
-        ) : tab === 'polls' ? (
-          polls.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-                <BarChart3 size={20} />
-              </span>
-              <div className="text-sm font-bold text-ink">No polls yet</div>
-              <div className="text-xs text-muted">{isSelf ? 'Tap + to start a poll.' : 'Nothing here yet.'}</div>
-            </div>
-          ) : (
-            <div className="divide-y divide-line">
-              {polls.map((p) => {
-                const opts = Array.isArray(p.options) ? p.options : [];
-                const total = opts.reduce((s, o) => s + (o.votes ?? 0), 0);
-                const ended = p.endsAt < Date.now();
-                return (
-                  <div key={p.id} className="relative px-4 py-3">
-                    <Link href={`/poll/${p.id}`} className="block pr-10">
-                      <div className="flex items-center gap-2 text-[11px] font-semibold text-ink/55">
-                        <BarChart3 size={12} className="text-brand" />
-                        <span>{ended ? 'Ended' : 'Active'}</span>
-                        <span>·</span>
-                        <span>{total} votes</span>
-                      </div>
-                      <div className="mt-1 text-sm font-bold text-ink line-clamp-2">{p.question}</div>
-                      {opts.length > 0 ? (
-                        <div className="mt-1 text-[11px] text-ink/55 line-clamp-1">
-                          {opts.map((o) => o.text).join(' · ')}
-                        </div>
-                      ) : null}
-                    </Link>
-                    {isSelf ? (
-                      <div className="absolute right-3 top-3">
-                        <PostMenu
-                          isOwner
-                          onDelete={async () => {
-                            try {
-                              await deletePoll(p.id, uid);
-                              toast('Poll deleted', 'success');
-                            } catch (e: any) {
-                              toast(e?.message ?? 'Could not delete poll', 'error');
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )
-        ) : (
-          // Rate Me tab — active + recently-ended sessions. Voting is
-          // locked once endsAt passes; ProfileRateMeCard renders the
-          // results bar in that state instead of buttons.
-          ratemes.length === 0 || !user ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
-                <Heart size={20} />
-              </span>
-              <div className="text-sm font-bold text-ink">No Rate Me yet</div>
-              <div className="text-xs text-muted">{isSelf ? 'Tap + to start one.' : 'Nothing here yet.'}</div>
-            </div>
-          ) : (
-            <div className="space-y-3 p-3">
-              {ratemes.map((s) => (
-                <ProfileRateMeCard key={s.id} sess={s} myUid={user.uid} />
-              ))}
-            </div>
-          )
-        )}
-      </Card>
+      <ProfileTabsCard
+        tab={tab}
+        setTab={setTab}
+        posts={posts}
+        reels={reels}
+        polls={polls}
+        ratemes={ratemes}
+        isSelf={isSelf}
+        uid={uid}
+        userUid={user?.uid}
+      />
 
       <Card>
         <div className="flex items-center justify-between">
@@ -527,6 +481,218 @@ function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { titl
         })}
       </div>
     </div>
+  );
+}
+
+}
+
+/** Single cell of the clean self-profile stats card (Likes / Friends /
+ *  Rating). Mirrors the rounded white card with three centred columns
+ *  shown in the reference design. */
+function SelfStatCell({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-2">
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-light text-brand">
+        {icon}
+      </span>
+      <div className="text-2xl font-black leading-none text-ink">{value}</div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink/55">{label}</div>
+    </div>
+  );
+}
+
+/** Profile content tabs (Posts / Reels / Polls / Rate Me) and their
+ *  associated grids. Extracted so the new clean self hero and the existing
+ *  other-user card can share exactly the same content rendering without
+ *  any logic drift. */
+function ProfileTabsCard({
+  tab,
+  setTab,
+  posts,
+  reels,
+  polls,
+  ratemes,
+  isSelf,
+  uid,
+  userUid,
+}: {
+  tab: 'posts' | 'reels' | 'polls' | 'rateme';
+  setTab: (t: 'posts' | 'reels' | 'polls' | 'rateme') => void;
+  posts: WhaPost[];
+  reels: ReelItem[];
+  polls: Poll[];
+  ratemes: RateMeSession[];
+  isSelf: boolean;
+  uid: string;
+  userUid?: string;
+}) {
+  return (
+    <Card className="!p-0 overflow-hidden">
+      <div className="grid grid-cols-4 border-b border-line">
+        {([
+          { id: 'posts', label: 'Posts', Icon: Camera, count: posts.length },
+          { id: 'reels', label: 'Reels', Icon: Film, count: reels.length },
+          { id: 'polls', label: 'Polls', Icon: BarChart3, count: polls.length },
+          { id: 'rateme', label: 'Rate Me', Icon: Heart, count: ratemes.length },
+        ] as const).map(({ id, label, Icon, count }) => {
+          const active = tab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`relative flex items-center justify-center gap-2 py-3 text-xs font-bold uppercase tracking-[0.18em] transition ${active ? 'text-brand' : 'text-ink/45 hover:text-ink/70'}`}
+            >
+              <Icon size={14} strokeWidth={2.2} />
+              <span className="hidden sm:inline">{label}</span>
+              <span>{count}</span>
+              {active ? <span className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-brand" /> : null}
+            </button>
+          );
+        })}
+      </div>
+      {tab === 'posts' ? (
+        posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+              <Camera size={20} />
+            </span>
+            <div className="text-sm font-bold text-ink">No posts yet</div>
+            <div className="text-xs text-muted">{isSelf ? 'Tap + to share something.' : 'Nothing here yet.'}</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-[2px] bg-line">
+            {posts.map((p) => {
+              const cover = p.mediaUrls?.[0];
+              return (
+                <Link
+                  key={p.id}
+                  href={`/post/${p.id}`}
+                  className="relative aspect-square overflow-hidden bg-brand-light"
+                >
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-light to-white p-2 text-center text-[11px] font-semibold leading-tight text-ink/70">
+                      <span className="line-clamp-5">{p.text || 'Untitled'}</span>
+                    </div>
+                  )}
+                  {p.mediaUrls && p.mediaUrls.length > 1 ? (
+                    <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {p.mediaUrls.length}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        )
+      ) : tab === 'reels' ? (
+        reels.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+              <Film size={20} />
+            </span>
+            <div className="text-sm font-bold text-ink">No reels yet</div>
+            <div className="text-xs text-muted">{isSelf ? 'Tap + to share a reel.' : 'Nothing here yet.'}</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-[2px] bg-line">
+            {reels.map((r) => (
+              <Link
+                key={r.id}
+                href="/reels"
+                className="relative aspect-[9/16] overflow-hidden bg-black"
+              >
+                {r.posterUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                ) : (
+                  <video
+                    src={r.videoUrl}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  <Film size={10} className="inline -mt-0.5 mr-0.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        )
+      ) : tab === 'polls' ? (
+        polls.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+              <BarChart3 size={20} />
+            </span>
+            <div className="text-sm font-bold text-ink">No polls yet</div>
+            <div className="text-xs text-muted">{isSelf ? 'Tap + to start a poll.' : 'Nothing here yet.'}</div>
+          </div>
+        ) : (
+          <div className="divide-y divide-line">
+            {polls.map((p) => {
+              const opts = Array.isArray(p.options) ? p.options : [];
+              const total = opts.reduce((s, o) => s + (o.votes ?? 0), 0);
+              const ended = p.endsAt < Date.now();
+              return (
+                <div key={p.id} className="relative px-4 py-3">
+                  <Link href={`/poll/${p.id}`} className="block pr-10">
+                    <div className="flex items-center gap-2 text-[11px] font-semibold text-ink/55">
+                      <BarChart3 size={12} className="text-brand" />
+                      <span>{ended ? 'Ended' : 'Active'}</span>
+                      <span>·</span>
+                      <span>{total} votes</span>
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-ink line-clamp-2">{p.question}</div>
+                    {opts.length > 0 ? (
+                      <div className="mt-1 text-[11px] text-ink/55 line-clamp-1">
+                        {opts.map((o) => o.text).join(' · ')}
+                      </div>
+                    ) : null}
+                  </Link>
+                  {isSelf ? (
+                    <div className="absolute right-3 top-3">
+                      <PostMenu
+                        isOwner
+                        onDelete={async () => {
+                          try {
+                            await deletePoll(p.id, uid);
+                            toast('Poll deleted', 'success');
+                          } catch (e: any) {
+                            toast(e?.message ?? 'Could not delete poll', 'error');
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        ratemes.length === 0 || !userUid ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-ink/15 text-ink/40">
+              <Heart size={20} />
+            </span>
+            <div className="text-sm font-bold text-ink">No Rate Me yet</div>
+            <div className="text-xs text-muted">{isSelf ? 'Tap + to start one.' : 'Nothing here yet.'}</div>
+          </div>
+        ) : (
+          <div className="space-y-3 p-3">
+            {ratemes.map((s) => (
+              <ProfileRateMeCard key={s.id} sess={s} myUid={userUid} />
+            ))}
+          </div>
+        )
+      )}
+    </Card>
   );
 }
 
