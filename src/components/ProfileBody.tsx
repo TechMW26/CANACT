@@ -484,8 +484,6 @@ function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { titl
   );
 }
 
-}
-
 /** Single cell of the clean self-profile stats card (Likes / Friends /
  *  Rating). Mirrors the rounded white card with three centred columns
  *  shown in the reference design. */
