@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Country, City } from 'country-state-city';
 import { Button } from '@/components/Button';
 import { Input, Select } from '@/components/Input';
-import { PhoneInput, isPhoneValid, toE164 } from '@/components/PhoneInput';
+import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import { Combobox, type ComboOption } from '@/components/Combobox';
 import type { CountryCode } from 'libphonenumber-js';
 import { BrandMark } from '@/components/Brand';
@@ -50,9 +50,9 @@ export default function OnboardPage() {
   useEffect(() => {
     if (!profile) return;
     if (profile.mobile) {
-      // Stored as E.164 (+91...). Strip leading '+' and dial code if present.
-      const raw = String(profile.mobile).replace(/[^0-9+]/g, '');
-      setMobile(raw.replace(/^\+?\d{1,3}/, ''));
+      const parsed = splitStoredPhone(profile.mobile);
+      setPhoneCountry(parsed.country);
+      setMobile(parsed.national);
     }
     if (profile.dateOfBirth) setDob(profile.dateOfBirth);
     if (profile.countryCode) {

@@ -17,6 +17,8 @@ export type PostDetailSheetItem =
   | { kind: 'wha'; data: WhaPost }
   | { kind: 'wha'; id: string; data?: WhaPost | null }
   | { kind: 'poll'; data: Poll }
+  | { kind: 'poll'; id: string; data?: Poll | null }
+  | { kind: 'rateme'; id: string; data?: RateMeSession | null }
   | { kind: 'rateme'; data: RateMeSession };
 
 type CommentRow = {
@@ -55,26 +57,26 @@ export function PostDetailSheet({
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const activeItemId = item ? item.kind === 'wha' ? ('id' in item ? item.id : item.data.id) : item.data.id : '';
+  const activeItemId = item ? ('id' in item ? item.id : item.data.id) : '';
   const itemKey = item ? `${item.kind}:${activeItemId}` : '';
 
   useEffect(() => {
     setText('');
     setComments([]);
     setPost(item?.kind === 'wha' ? ('data' in item ? item.data ?? null : null) : null);
-    setPoll(item?.kind === 'poll' ? item.data : null);
-    setRateMe(item?.kind === 'rateme' ? item.data : null);
+    setPoll(item?.kind === 'poll' ? ('data' in item ? item.data ?? null : null) : null);
+    setRateMe(item?.kind === 'rateme' ? ('data' in item ? item.data ?? null : null) : null);
     if (!item) return;
     if (item.kind === 'wha') return activeItemId ? listenPost(activeItemId, setPost) : undefined;
-    if (item.kind === 'poll') return listenPoll(item.data.id, setPoll);
-    return listenRateMeSession(item.data.id, setRateMe);
+    if (item.kind === 'poll') return activeItemId ? listenPoll(activeItemId, setPoll) : undefined;
+    return activeItemId ? listenRateMeSession(activeItemId, setRateMe) : undefined;
   }, [itemKey]);
 
   useEffect(() => {
     if (!item) return;
     if (item.kind === 'wha') return activeItemId ? listenComments(activeItemId, setComments) : undefined;
-    if (item.kind === 'poll') return listenPollComments(item.data.id, setComments);
-    return listenRateMeComments(item.data.id, setComments);
+    if (item.kind === 'poll') return activeItemId ? listenPollComments(activeItemId, setComments) : undefined;
+    return activeItemId ? listenRateMeComments(activeItemId, setComments) : undefined;
   }, [itemKey]);
 
   const attachment = useMemo<ChatAttachment | null>(() => {
@@ -108,8 +110,8 @@ export function PostDetailSheet({
     setText('');
     try {
       if (item.kind === 'wha') await addComment(activeItemId, myUid, myName, value);
-      else if (item.kind === 'poll') await commentPoll(item.data.id, myUid, myName, value);
-      else await commentRateMe(item.data.id, myUid, myName, value);
+      else if (item.kind === 'poll') await commentPoll(activeItemId, myUid, myName, value);
+      else await commentRateMe(activeItemId, myUid, myName, value);
     } catch (error: any) {
       setText(value);
       toast(error?.message ?? 'Could not comment', 'error');

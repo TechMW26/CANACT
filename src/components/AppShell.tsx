@@ -9,7 +9,7 @@ import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
-import { PostDetailSheet } from './PostDetailSheet';
+import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
 import { ShareToChatSheet } from './ShareToChatSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
@@ -63,9 +63,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [plusOpen, setPlusOpen] = useState(false);
-  const [globalPostId, setGlobalPostId] = useState<string | null>(null);
+  const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
+  const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const profileBlendChrome = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
@@ -75,6 +76,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     const id = setTimeout(() => setProfileTimedOut(true), 7000);
     return () => clearTimeout(id);
   }, [user, profile]);
+
+  useEffect(() => {
+    setMobileHeaderTopInset(getMobileHeaderTopInset());
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -87,14 +92,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [user, profile, loading, pathname, router, profileTimedOut]);
 
   useEffect(() => {
-    const postId = postIdFromPath(pathname);
-    if (!postId) return;
-    setGlobalPostId(postId);
+    const item = detailPopupItemFromPath(pathname);
+    if (!item) return;
+    setGlobalDetailItem(item);
     router.replace('/feed', { scroll: false });
   }, [pathname, router]);
 
   useEffect(() => {
-    const openPostFromLink = (event: MouseEvent) => {
+    const openDetailPopupFromLink = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const target = event.target instanceof Element ? event.target : null;
       const anchor = target?.closest('a[href]');
@@ -102,14 +107,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       if (anchor.target && anchor.target !== '_self') return;
       const url = new URL(anchor.href, window.location.href);
       if (url.origin !== window.location.origin) return;
-      const postId = postIdFromPath(url.pathname);
-      if (!postId) return;
+      const item = detailPopupItemFromPath(url.pathname);
+      if (!item) return;
       event.preventDefault();
       haptic('subtle');
-      setGlobalPostId(postId);
+      setGlobalDetailItem(item);
     };
-    document.addEventListener('click', openPostFromLink, true);
-    return () => document.removeEventListener('click', openPostFromLink, true);
+    document.addEventListener('click', openDetailPopupFromLink, true);
+    return () => document.removeEventListener('click', openDetailPopupFromLink, true);
   }, []);
 
   // Cold-start route restore was sending users back to /inbox/<uid>
@@ -141,10 +146,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const postPopups = (
     <>
       <PostDetailSheet
-        item={globalPostId ? { kind: 'wha', id: globalPostId } : null}
+        item={globalDetailItem}
         myUid={user.uid}
         myName={profile?.fullName ?? 'You'}
-        onClose={() => setGlobalPostId(null)}
+        onClose={() => setGlobalDetailItem(null)}
         onShare={setPostShareAttachment}
       />
       <ShareToChatSheet
@@ -192,7 +197,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           shell has multiple ancestors with `overflow` set, and even the
           slightest CSS containment / transform on any of them silently
           breaks `position: sticky`. Fixed has none of those constraints. */}
-      <div id="canact-app-content" className="lg:w-full lg:pl-60">
+      <div id="canact-app-content" data-disable-sheet-zoom={profileBlendChrome ? 'true' : undefined} className="lg:w-full lg:pl-60">
       {/* Desktop sidebar — fixed to the viewport so it's always in view
           regardless of how far the main column scrolls. Hidden under lg
           (tablet portrait still gets the floating mobile header + bottom nav). */}
@@ -231,14 +236,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader blendChrome={profileBlendChrome} />
+        <UnifiedHeader blendChrome={profileBlendChrome} topInset={mobileHeaderTopInset} />
         {/* Spacer mirroring the fixed top bar so page content starts below it.
           Top bar = safe-area-inset-top + 56px (h-14 row). */}
         <div
           data-canact-header-spacer
           aria-hidden
           className="lg:hidden"
-          style={{ height: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}
+          style={{ height: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 56px)` : '56px' }}
         />
         <div className="canact-col pb-20 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
@@ -251,7 +256,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav is profile-blended on profile routes and standard
           white elsewhere. Active tab gets the brand pill treatment. */}
-      <nav className={`lg:hidden fixed inset-x-0 bottom-0 z-40 safe-bottom transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}>
+      <nav className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}>
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = (pathname === href || pathname?.startsWith(href));
@@ -304,11 +309,38 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-function postIdFromPath(path: string | null) {
+function detailPopupItemFromPath(path: string | null): PostDetailSheetItem | null {
   if (!path) return null;
-  const match = path.match(/^\/post\/([^/]+)$/);
-  if (!match || match[1] === 'create') return null;
-  return decodeURIComponent(match[1]);
+  const match = path.match(/^\/(post|poll|rateme)\/([^/]+)$/);
+  if (!match) return null;
+  const [, routeKind, rawId] = match;
+  if ((routeKind === 'post' && rawId === 'create') || (routeKind === 'poll' && rawId === 'create') || (routeKind === 'rateme' && rawId === 'start')) return null;
+  const id = decodeURIComponent(rawId);
+  if (routeKind === 'post') return { kind: 'wha', id };
+  if (routeKind === 'poll') return { kind: 'poll', id };
+  return { kind: 'rateme', id };
+}
+
+function getMobileHeaderTopInset() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return null;
+  if (isIOSDevice()) return 'max(env(safe-area-inset-top, 0px), 12px)';
+  const ua = navigator.userAgent || '';
+  const isAndroid = /Android/i.test(ua);
+  if (!isAndroid) return null;
+  const nativeShell = 'Capacitor' in window;
+  const androidWebView = /; wv\)|\bwv\b/i.test(ua);
+  const standalone = !!(
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.matchMedia?.('(display-mode: fullscreen)').matches
+  );
+  return nativeShell || androidWebView || standalone ? 'max(env(safe-area-inset-top, 0px), 24px)' : null;
+}
+
+function isIOSDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function titleFor(path: string | null) {
@@ -327,7 +359,7 @@ function titleFor(path: string | null) {
   return '';
 }
 
-function UnifiedHeader({ blendChrome = false }: { blendChrome?: boolean }) {
+function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
@@ -351,6 +383,7 @@ function UnifiedHeader({ blendChrome = false }: { blendChrome?: boolean }) {
     <header
       data-canact-header
       className={`fixed top-0 left-0 right-0 z-30 lg:hidden transition-colors duration-500 ease-out ${blendChrome ? 'canact-profile-header-chrome border-b-0 pb-8' : 'bg-white border-b border-line'}`}
+      style={{ paddingTop: topInset ?? undefined }}
     >
       <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={26} href="/feed" />
@@ -396,7 +429,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
     };
   }, [open]);
 
-  const pillClassName = `canact-distance-pill inline-flex h-8 min-w-[112px] items-center justify-center rounded-full px-4 text-center text-[13px] font-extrabold leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
+  const pillClassName = `canact-distance-pill inline-flex h-9 w-auto min-w-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-center text-[13px] font-normal leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
   const menuClassName = `absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl border p-1 backdrop-blur-xl ${blendChrome ? 'border-white/50 bg-white/90 text-ink' : 'border-line bg-white text-ink'}`;
 
   return (
@@ -412,7 +445,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
           setOpen((wasOpen) => !wasOpen);
         }}
       >
-        <span className="block w-full text-center">{selectedOption.label}</span>
+        <span className="block text-center">{selectedOption.label}</span>
       </button>
       {open && (
         <div role="listbox" aria-label="Feed distance filter" className={menuClassName}>

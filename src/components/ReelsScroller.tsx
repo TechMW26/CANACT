@@ -16,6 +16,7 @@ import {
 } from '@/lib/services/reels';
 import type { ReelItem } from '@/lib/types';
 import { filterCss } from '@/lib/mediaFilters';
+import { lockPageScroll } from '@/lib/scrollLock';
 
 export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   const { user, profile } = useAuth();
@@ -31,11 +32,10 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
     setMounted(true);
     const shell = document.getElementById('canact-app-shell');
     shell?.setAttribute('data-header-hidden', 'true');
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockPageScroll();
     return () => {
       shell?.setAttribute('data-header-hidden', 'false');
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
     };
   }, []);
 

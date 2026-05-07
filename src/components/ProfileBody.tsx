@@ -419,7 +419,7 @@ function profileThumbnails(tab: ProfileTabKey, posts: WhaPost[], reels: ReelItem
       })),
       ...ratemes.slice(0, 4).map((item) => ({
         id: item.id,
-        href: '/profile',
+        href: `/rateme/${item.id}`,
         src: item.photoURL,
         label: 'Rate Me',
       })),
@@ -918,22 +918,24 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
       : `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
   return (
     <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white">
-      <div className="flex items-center justify-between px-4 pt-4">
-        <div className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Rate Me</div>
-        <div className="text-[11px] font-semibold text-muted">{timeLabel}</div>
-      </div>
-      {sess.photoURL ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={sess.photoURL}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="mt-3 block w-full max-h-[480px] object-cover"
-        />
-      ) : null}
+      <Link href={`/rateme/${sess.id}`} prefetch className="block">
+        <div className="flex items-center justify-between px-4 pt-4">
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Rate Me</div>
+          <div className="text-[11px] font-semibold text-muted">{timeLabel}</div>
+        </div>
+        {sess.photoURL ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={sess.photoURL}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="mt-3 block w-full max-h-[480px] object-cover"
+          />
+        ) : null}
+      </Link>
       {locked ? (
-        <div className="px-4 pt-3">
+        <Link href={`/rateme/${sess.id}`} prefetch className="block px-4 pt-3">
           <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-ink/60">
             <span className="text-rose-500">Down · {dislikes}</span>
             <span className="text-emerald-600">Up · {likes}</span>
@@ -945,7 +947,7 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
           <div className="mt-1 pb-3 text-[11px] text-muted">
             {total === 0 ? 'No votes' : `${total} vote${total === 1 ? '' : 's'} · ${upPct}% positive`}
           </div>
-        </div>
+        </Link>
       ) : (
         <div className="px-4 pt-3 pb-4 grid grid-cols-2 gap-2">
           <button

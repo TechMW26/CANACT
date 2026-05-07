@@ -6,67 +6,31 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input, Textarea } from '@/components/Input';
 import { Combobox, type ComboOption } from '@/components/Combobox';
-import { PhoneInput, isPhoneValid, toE164 } from '@/components/PhoneInput';
+import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import type { CountryCode } from 'libphonenumber-js';
 import { Avatar } from '@/components/Avatar';
+import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { Camera, Lock, Trash2, UserIcon, MapPin, Phone, Sparkles } from '@/components/icons';
 
-const MAX_PHOTO_SIDE = 512;
 const MAX_BIO = 300;
-
-/** Resize an image File into a square WebP Blob no larger than MAX_PHOTO_SIDE.
- *  We deliberately produce a real Blob (not a data URL) so the avatar can be
- *  uploaded to the CDN — storing 80 KB of base64 inside RTDB poisons every
- *  denormalised participant/friend record that copies `photoURL` around. */
-async function resizeImageToBlob(file: File): Promise<Blob> {
-  const img = await new Promise<HTMLImageElement>((res, rej) => {
-    const u = URL.createObjectURL(file);
-    const i = new Image();
-    i.onload = () => { URL.revokeObjectURL(u); res(i); };
-    i.onerror = (e) => { URL.revokeObjectURL(u); rej(e); };
-    i.src = u;
-  });
-  const side = Math.min(img.width, img.height);
-  const sx = (img.width - side) / 2;
-  const sy = (img.height - side) / 2;
-  const target = Math.min(MAX_PHOTO_SIDE, side);
-  const canvas = document.createElement('canvas');
-  canvas.width = target;
-  canvas.height = target;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas unsupported');
-  ctx.drawImage(img, sx, sy, side, side, 0, 0, target, target);
-  // WebP first; fall back to JPEG if the browser refuses (older Safari).
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((b) => resolve(b), 'image/webp', 0.9);
-  });
-  if (blob && blob.size > 0) return blob;
-  const jpeg = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
-  });
-  if (!jpeg) throw new Error('Could not encode image');
-  return jpeg;
-}
 
 export default function EditProfilePage() {
   const { profile, updateMyProfile } = useAuth();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const initialPhone = splitStoredPhone(profile?.mobile, (profile?.countryCode as CountryCode) || 'IN');
   const [photo, setPhoto] = useState(profile?.photoURL ?? '');
+  const [photoEditorFile, setPhotoEditorFile] = useState<File | null>(null);
+  const [photoEditorOpen, setPhotoEditorOpen] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [firstName, setFirstName] = useState(profile?.firstName ?? '');
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
-  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(
-    (profile?.countryCode as CountryCode) || 'IN',
-  );
-  const [mobile, setMobile] = useState(() => {
-    if (!profile?.mobile) return '';
-    const raw = String(profile.mobile).replace(/[^0-9+]/g, '');
-    return raw.replace(/^\+?\d{1,3}/, '');
-  });
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(initialPhone.country);
+  const [mobile, setMobile] = useState(initialPhone.national);
   const [countryCode, setCountryCode] = useState(profile?.countryCode ?? 'IN');
   const [country, setCountry] = useState(profile?.country ?? 'India');
   const [city, setCity] = useState(profile?.city ?? '');
@@ -76,7 +40,12 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (!profile) return;
     if (!photo && profile.photoURL) setPhoto(profile.photoURL);
-  }, [profile, photo]);
+    if (!mobile && profile.mobile) {
+      const parsed = splitStoredPhone(profile.mobile, (profile.countryCode as CountryCode) || 'IN');
+      setPhoneCountry(parsed.country);
+      setMobile(parsed.national);
+    }
+  }, [mobile, photo, profile]);
 
   const countryOptions: ComboOption[] = useMemo(
     () => Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name, flag: c.isoCode })),
@@ -103,29 +72,49 @@ export default function EditProfilePage() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (!f.type.startsWith('image/')) return toast('Please select an image', 'error');
+    setPhotoEditorFile(f);
+    setPhotoEditorOpen(true);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const saveEditedPhoto = async (blob: Blob) => {
     if (!profile) return;
     const previousUrl = photo;
-    setBusy(true);
+    setPhotoBusy(true);
     try {
-      const blob = await resizeImageToBlob(f);
       const { url } = await uploadMedia(blob, { kind: 'avatar', uid: profile.uid });
+      await updateMyProfile({ photoURL: url });
       setPhoto(url);
-      // Drop the previous avatar from the on-device media cache so the
-      // <img key={src}> remount in <Avatar> paints the new URL straight
-      // away on every screen instead of waiting for the stale entry
-      // to expire by TTL.
       if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
         try {
           navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] });
         } catch { /* ignore */ }
       }
-      toast('Photo ready — tap Save to apply', 'success');
+      setPhotoEditorOpen(false);
+      setPhotoEditorFile(null);
+      toast('Profile photo updated', 'success');
     } catch (err: any) {
       toast(err?.message ?? 'Could not upload image', 'error');
     } finally {
-      setBusy(false);
-      // Reset the input so picking the same file again still triggers onChange.
-      if (fileRef.current) fileRef.current.value = '';
+      setPhotoBusy(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    const previousUrl = photo;
+    setPhoto('');
+    setPhotoBusy(true);
+    try {
+      await updateMyProfile({ photoURL: '' });
+      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* ignore */ }
+      }
+      toast('Profile photo removed', 'success');
+    } catch (err: any) {
+      setPhoto(previousUrl);
+      toast(err?.message ?? 'Could not remove photo', 'error');
+    } finally {
+      setPhotoBusy(false);
     }
   };
 
@@ -137,7 +126,7 @@ export default function EditProfilePage() {
     try {
       const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.fullName;
       await updateMyProfile({
-        photoURL: photo || undefined,
+        photoURL: photo,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         fullName,
@@ -176,13 +165,13 @@ export default function EditProfilePage() {
         </div>
         <div className="flex-1 text-center sm:text-left">
           <h2 className="text-lg font-extrabold text-ink">{profile.fullName}</h2>
-          <p className="mt-0.5 text-sm text-muted">JPG, PNG or WebP. Auto-cropped to square, optimised to 512 px WebP.</p>
+          <p className="mt-0.5 text-sm text-muted">JPG, PNG or WebP. Adjust crop and colour before it saves.</p>
           <div className="mt-3 inline-flex flex-wrap justify-center gap-2 sm:justify-start">
-            <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} loading={busy}>
+            <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} loading={photoBusy}>
               <Camera size={14} className="mr-1" /> Change photo
             </Button>
             {photo ? (
-              <Button size="sm" variant="ghost" onClick={() => setPhoto('')}>
+              <Button size="sm" variant="ghost" onClick={removePhoto} loading={photoBusy}>
                 <Trash2 size={14} className="mr-1" /> Remove
               </Button>
             ) : null}
@@ -270,6 +259,13 @@ export default function EditProfilePage() {
           <Button full size="lg" loading={busy} onClick={onSave}>Save changes</Button>
         </div>
       </div>
+      <ProfileImageEditorSheet
+        file={photoEditorFile}
+        open={photoEditorOpen}
+        busy={photoBusy}
+        onClose={() => { setPhotoEditorOpen(false); setPhotoEditorFile(null); }}
+        onApply={saveEditedPhoto}
+      />
     </div>
   );
 }

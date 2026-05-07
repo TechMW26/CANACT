@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { lockPageScroll } from '@/lib/scrollLock';
 import { X } from './icons';
 
 const ANIM_MS = 320;
@@ -54,12 +55,11 @@ export function Sheet({
 
   useEffect(() => {
     if (!mounted) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockPageScroll();
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
       window.removeEventListener('keydown', onKey);
       const shell = document.getElementById('canact-app-content');
       shell?.classList.remove('canact-sheet-zoom-out');
@@ -77,7 +77,7 @@ export function Sheet({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center`} role="dialog" aria-modal="true">
+    <div className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center overflow-hidden overscroll-none`} role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Close"
@@ -86,18 +86,20 @@ export function Sheet({
       />
       <div
         style={{ transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)' }}
-        className={`relative w-[100vw] max-w-[100vw] rounded-t-[32px] bg-white px-4 pb-8 pt-3 safe-bottom transform lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        className={`relative flex max-h-[calc(100svh-12px)] w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-[32px] bg-white px-4 pt-3 safe-bottom transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
+        <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
         {title !== undefined && (
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex shrink-0 items-center justify-between">
             <h2 className="text-xl font-black tracking-tight text-ink">{title}</h2>
             <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-light/60 text-brand">
               <X size={16} />
             </button>
           </div>
         )}
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-8 pr-1 [-webkit-overflow-scrolling:touch]">
+          {children}
+        </div>
       </div>
     </div>,
     document.body,

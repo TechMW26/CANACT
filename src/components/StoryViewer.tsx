@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Avatar } from './Avatar';
 import { isVideoUrl } from './CameraCapture';
 import { filterCss } from '@/lib/mediaFilters';
+import { lockPageScroll } from '@/lib/scrollLock';
 import { Heart, MessageSquare, Send, Trash2, X, Eye, Volume2, VolumeX } from './icons';
 import { listenStory, markStoryView, replyToStory, toggleStoryLike } from '@/lib/services/stories';
 import type { StoryItem } from '@/lib/types';
@@ -48,11 +49,8 @@ export function StoryViewer({
   const story = liveStory ?? stories[index];
   const isMine = story?.uid === meUid;
 
-  // Body scroll lock
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return lockPageScroll();
   }, []);
 
   // Listen to live story (for likes / replies / viewers updates)

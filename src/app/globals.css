@@ -159,6 +159,13 @@ input[type="time"]::-webkit-date-and-time-value {
   overflow: hidden;
   will-change: transform, filter;
 }
+#canact-app-content[data-disable-sheet-zoom="true"].canact-sheet-zoom-out {
+  transform: none;
+  filter: none;
+  border-radius: 0;
+  overflow: visible;
+  will-change: auto;
+}
 
 @keyframes storybar {
   0% { width: 0%; }

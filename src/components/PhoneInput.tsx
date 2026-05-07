@@ -6,6 +6,7 @@ import {
   getCountries,
   getCountryCallingCode,
   isValidPhoneNumber,
+  parsePhoneNumberFromString,
   type CountryCode,
 } from 'libphonenumber-js';
 
@@ -80,8 +81,7 @@ export function PhoneInput({
           value={formatted}
           required={required}
           onChange={(e) => {
-            const digits = e.target.value.replace(/\D/g, '');
-            onChange(digits);
+            onChange(toNationalDigits(country, e.target.value));
           }}
           className="flex-1 bg-transparent px-3 text-ink placeholder:text-subtle outline-none"
         />
@@ -93,9 +93,37 @@ export function PhoneInput({
 
 export function isPhoneValid(country: CountryCode, national: string) {
   if (!national) return false;
-  return isValidPhoneNumber(national, country);
+  const parsed = parsePhoneNumberFromString(national, country);
+  return parsed?.isValid() ?? isValidPhoneNumber(national, country);
 }
 
 export function toE164(country: CountryCode, national: string) {
-  return `+${getCountryCallingCode(country)}${national.replace(/\D/g, '')}`;
+  const parsed = parsePhoneNumberFromString(national, country);
+  if (parsed?.number) return parsed.number;
+  const digits = toNationalDigits(country, national);
+  return `+${getCountryCallingCode(country)}${digits}`;
+}
+
+export function toNationalDigits(country: CountryCode, value: string) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const parsed = parsePhoneNumberFromString(raw, country);
+  if (parsed?.nationalNumber && (raw.includes('+') || parsed.isPossible())) return parsed.nationalNumber;
+  const digits = raw.replace(/\D/g, '');
+  const dialCode = getCountryCallingCode(country);
+  if (raw.startsWith('+') && digits.startsWith(dialCode)) return digits.slice(dialCode.length);
+  return digits;
+}
+
+export function splitStoredPhone(value: string | undefined | null, fallbackCountry: CountryCode = 'IN') {
+  const raw = String(value ?? '').trim();
+  if (!raw) return { country: fallbackCountry, national: '' };
+  const parsed = parsePhoneNumberFromString(raw) || parsePhoneNumberFromString(raw, fallbackCountry);
+  if (parsed?.nationalNumber) {
+    return {
+      country: (parsed.country as CountryCode | undefined) ?? fallbackCountry,
+      national: parsed.nationalNumber,
+    };
+  }
+  return { country: fallbackCountry, national: toNationalDigits(fallbackCountry, raw) };
 }
