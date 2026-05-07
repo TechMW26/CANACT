@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MUSIC_LIBRARY, type MusicTrack } from '@/lib/musicLibrary';
+import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 import { Music, Search, X } from './icons';
 
 interface Props {
@@ -14,6 +15,11 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
   const [q, setQ] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const swipeDismissHandlers = useTopScrollSwipeDismiss({
+    onClose,
+    getScrollElement: () => listRef.current,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -49,7 +55,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
       <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div className="relative flex max-h-[80vh] w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
+      <div {...swipeDismissHandlers} className="relative flex max-h-[80vh] w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
         <div className="mb-3 flex items-center gap-2">
           <Music size={18} className="text-brand" />
           <div className="text-sm font-extrabold text-ink">Add music</div>
@@ -66,7 +72,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
             className="w-full bg-transparent text-sm outline-none"
           />
         </label>
-        <ul className="flex-1 overflow-y-auto">
+        <ul ref={listRef} className="flex-1 overflow-y-auto">
           {list.map((t) => (
             <li key={t.id} className="flex items-center gap-3 border-b border-ink/5 py-2">
               <button

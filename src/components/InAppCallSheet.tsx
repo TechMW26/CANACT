@@ -761,7 +761,7 @@ export function InAppCallSheet({
               autoPlay
               playsInline
               muted
-              className={`absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 transition-opacity ${hasLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 transition-opacity ${facing === 'user' ? '-scale-x-100' : ''} ${hasLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             />
             {/* Custom self-view placeholder shown while the camera
                 spins up — replaces the empty black box that the

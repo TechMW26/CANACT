@@ -1,24 +1,23 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { CameraCapture, isVideoUrl } from '@/components/CameraCapture';
 import { Textarea } from '@/components/Input';
 import { MusicPicker } from '@/components/MusicPicker';
 import { FilterStrip } from '@/components/FilterStrip';
 import {
   ArrowLeft,
   Film,
-  ImageIcon,
   Music,
   RotateCcw,
   Sparkles,
   Trash2,
   Volume2,
   VolumeX,
-  X,
 } from '@/components/icons';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
@@ -37,8 +36,6 @@ export default function ReelCreatePage() {
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const composeRef = useRef<HTMLVideoElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const cameraRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState<Step>('capture');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -48,20 +45,6 @@ export default function ReelCreatePage() {
   const [filter, setFilter] = useState<MediaFilterId>('none');
   const [muted, setMuted] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  const onPickFile = (file: File | null) => {
-    if (!file) return;
-    if (!file.type.startsWith('video/')) return toast('Please pick a video', 'error');
-    const reader = new FileReader();
-    reader.onload = () => {
-      setVideoUrl(reader.result as string);
-      setStep('preview');
-    };
-    reader.readAsDataURL(file);
-  };
 
   const retake = () => {
     setVideoUrl(null);
@@ -71,79 +54,28 @@ export default function ReelCreatePage() {
   };
 
   if (!user || !profile) return null;
-  if (!mounted) return null;
 
   // ────────────────── CAPTURE ──────────────────
   if (step === 'capture') {
-    const ui = (
-      <div className="fixed inset-0 z-[100] bg-gradient-to-b from-[#1a0d10] via-black to-[#1a0d10] text-white">
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 p-4 safe-top">
-          <button
-            onClick={() => router.replace('/create')}
-            aria-label="Close"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur"
-          >
-            <X size={18} />
-          </button>
-          <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold backdrop-blur">
-            New reel · up to {MAX_DURATION}s
-          </div>
-          <button
-            onClick={() => setShowMusic(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold backdrop-blur"
-          >
-            <Music size={14} /> {music ? 'Music ✓' : 'Music'}
-          </button>
-        </div>
-
-        <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-8 text-center">
-          <div className="inline-flex h-24 w-24 items-center justify-center rounded-full bg-brand/20 ring-1 ring-brand/40">
-            <Film size={42} />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-extrabold">Record a reel</h1>
-            <p className="text-sm text-white/70">Tap the shutter to use your phone&rsquo;s camera. We&rsquo;ll let you trim, filter, and add music after.</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => cameraRef.current?.click()}
-            aria-label="Open camera"
-            className="relative inline-flex h-24 w-24 items-center justify-center rounded-full bg-white/10 backdrop-blur active:scale-95 transition"
-          >
-            <span className="absolute inset-2 rounded-full border-[3px] border-white/85" />
-            <span className="absolute inset-[14px] rounded-full bg-brand" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-bold backdrop-blur"
-          >
-            <ImageIcon size={16} /> Choose from gallery
-          </button>
-        </div>
-
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="video/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-        />
-        <input
-          ref={fileRef}
-          type="file"
-          accept="video/*"
-          className="hidden"
-          onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
-        />
-
-        <MusicPicker open={showMusic} onClose={() => setShowMusic(false)} onPick={setMusic} />
-      </div>
+    return (
+      <CameraCapture
+        defaultFacing="environment"
+        allowPhoto={false}
+        allowVideo
+        initialMode="video"
+        maxVideoSec={MAX_DURATION}
+        onCancel={() => router.replace('/create')}
+        onCapture={(urls) => {
+          const next = urls.find(isVideoUrl) ?? urls[0];
+          if (!next || !isVideoUrl(next)) {
+            toast('Please record or pick a video', 'error');
+            return;
+          }
+          setVideoUrl(next);
+          setStep('preview');
+        }}
+      />
     );
-    return createPortal(ui, document.body);
   }
 
   // ────────────────── PREVIEW (filters / mute / retake) ──────────────────

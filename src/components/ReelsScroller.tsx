@@ -17,6 +17,7 @@ import {
 import type { ReelItem } from '@/lib/types';
 import { filterCss } from '@/lib/mediaFilters';
 import { lockPageScroll } from '@/lib/scrollLock';
+import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 
 export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   const { user, profile } = useAuth();
@@ -266,6 +267,10 @@ function CommentsSheet({
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const swipeDismissHandlers = useTopScrollSwipeDismiss({
+    onClose,
+    getScrollElement: () => listRef.current,
+  });
 
   useEffect(() => listenReelComments(reel.id, setItems), [reel.id]);
   useEffect(() => {
@@ -293,7 +298,8 @@ function CommentsSheet({
     <div className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
-        className={`absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[92dvh]' : 'h-[58dvh]'}`}
+        {...swipeDismissHandlers}
+        className={`absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[90vh]' : 'h-[58dvh] max-h-[90vh]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

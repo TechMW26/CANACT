@@ -6,6 +6,7 @@ import { Avatar } from './Avatar';
 import { isVideoUrl } from './CameraCapture';
 import { filterCss } from '@/lib/mediaFilters';
 import { lockPageScroll } from '@/lib/scrollLock';
+import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 import { Heart, MessageSquare, Send, Trash2, X, Eye, Volume2, VolumeX } from './icons';
 import { listenStory, markStoryView, replyToStory, toggleStoryLike } from '@/lib/services/stories';
 import type { StoryItem } from '@/lib/types';
@@ -45,6 +46,11 @@ export function StoryViewer({
   const startedAtRef = useRef<number>(Date.now());
   const elapsedRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
+  const viewersSheetRef = useRef<HTMLDivElement | null>(null);
+  const viewersSwipeDismissHandlers = useTopScrollSwipeDismiss({
+    onClose: () => setShowViewers(false),
+    getScrollElement: () => viewersSheetRef.current,
+  });
 
   const story = liveStory ?? stories[index];
   const isMine = story?.uid === meUid;
@@ -330,6 +336,8 @@ export function StoryViewer({
       {showViewers && isMine ? (
         <div className="absolute inset-0 z-[110] flex items-end bg-black/55" onClick={() => setShowViewers(false)}>
           <div
+            {...viewersSwipeDismissHandlers}
+            ref={viewersSheetRef}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[70vh] w-[100vw] max-w-[100vw] overflow-y-auto rounded-t-[28px] bg-white px-4 pb-6 pt-3 text-ink safe-bottom"
           >

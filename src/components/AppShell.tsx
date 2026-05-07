@@ -67,6 +67,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
+  const [mobileBottomNavSafeInset, setMobileBottomNavSafeInset] = useState<string | null>(null);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const profileBlendChrome = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
@@ -79,6 +80,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
+    const updateBottomSafeInset = () => setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
+    updateBottomSafeInset();
+    window.addEventListener('resize', updateBottomSafeInset);
+    window.addEventListener('orientationchange', updateBottomSafeInset);
+    window.visualViewport?.addEventListener('resize', updateBottomSafeInset);
+    return () => {
+      window.removeEventListener('resize', updateBottomSafeInset);
+      window.removeEventListener('orientationchange', updateBottomSafeInset);
+      window.visualViewport?.removeEventListener('resize', updateBottomSafeInset);
+    };
   }, []);
 
   useEffect(() => {
@@ -90,6 +101,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       router.replace('/onboard');
     }
   }, [user, profile, loading, pathname, router, profileTimedOut]);
+
+  useEffect(() => {
+    if (pathname !== '/create') return;
+    if (loading || !user || !profile || profile.profileComplete === false) return;
+    setPlusOpen(true);
+    router.replace('/feed', { scroll: false });
+  }, [pathname, router, loading, user, profile]);
 
   useEffect(() => {
     const item = detailPopupItemFromPath(pathname);
@@ -227,12 +245,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
-        <Link
-          href="/create"
+        <button
+          type="button"
+          onClick={() => { haptic('strong'); setPlusOpen(true); }}
           className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-brand text-white font-semibold py-2.5 hover:bg-brand-dark"
         >
           <Sparkles size={18} /> Create
-        </Link>
+        </button>
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
@@ -256,7 +275,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav is profile-blended on profile routes and standard
           white elsewhere. Active tab gets the brand pill treatment. */}
-      <nav className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}>
+      <nav
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}
+        style={{ paddingBottom: mobileBottomNavSafeInset ?? undefined }}
+      >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = (pathname === href || pathname?.startsWith(href));
@@ -334,6 +356,26 @@ function getMobileHeaderTopInset() {
     window.matchMedia?.('(display-mode: fullscreen)').matches
   );
   return nativeShell || androidWebView || standalone ? 'max(env(safe-area-inset-top, 0px), 24px)' : null;
+}
+
+function getMobileBottomNavSafeInset() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined' || typeof document === 'undefined') return null;
+  if (isIPhoneDevice()) return 'max(env(safe-area-inset-bottom, 0px), 8px)';
+  return measureSafeAreaInsetBottom() > 0 ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : null;
+}
+
+function measureSafeAreaInsetBottom() {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;bottom:0;height:0;width:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px);';
+  document.body.appendChild(probe);
+  const value = Number.parseFloat(window.getComputedStyle(probe).paddingBottom) || 0;
+  probe.remove();
+  return value;
+}
+
+function isIPhoneDevice() {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPod/.test(navigator.userAgent || '');
 }
 
 function isIOSDevice() {

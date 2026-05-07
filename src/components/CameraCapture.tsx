@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Aperture, Film, ImageIcon, Loader2, SwitchCamera, X, Zap } from './icons';
+import { Aperture, Film, ImageIcon, Loader2, RotateCcw, SwitchCamera, X, Zap } from './icons';
 
 type Mode = 'photo' | 'video';
 type Facing = 'user' | 'environment';
@@ -20,14 +20,27 @@ type ImageCaptureLike = {
 };
 
 type ImageCaptureConstructor = new (track: MediaStreamTrack) => ImageCaptureLike;
+type LoadedImageSource = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+};
 
 const PHOTO_QUALITY = 0.96;
 const FALLBACK_ZOOM: ZoomState = { supported: false, min: 1, max: 1, step: 0.1, value: 1 };
-const VIDEO_MIME_CANDIDATES = [
+const VIDEO_MIME_CANDIDATES_WITH_AUDIO = [
   'video/mp4;codecs=h264,aac',
   'video/mp4',
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
+  'video/webm',
+];
+const VIDEO_MIME_CANDIDATES_SILENT = [
+  'video/mp4;codecs=h264',
+  'video/mp4',
+  'video/webm;codecs=vp9',
+  'video/webm;codecs=vp8',
   'video/webm',
 ];
 
@@ -35,6 +48,8 @@ export function CameraCapture({
   multiple = false,
   maxPhotos = 1,
   allowVideo = true,
+  allowPhoto = true,
+  initialMode = 'photo',
   maxVideoSec = 60,
   onCancel,
   onCapture,
@@ -44,6 +59,8 @@ export function CameraCapture({
   multiple?: boolean;
   maxPhotos?: number;
   allowVideo?: boolean;
+  allowPhoto?: boolean;
+  initialMode?: Mode;
   maxVideoSec?: number;
   onCancel: () => void;
   /** Returns data URLs. Video items will be `data:video/...` so consumers can detect type. */
@@ -61,8 +78,10 @@ export function CameraCapture({
   const recordTimerRef = useRef<number | null>(null);
   const stopTimeoutRef = useRef<number | null>(null);
   const discardRecordingRef = useRef(false);
+  const streamRequestIdRef = useRef(0);
+  const recordingStreamCleanupRef = useRef<(() => void) | null>(null);
 
-  const [mode, setMode] = useState<Mode>('photo');
+  const [mode, setMode] = useState<Mode>(() => (initialMode === 'video' && allowVideo ? 'video' : 'photo'));
   const [facing, setFacing] = useState<Facing>(defaultFacing);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
@@ -74,8 +93,11 @@ export function CameraCapture({
   const [recordingSec, setRecordingSec] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomState>(FALLBACK_ZOOM);
+  const [activeFps, setActiveFps] = useState<number | null>(null);
 
   const mediaRecorderSupported = typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined';
+  const photoEnabled = allowPhoto;
+  const videoEnabled = allowVideo;
 
   const stopRecording = useCallback((discard = false) => {
     const recorder = recorderRef.current;
@@ -88,6 +110,8 @@ export function CameraCapture({
     if (stopTimeoutRef.current) window.clearTimeout(stopTimeoutRef.current);
     recordTimerRef.current = null;
     stopTimeoutRef.current = null;
+    recordingStreamCleanupRef.current?.();
+    recordingStreamCleanupRef.current = null;
     recorderRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -108,43 +132,54 @@ export function CameraCapture({
       setCameraError('Camera unavailable');
       return;
     }
+    const requestId = ++streamRequestIdRef.current;
     setStreamReady(false);
     setCameraError(null);
+    setActiveFps(null);
     stopCurrentStream();
 
     try {
       const stream = await getBestCameraStream({ mode, facing, deviceId: selectedDeviceId });
+      if (streamRequestIdRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (video) {
-        video.srcObject = stream;
-        video.muted = true;
-        video.playsInline = true;
-        try { await video.play(); } catch {}
+        await attachStreamToVideo(video, stream);
+      }
+      if (streamRequestIdRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
 
       const track = stream.getVideoTracks()[0];
       await applyAutoCameraProcessing(track);
       const settings = track.getSettings?.() ?? {};
       setActiveDeviceId(typeof settings.deviceId === 'string' ? settings.deviceId : selectedDeviceId);
+      setActiveFps(typeof settings.frameRate === 'number' ? Math.round(settings.frameRate) : null);
       setZoom(readZoomState(track));
       setStreamReady(true);
       await refreshDevices();
     } catch (error: any) {
+      if (streamRequestIdRef.current !== requestId) return;
       setStreamReady(false);
       setZoom(FALLBACK_ZOOM);
+      setActiveFps(null);
       setCameraError(error?.name === 'NotAllowedError' ? 'Camera permission needed' : 'Camera unavailable');
     }
   }, [facing, mode, refreshDevices, selectedDeviceId, stopCurrentStream]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await activateStream();
-      if (cancelled) stopCurrentStream();
-    })();
+    if (mode === 'photo' && !photoEnabled && videoEnabled) setMode('video');
+    if (mode === 'video' && !videoEnabled && photoEnabled) setMode('photo');
+  }, [mode, photoEnabled, videoEnabled]);
+
+  useEffect(() => {
+    activateStream();
     return () => {
-      cancelled = true;
+      streamRequestIdRef.current += 1;
       stopRecording(true);
       stopCurrentStream();
     };
@@ -159,6 +194,7 @@ export function CameraCapture({
   const lensDevices = useMemo(() => devicesForFacing(devices, facing), [devices, facing]);
   const showLensControls = lensDevices.length > 1 && lensDevices.some((device) => device.label);
   const canRecordVideo = mode === 'video' && mediaRecorderSupported && streamReady;
+  const showModeToggle = photoEnabled && videoEnabled;
 
   const appendPhotoUrls = (urls: string[]) => {
     if (!multiple || maxPhotos === 1) {
@@ -183,6 +219,7 @@ export function CameraCapture({
   };
 
   const capturePhoto = async () => {
+    if (!photoEnabled) return;
     if (busy) return;
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track || !videoRef.current) {
@@ -192,7 +229,8 @@ export function CameraCapture({
     setBusy(true);
     try {
       const rawBlob = await takeBestStill(track, videoRef.current);
-      const enhancedBlob = await autoEnhanceImageBlob(rawBlob);
+      const selfieBlob = facing === 'user' ? await mirrorImageBlob(rawBlob) : rawBlob;
+      const enhancedBlob = await autoEnhanceImageBlob(selfieBlob);
       appendPhotoUrls([await blobToDataUrl(enhancedBlob)]);
     } catch {
       nativePhotoRef.current?.click();
@@ -202,6 +240,7 @@ export function CameraCapture({
   };
 
   const startRecording = async () => {
+    if (!videoEnabled) return;
     if (busy || recording) return;
     if (!canRecordVideo || !streamRef.current) {
       nativeVideoRef.current?.click();
@@ -211,12 +250,19 @@ export function CameraCapture({
     chunksRef.current = [];
     discardRecordingRef.current = false;
     try {
-      const recorder = new MediaRecorder(streamRef.current, getRecorderOptions(streamRef.current));
+      const mirroredRecording = facing === 'user' && videoRef.current
+        ? createMirroredRecordingStream(videoRef.current, streamRef.current, activeFps ?? 60)
+        : null;
+      const recordingStream = mirroredRecording?.stream ?? streamRef.current;
+      recordingStreamCleanupRef.current = mirroredRecording?.cleanup ?? null;
+      const recorder = new MediaRecorder(recordingStream, getRecorderOptions(recordingStream));
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data?.size) chunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
+        recordingStreamCleanupRef.current?.();
+        recordingStreamCleanupRef.current = null;
         const discard = discardRecordingRef.current;
         discardRecordingRef.current = false;
         if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
@@ -241,6 +287,8 @@ export function CameraCapture({
       }, 250);
       stopTimeoutRef.current = window.setTimeout(() => stopRecording(), maxVideoSec * 1000);
     } catch {
+      recordingStreamCleanupRef.current?.();
+      recordingStreamCleanupRef.current = null;
       setBusy(false);
       nativeVideoRef.current?.click();
     }
@@ -267,6 +315,10 @@ export function CameraCapture({
   };
 
   const handlePrimaryAction = () => {
+    if (!streamReady && cameraError && typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function') {
+      activateStream();
+      return;
+    }
     if (mode === 'photo') {
       capturePhoto();
       return;
@@ -337,7 +389,7 @@ export function CameraCapture({
           </button>
           <div className="inline-flex items-center gap-2 rounded-full bg-black/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide backdrop-blur-xl ring-1 ring-white/15">
             {streamReady ? <Zap size={12} /> : <Loader2 size={12} className="animate-spin" />}
-            {mode === 'photo' ? (multiple ? `${shots.length}/${maxPhotos}` : 'Photo') : recording ? formatDuration(recordingSec) : `Video ${maxVideoSec}s`}
+            {mode === 'photo' ? (multiple ? `${shots.length}/${maxPhotos}` : 'Photo') : recording ? formatDuration(recordingSec) : `${activeFps && activeFps >= 50 ? `${activeFps}fps · ` : ''}Video ${maxVideoSec}s`}
           </div>
           <button
             type="button"
@@ -350,14 +402,14 @@ export function CameraCapture({
           </button>
         </div>
 
-        {allowVideo && (
+        {showModeToggle && (
           <div className="mt-4 flex justify-center">
             <div className="inline-flex items-center gap-1 rounded-full bg-black/35 p-1 backdrop-blur-xl ring-1 ring-white/15">
               {(['photo', 'video'] as const).map((nextMode) => (
                 <button
                   key={nextMode}
                   type="button"
-                  disabled={recording}
+                  disabled={recording || (nextMode === 'photo' && !photoEnabled) || (nextMode === 'video' && !videoEnabled)}
                   onClick={() => setMode(nextMode)}
                   className={`inline-flex h-8 items-center gap-1 rounded-full px-3 text-[11px] font-bold uppercase tracking-wider transition disabled:opacity-45 ${
                     mode === nextMode ? 'bg-white text-ink' : 'text-white/85'
@@ -429,12 +481,12 @@ export function CameraCapture({
               type="button"
               onClick={handlePrimaryAction}
               disabled={busy || (!streamReady && !cameraError)}
-              aria-label={mode === 'video' && recording ? 'Stop recording' : mode === 'video' ? 'Record video' : 'Take photo'}
+              aria-label={!streamReady && cameraError ? 'Retry camera' : mode === 'video' && recording ? 'Stop recording' : mode === 'video' ? 'Record video' : 'Take photo'}
               className={`mx-auto inline-flex h-[76px] w-[76px] items-center justify-center rounded-full border-[5px] border-white transition active:scale-95 disabled:opacity-45 ${
                 mode === 'video' && recording ? 'bg-rose-500' : 'bg-white/18'
               }`}
             >
-              {busy ? <Loader2 size={24} className="animate-spin" /> : mode === 'video' && recording ? <span className="h-7 w-7 rounded-md bg-white" /> : <span className="h-14 w-14 rounded-full bg-white" />}
+              {busy ? <Loader2 size={24} className="animate-spin" /> : !streamReady && cameraError ? <RotateCcw size={28} /> : mode === 'video' && recording ? <span className="h-7 w-7 rounded-md bg-white" /> : <span className="h-14 w-14 rounded-full bg-white" />}
             </button>
 
             <button
@@ -482,39 +534,45 @@ export function CameraCapture({
 }
 
 async function getBestCameraStream({ mode, facing, deviceId }: { mode: Mode; facing: Facing; deviceId: string | null }) {
-  const audio = mode === 'video'
-    ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    : false;
   const attempts: MediaStreamConstraints[] = [];
+  const audioAttempts = mode === 'video'
+    ? [{ echoCancellation: false, noiseSuppression: false, autoGainControl: false }, false]
+    : [false];
+  const frameRate60 = { ideal: 60, min: 30, max: 60 };
+  const frameRateBalanced = { ideal: mode === 'video' ? 60 : 30, max: 60 };
+  const frameRateSafe = { ideal: mode === 'video' ? 30 : 24, max: mode === 'video' ? 60 : 30 };
   const baseHigh = {
     width: { ideal: 3840 },
     height: { ideal: 2160 },
-    frameRate: { ideal: 60, max: 60 },
+    frameRate: frameRate60,
     resizeMode: 'none',
   } as any;
   const baseBalanced = {
     width: { ideal: 1920 },
     height: { ideal: 1080 },
-    frameRate: { ideal: 60, max: 60 },
+    frameRate: frameRateBalanced,
     resizeMode: 'none',
   } as any;
   const baseSafe = {
     width: { ideal: 1920 },
     height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 30 },
+    frameRate: frameRateSafe,
   } as any;
 
-  if (deviceId) {
-    attempts.push({ audio, video: { ...baseHigh, deviceId: { exact: deviceId } } as any });
-    attempts.push({ audio, video: { ...baseBalanced, deviceId: { exact: deviceId } } as any });
-  } else {
-    attempts.push({ audio, video: { ...baseHigh, facingMode: { exact: facing } } as any });
-    attempts.push({ audio, video: { ...baseHigh, facingMode: { ideal: facing } } as any });
-    attempts.push({ audio, video: { ...baseBalanced, facingMode: { ideal: facing } } as any });
+  for (const audio of audioAttempts) {
+    if (deviceId) {
+      attempts.push({ audio, video: { ...baseHigh, deviceId: { exact: deviceId } } as any });
+      attempts.push({ audio, video: { ...baseBalanced, deviceId: { exact: deviceId } } as any });
+      attempts.push({ audio, video: { ...baseSafe, deviceId: { exact: deviceId } } as any });
+    } else {
+      attempts.push({ audio, video: { ...baseHigh, facingMode: { exact: facing } } as any });
+      attempts.push({ audio, video: { ...baseHigh, facingMode: { ideal: facing } } as any });
+      attempts.push({ audio, video: { ...baseBalanced, facingMode: { ideal: facing } } as any });
+      attempts.push({ audio, video: { ...baseSafe, facingMode: { ideal: facing } } as any });
+    }
+    attempts.push({ audio, video: { facingMode: { ideal: facing }, frameRate: frameRateSafe } as any });
+    attempts.push({ audio, video: true });
   }
-  attempts.push({ audio, video: { ...baseSafe, facingMode: { ideal: facing } } as any });
-  attempts.push({ audio, video: { facingMode: { ideal: facing } } as any });
-  attempts.push({ audio, video: true });
 
   let lastError: unknown;
   for (const constraints of attempts) {
@@ -525,6 +583,30 @@ async function getBestCameraStream({ mode, facing, deviceId }: { mode: Mode; fac
     }
   }
   throw lastError;
+}
+
+async function attachStreamToVideo(video: HTMLVideoElement, stream: MediaStream) {
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  if (!video.hasAttribute('playsinline')) video.setAttribute('playsinline', 'true');
+  await waitForVideoMetadata(video);
+  try { await video.play(); } catch {}
+}
+
+function waitForVideoMetadata(video: HTMLVideoElement) {
+  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener('loadedmetadata', done);
+      video.removeEventListener('canplay', done);
+      resolve();
+    };
+    const timeout = window.setTimeout(done, 1200);
+    video.addEventListener('loadedmetadata', done, { once: true });
+    video.addEventListener('canplay', done, { once: true });
+  });
 }
 
 async function applyAutoCameraProcessing(track: MediaStreamTrack | undefined) {
@@ -606,6 +688,100 @@ async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
   return blob;
 }
 
+async function mirrorImageBlob(blob: Blob): Promise<Blob> {
+  let image: LoadedImageSource | null = null;
+  try {
+    image = await loadImageSource(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return blob;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(image.source, 0, 0, image.width, image.height);
+    const mirrored = await canvasToBlob(canvas, blob.type || 'image/jpeg', PHOTO_QUALITY);
+    return mirrored && mirrored.size ? mirrored : blob;
+  } catch {
+    return blob;
+  } finally {
+    image?.close();
+  }
+}
+
+async function loadImageSource(blob: Blob): Promise<LoadedImageSource> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' } as any);
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        close: () => bitmap.close?.(),
+      };
+    } catch {}
+  }
+
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    const cleanup = () => URL.revokeObjectURL(url);
+    image.onload = () => resolve({
+      source: image,
+      width: image.naturalWidth || image.width,
+      height: image.naturalHeight || image.height,
+      close: cleanup,
+    });
+    image.onerror = () => {
+      cleanup();
+      reject(new Error('Could not load image'));
+    };
+    image.src = url;
+  });
+}
+
+function createMirroredRecordingStream(video: HTMLVideoElement, sourceStream: MediaStream, fps: number) {
+  const canvas = document.createElement('canvas');
+  if (typeof canvas.captureStream !== 'function') return null;
+  const videoTrack = sourceStream.getVideoTracks()[0];
+  const settings = videoTrack?.getSettings?.() ?? {};
+  const width = video.videoWidth || Number(settings.width) || 1080;
+  const height = video.videoHeight || Number(settings.height) || 1920;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  let stopped = false;
+  let rafId = 0;
+  const drawFrame = () => {
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, width, height);
+    ctx.restore();
+  };
+  const tick = () => {
+    if (stopped) return;
+    drawFrame();
+    rafId = requestAnimationFrame(tick);
+  };
+  drawFrame();
+  const captureFps = Math.min(60, Math.max(24, Math.round(fps || 60)));
+  const canvasStream = canvas.captureStream(captureFps);
+  sourceStream.getAudioTracks().forEach((track) => canvasStream.addTrack(track));
+  rafId = requestAnimationFrame(tick);
+  return {
+    stream: canvasStream,
+    cleanup: () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+      canvasStream.getVideoTracks().forEach((track) => track.stop());
+    },
+  };
+}
+
 async function autoEnhanceImageBlob(blob: Blob): Promise<Blob> {
   if (typeof document === 'undefined') return blob;
   try {
@@ -635,7 +811,9 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
 }
 
 function getRecorderOptions(stream: MediaStream): MediaRecorderOptions {
-  const mimeType = VIDEO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+  const hasAudio = stream.getAudioTracks().some((track) => track.readyState === 'live');
+  const candidates = hasAudio ? VIDEO_MIME_CANDIDATES_WITH_AUDIO : VIDEO_MIME_CANDIDATES_SILENT;
+  const mimeType = candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
   const settings = stream.getVideoTracks()[0]?.getSettings?.() ?? {};
   const width = Number(settings.width || 1920);
   const height = Number(settings.height || 1080);
@@ -649,7 +827,7 @@ function getRecorderOptions(stream: MediaStream): MediaRecorderOptions {
   return {
     ...(mimeType ? { mimeType } : {}),
     videoBitsPerSecond,
-    audioBitsPerSecond: 160_000,
+    ...(hasAudio ? { audioBitsPerSecond: 160_000 } : {}),
   };
 }
 
