@@ -39,11 +39,11 @@ export default function HelpFeed() {
     });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4">
       {/* Sticky single CTA */}
       <div className="sticky top-[68px] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-1 pb-2 bg-candy/85 backdrop-blur-md">
         <Link href="/help/create" className="block">
-          <button className="w-full h-12 rounded-full bg-brand text-white font-bold inline-flex items-center justify-center gap-2 shadow-[0_8px_20px_-8px_rgba(200,16,46,0.55)] hover:bg-brand-dark active:scale-[0.99] transition">
+          <button className="w-full h-12 rounded-full bg-brand text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-brand-dark active:scale-[0.99] transition">
             <LifeBuoy size={20} strokeWidth={2.4} /> Request Help
           </button>
         </Link>
@@ -70,7 +70,7 @@ export default function HelpFeed() {
 
         {visible.map((h) => (
           <Link key={h.id} href={`/help/${h.id}`} className="block">
-            <Card className="hover:shadow-md transition">
+            <Card className="transition-colors hover:border-brand-light">
               <div className="flex items-start gap-3">
                 <span className={`mt-1 inline-flex items-center justify-center w-3 h-3 rounded-full ${TYPE_COLOR[h.type]}`} aria-label={TYPE_LABEL[h.type]} />
                 <Avatar src={h.authorPhoto ?? null} name={h.authorName} />

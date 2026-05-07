@@ -761,13 +761,13 @@ export function InAppCallSheet({
               autoPlay
               playsInline
               muted
-              className={`absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 shadow-lg transition-opacity ${hasLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              className={`absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 object-cover bg-black/40 transition-opacity ${hasLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             />
             {/* Custom self-view placeholder shown while the camera
                 spins up — replaces the empty black box that the
                 browser shows when a <video> has no srcObject. */}
             {(!hasLocalVideo || cameraOff) && (
-              <div className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 bg-gradient-to-br from-brand/40 to-ink/80 shadow-lg flex flex-col items-center justify-center gap-1 text-white">
+              <div className="absolute right-3 top-3 z-[3] h-40 w-28 rounded-2xl border-2 border-white/85 bg-gradient-to-br from-brand/40 to-ink/80 flex flex-col items-center justify-center gap-1 text-white">
                 {cameraOff ? (
                   <>
                     <VideoOff size={20} />
@@ -792,7 +792,7 @@ export function InAppCallSheet({
 
         {/* Peer is asking us to enable video — Accept / Decline overlay. */}
         {peerWantsVideo && (
-          <div className="absolute inset-x-4 bottom-32 z-[5] rounded-3xl bg-white/95 p-4 text-ink shadow-2xl">
+          <div className="absolute inset-x-4 bottom-32 z-[5] rounded-3xl bg-white/95 p-4 text-ink">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand/15 text-brand">
                 <Video size={20} />
@@ -895,7 +895,7 @@ export function InAppCallSheet({
           <button
             type="button"
             onClick={hangup}
-            className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg"
+            className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white"
             aria-label="Hang up"
           >
             <PhoneOff size={26} />

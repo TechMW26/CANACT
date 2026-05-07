@@ -336,7 +336,7 @@ export default function InboxThreadPage() {
             placeholder={canSend ? 'Message…' : 'Awaiting acceptance'}
             disabled={!canSend || busy}
             rows={1}
-            className="max-h-32 flex-1 resize-none rounded-3xl border border-line bg-candy px-4 py-2.5 text-sm shadow-sm outline-none focus:border-brand"
+            className="max-h-32 flex-1 resize-none rounded-3xl border border-line bg-candy px-4 py-2.5 text-sm outline-none focus:border-brand"
           />
           <button
             type="submit"
@@ -353,7 +353,7 @@ export default function InboxThreadPage() {
       <Sheet open={!!actionMsg} onClose={() => setActionMsg(null)} title="">
         {actionMsg && (
           <div className="space-y-4">
-            <div className="rounded-3xl bg-white p-2 shadow-[0_8px_24px_-12px_rgba(10,10,10,0.18)] ring-1 ring-line">
+            <div className="rounded-3xl bg-white p-2 ring-1 ring-line">
               <div className="flex items-center justify-between gap-1">
                 {QUICK_REACTIONS.map((emoji, i) => {
                   const active = actionMsg.reactions?.[user.uid] === emoji;

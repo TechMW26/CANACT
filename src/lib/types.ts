@@ -121,6 +121,7 @@ export interface RateMeSession {
   votes?: Record<string, 'like' | 'dislike'>;
   likes: number;
   dislikes: number;
+  commentCount?: number;
 }
 
 export interface StoryOverlay {
@@ -225,6 +226,13 @@ export type ChatAttachment =
       postId: string;
       authorName?: string;
       text?: string;
+      thumbUrl?: string;
+    }
+  | {
+      kind: 'poll';
+      pollId: string;
+      authorName?: string;
+      question?: string;
       thumbUrl?: string;
     }
   | {

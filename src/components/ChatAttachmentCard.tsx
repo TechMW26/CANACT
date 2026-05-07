@@ -36,6 +36,7 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
   const [thumbIsVideo, setThumbIsVideo] = useState<boolean>(false);
   const [text, setText] = useState<string | undefined>(
     attachment.kind === 'post' ? attachment.text
+      : attachment.kind === 'poll' ? attachment.question
       : attachment.kind === 'reel' ? attachment.caption
       : undefined,
   );
@@ -48,7 +49,7 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
     (async () => {
       try {
         if (attachment.kind === 'post') {
-          const snap = await get(ref(db, `whaPosts/${attachment.postId}`));
+          const snap = await get(ref(db, `wha/${attachment.postId}`));
           const v = snap.val();
           if (cancelled || !v) return;
           // Prefer the dedicated poster (cheap JPEG generated at upload
@@ -66,6 +67,12 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
             }
           }
           if (!text && v.text) setText(v.text);
+          if (!author && v.authorName) setAuthor(v.authorName);
+        } else if (attachment.kind === 'poll') {
+          const snap = await get(ref(db, `polls/${attachment.pollId}`));
+          const v = snap.val();
+          if (cancelled || !v) return;
+          if (!text && v.question) setText(v.question);
           if (!author && v.authorName) setAuthor(v.authorName);
         } else if (attachment.kind === 'reel') {
           const snap = await get(ref(db, `reels/${attachment.reelId}`));
@@ -106,15 +113,16 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
 
   const href =
     attachment.kind === 'post' ? `/post/${attachment.postId}`
+    : attachment.kind === 'poll' ? `/poll/${attachment.pollId}`
     : attachment.kind === 'reel' ? `/reel/${attachment.reelId}`
     : authorUid ? `/profile/${authorUid}` : '/feed';
-  const label = attachment.kind === 'post' ? 'Post' : attachment.kind === 'reel' ? 'Reel' : 'Rate Me';
+  const label = attachment.kind === 'post' ? 'Post' : attachment.kind === 'poll' ? 'Poll' : attachment.kind === 'reel' ? 'Reel' : 'Rate Me';
 
   return (
     <Link
       href={href}
       prefetch
-      className="block w-64 overflow-hidden rounded-2xl border border-line bg-white text-ink shadow-[0_8px_22px_-12px_rgba(10,10,10,0.18)]"
+      className="block w-64 overflow-hidden rounded-2xl border border-line bg-white text-ink"
     >
       <div className="relative aspect-[4/5] bg-brand-light/40">
         {thumb ? (

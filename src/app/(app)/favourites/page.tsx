@@ -58,8 +58,8 @@ export default function FavouritesPage() {
 
   if (!user) return null;
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-1 rounded-full bg-white p-1 shadow-[0_8px_22px_-14px_rgba(10,10,10,0.25)] ring-1 ring-line">
+    <div className="space-y-3 pt-4">
+      <div className="flex items-center gap-1 rounded-full bg-white p-1 ring-1 ring-line">
         <PillTab active={tab === 'friends'} onClick={() => setTab('friends')} label="Friends" badge={friendReqs.length} />
         <PillTab active={tab === 'favourites'} onClick={() => setTab('favourites')} label="Favourites" badge={favReqs.length} />
       </div>
@@ -165,7 +165,7 @@ function PillTab({ active, onClick, label, badge }: { active: boolean; onClick: 
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex-1 rounded-full px-4 py-2 text-sm font-extrabold transition ${active ? 'bg-brand text-white shadow-[0_8px_18px_-10px_rgba(200,16,46,0.65)]' : 'text-ink/60 hover:text-ink'}`}
+      className={`relative flex-1 rounded-full px-4 py-2 text-sm font-extrabold transition ${active ? 'bg-brand text-white' : 'text-ink/60 hover:text-ink'}`}
     >
       {label}
       {badge > 0 && (

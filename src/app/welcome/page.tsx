@@ -18,11 +18,26 @@ function GoogleGlyph() {
   );
 }
 
+const ADMIN_EMAIL = 'avi2001raj@gmail.com';
+const ADMIN_PASSWORD = 'Admin@login2025';
+
+function isLocalhost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
+}
+
 export default function WelcomePage() {
   const router = useRouter();
-  const { user, profile, loading, signInWithGoogle } = useAuth();
+  const { user, profile, loading, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
+  const [devMode, setDevMode] = useState(false);
+  const [email, setEmail] = useState(ADMIN_EMAIL);
+  const [password, setPassword] = useState(ADMIN_PASSWORD);
+
+  useEffect(() => { setDevMode(isLocalhost()); }, []);
 
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return; }
@@ -77,6 +92,68 @@ export default function WelcomePage() {
           <p className="mt-4 text-xs text-ink/55">
             By continuing you agree to our terms and privacy policy.
           </p>
+
+          {devMode && (
+            <div className="mt-8 rounded-xl border border-dashed border-line bg-white/70 p-4 text-left">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wide text-brand">Localhost dev sign-in</span>
+                <span className="text-[10px] text-ink/50">email + password</span>
+              </div>
+              <form
+                className="flex flex-col gap-2"
+                onSubmit={(e) => { e.preventDefault(); }}
+              >
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-line px-3 text-sm"
+                  placeholder="email"
+                />
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-line px-3 text-sm"
+                  placeholder="password"
+                />
+                <div className="mt-1 flex gap-2">
+                  <Button
+                    type="submit"
+                    full
+                    loading={emailBusy}
+                    onClick={async () => {
+                      setEmailBusy(true);
+                      try { await signInWithEmail(email, password); }
+                      catch (err: any) { toast(err?.message ?? 'Sign-in failed', 'error'); }
+                      finally { setEmailBusy(false); }
+                    }}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    type="button"
+                    full
+                    loading={emailBusy}
+                    onClick={async () => {
+                      setEmailBusy(true);
+                      try {
+                        await signUpWithEmail(email, password);
+                        toast('Account created', 'success');
+                      } catch (err: any) {
+                        toast(err?.message ?? 'Sign-up failed', 'error');
+                      } finally { setEmailBusy(false); }
+                    }}
+                    className="!bg-white !text-ink ring-1 ring-line"
+                  >
+                    Sign up
+                  </Button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -9,9 +9,10 @@ import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
+import { PostDetailSheet } from './PostDetailSheet';
+import { ShareToChatSheet } from './ShareToChatSheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
-import { Select } from './Input';
 import { IncomingCallRinger } from './IncomingCallRinger';
 import { ScrollRestoration } from './ScrollRestoration';
 import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
@@ -19,6 +20,7 @@ import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
+import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -61,9 +63,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [plusOpen, setPlusOpen] = useState(false);
+  const [globalPostId, setGlobalPostId] = useState<string | null>(null);
+  const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
+  const profileBlendChrome = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
 
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return; }
@@ -80,6 +85,32 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       router.replace('/onboard');
     }
   }, [user, profile, loading, pathname, router, profileTimedOut]);
+
+  useEffect(() => {
+    const postId = postIdFromPath(pathname);
+    if (!postId) return;
+    setGlobalPostId(postId);
+    router.replace('/feed', { scroll: false });
+  }, [pathname, router]);
+
+  useEffect(() => {
+    const openPostFromLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const anchor = target?.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.target && anchor.target !== '_self') return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      const postId = postIdFromPath(url.pathname);
+      if (!postId) return;
+      event.preventDefault();
+      haptic('subtle');
+      setGlobalPostId(postId);
+    };
+    document.addEventListener('click', openPostFromLink, true);
+    return () => document.removeEventListener('click', openPostFromLink, true);
+  }, []);
 
   // Cold-start route restore was sending users back to /inbox/<uid>
   // (or whatever screen they had open last) when they reopened the
@@ -107,6 +138,22 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // Full-screen routes: hide the unified header, page transition wrapper, and
   // bottom nav so the page can own the entire viewport (chat threads, etc).
   const isFullScreen = !!pathname && /^\/inbox\/[^/]+/.test(pathname);
+  const postPopups = (
+    <>
+      <PostDetailSheet
+        item={globalPostId ? { kind: 'wha', id: globalPostId } : null}
+        myUid={user.uid}
+        myName={profile?.fullName ?? 'You'}
+        onClose={() => setGlobalPostId(null)}
+        onShare={setPostShareAttachment}
+      />
+      <ShareToChatSheet
+        open={!!postShareAttachment}
+        onClose={() => setPostShareAttachment(null)}
+        attachment={postShareAttachment}
+      />
+    </>
+  );
 
   if (isFullScreen) {
     return (
@@ -117,6 +164,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             top of a conversation should never reload the page mid-message. */}
         <PageTransition>{children}</PageTransition>
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
+        {postPopups}
         <HelpAlertManager />
         <IncomingCallRinger />
         <NativeCallDeepLinkRouter />
@@ -183,19 +231,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader />
-        {/* Spacer that occupies the same vertical space as the fixed
-            header so the page content starts below it instead of
-            underneath. Header total ≈ safe-area-inset-top + 76px (pt-3 +
-            pill 52px + pb-3); we mirror that with safe-top padding + a
-            76px content height so the spacer scales with the notch. */}
+        <UnifiedHeader blendChrome={profileBlendChrome} />
+        {/* Spacer mirroring the fixed top bar so page content starts below it.
+          Top bar = safe-area-inset-top + 56px (h-14 row). */}
         <div
           data-canact-header-spacer
           aria-hidden
           className="lg:hidden"
-          style={{ height: 'calc(env(safe-area-inset-top, 0px) + 76px)' }}
+          style={{ height: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}
         />
-        <div className="canact-col pb-4 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className="canact-col pb-20 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
@@ -204,15 +249,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </main>
       </div>{/* /canact-app-content */}
 
-      {/* Floating mobile bottom nav (outside the zoom-target element so it
-          stays put when sheets / popups open).
-          Active tab expands into a brand-tinted pill that shows its label,
-          mimicking the "Home" pill in the inspiration design. The smooth
-          width transition is what gives it the animated feel without
-          pulling in framer-motion. */}
-      <nav className="lg:hidden fixed inset-x-0 bottom-0 z-40 pt-2 pb-3 safe-bottom pointer-events-none">
-        <div className="canact-col pointer-events-auto rounded-[28px] bg-white border border-line shadow-[0_14px_36px_-14px_rgba(10,10,10,0.32)]">
-          <div className="flex h-16 items-center justify-around px-2">
+        {/* Mobile bottom nav is profile-blended on profile routes and standard
+          white elsewhere. Active tab gets the brand pill treatment. */}
+      <nav className={`lg:hidden fixed inset-x-0 bottom-0 z-40 safe-bottom transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}>
+        <div className="relative z-10 flex h-16 items-center justify-around px-2">
             {TABS.map(({ href, label, Icon, isFab }) => {
               const active = (pathname === href || pathname?.startsWith(href));
               const isProfile = href === '/profile';
@@ -238,10 +278,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                   </span>
                 </>
               );
-              const cls = `group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color] duration-300 ease-out ${
+              const cls = `canact-bottom-tab group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color,box-shadow] duration-300 ease-out ${
                 active
-                  ? 'bg-brand text-white pl-3 pr-4 shadow-[0_8px_18px_-8px_rgba(200,16,46,0.6)]'
-                  : 'text-ink/65 hover:text-ink'
+                  ? 'canact-bottom-tab-active bg-brand text-white pl-3 pr-4'
+                  : 'canact-bottom-tab-inactive text-ink/65 hover:text-ink'
               }`;
               if (isFab) {
                 return (
@@ -256,12 +296,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-          </div>
         </div>
       </nav>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
+      {postPopups}
     </div>
   );
+}
+
+function postIdFromPath(path: string | null) {
+  if (!path) return null;
+  const match = path.match(/^\/post\/([^/]+)$/);
+  if (!match || match[1] === 'create') return null;
+  return decodeURIComponent(match[1]);
 }
 
 function titleFor(path: string | null) {
@@ -280,14 +327,10 @@ function titleFor(path: string | null) {
   return '';
 }
 
-function UnifiedHeader() {
+function UnifiedHeader({ blendChrome = false }: { blendChrome?: boolean }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
-  // Combined unread + pending request count for the chat icon. Uses the
-  // same listener as the rest of the inbox UI so all three badges (header
-  // icon, sidebar link, inbox tab pills) update in lockstep.
-  const { total: inboxTotal } = useInboxBadges();
 
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
@@ -307,43 +350,94 @@ function UnifiedHeader() {
   return (
     <header
       data-canact-header
-      className="fixed top-0 left-0 right-0 z-30 pt-3 pb-3 safe-top lg:hidden pointer-events-none"
+      className={`fixed top-0 left-0 right-0 z-30 lg:hidden transition-colors duration-500 ease-out ${blendChrome ? 'canact-profile-header-chrome border-b-0 pb-8' : 'bg-white border-b border-line'}`}
     >
-      <div className="canact-col md:max-w-none pointer-events-auto flex items-center gap-2 rounded-2xl bg-white border border-line shadow-[0_6px_20px_-8px_rgba(10,10,10,0.18)] px-3 py-2">
+      <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={26} href="/feed" />
         <div className="ml-auto inline-flex items-center gap-2">
-          <Select
-            aria-label="Feed distance filter"
-            value={String(radiusIdx)}
-            onChange={(e) => setRadiusIdx(Number(e.target.value))}
-            className="h-8 w-auto min-w-[78px] rounded-full border border-[#F1D7DC] bg-brand-light px-2 text-center text-[11px] font-bold text-brand shadow-none [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
-          >
-            {RADIUS_OPTIONS.map((option) => (
-              <option key={option.index} value={option.index}>{option.label}</option>
-            ))}
-          </Select>
-          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className="inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-            <Search size={16} strokeWidth={2.2} />
+          <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={blendChrome} />
+          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+            <Search size={18} strokeWidth={2.2} />
           </Link>
-          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className="relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-            <Heart size={16} strokeWidth={2.2} />
+          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+            <Heart size={18} strokeWidth={2.2} />
             {pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
                 {pendingCount > 9 ? '9+' : pendingCount}
               </span>
             )}
           </Link>
-          <Link href="/inbox" aria-label="Inbox" prefetch onClick={() => haptic('subtle')} className="relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full border border-[#F1D7DC] bg-white/90 text-ink/70 hover:bg-brand-light hover:text-brand transition">
-            <MessageSquare size={16} strokeWidth={2.2} />
-            {inboxTotal > 0 && (
-              <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
-                {inboxTotal > 9 ? '9+' : inboxTotal}
-              </span>
-            )}
-          </Link>
         </div>
       </div>
     </header>
+  );
+}
+
+function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx: number; setRadiusIdx: (value: number) => void; blendChrome: boolean }) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const selectedOption = RADIUS_OPTIONS.find((option) => option.index === radiusIdx) ?? RADIUS_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !dropdownRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  const pillClassName = `canact-distance-pill inline-flex h-8 min-w-[112px] items-center justify-center rounded-full px-4 text-center text-[13px] font-extrabold leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
+  const menuClassName = `absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl border p-1 backdrop-blur-xl ${blendChrome ? 'border-white/50 bg-white/90 text-ink' : 'border-line bg-white text-ink'}`;
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        aria-label="Feed distance filter"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={pillClassName}
+        onClick={() => {
+          haptic('subtle');
+          setOpen((wasOpen) => !wasOpen);
+        }}
+      >
+        <span className="block w-full text-center">{selectedOption.label}</span>
+      </button>
+      {open && (
+        <div role="listbox" aria-label="Feed distance filter" className={menuClassName}>
+          {RADIUS_OPTIONS.map((option) => {
+            const selected = option.index === radiusIdx;
+            return (
+              <button
+                key={option.index}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`flex h-9 w-full items-center justify-center rounded-xl px-3 text-center text-xs font-extrabold transition ${selected ? 'bg-brand text-white' : 'text-ink/75 hover:bg-brand-light hover:text-brand'}`}
+                onClick={() => {
+                  setRadiusIdx(option.index);
+                  setOpen(false);
+                  haptic('selection');
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

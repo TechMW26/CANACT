@@ -104,7 +104,7 @@ export function Combobox({
           </svg>
         </button>
         {open && !disabled && (
-          <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-line bg-white shadow-lg">
+          <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-2xl border border-line bg-white">
             <div className="border-b border-line p-2">
               <input
                 ref={inputRef}

@@ -90,4 +90,6 @@ export {
   Copy,
   MoreVertical,
   MoreHorizontal,
+  ShoppingBag,
+  AlignLeft,
 } from 'lucide-react';

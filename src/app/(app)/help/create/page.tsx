@@ -69,7 +69,7 @@ export default function HelpCreatePage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4">
       <Card>
         <h2 className="text-xl font-bold">Request Help</h2>
         <p className="text-xs text-muted mt-1">Pick urgency, audience, and how nearby people should respond.</p>
@@ -87,7 +87,7 @@ export default function HelpCreatePage() {
                   key={t}
                   type="button"
                   onClick={() => setType(t)}
-                  className={`rounded-2xl border-2 p-3 flex flex-col items-center gap-1 transition ${active ? 'border-ink shadow-md' : 'border-transparent opacity-70 hover:opacity-100'} ${m.bg} ${m.text}`}
+                  className={`rounded-2xl border-2 p-3 flex flex-col items-center gap-1 transition ${active ? 'border-ink' : 'border-transparent opacity-70 hover:opacity-100'} ${m.bg} ${m.text}`}
                 >
                   <I size={20} strokeWidth={2.2} />
                   <span className="font-bold text-sm">{m.label}</span>

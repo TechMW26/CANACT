@@ -50,7 +50,7 @@ export default function PostCreatePage() {
           type="button"
           aria-label="Back to camera"
           onClick={() => setStep('capture')}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line shadow-sm"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line"
         >
           <ArrowLeft size={18} />
         </button>
@@ -60,7 +60,7 @@ export default function PostCreatePage() {
         </div>
       </header>
 
-      <div className="rounded-[30px] bg-white/92 p-4 ring-1 ring-[#F1D7DC] shadow-[0_18px_36px_-26px_rgba(10,10,10,0.18)]">
+      <div className="rounded-[30px] bg-white/92 p-4 ring-1 ring-[#F1D7DC]">
         <div className="flex items-center gap-3">
           <Avatar src={profile.photoURL ?? null} name={profile.fullName} />
           <div className="min-w-0 flex-1">

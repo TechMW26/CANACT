@@ -52,7 +52,7 @@ function RatingPromptModal({
   const minutes = Math.max(1, Math.round(pending.durationMs / 60000));
   return (
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-ink/40 backdrop-blur-sm p-3">
-      <div className="w-full max-w-sm rounded-3xl bg-white shadow-2xl p-5">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <Avatar src={pending.otherPhoto ?? null} name={pending.otherName} size={48} />

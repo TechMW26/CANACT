@@ -57,7 +57,7 @@ export function PostMenu({
 
       {open && (
         <div
-          className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-2xl border border-line bg-white shadow-[0_18px_44px_-18px_rgba(10,10,10,0.35)]"
+          className="absolute right-0 top-11 z-50 w-44 overflow-hidden rounded-2xl border border-line bg-white"
           onClick={(e) => e.stopPropagation()}
         >
           {isOwner && onDelete && (

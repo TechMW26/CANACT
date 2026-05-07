@@ -112,9 +112,9 @@ const SECONDARY: Action[] = [
 
 export default function CreateHubPage() {
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl pt-4">
       <header className="mb-5">
-        <div className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 text-xs font-semibold text-brand ring-1 ring-[#F1D7DC] shadow-[0_10px_24px_-18px_rgba(10,10,10,0.28)]">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1.5 text-xs font-semibold text-brand ring-1 ring-[#F1D7DC]">
           <Sparkles size={14} /> Create
         </div>
         <h1 className="mt-3 text-3xl font-black tracking-tight text-ink">What do you want to share?</h1>
@@ -126,10 +126,10 @@ export default function CreateHubPage() {
           <Link
             key={href}
             href={href}
-            className={`group relative overflow-hidden rounded-[28px] bg-gradient-to-br ${accent} p-5 ring-1 ${ring} shadow-[0_18px_36px_-26px_rgba(10,10,10,0.22)] transition active:scale-[0.99]`}
+            className={`group relative overflow-hidden rounded-[28px] bg-gradient-to-br ${accent} p-5 ring-1 ${ring} transition active:scale-[0.99]`}
           >
             <div className="flex items-start gap-4">
-              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-brand shadow-[0_10px_24px_-14px_rgba(200,16,46,0.45)]">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-brand">
                 <Icon size={26} strokeWidth={2} />
               </span>
               <div className="min-w-0 flex-1">
@@ -162,9 +162,9 @@ export default function CreateHubPage() {
             <Link
               key={href + title}
               href={href}
-              className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${accent} p-4 ring-1 ${ring} shadow-[0_10px_24px_-18px_rgba(10,10,10,0.22)] transition active:scale-[0.99]`}
+              className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${accent} p-4 ring-1 ${ring} transition active:scale-[0.99]`}
             >
-              <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${dark ? 'bg-white/10' : 'bg-white'} ${iconColor ?? 'text-brand'} shadow-[0_8px_18px_-14px_rgba(200,16,46,0.4)]`}>
+              <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${dark ? 'bg-white/10' : 'bg-white'} ${iconColor ?? 'text-brand'}`}>
                 <Icon size={18} strokeWidth={2} />
               </span>
               <div className={`mt-3 text-sm font-extrabold tracking-tight ${dark ? 'text-white' : 'text-ink'}`}>{title}</div>

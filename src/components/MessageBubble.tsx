@@ -214,7 +214,7 @@ const MessageBubbleInner = memo(function MessageBubbleInner({
           </div>
         ) : message.text ? (
           <div
-            className={`whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm shadow-sm ${
+            className={`whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
               mine ? 'bg-brand text-white' : 'bg-white text-ink ring-1 ring-line'
             }`}
           >
@@ -236,7 +236,7 @@ const MessageBubbleInner = memo(function MessageBubbleInner({
           <div className={`relative h-3 ${mine ? 'self-end' : 'self-start'}`}>
             <div
               key={reactionEntries.map(([, e]) => e).join(',') + ':' + reactionEntries.length}
-              className={`canact-reaction-pop absolute -top-3 ${mine ? 'right-2' : 'left-2'} flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 shadow-[0_4px_12px_-4px_rgba(10,10,10,0.25)] ring-1 ring-line`}
+              className={`canact-reaction-pop absolute -top-3 ${mine ? 'right-2' : 'left-2'} flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 ring-1 ring-line`}
             >
               {Object.entries(reactionCounts).map(([emoji, count]) => (
                 <button

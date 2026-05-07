@@ -13,7 +13,7 @@ export default function NotificationsPage() {
   useEffect(() => { if (user) return listenNotifications(user.uid, setItems); }, [user?.uid]);
   if (!user) return null;
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pt-4">
       {items.length === 0 && <Card className="text-center text-muted">No notifications yet.</Card>}
       {items.map((n) => {
         const href = n.kind === 'help' ? `/help/${n.data?.helpId}` : n.kind === 'follow' ? `/profile/${n.data?.fromUid}` : '#';

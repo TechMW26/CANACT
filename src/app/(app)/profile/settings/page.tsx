@@ -92,7 +92,7 @@ export default function ProfileSettingsPage() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden border border-[#EFD9DD] bg-white shadow-[0_18px_44px_-26px_rgba(10,10,10,0.22)]">
+      <Card className="overflow-hidden border border-[#EFD9DD] bg-white">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">

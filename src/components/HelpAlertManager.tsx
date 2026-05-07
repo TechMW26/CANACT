@@ -182,7 +182,7 @@ export function HelpAlertManager() {
     >
       {/* Solid dark backdrop — clicks do NOT dismiss. */}
       <div className="absolute inset-0 bg-ink/70 backdrop-blur-sm" aria-hidden="true" />
-      <div className="relative w-full max-w-sm rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-3xl bg-white ring-1 ring-black/5 overflow-hidden">
         {current.kind === 'request' ? (
           <>
             <div className={`flex items-center gap-2 px-5 py-3 text-white font-bold ${TYPE_LABEL[current.type].tint}`}>

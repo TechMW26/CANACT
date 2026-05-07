@@ -118,7 +118,7 @@ export function PullToRefresh({
           opacity: visible ? 1 : 0,
           transform: `translate(-50%, ${busy ? 12 : Math.min(pull * 0.5, 40)}px) scale(${busy ? 1 : 0.85 + progress * 0.15})`,
         }}
-        className="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top,0px)+72px)] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-white text-brand shadow-[0_8px_22px_-8px_rgba(10,10,10,0.35)] transition-opacity"
+        className="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top,0px)+72px)] z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-white text-brand transition-opacity"
       >
         <Loader2
           size={20}

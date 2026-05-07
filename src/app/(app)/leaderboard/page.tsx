@@ -21,7 +21,7 @@ export default function LeaderboardPage() {
   useEffect(() => listenLeaderboard(scope, profile, setRows), [scope, profile]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4">
       <div className="-mx-4 overflow-x-auto no-scrollbar md:-mx-6">
         <div className="flex w-max gap-2 px-4 md:px-6">
           {SCOPES.map((s) => (

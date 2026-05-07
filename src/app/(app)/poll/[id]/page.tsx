@@ -28,7 +28,7 @@ export default function PollDetail() {
   const ended = p.endsAt < Date.now();
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4">
       <Card>
         <div className="flex items-center gap-3">
           <Link href={`/profile/${p.uid}`}><Avatar name={p.authorName} /></Link>

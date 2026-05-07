@@ -74,7 +74,7 @@ export default function HelpDetailPage() {
   const confirmedMe = !!h.confirmedHelpers?.[user.uid];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4">
       {/* Author header */}
       <Card>
         <div className="flex items-start gap-3">

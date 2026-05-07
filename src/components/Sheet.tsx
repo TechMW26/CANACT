@@ -86,7 +86,7 @@ export function Sheet({
       />
       <div
         style={{ transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)' }}
-        className={`relative w-full max-w-md rounded-t-[32px] bg-white px-4 pb-8 pt-3 shadow-[0_-20px_60px_-20px_rgba(10,10,10,0.45)] safe-bottom transform ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        className={`relative w-[100vw] max-w-[100vw] rounded-t-[32px] bg-white px-4 pb-8 pt-3 safe-bottom transform lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
         {title !== undefined && (

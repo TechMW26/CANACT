@@ -5,6 +5,8 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signInWithCredential,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   getRedirectResult,
   GoogleAuthProvider,
   signOut as fbSignOut,
@@ -56,6 +58,8 @@ interface AuthCtx {
   profile: UserProfile | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateMyProfile: (patch: Partial<UserProfile>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -288,6 +292,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         throw err;
       }
+    },
+    signInWithEmail: async (email, password) => {
+      const auth = getFirebaseAuth();
+      const r = await signInWithEmailAndPassword(auth, email, password);
+      if (r.user) seedInBackground(r.user);
+    },
+    signUpWithEmail: async (email, password) => {
+      const auth = getFirebaseAuth();
+      const r = await createUserWithEmailAndPassword(auth, email, password);
+      if (r.user) seedInBackground(r.user);
     },
     signOut: async () => {
       await fbSignOut(getFirebaseAuth());

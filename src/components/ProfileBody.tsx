@@ -40,6 +40,12 @@ import {
   Star,
   Users as UsersIcon,
   Settings as SettingsIcon,
+  Bookmark,
+  Send,
+  MoreHorizontal,
+  ShoppingBag,
+  AlignLeft,
+  Video,
 } from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
@@ -159,256 +165,431 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     return a > 0 && a < 130 ? a : undefined;
   })();
 
-  // SELF profile renders a clean, reference-matching hero (big avatar with
-  // camera badge, name + age, location, bio, single Edit Profile pill, and
-  // a white stats card with three cells). Other-user profiles keep their
-  // existing card with rating / like / friend / message affordances.
-  if (isSelf) {
-    return (
-      <div className="space-y-4">
-        {/* Section caption + actions row, matches "MY PROFILE  ⋯" header. */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-xs font-extrabold uppercase tracking-[0.32em] text-brand">My Profile</h1>
-          <Link
-            href="/profile/settings"
-            prefetch
-            aria-label="Profile settings"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.55)]"
-          >
-            <SettingsIcon size={18} />
-          </Link>
-        </div>
+  const supportersCount = isSelf
+    ? Math.max(friendsCount, u.likesCount ?? 0)
+    : (u.likesCount ?? 0);
 
-        {/* Hero card: soft pastel backdrop + big centred avatar with the
-            camera-shutter badge for quick photo change. */}
-        <Card className="relative overflow-hidden border border-[#F1D7DC] bg-[radial-gradient(circle_at_50%_30%,_rgba(255,216,221,0.85),_rgba(255,248,248,0.95)_55%,_rgba(255,255,255,1)_100%)] shadow-[0_24px_60px_-32px_rgba(200,16,46,0.3)]">
-          <div className="flex flex-col items-center pt-6 pb-2">
-            <div className="relative">
-              <div className="rounded-full bg-white p-1.5 shadow-[0_10px_24px_-12px_rgba(10,10,10,0.25)] ring-1 ring-white/70">
-                <Avatar src={u.photoURL} name={u.fullName} size={128} />
-              </div>
-              <Link
-                href="/edit-profile"
-                prefetch
-                aria-label="Change photo"
-                className="absolute bottom-1 right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.55)] ring-4 ring-white"
-              >
-                <Camera size={16} />
-              </Link>
-            </div>
-            <div className="mt-5 flex items-center gap-2 px-4 text-center">
-              <h2 className="text-2xl font-black tracking-tight text-ink">{u.fullName}</h2>
-              {age ? <span className="text-2xl font-bold text-ink/45">{age}</span> : null}
-            </div>
-            {isVerified ? <div className="mt-2"><VerifiedBadge compact /></div> : null}
-            {locationText ? (
-              <div className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-ink/65">
-                <MapPin size={14} className="text-brand" />
-                <span>{locationText}</span>
-              </div>
-            ) : null}
-            {u.bio ? (
-              <p className="mt-4 max-w-md px-6 text-center text-sm leading-6 text-ink/70 whitespace-pre-wrap">{u.bio}</p>
-            ) : (
-              <p className="mt-4 max-w-md px-6 text-center text-sm text-ink/40 italic">Add a short bio so people know what you’re about.</p>
-            )}
-            <Link href="/edit-profile" prefetch className="mt-5 inline-flex">
-              <Button size="md" icon={<Pencil size={14} />}>Edit Profile</Button>
-            </Link>
-          </div>
-        </Card>
+  const handleProfileSupport = async () => {
+    if (isSelf || !user || !me) return;
+    try {
+      if (friendStatus === 'incoming') {
+        await acceptFriendRequest(
+          user.uid,
+          { name: me.fullName, photoURL: me.photoURL },
+          uid,
+          { name: u.fullName, photoURL: u.photoURL },
+        );
+        toast('You are now friends', 'success');
+        return;
+      }
+      if (friendStatus === 'none') {
+        await sendFriendRequest(
+          { uid: user.uid, name: me.fullName, photoURL: me.photoURL },
+          { uid: u.uid, name: u.fullName, photoURL: u.photoURL },
+        );
+        await setLikeDislike(uid, user.uid, 'like');
+        toast('Support sent', 'success');
+        return;
+      }
+      if (friendStatus === 'friends') {
+        await requestFollow(user.uid, me.fullName, uid);
+        toast('Added to favourites', 'success');
+        return;
+      }
+      toast('Request already sent', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not support profile', 'error');
+    }
+  };
 
-        {/* Stats card — three pastel cells (Likes / Friends / Rating). */}
-        <Card className="!p-0 overflow-hidden border border-[#F1D7DC] bg-white">
-          <div className="grid grid-cols-3 divide-x divide-[#F4E0E4] py-4">
-            <SelfStatCell icon={<Heart size={16} />} value={String(u.likesCount ?? 0)} label="Likes" />
-            <SelfStatCell icon={<UsersIcon size={16} />} value={String(friendsCount)} label="Friends" />
-            <SelfStatCell icon={<Star size={16} />} value={(u.rating ?? 0).toFixed(1)} label="Rating" />
-          </div>
-        </Card>
-
-        {/* Tabs + content. Same component used on the non-self profile
-            below so behaviour stays identical. */}
-        <ProfileTabsCard
-          tab={tab}
-          setTab={setTab}
-          posts={posts}
-          reels={reels}
-          polls={polls}
-          ratemes={ratemes}
-          isSelf={isSelf}
-          uid={uid}
-          userUid={user?.uid}
-        />
-      </div>
-    );
-  }
-
-  const statCards = [
-    { label: 'Rating', value: (u.rating ?? 0).toFixed(1), tone: 'text-brand bg-brand-light/70' },
-    { label: 'Likes', value: String(u.likesCount ?? 0), tone: 'text-emerald-700 bg-emerald-50' },
-    { label: 'Cards', value: String(CARD_KEYS.reduce((sum, key) => sum + (u.cardsReceived?.[key] ?? 0), 0)), tone: 'text-amber-700 bg-amber-50' },
-  ];
+  const handleProfileBookmark = async () => {
+    if (isSelf || !user || !me) return;
+    try {
+      await requestFollow(user.uid, me.fullName, uid);
+      toast('Request sent', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not send request', 'error');
+    }
+  };
 
   return (
-    <div className="space-y-4">
-      <Card className="relative overflow-hidden border border-[#F1D7DC] bg-[radial-gradient(circle_at_top_left,_rgba(255,216,221,0.9),_rgba(255,248,248,0.96)_44%,_rgba(255,255,255,1)_100%)] shadow-[0_24px_60px_-28px_rgba(200,16,46,0.35)]">
-        <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-brand/10 blur-2xl" />
-        <div className="pointer-events-none absolute -left-8 bottom-0 h-24 w-24 rounded-full bg-amber-200/30 blur-2xl" />
-        <div className="relative">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start">
-            <div className="flex items-center gap-4 md:flex-col md:items-start">
-              <div className="rounded-[28px] bg-white/80 p-1.5 shadow-[0_10px_24px_-12px_rgba(10,10,10,0.25)] ring-1 ring-white/70">
-                <Avatar src={u.photoURL} name={u.fullName} size={96} />
-              </div>
-              <div className="flex-1 min-w-0 md:hidden">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-2xl font-black tracking-tight truncate">{u.fullName}</h2>
-                  {isVerified ? <VerifiedBadge /> : null}
-                </div>
-                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                  <RatingPill value={u.rating ?? 0} />
-                  <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.likesCount ?? 0} likes</span>
-                  <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.dislikesCount ?? 0} dislikes</span>
-                </div>
-              </div>
-            </div>
+    <CanactPagesProfileUI
+      userProfile={u}
+      isSelf={isSelf}
+      isVerified={isVerified}
+      age={age}
+      locationText={locationText}
+      supportersCount={supportersCount}
+      tab={tab}
+      setTab={setTab}
+      posts={posts}
+      reels={reels}
+      polls={polls}
+      ratemes={ratemes}
+      onSupport={handleProfileSupport}
+      onBookmark={handleProfileBookmark}
+      friendStatus={friendStatus}
+    />
+  );
+}
 
-            <div className="hidden flex-1 min-w-0 md:block">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-3xl font-black tracking-tight truncate">{u.fullName}</h2>
-                {isVerified ? <VerifiedBadge /> : null}
-              </div>
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
-                <RatingPill value={u.rating ?? 0} />
-                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.likesCount ?? 0} likes</span>
-                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">{u.dislikesCount ?? 0} dislikes</span>
-                {isSelf && u.mobile ? <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-bold text-ink/70">+91 {u.mobile}</span> : null}
+type ProfileTabKey = 'posts' | 'reels' | 'polls' | 'rateme';
+
+function profileSlug(user: UserProfile) {
+  return (user.fullName || user.email || user.mobile || 'canact')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .slice(0, 18) || 'canact';
+}
+
+function splitProfileName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return [name || 'CANACT', 'Profile'];
+  return [parts[0], parts.slice(1).join(' ')];
+}
+
+function BrandDot({ color, letter }: { color: string; letter: string }) {
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-[2px] ring-black/40"
+      style={{ background: color, fontSize: 9, fontWeight: 800, color: '#fff' }}
+    >
+      {letter}
+    </div>
+  );
+}
+
+type ProfileThumb = {
+  id: string;
+  href: string;
+  src?: string | null;
+  video?: string | null;
+  label: string;
+};
+
+type ChromeTone = 'light' | 'dark';
+
+const PROFILE_CHROME_FALLBACK: { top: ChromeTone; bottom: ChromeTone } = { top: 'light', bottom: 'dark' };
+const PROFILE_CHROME_VARS = [
+  '--canact-profile-top-rgb',
+  '--canact-profile-bottom-rgb',
+  '--canact-profile-top-ink',
+  '--canact-profile-bottom-ink',
+  '--canact-profile-top-light-opacity',
+  '--canact-profile-top-dark-opacity',
+  '--canact-profile-bottom-light-opacity',
+  '--canact-profile-bottom-dark-opacity',
+];
+
+function toneToRgb(tone: ChromeTone) {
+  return tone === 'light' ? '255 255 255' : '0 0 0';
+}
+
+function toneToInk(tone: ChromeTone) {
+  return tone === 'light' ? '10 10 10' : '255 255 255';
+}
+
+function applyProfileChrome(top: ChromeTone, bottom: ChromeTone) {
+  const root = document.documentElement;
+  root.style.setProperty('--canact-profile-top-rgb', toneToRgb(top));
+  root.style.setProperty('--canact-profile-bottom-rgb', toneToRgb(bottom));
+  root.style.setProperty('--canact-profile-top-ink', toneToInk(top));
+  root.style.setProperty('--canact-profile-bottom-ink', toneToInk(bottom));
+  root.style.setProperty('--canact-profile-top-light-opacity', top === 'light' ? '1' : '0');
+  root.style.setProperty('--canact-profile-top-dark-opacity', top === 'dark' ? '1' : '0');
+  root.style.setProperty('--canact-profile-bottom-light-opacity', bottom === 'light' ? '1' : '0');
+  root.style.setProperty('--canact-profile-bottom-dark-opacity', bottom === 'dark' ? '1' : '0');
+}
+
+function clearProfileChrome() {
+  const root = document.documentElement;
+  PROFILE_CHROME_VARS.forEach((property) => root.style.removeProperty(property));
+}
+
+function toneFromLuma(luma: number) {
+  return luma >= 154 ? 'light' : 'dark';
+}
+
+function imageCoverRect(image: HTMLImageElement, viewportWidth: number, viewportHeight: number) {
+  const imageWidth = image.naturalWidth || image.width;
+  const imageHeight = image.naturalHeight || image.height;
+  const viewportAspect = viewportWidth / viewportHeight;
+  const imageAspect = imageWidth / imageHeight;
+  if (imageAspect > viewportAspect) {
+    const sourceWidth = imageHeight * viewportAspect;
+    return { sx: (imageWidth - sourceWidth) / 2, sy: 0, sw: sourceWidth, sh: imageHeight };
+  }
+  const sourceHeight = imageWidth / viewportAspect;
+  return { sx: 0, sy: (imageHeight - sourceHeight) / 2, sw: imageWidth, sh: sourceHeight };
+}
+
+function averageZoneLuma(data: Uint8ClampedArray, width: number, startY: number, endY: number) {
+  let total = 0;
+  let count = 0;
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = 0; x < width; x += 2) {
+      const offset = (y * width + x) * 4;
+      const alpha = data[offset + 3] / 255;
+      if (alpha <= 0) continue;
+      total += (0.2126 * data[offset] + 0.7152 * data[offset + 1] + 0.0722 * data[offset + 2]) * alpha;
+      count += alpha;
+    }
+  }
+  return count ? total / count : 0;
+}
+
+function sampleProfileImageTones(src: string): Promise<{ top: ChromeTone; bottom: ChromeTone }> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.decoding = 'async';
+    image.onload = () => {
+      try {
+        const width = 48;
+        const height = 96;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) {
+          resolve(PROFILE_CHROME_FALLBACK);
+          return;
+        }
+        const viewportWidth = Math.max(window.innerWidth || 1, 1);
+        const viewportHeight = Math.max(window.innerHeight || 1, 1);
+        const rect = imageCoverRect(image, viewportWidth, viewportHeight);
+        context.drawImage(image, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height).data;
+        const topLuma = averageZoneLuma(pixels, width, 0, Math.floor(height * 0.2));
+        const bottomLuma = averageZoneLuma(pixels, width, Math.floor(height * 0.8), height) * 0.68;
+        resolve({ top: toneFromLuma(topLuma), bottom: toneFromLuma(bottomLuma) });
+      } catch {
+        resolve(PROFILE_CHROME_FALLBACK);
+      }
+    };
+    image.onerror = () => resolve(PROFILE_CHROME_FALLBACK);
+    image.src = src;
+  });
+}
+
+function useAdaptiveProfileChrome(heroSrc: string | null) {
+  useEffect(() => {
+    let cancelled = false;
+    applyProfileChrome(PROFILE_CHROME_FALLBACK.top, PROFILE_CHROME_FALLBACK.bottom);
+    if (heroSrc) {
+      sampleProfileImageTones(heroSrc).then(({ top, bottom }) => {
+        if (!cancelled) applyProfileChrome(top, bottom);
+      });
+    }
+    return () => {
+      cancelled = true;
+      clearProfileChrome();
+    };
+  }, [heroSrc]);
+}
+
+function postCover(post: WhaPost) {
+  return post.mediaPosters?.[0] || post.mediaUrls?.[0] || null;
+}
+
+function profileHeroImage(userProfile: UserProfile, posts: WhaPost[], reels: ReelItem[], ratemes: RateMeSession[]) {
+  return userProfile.photoURL
+    || posts.map(postCover).find(Boolean)
+    || reels.map((reel) => reel.posterUrl).find(Boolean)
+    || ratemes.map((item) => item.photoURL).find(Boolean)
+    || null;
+}
+
+function profileThumbnails(tab: ProfileTabKey, posts: WhaPost[], reels: ReelItem[], polls: Poll[], ratemes: RateMeSession[]): ProfileThumb[] {
+  if (tab === 'reels') {
+    return reels.slice(0, 8).map((reel) => ({
+      id: reel.id,
+      href: `/reel/${reel.id}`,
+      src: reel.posterUrl,
+      video: reel.videoUrl,
+      label: reel.caption || 'Reel',
+    }));
+  }
+  if (tab === 'polls' || tab === 'rateme') {
+    return [
+      ...polls.slice(0, 4).map((poll) => ({
+        id: poll.id,
+        href: `/poll/${poll.id}`,
+        label: poll.question || 'Poll',
+      })),
+      ...ratemes.slice(0, 4).map((item) => ({
+        id: item.id,
+        href: '/profile',
+        src: item.photoURL,
+        label: 'Rate Me',
+      })),
+    ].slice(0, 8);
+  }
+  return posts.slice(0, 8).map((post) => ({
+    id: post.id,
+    href: `/post/${post.id}`,
+    src: postCover(post),
+    label: post.text || 'Post',
+  }));
+}
+
+function CanactPagesProfileUI({
+  userProfile,
+  isSelf,
+  isVerified,
+  age,
+  locationText,
+  supportersCount,
+  tab,
+  setTab,
+  posts,
+  reels,
+  polls,
+  ratemes,
+  onSupport,
+  onBookmark,
+  friendStatus,
+}: {
+  userProfile: UserProfile;
+  isSelf: boolean;
+  isVerified: boolean;
+  age?: number;
+  locationText: string;
+  supportersCount: number;
+  tab: ProfileTabKey;
+  setTab: (tab: ProfileTabKey) => void;
+  posts: WhaPost[];
+  reels: ReelItem[];
+  polls: Poll[];
+  ratemes: RateMeSession[];
+  onSupport: () => Promise<void>;
+  onBookmark: () => Promise<void>;
+  friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
+}) {
+  const activeTab = tab === 'rateme' ? 'polls' : tab;
+  const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
+  useAdaptiveProfileChrome(heroSrc);
+  const nameLines = splitProfileName(userProfile.fullName);
+  const role = userProfile.tags?.[0] || locationText || `${(userProfile.rating ?? 0).toFixed(1)} rating`;
+  const supportLabel = isSelf
+    ? 'Edit'
+    : friendStatus === 'friends'
+      ? 'Friends'
+      : friendStatus === 'requested'
+        ? 'Requested'
+        : friendStatus === 'incoming'
+          ? 'Accept'
+          : 'Support';
+  const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
+
+  return (
+    <div className="fixed inset-0 z-[25] overflow-y-auto bg-black">
+      <div className="relative min-h-[100svh] overflow-hidden bg-black">
+        {heroSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={heroSrc} alt={userProfile.fullName} className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,107,122,0.55),transparent_32%),linear-gradient(145deg,#1c1c1f,#050505)]" />
+        )}
+
+        <div
+          className="absolute inset-0 transition-opacity duration-500"
+          style={{
+            background: 'linear-gradient(180deg, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.30) 0%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.20) 20%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.08) 42%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.10) 55%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.48) 78%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.92) 100%)',
+          }}
+        />
+
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+108px)]">
+          <div className="mb-3">
+            <div className="w-fit rounded-full p-[2.5px]" style={{ background: 'linear-gradient(135deg, #FF6B7A, #FFB3B8)' }}>
+              <div className="h-[46px] w-[46px] overflow-hidden rounded-full ring-[2px] ring-black/30">
+                <Avatar src={userProfile.photoURL} name={userProfile.fullName} size={46} />
               </div>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {statCards.map((item) => (
-              <div key={item.label} className={`rounded-2xl px-3 py-3 ${item.tone}`}>
-                <div className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">{item.label}</div>
-                <div className="mt-1 text-xl font-black leading-none">{item.value}</div>
-              </div>
-            ))}
+          <div className="mb-4">
+            <h1 className="text-[42px] font-extrabold leading-none text-white" style={{ letterSpacing: -1.5 }}>
+              {nameLines.map((line) => <span key={line} className="block break-words">{line}</span>)}
+            </h1>
+            <p className="mt-2 text-xs text-white/55">
+              iAm @{profileSlug(userProfile)} &nbsp;·&nbsp; {role}{age ? ` · ${age}` : ''}{isVerified ? ' · Verified' : ''}
+            </p>
+            {userProfile.bio ? (
+              <p className="mt-3 line-clamp-2 max-w-[88vw] whitespace-pre-wrap text-xs leading-5 text-white/65">{userProfile.bio}</p>
+            ) : null}
           </div>
 
-          {/* Personal info — only visible to the owner */}
-          {isSelf ? (
-            <div className="mt-4 grid gap-2 md:grid-cols-2">
-              <InfoPill icon={<MapPin size={14} />} label={locationText || 'Location not set'} />
-              <InfoPill icon={<Mail size={14} />} label={u.email || 'Email private'} />
-              <InfoPill icon={<Award size={14} />} label={u.dateOfBirth ? `DOB ${u.dateOfBirth}` : 'DOB not verified'} />
-              <InfoPill icon={<Crown size={14} />} label={u.address || 'Address not verified'} />
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex items-center">
+              <BrandDot color="#e11a1a" letter="C" />
+              <div className="-ml-2"><BrandDot color="#0b3d91" letter="A" /></div>
+              <div className="-ml-2"><BrandDot color="#1a4f8c" letter="N" /></div>
             </div>
-          ) : null}
-
-          {isSelf && u.bio ? <p className="mt-4 text-sm leading-6 text-ink/75 whitespace-pre-wrap">{u.bio}</p> : null}
-          {isSelf && u.tags?.length ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {u.tags.map((t) => (
-                <span key={t} className="rounded-full border border-white/70 bg-white/80 px-3 py-1 text-[11px] font-bold text-brand shadow-sm">
-                  {t}
-                </span>
-              ))}
+            <div>
+              <div className="text-sm font-bold leading-none text-white">{supportersCount.toLocaleString()}</div>
+              <div className="text-[10px] text-white/45">Supporters</div>
             </div>
-          ) : null}
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            {isSelf ? (
-              <Link href="/profile/settings" prefetch>
-                <Button variant="outline" size="sm" icon={<SettingsIcon size={14} />}>Profile settings</Button>
-              </Link>
-            ) : (
-              <>
-                <Button size="sm" variant={myVote?.main === 'like' ? 'primary' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'like')}>
-                  <ThumbsUp size={14} className="mr-1" /> Like
-                </Button>
-                <Button size="sm" variant={myVote?.main === 'dislike' ? 'danger' : 'outline'} onClick={() => user && setLikeDislike(uid, user.uid, 'dislike')}>
-                  <ThumbsDown size={14} className="mr-1" /> Dislike
-                </Button>
-                <Button size="sm" variant="subtle" onClick={async () => { if (user && me) { await requestFollow(user.uid, me.fullName, uid); toast('Request sent', 'success'); } }}>+ Favourite</Button>
-                <FriendButton
-                  status={friendStatus}
-                  onSend={async () => {
-                    if (!user || !me) return;
-                    await sendFriendRequest(
-                      { uid: user.uid, name: me.fullName, photoURL: me.photoURL },
-                      { uid: u.uid, name: u.fullName, photoURL: u.photoURL },
-                    );
-                    toast('Friend request sent', 'success');
-                  }}
-                  onCancel={async () => { if (user) await cancelFriendRequest(user.uid, uid); }}
-                  onAccept={async () => {
-                    if (!user || !me) return;
-                    await acceptFriendRequest(
-                      user.uid,
-                      { name: me.fullName, photoURL: me.photoURL },
-                      uid,
-                      { name: u.fullName, photoURL: u.photoURL },
-                    );
-                    toast('You are now friends', 'success');
-                  }}
-                  onDecline={async () => { if (user) await declineFriendRequest(user.uid, uid); }}
-                  onUnfriend={async () => { if (user) await unfriend(user.uid, uid); }}
-                />
-                <Link href={`/inbox/${uid}`} prefetch>
-                  <Button size="sm" variant="outline">Message</Button>
+            <div className="ml-auto flex gap-2">
+              {isSelf ? (
+                <Link href="/edit-profile" prefetch className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                  {supportLabel}
                 </Link>
-              </>
+              ) : (
+                <button type="button" onClick={onSupport} className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                  {supportLabel}
+                </button>
+              )}
+              <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                {isSelf ? 'Settings' : 'Chat'}
+              </Link>
+            </div>
+          </div>
+
+          <div className="mb-4 flex items-center gap-8 border-b border-white/15 pb-3">
+            {([
+              { id: 'posts', Icon: ShoppingBag },
+              { id: 'reels', Icon: Video },
+              { id: 'polls', Icon: AlignLeft },
+            ] as const).map(({ id, Icon }) => {
+              const active = activeTab === id;
+              return (
+                <button key={id} type="button" onClick={() => setTab(id)} className="relative flex items-center justify-center">
+                  <Icon size={18} strokeWidth={active ? 2.2 : 1.6} style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'color 0.2s' }} />
+                  {active ? <span className="absolute -bottom-3 left-0 right-0 h-[2px] rounded-full bg-white" /> : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {thumbs.length ? thumbs.map((thumb) => (
+              <Link
+                key={thumb.id}
+                href={thumb.href}
+                prefetch
+                className="h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-white/20 bg-white/10 active:scale-95 transition"
+              >
+                {thumb.src ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumb.src} alt={thumb.label} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                ) : thumb.video ? (
+                  <video src={thumb.video} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-white/10 p-2 text-center text-[10px] font-semibold leading-tight text-white/75">
+                    <span className="line-clamp-4">{thumb.label}</span>
+                  </div>
+                )}
+              </Link>
+            )) : (
+              <div className="flex h-[76px] min-w-[180px] items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 text-center text-xs font-semibold text-white/60">
+                No content yet
+              </div>
             )}
           </div>
         </div>
-      </Card>
-
-      {/* Instagram-style posts grid. The 4th tab ("Rate Me") replaced the
-          old "Tagged" stub — the user's active + recently-ended Rate Me
-          sessions now live inside this grid instead of as a separate strip
-          above it, so all of a user's content is in one place. */}
-      <ProfileTabsCard
-        tab={tab}
-        setTab={setTab}
-        posts={posts}
-        reels={reels}
-        polls={polls}
-        ratemes={ratemes}
-        isSelf={isSelf}
-        uid={uid}
-        userUid={user?.uid}
-      />
-
-      <Card>
-        <div className="flex items-center justify-between">
-          <h3 className="font-black tracking-tight">Attributes</h3>
-          {cooldownLeft > 0 && !isSelf && <span className="text-xs text-muted">Cooldown {Math.ceil(cooldownLeft / 60000)} min</span>}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <AttrGroup title="Positive" items={POSITIVE_ATTRS} u={u} mine={myVote?.attr?.key} disabled={isSelf || cooldownLeft > 0} onPick={handleAttr} positive />
-          <AttrGroup title="Negative" items={NEGATIVE_ATTRS} u={u} mine={myVote?.attr?.key} disabled={isSelf || cooldownLeft > 0} onPick={handleAttr} positive={false} />
-        </div>
-      </Card>
-
-      <Card>
-        <h3 className="font-black tracking-tight">Cards</h3>
-        <p className="text-xs text-muted">Tap to give. Tap again to take back. One card per pair.</p>
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {CARD_KEYS.map((c) => {
-            const given = !!myVote?.cards?.[c];
-            return (
-              <button key={c} disabled={isSelf} onClick={() => handleCard(c)}
-                className={`rounded-2xl p-3 border text-left transition ${given ? 'bg-brand text-white border-brand shadow-[0_10px_24px_-14px_rgba(200,16,46,0.65)]' : 'bg-white text-ink border-line hover:border-brand-light'} disabled:opacity-70`}>
-                <div className="text-xs font-bold uppercase tracking-wide opacity-80">Card</div>
-                <div className="font-bold">{CARD_LABELS[c]}</div>
-                <div className="mt-1 text-xs">{u.cardsReceived?.[c] ?? 0} received</div>
-              </button>
-            );
-          })}
-        </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -455,7 +636,7 @@ function VerifiedBadge({ compact = false }: { compact?: boolean }) {
 
 function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="inline-flex min-w-0 items-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-sm text-ink/75 shadow-[0_8px_20px_-16px_rgba(10,10,10,0.3)]">
+    <div className="inline-flex min-w-0 items-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-sm text-ink/75">
       <span className="shrink-0 text-brand">{icon}</span>
       <span className="truncate">{label}</span>
     </div>
@@ -736,7 +917,7 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
       ? `${Math.ceil(remaining / 3_600_000)}h left`
       : `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
   return (
-    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
+    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white">
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Rate Me</div>
         <div className="text-[11px] font-semibold text-muted">{timeLabel}</div>

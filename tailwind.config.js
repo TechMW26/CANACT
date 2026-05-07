@@ -17,7 +17,7 @@ module.exports = {
         underground: '#1A1A1A',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(0,0,0,.04), 0 4px 10px rgba(200,16,46,.06)',
+        card: 'none',
       },
       borderRadius: { xl2: '1.25rem' },
       fontFamily: {

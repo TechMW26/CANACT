@@ -333,7 +333,7 @@ export function StoryViewer({
         <div className="absolute inset-0 z-[110] flex items-end bg-black/55" onClick={() => setShowViewers(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full rounded-t-[28px] bg-white px-4 pb-6 pt-3 text-ink shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.5)] safe-bottom max-h-[70vh] overflow-y-auto"
+            className="max-h-[70vh] w-[100vw] max-w-[100vw] overflow-y-auto rounded-t-[28px] bg-white px-4 pb-6 pt-3 text-ink safe-bottom"
           >
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
             <div className="mb-2 flex items-center justify-between">

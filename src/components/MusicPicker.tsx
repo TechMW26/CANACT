@@ -49,7 +49,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
       <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div className="relative w-full max-w-md rounded-t-3xl bg-white p-4 shadow-2xl max-h-[80vh] flex flex-col">
+      <div className="relative flex max-h-[80vh] w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
         <div className="mb-3 flex items-center gap-2">
           <Music size={18} className="text-brand" />
           <div className="text-sm font-extrabold text-ink">Add music</div>

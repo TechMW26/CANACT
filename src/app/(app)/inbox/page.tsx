@@ -29,9 +29,9 @@ export default function InboxPage() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto max-w-2xl pb-8">
+    <div className="mx-auto max-w-2xl pb-8 pt-4">
       <header className="mb-3 flex items-center gap-2">
-        <Link href="/feed" aria-label="Back" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line shadow-sm">
+        <Link href="/feed" aria-label="Back" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line">
           <ArrowLeft size={18} />
         </Link>
         <div>

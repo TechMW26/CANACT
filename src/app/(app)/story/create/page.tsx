@@ -43,7 +43,7 @@ export default function StoryCreatePage() {
             type="button"
             aria-label="Back"
             onClick={() => setShot(null)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line shadow-sm"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line"
           >
             <ArrowLeft size={18} />
           </button>
@@ -53,7 +53,7 @@ export default function StoryCreatePage() {
           </div>
         </header>
 
-        <div className="overflow-hidden rounded-[28px] bg-black shadow-[0_18px_36px_-26px_rgba(10,10,10,0.32)]">
+        <div className="overflow-hidden rounded-[28px] bg-black">
           <video
             src={shot}
             className="aspect-[9/16] w-full object-contain"

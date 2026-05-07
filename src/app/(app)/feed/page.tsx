@@ -12,15 +12,16 @@ import { listenWhaFeed, reactWha, deletePost } from '@/lib/services/wha';
 import { listenPollFeed, votePoll, deletePoll } from '@/lib/services/poll';
 import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
-import { listenReels, deleteReel } from '@/lib/services/reels';
+import { listenReels, deleteReel, toggleReelLike } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, SlidersHorizontal, Send, Play } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, SlidersHorizontal, Play, Share2 } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
 import { Sheet } from '@/components/Sheet';
 import { ShareToChatSheet } from '@/components/ShareToChatSheet';
+import { PostDetailSheet } from '@/components/PostDetailSheet';
 import { PostMenu } from '@/components/PostMenu';
 import { CANACT_REFRESH_EVENT } from '@/components/PullToRefresh';
 import { readFeedCache, writeFeedCachePart } from '@/lib/feedCache';
@@ -28,6 +29,8 @@ import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import type { LucideIcon } from 'lucide-react';
+
+type FeedDetailItem = Extract<FeedItem, { kind: 'wha' | 'poll' | 'rateme' }>;
 
 const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
   { id: 'cool',  Icon: Smile,       label: 'Cool' },
@@ -70,6 +73,7 @@ export default function FeedPage() {
     wha: seeded, polls: seeded, rms: seeded, reels: seeded, stories: seeded,
   });
   const [shareAttachment, setShareAttachment] = useState<ChatAttachment | null>(null);
+  const [detailItem, setDetailItem] = useState<FeedDetailItem | null>(null);
   // Bumping this re-runs the listener effects below, which is how the
   // pull-to-refresh gesture forces fresh subscriptions.
   const [refreshTick, setRefreshTick] = useState(0);
@@ -172,9 +176,9 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
-    <div className="min-h-screen pb-24 md:pb-10">
+    <div className="min-h-screen pt-4 pb-24 md:pb-10">
 
-      <section className="canact-stories-strip flex items-center gap-2 pt-1 pb-2">
+      <section className="canact-stories-strip flex items-center gap-2 pb-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
           <div className="flex min-w-max items-center gap-3 pr-2">
             {/* Own story tile. The avatar fills the rounded square; a
@@ -267,36 +271,44 @@ export default function FeedPage() {
             <Skeleton height={224} borderRadius={24} />
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted shadow-[0_18px_36px_-26px_rgba(10,10,10,0.16)]">
+          <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted">
             Nothing here yet. Be the first to post around you.
           </div>
         ) : null}
 
-        {/* Two-column Instagram-style grid. Polls / Rate-Me / text-only
-            posts always span both columns. Among media-bearing tiles we
-            keep an Insta-like rhythm: every third media post (starting
-            with the first) is full-width, the rest pair up. */}
+        {/* Reference-grid rhythm: first card full width, then paired half cards. */}
         <div className="grid grid-cols-2 gap-3">
-          {(() => {
-            let mediaIdx = 0;
-            return items.map((it) => {
-              const hasMedia =
-                (it.kind === 'wha' && (it.data.mediaUrls?.length ?? 0) > 0) ||
-                it.kind === 'reel';
-              if (!hasMedia) {
-                if (it.kind === 'poll') {
-                  return <div key={`poll_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_320px]"><PollCard poll={it.data} myUid={user!.uid} /></div>;
-                }
-                if (it.kind === 'rateme') {
-                  return <div key={`rm_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_360px]"><RateMeCard sess={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
-                }
-                return <div key={`wha_${it.data.id}`} className="col-span-2 [content-visibility:auto] [contain-intrinsic-size:auto_220px]"><WhaTextCard post={it.data} myUid={user!.uid} onShare={setShareAttachment} /></div>;
-              }
-              const isFull = mediaIdx % 3 === 0;
-              mediaIdx += 1;
+          {items.map((it, index) => {
+              const isFull = index === 0;
               const span = isFull ? 'col-span-2' : 'col-span-1';
               const height = isFull ? 'h-72' : 'h-56';
               const cv = '[content-visibility:auto] [contain-intrinsic-size:auto_360px]';
+              if (it.kind === 'poll') {
+                return (
+                  <div key={`poll_${it.data.id}`} className={`${span} ${cv}`}>
+                    <PollCard
+                      poll={it.data}
+                      myUid={user!.uid}
+                      onOpen={() => setDetailItem({ kind: 'poll', data: it.data })}
+                      onShare={setShareAttachment}
+                      heightClass={height}
+                    />
+                  </div>
+                );
+              }
+              if (it.kind === 'rateme') {
+                return (
+                  <div key={`rm_${it.data.id}`} className={`${span} ${cv}`}>
+                    <RateMeCard
+                      sess={it.data}
+                      myUid={user!.uid}
+                      onOpen={() => setDetailItem({ kind: 'rateme', data: it.data })}
+                      onShare={setShareAttachment}
+                      heightClass={height}
+                    />
+                  </div>
+                );
+              }
               if (it.kind === 'reel') {
                 return (
                   <div key={`reel_${it.data.id}`} className={`${span} ${cv}`}>
@@ -306,11 +318,16 @@ export default function FeedPage() {
               }
               return (
                 <div key={`wha_${it.data.id}`} className={`${span} ${cv}`}>
-                  <WhaTile post={it.data} myUid={user!.uid} onShare={setShareAttachment} heightClass={height} />
+                  <WhaTile
+                    post={it.data}
+                    myUid={user!.uid}
+                    onOpen={() => setDetailItem({ kind: 'wha', data: it.data })}
+                    onShare={setShareAttachment}
+                    heightClass={height}
+                  />
                 </div>
               );
-            });
-          })()}
+            })}
         </div>
       </section>
 
@@ -351,6 +368,13 @@ export default function FeedPage() {
         onClose={() => setShareAttachment(null)}
         attachment={shareAttachment}
       />
+      <PostDetailSheet
+        item={detailItem}
+        myUid={user!.uid}
+        myName={profile?.fullName ?? 'You'}
+        onClose={() => setDetailItem(null)}
+        onShare={setShareAttachment}
+      />
     </div>
     </SkeletonTheme>
   );
@@ -364,51 +388,14 @@ function withinRadius(it: FeedItem, c: { lat: number; lng: number } | null, r: n
   return haversineMeters(c, { lat: d.lat, lng: d.lng }) <= r;
 }
 
-function WhaTextCard({ post, myUid, onShare }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void }) {
-  const myReact = post.reactionVoters?.[myUid];
-  return (
-    <article className="rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
-      <div className="flex items-center gap-3">
-        <Link href={`/profile/${post.uid}`}><Avatar src={post.authorPhoto} name={post.authorName} /></Link>
-        <div className="flex-1 min-w-0">
-          <Link href={`/profile/${post.uid}`} className="font-bold truncate block">{post.authorName}</Link>
-          <span className="text-xs text-muted">{timeAgo(post.createdAt)} \u2022 What's Happening</span>
-        </div>
-        <PostMenu isOwner={post.uid === myUid} onDelete={async () => { await deletePost(post.id, myUid); }} />
-      </div>
-      <Link href={`/post/${post.id}`} prefetch>
-        {post.text && <p className="mt-2 whitespace-pre-wrap">{post.text}</p>}
-      </Link>
-      <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
-        {REACTIONS.map(({ id, Icon, label }) => (
-          <button key={id} onClick={() => reactWha(post.id, myUid, id)} aria-label={label}
-            className={`inline-flex items-center gap-1 rounded-full px-3 h-8 text-xs font-semibold border ${myReact === id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}>
-            <Icon size={14} /> {post.reactions?.[id] ?? 0}
-          </button>
-        ))}
-        <Link href={`/post/${post.id}`} prefetch className="ml-auto rounded-full px-3 h-8 text-xs font-semibold border border-line bg-white inline-flex items-center gap-1">
-          <MessageCircle size={14} /> {post.commentCount ?? 0}
-        </Link>
-        <button onClick={() => onShare({ kind: 'post', postId: post.id })} aria-label="Share"
-          className="rounded-full px-3 h-8 text-xs font-semibold border border-line bg-white inline-flex items-center gap-1">
-          <Send size={14} />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-/** A media tile composed of two stacked sections inside a single white
- *  card: the media on top (image / autoplaying muted video) with a small
- *  pill badge floating bottom-left, and a white caption strip below
- *  showing 2-3 lines of caption + a "Read more" link, plus the like /
- *  comment / share row on the right so action buttons NEVER overlap the
- *  media. The whole tile is tappable; the action buttons stop
- *  propagation so they don't double-fire. */
+/** Shared reference-style feed tile used by every feed item type. */
 function MediaOverlayTile({
   href,
   heightClass,
   badge,
+  bottomContent,
+  actions,
+  statText,
   authorPhoto,
   authorName,
   authorUid,
@@ -416,6 +403,7 @@ function MediaOverlayTile({
   liked,
   likeCount,
   commentCount,
+  onOpen,
   onLike,
   onShare,
   onDelete,
@@ -425,6 +413,9 @@ function MediaOverlayTile({
   href: string;
   heightClass: string;
   badge?: React.ReactNode;
+  bottomContent?: React.ReactNode;
+  actions?: React.ReactNode;
+  statText?: string;
   authorPhoto?: string | null;
   authorName: string;
   authorUid: string;
@@ -432,6 +423,7 @@ function MediaOverlayTile({
   liked: boolean;
   likeCount: number;
   commentCount: number;
+  onOpen?: () => void;
   onLike: () => void;
   onShare: () => void;
   onDelete?: () => Promise<void> | void;
@@ -439,82 +431,102 @@ function MediaOverlayTile({
   children: React.ReactNode;
 }) {
   const trimmed = (caption ?? '').trim();
-  // ~70 chars per line × 2 → showLong threshold; CSS line-clamp also
-  // limits wrap height so the "Read more" toggle always lines up.
-  const isLong = trimmed.length > 90;
   const router = useRouter();
+  const open = () => { if (onOpen) onOpen(); else router.push(href); };
+  const defaultStatText = statText ?? `${likeCount.toLocaleString()} likes${commentCount ? ` · ${commentCount} comments` : ''}`;
   return (
-    <div className={`flex w-full flex-col overflow-hidden rounded-[24px] bg-white border border-[#F1D7DC] shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]`}>
-      {/* Media block \u2014 fixed height, the only place where overlays sit. */}
-      <Link
-        href={href}
-        prefetch
-        className={`relative block w-full ${heightClass} overflow-hidden bg-[#0E0E10] active:opacity-95 transition`}
-      >
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          open();
+        }
+      }}
+      className="relative overflow-hidden rounded-3xl border border-[#FFE4E6] bg-white active:scale-[0.99] transition cursor-pointer"
+    >
+      <div className={`relative w-full ${heightClass} overflow-hidden bg-[#0E0E10]`}>
         <div className="absolute inset-0">{children}</div>
-        {/* Top-left author pill */}
-        <div className="absolute left-2 top-2 right-2 flex items-start justify-between gap-2">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+
+        <div className="absolute left-3 top-3 right-3 flex items-start justify-between gap-2">
           <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
-            <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur px-1.5 py-1 pr-2.5 max-w-[60vw] shadow-sm">
-              <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-1 ring-brand/40">
+            <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur pl-1 pr-3 py-1 max-w-[60vw]">
+              <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-2 ring-[#FF6B7A]">
                 <Avatar src={authorPhoto} name={authorName} size={24} />
               </span>
-              <span className="text-[11px] font-bold text-ink truncate">{authorName}</span>
+              <span className="text-[11px] font-medium text-neutral-800 truncate">{authorName}</span>
             </Link>
           </div>
           {isOwner && onDelete ? (
             <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
               <PostMenu isOwner onDelete={async () => { await onDelete(); }} />
             </div>
+          ) : badge ? (
+            <div>{badge}</div>
           ) : null}
         </div>
-        {/* Bottom-left type badge (Reel / Photo / etc.) */}
-        {badge ? (
-          <div className="absolute left-2 bottom-2">
-            {badge}
-          </div>
-        ) : null}
-        {/* Bottom-right vertical action stack — like / comment / share
-            sit inside the media area itself so the layout stays Insta-like.
-            Each button has a translucent dark pill background so it stays
-            legible against any photo. */}
-        <div onClick={(e) => e.stopPropagation()} className="absolute right-2 bottom-2 flex flex-col items-center gap-1.5 pointer-events-auto">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }} aria-label="Like" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
-            <Heart size={16} className={liked ? 'text-[#FF6B7A]' : 'text-white'} fill={liked ? '#FF6B7A' : 'none'} />
-          </button>
-          {likeCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{likeCount}</span>}
-          <Link href={href} prefetch onClick={(e) => e.stopPropagation()} aria-label="Comments" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
-            <MessageCircle size={16} />
-          </Link>
-          {commentCount > 0 && <span className="text-[10px] font-bold text-white drop-shadow">{commentCount}</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }} aria-label="Share" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white">
-            <Send size={16} />
-          </button>
-        </div>
-      </Link>
 
-      {/* Caption-only strip on a white background. Action buttons live
-          inside the media block (Insta-style) so they remain anchored to
-          the visual itself. */}
-      {trimmed ? (
-        <div className="px-3 py-2 text-[12px] leading-snug text-ink">
-          <span className="line-clamp-2 whitespace-pre-wrap">{trimmed}</span>
-          {isLong ? (
+        <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
+          <div className="min-w-0 max-w-[70%] text-white">
+            {bottomContent ?? (
+              <>
+                {trimmed ? (
+                  <div className="line-clamp-2 whitespace-pre-wrap text-[12px] font-medium leading-tight">
+                    {trimmed}
+                  </div>
+                ) : null}
+                <div className="mt-0.5 text-[10px] text-white/80">
+                  {defaultStatText}
+                </div>
+                {trimmed.length > 90 ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); open(); }}
+                    className="mt-0.5 text-[10px] font-bold text-white/90"
+                  >
+                    Read more
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
+
+          {actions ?? <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); router.push(href); }}
-              className="mt-0.5 text-[11px] font-bold text-brand"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }}
+              aria-label="Like"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition"
             >
-              Read more
+              <Heart size={15} fill={liked ? '#FF6B7A' : 'none'} />
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(); }}
+              aria-label="Comments"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
+            >
+              <MessageCircle size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }}
+              aria-label="Share"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
+            >
+              <Share2 size={15} />
+            </button>
+          </div>}
         </div>
-      ) : null}
-    </div>
+      </div>
+    </article>
   );
 }
 
-function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: string; onShare: (a: ChatAttachment) => void; heightClass: string }) {
+function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost; myUid: string; onOpen: () => void; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const myReact = post.reactionVoters?.[myUid];
   const liked = myReact === 'love';
   const totalReactions = post.reactions
@@ -534,12 +546,13 @@ function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: 
       liked={liked}
       likeCount={totalReactions}
       commentCount={post.commentCount ?? 0}
+      onOpen={onOpen}
       onLike={() => reactWha(post.id, myUid, 'love')}
       onShare={() => onShare({ kind: 'post', postId: post.id })}
       isOwner={post.uid === myUid}
       onDelete={async () => { await deletePost(post.id, myUid); }}
       badge={isVideo ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-black/60 backdrop-blur text-white px-2 h-6 text-[10px] font-bold shadow-sm">
+        <span className="inline-flex h-6 items-center gap-1 rounded-full bg-black/60 px-2 text-[10px] font-bold text-white backdrop-blur">
           <Play size={10} fill="currentColor" /> Video
         </span>
       ) : undefined}
@@ -549,190 +562,163 @@ function WhaTile({ post, myUid, onShare, heightClass }: { post: WhaPost; myUid: 
       ) : cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-      ) : null}
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
+          <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{post.text || "What's Happening"}</span>
+        </div>
+      )}
     </MediaOverlayTile>
   );
 }
 
-function PollCard({ poll, myUid }: { poll: Poll; myUid: string }) {
+function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; myUid: string; onOpen: () => void; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const options = Array.isArray(poll.options) ? poll.options : [];
   const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
   const isOwner = poll.uid === myUid;
   return (
-    <article className="relative rounded-[24px] border border-[#F1D7DC] bg-white/92 p-4 shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
-      <div className="flex items-center gap-3">
-        <Link href={`/profile/${poll.uid}`}><Avatar name={poll.authorName} /></Link>
-        <div className="flex-1 min-w-0">
-          <Link href={`/profile/${poll.uid}`} className="font-bold truncate block">{poll.authorName}</Link>
-          <span className="text-xs text-muted">{timeAgo(poll.createdAt)} \u2022 Poll \u2022 {ended ? 'Ended' : timeLeft(poll.endsAt)}</span>
-        </div>
-        {isOwner ? (
-          <PostMenu
-            isOwner
-            onDelete={async () => {
-              try { await deletePoll(poll.id, myUid); toast('Poll deleted', 'success'); }
-              catch (e: any) { toast(e?.message ?? 'Could not delete poll', 'error'); }
-            }}
-          />
-        ) : null}
-      </div>
-      <p className="mt-2 font-semibold">{poll.question}</p>
-      <div className="mt-2 space-y-2">
-        {options.map((o) => {
-          const pct = total ? Math.round((o.votes / total) * 100) : 0;
-          const selected = mine === o.id;
-          return (
-            <button key={o.id} disabled={ended} onClick={() => votePoll(poll.id, myUid, o.id)}
-              className={`w-full text-left relative overflow-hidden rounded-xl border ${selected ? 'border-brand' : 'border-line'} bg-white px-3 py-2.5`}>
-              <div className="absolute inset-y-0 left-0 bg-brand-light/70" style={{ width: `${pct}%` }} />
-              <div className="relative flex justify-between items-center">
-                <span className="font-medium">{o.text}</span>
-                <span className="text-xs text-muted">{pct}% \u2022 {o.votes}</span>
-              </div>
-            </button>
-          );
-        })}
-        {poll.openEnded && options.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line bg-white px-3 py-2 text-xs text-muted">
-            Open-ended poll. Reply in comments to participate.
+    <MediaOverlayTile
+      href={`/poll/${poll.id}`}
+      heightClass={heightClass}
+      authorName={poll.authorName}
+      authorUid={poll.uid}
+      caption={poll.question}
+      liked={mine != null}
+      likeCount={total}
+      commentCount={poll.commentCount ?? 0}
+      onOpen={onOpen}
+      onLike={() => options[0] && !ended && votePoll(poll.id, myUid, options[0].id)}
+      onShare={() => onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question })}
+      isOwner={isOwner}
+      onDelete={isOwner ? async () => {
+        try { await deletePoll(poll.id, myUid); toast('Poll deleted', 'success'); }
+        catch (error: any) { toast(error?.message ?? 'Could not delete poll', 'error'); }
+      } : undefined}
+      badge={<span className="inline-flex h-6 items-center rounded-full bg-[#FF6B7A] px-2 text-[10px] font-bold text-white">Poll</span>}
+      statText={`${total} votes · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`}
+      bottomContent={(
+        <div>
+          <div className="line-clamp-2 text-[12px] font-bold leading-tight text-white">{poll.question}</div>
+          <div className="mt-1.5 space-y-1">
+            {options.slice(0, 2).map((option) => {
+              const pct = total ? Math.round((option.votes / total) * 100) : 0;
+              const selected = mine === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={ended}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); votePoll(poll.id, myUid, option.id); }}
+                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur ${selected ? 'bg-[#FF6B7A] text-white' : 'bg-white/90 text-neutral-800'}`}
+                >
+                  {option.text} · {pct}%
+                </button>
+              );
+            })}
           </div>
-        ) : null}
+          <div className="mt-1 text-[10px] text-white/80">{total} votes · {ended ? 'Ended' : timeLeft(poll.endsAt)}</div>
+        </div>
+      )}
+      actions={(
+        <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
+          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(); }} aria-label="Open poll" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
+            <MessageCircle size={15} />
+          </button>
+          <button type="button" disabled={!options[0] || ended} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
+            <ThumbsUp size={15} />
+          </button>
+          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
+            <Share2 size={15} />
+          </button>
+        </div>
+      )}
+    >
+      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
+        <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{poll.question}</span>
       </div>
-      <div className="mt-3 flex gap-2 text-xs text-muted">
-        <Link href={`/poll/${poll.id}`} className="rounded-full px-3 h-8 inline-flex items-center font-semibold border border-line bg-white">Open</Link>
-        <span className="ml-auto self-center">{total} votes</span>
-      </div>
-    </article>
+    </MediaOverlayTile>
   );
 }
 
-function RateMeCard({ sess, myUid, onShare }: { sess: RateMeSession; myUid: string; onShare: (a: ChatAttachment) => void }) {
+function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateMeSession; myUid: string; onOpen: () => void; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const isOwner = sess.uid === myUid;
   const ended = sess.endsAt <= Date.now();
   const locked = ended || isOwner;
-  // Optimistic local overlay: when the user taps a vote we immediately
-  // bump the counters + flip `my` so the UI reacts instantly. The RTDB
-  // round-trip (get → transaction → set) used to take ~600-1200ms, all
-  // of which felt like the app was frozen. Once the live snapshot
-  // arrives, the server values take over because we read straight off
-  // `sess` again.
   const [optimistic, setOptimistic] = useState<{ kind: 'like' | 'dislike'; prev: 'like' | 'dislike' | undefined } | null>(null);
   const serverMy = sess.votes?.[myUid];
-  // Reset the optimistic overlay once the server confirms our vote so
-  // we don't double-count when subsequent snapshots arrive.
   useEffect(() => {
     if (optimistic && serverMy === optimistic.kind) setOptimistic(null);
   }, [serverMy, optimistic]);
   const my = optimistic ? optimistic.kind : serverMy;
-  const baseLikes = sess.likes ?? 0;
-  const baseDislikes = sess.dislikes ?? 0;
-  let likes = baseLikes;
-  let dislikes = baseDislikes;
+  let likes = sess.likes ?? 0;
+  let dislikes = sess.dislikes ?? 0;
   if (optimistic) {
     if (optimistic.prev === 'like') likes = Math.max(0, likes - 1);
     if (optimistic.prev === 'dislike') dislikes = Math.max(0, dislikes - 1);
-    if (optimistic.kind === 'like') likes += 1; else dislikes += 1;
+    if (optimistic.kind === 'like') likes += 1;
+    else dislikes += 1;
   }
   const total = likes + dislikes;
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
   const cast = (kind: 'like' | 'dislike') => {
-    if (locked) return;
-    if (my === kind) return;
+    if (locked || my === kind) return;
     setOptimistic({ kind, prev: serverMy });
-    voteRateMe(sess.id, myUid, kind).catch((e: any) => {
+    voteRateMe(sess.id, myUid, kind).catch((error: any) => {
       setOptimistic(null);
-      toast(e?.message ?? 'Could not vote', 'error');
+      toast(error?.message ?? 'Could not vote', 'error');
     });
   };
   return (
-    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white shadow-[0_18px_36px_-28px_rgba(10,10,10,0.18)]">
-      {/* Header row — same anatomy as WhaTextCard / PollCard. */}
-      <div className="flex items-center gap-3 px-4 pt-4">
-        <Link href={`/profile/${sess.uid}`}><Avatar src={sess.photoURL} name={sess.authorName} /></Link>
-        <div className="flex-1 min-w-0">
-          <Link href={`/profile/${sess.uid}`} className="font-bold truncate block">{sess.authorName}</Link>
-          <span className="text-xs text-muted">
-            Rate Me · {ended ? 'Voting closed' : timeLeft(sess.endsAt)}
-          </span>
-        </div>
-      </div>
-
-      {/* Full-bleed photo with floating share button to match the
-          MediaOverlayTile design language used by posts and reels. */}
-      {sess.photoURL && (
-        <div className="relative mt-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={sess.photoURL}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="block w-full max-h-[480px] object-cover"
-          />
-          <div className="absolute right-2 bottom-2 z-[2]">
-            <button
-              type="button"
-              onClick={() => onShare({ kind: 'rateme', sessionId: sess.id })}
-              aria-label="Share"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm text-white"
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Once voting is locked we ditch the buttons entirely and just
-          render a results bar so the card stays useful as a permanent
-          record on the wall and on the author's profile. */}
-      {locked ? (
-        <div className="px-4 pt-3 pb-4">
-          <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-ink/60">
-            <span className="text-rose-500">Down · {dislikes}</span>
-            <span className="text-emerald-600">Up · {likes}</span>
-          </div>
-          <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-ink/5">
+    <MediaOverlayTile
+      href={`/profile/${sess.uid}`}
+      heightClass={heightClass}
+      authorPhoto={sess.photoURL}
+      authorName={sess.authorName}
+      authorUid={sess.uid}
+      caption="Rate Me"
+      liked={my === 'like'}
+      likeCount={likes}
+      commentCount={sess.commentCount ?? 0}
+      onOpen={onOpen}
+      onLike={() => cast('like')}
+      onShare={() => onShare({ kind: 'rateme', sessionId: sess.id })}
+      isOwner={false}
+      statText={`${likes} up · ${dislikes} down`}
+      bottomContent={(
+        <div>
+          <div className="text-[12px] font-bold leading-tight text-white">Rate Me</div>
+          <div className="mt-0.5 text-[10px] text-white/80">{ended ? 'Voting closed' : timeLeft(sess.endsAt)}</div>
+          <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-white/25">
             <div style={{ width: `${downPct}%` }} className="bg-rose-300" />
             <div style={{ width: `${upPct}%` }} className="bg-emerald-300" />
           </div>
-          <div className="mt-1 text-[11px] text-muted">
-            {total === 0 ? 'No votes' : `${total} vote${total === 1 ? '' : 's'} · ${upPct}% positive`}
-          </div>
         </div>
-      ) : (
-        // Active voting: pastel colour-coded pills, full-width, equal
-        // halves. Down-vote left, Up-vote right per spec.
-        <div className="px-4 pt-3 pb-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => cast('dislike')}
-            aria-pressed={my === 'dislike'}
-            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
-              my === 'dislike'
-                ? 'bg-rose-500 text-white border-rose-500'
-                : 'bg-rose-50 text-rose-600 border-rose-100 active:bg-rose-100'
-            }`}
-          >
-            <ThumbsDown size={16} /> Down vote · {dislikes}
+      )}
+      actions={(
+        <div onClick={(event) => event.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
+          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('like'); }} aria-label="Up vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
+            <ThumbsUp size={15} />
           </button>
-          <button
-            type="button"
-            onClick={() => cast('like')}
-            aria-pressed={my === 'like'}
-            className={`inline-flex items-center justify-center gap-2 rounded-full px-3 h-11 text-sm font-extrabold transition border ${
-              my === 'like'
-                ? 'bg-emerald-500 text-white border-emerald-500'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-100 active:bg-emerald-100'
-            }`}
-          >
-            <ThumbsUp size={16} /> Up vote · {likes}
+          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('dislike'); }} aria-label="Down vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition disabled:opacity-60">
+            <ThumbsDown size={15} />
+          </button>
+          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'rateme', sessionId: sess.id }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
+            <Share2 size={15} />
           </button>
         </div>
       )}
-    </article>
+    >
+      {sess.photoURL ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
+          <span className="text-lg font-black leading-tight text-[#FF6B7A]/80">Rate Me</span>
+        </div>
+      )}
+    </MediaOverlayTile>
   );
 }
 
@@ -750,12 +736,12 @@ function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid
       liked={liked}
       likeCount={likeCount}
       commentCount={0}
-      onLike={() => { /* like-toggle requires reels service \u2014 fall back to detail */ }}
+      onLike={() => toggleReelLike(reel.id, myUid)}
       onShare={() => onShare({ kind: 'reel', reelId: reel.id })}
       isOwner={reel.uid === myUid}
       onDelete={async () => { await deleteReel(reel.id, myUid); }}
       badge={(
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-6 text-[10px] font-bold shadow-sm">
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-6 text-[10px] font-bold">
           <Play size={10} fill="currentColor" /> Reel
         </span>
       )}
@@ -803,7 +789,7 @@ function StoryRing({
         </div>
       </div>
       {showPlus ? (
-        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white shadow-sm">
+        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white ring-2 ring-white">
           <Plus size={12} />
         </span>
       ) : null}

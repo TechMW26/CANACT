@@ -293,7 +293,7 @@ function CommentsSheet({
     <div className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
-        className={`absolute inset-x-0 bottom-0 flex flex-col rounded-t-3xl bg-white text-ink shadow-2xl canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[92dvh]' : 'h-[58dvh]'}`}
+        className={`absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[92dvh]' : 'h-[58dvh]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

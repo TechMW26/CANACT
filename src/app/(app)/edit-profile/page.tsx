@@ -168,7 +168,7 @@ export default function EditProfilePage() {
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label="Change photo"
-            className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_18px_-8px_rgba(200,16,46,0.55)] ring-4 ring-white"
+            className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white ring-4 ring-white"
           >
             <Camera size={16} />
           </button>
@@ -265,7 +265,7 @@ export default function EditProfilePage() {
 
       {/* Save bar */}
       <div className="sticky bottom-3 z-10 mx-auto max-w-2xl">
-        <div className="flex gap-2 rounded-2xl bg-white/95 p-2 shadow-[0_18px_44px_-22px_rgba(10,10,10,0.32)] ring-1 ring-line backdrop-blur">
+        <div className="flex gap-2 rounded-2xl bg-white/95 p-2 ring-1 ring-line backdrop-blur">
           <Button variant="ghost" full size="lg" onClick={() => router.back()}>Cancel</Button>
           <Button full size="lg" loading={busy} onClick={onSave}>Save changes</Button>
         </div>

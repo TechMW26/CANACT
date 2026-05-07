@@ -50,6 +50,10 @@ export function listenActiveRateMe(cb: (items: RateMeSession[]) => void) {
   });
 }
 
+export function listenRateMeSession(sessionId: string, cb: (item: RateMeSession | null) => void) {
+  return onValue(ref(db, `ratemeSessions/${sessionId}`), (snap) => cb(snap.val() as RateMeSession | null));
+}
+
 /**
  * Subscribe to a single user's Rate Me sessions (active + recently
  * ended) so we can surface them on their profile alongside posts. We
@@ -91,4 +95,19 @@ export async function voteRateMe(sessionId: string, voterUid: string, kind: 'lik
     return s;
   });
   await set(voterRef, kind);
+}
+
+export async function commentRateMe(sessionId: string, uid: string, name: string, text: string) {
+  const node = push(ref(db, `ratemeComments/${sessionId}`));
+  await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
+  await runTransaction(ref(db, `ratemeSessions/${sessionId}/commentCount`), (count: number) => (count ?? 0) + 1);
+}
+
+export function listenRateMeComments(sessionId: string, cb: (items: any[]) => void) {
+  return onValue(ref(db, `ratemeComments/${sessionId}`), (snap) => {
+    const out: any[] = [];
+    snap.forEach((child) => { out.push(child.val()); });
+    out.sort((a, b) => a.createdAt - b.createdAt);
+    cb(out);
+  });
 }

@@ -161,7 +161,7 @@ export function CameraCapture({
             <button
               type="button"
               onClick={() => (mode === 'photo' ? photoCameraRef.current?.click() : videoCameraRef.current?.click())}
-              className="flex items-center justify-center gap-3 rounded-2xl bg-brand px-5 py-4 text-base font-bold shadow-[0_18px_36px_-18px_rgba(200,16,46,0.55)] active:scale-[0.98] transition"
+              className="flex items-center justify-center gap-3 rounded-2xl bg-brand px-5 py-4 text-base font-bold active:scale-[0.98] transition"
             >
               {mode === 'photo' ? <Aperture size={20} /> : <Film size={20} />}
               {mode === 'photo' ? 'Take photo' : 'Record video'}
@@ -204,7 +204,7 @@ export function CameraCapture({
             <button
               type="button"
               onClick={() => onCapture(shots)}
-              className="w-full rounded-2xl bg-brand px-5 py-3.5 text-base font-bold shadow-[0_18px_36px_-18px_rgba(200,16,46,0.55)]"
+              className="w-full rounded-2xl bg-brand px-5 py-3.5 text-base font-bold"
             >
               Done · {shots.length}
             </button>
