@@ -64,8 +64,11 @@ export async function bumpReelView(reelId: string) {
 }
 
 export async function deleteReel(reelId: string, uid: string) {
-  await remove(ref(db, `reels/${reelId}`));
-  await remove(ref(db, `userReels/${uid}/${reelId}`));
+  await Promise.all([
+    remove(ref(db, `reels/${reelId}`)),
+    remove(ref(db, `userReels/${uid}/${reelId}`)),
+    remove(ref(db, `reelComments/${reelId}`)),
+  ]);
 }
 
 export async function addReelComment(reelId: string, uid: string, name: string, photoURL: string | undefined, text: string) {

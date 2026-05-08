@@ -9,10 +9,10 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
-import { listenUserWhaPosts } from '@/lib/services/wha';
-import { listenUserReels } from '@/lib/services/reels';
+import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
+import { deleteReel, listenUserReels } from '@/lib/services/reels';
 import { listenUserPolls, deletePoll } from '@/lib/services/poll';
-import { listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
+import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
 import { toast } from '@/components/Toaster';
 import { PostMenu } from '@/components/PostMenu';
 import { requestFollow } from '@/lib/services/favourites';
@@ -53,6 +53,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [u, setU] = useState<UserProfile | null>(null);
   const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attr?: { key: AttrKey; at: number }; cards?: Record<string, number> } | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
+  const [profileVoteBusy, setProfileVoteBusy] = useState(false);
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (s) => setU(s.val()));
@@ -212,6 +213,22 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     }
   };
 
+  const handleProfileVote = async (kind: 'like' | 'dislike') => {
+    if (isSelf || !user || profileVoteBusy) return;
+    const previousVote = myVote?.main;
+    setProfileVoteBusy(true);
+    setMyVote((current) => ({ ...(current ?? {}), main: kind }));
+    try {
+      await setLikeDislike(uid, user.uid, kind);
+      toast(kind === 'like' ? 'Liked profile' : 'Disliked profile', 'success');
+    } catch (error: any) {
+      setMyVote((current) => ({ ...(current ?? {}), main: previousVote }));
+      toast(error?.message ?? 'Could not update vote', 'error');
+    } finally {
+      setProfileVoteBusy(false);
+    }
+  };
+
   return (
     <CanactPagesProfileUI
       userProfile={u}
@@ -228,6 +245,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       ratemes={ratemes}
       onSupport={handleProfileSupport}
       onBookmark={handleProfileBookmark}
+      onProfileVote={handleProfileVote}
+      profileVote={myVote?.main}
+      profileVoteBusy={profileVoteBusy}
       friendStatus={friendStatus}
     />
   );
@@ -415,6 +435,7 @@ function profileThumbnails(tab: ProfileTabKey, posts: WhaPost[], reels: ReelItem
       ...polls.slice(0, 4).map((poll) => ({
         id: poll.id,
         href: `/poll/${poll.id}`,
+        src: poll.photoURL,
         label: poll.question || 'Poll',
       })),
       ...ratemes.slice(0, 4).map((item) => ({
@@ -433,6 +454,48 @@ function profileThumbnails(tab: ProfileTabKey, posts: WhaPost[], reels: ReelItem
   }));
 }
 
+function ProfileVotePill({
+  vote,
+  busy,
+  onVote,
+}: {
+  vote?: 'like' | 'dislike';
+  busy: boolean;
+  onVote: (kind: 'like' | 'dislike') => Promise<void>;
+}) {
+  const buttonClass = (kind: 'like' | 'dislike') => {
+    const active = vote === kind;
+    if (active && kind === 'like') return 'bg-white text-emerald-600';
+    if (active && kind === 'dislike') return 'bg-white text-rose-600';
+    return 'text-white/72 hover:bg-white/12 active:bg-white/18';
+  };
+
+  return (
+    <div className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+86px)] z-20 inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/18 p-1 backdrop-blur-md lg:top-6">
+      <button
+        type="button"
+        disabled={busy}
+        aria-label="Dislike profile"
+        aria-pressed={vote === 'dislike'}
+        onClick={() => onVote('dislike')}
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('dislike')}`}
+      >
+        <ThumbsDown size={17} />
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        aria-label="Like profile"
+        aria-pressed={vote === 'like'}
+        onClick={() => onVote('like')}
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('like')}`}
+      >
+        <ThumbsUp size={17} />
+      </button>
+    </div>
+  );
+}
+
 function CanactPagesProfileUI({
   userProfile,
   isSelf,
@@ -448,6 +511,9 @@ function CanactPagesProfileUI({
   ratemes,
   onSupport,
   onBookmark,
+  onProfileVote,
+  profileVote,
+  profileVoteBusy,
   friendStatus,
 }: {
   userProfile: UserProfile;
@@ -464,6 +530,9 @@ function CanactPagesProfileUI({
   ratemes: RateMeSession[];
   onSupport: () => Promise<void>;
   onBookmark: () => Promise<void>;
+  onProfileVote: (kind: 'like' | 'dislike') => Promise<void>;
+  profileVote?: 'like' | 'dislike';
+  profileVoteBusy: boolean;
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
 }) {
   const activeTab = tab === 'rateme' ? 'polls' : tab;
@@ -498,6 +567,10 @@ function CanactPagesProfileUI({
             background: 'linear-gradient(180deg, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.30) 0%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.20) 20%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.08) 42%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.10) 55%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.48) 78%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.92) 100%)',
           }}
         />
+
+        {!isSelf ? (
+          <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} />
+        ) : null}
 
         <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+108px)]">
           <div className="mb-3">
@@ -744,25 +817,28 @@ function ProfileTabsCard({
             {posts.map((p) => {
               const cover = p.mediaUrls?.[0];
               return (
-                <Link
-                  key={p.id}
-                  href={`/post/${p.id}`}
-                  className="relative aspect-square overflow-hidden bg-brand-light"
-                >
-                  {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-light to-white p-2 text-center text-[11px] font-semibold leading-tight text-ink/70">
-                      <span className="line-clamp-5">{p.text || 'Untitled'}</span>
+                <div key={p.id} className="relative aspect-square bg-brand-light">
+                  <Link href={`/post/${p.id}`} className="block h-full w-full overflow-hidden">
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-light to-white p-2 text-center text-[11px] font-semibold leading-tight text-ink/70">
+                        <span className="line-clamp-5">{p.text || 'Untitled'}</span>
+                      </div>
+                    )}
+                    {p.mediaUrls && p.mediaUrls.length > 1 ? (
+                      <span className={`absolute top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white ${isSelf ? 'left-1.5' : 'right-1.5'}`}>
+                        {p.mediaUrls.length}
+                      </span>
+                    ) : null}
+                  </Link>
+                  {isSelf ? (
+                    <div className="absolute right-1.5 top-1.5 z-10">
+                      <PostMenu isOwner variant="dark" onDelete={async () => { await deletePost(p.id, p.uid); }} />
                     </div>
-                  )}
-                  {p.mediaUrls && p.mediaUrls.length > 1 ? (
-                    <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      {p.mediaUrls.length}
-                    </span>
                   ) : null}
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -779,27 +855,30 @@ function ProfileTabsCard({
         ) : (
           <div className="grid grid-cols-3 gap-[2px] bg-line">
             {reels.map((r) => (
-              <Link
-                key={r.id}
-                href="/reels"
-                className="relative aspect-[9/16] overflow-hidden bg-black"
-              >
-                {r.posterUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                ) : (
-                  <video
-                    src={r.videoUrl}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="h-full w-full object-cover"
-                  />
-                )}
-                <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  <Film size={10} className="inline -mt-0.5 mr-0.5" />
-                </span>
-              </Link>
+              <div key={r.id} className="relative aspect-[9/16] bg-black">
+                <Link href="/reels" className="block h-full w-full overflow-hidden">
+                  {r.posterUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.posterUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <video
+                      src={r.videoUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                  <span className={`absolute top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white ${isSelf ? 'left-1.5' : 'right-1.5'}`}>
+                    <Film size={10} className="inline -mt-0.5 mr-0.5" />
+                  </span>
+                </Link>
+                {isSelf ? (
+                  <div className="absolute right-1.5 top-1.5 z-10">
+                    <PostMenu isOwner variant="dark" onDelete={async () => { await deleteReel(r.id, r.uid); }} />
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         )
@@ -820,19 +899,25 @@ function ProfileTabsCard({
               const ended = p.endsAt < Date.now();
               return (
                 <div key={p.id} className="relative px-4 py-3">
-                  <Link href={`/poll/${p.id}`} className="block pr-10">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold text-ink/55">
-                      <BarChart3 size={12} className="text-brand" />
-                      <span>{ended ? 'Ended' : 'Active'}</span>
-                      <span>·</span>
-                      <span>{total} votes</span>
-                    </div>
-                    <div className="mt-1 text-sm font-bold text-ink line-clamp-2">{p.question}</div>
-                    {opts.length > 0 ? (
-                      <div className="mt-1 text-[11px] text-ink/55 line-clamp-1">
-                        {opts.map((o) => o.text).join(' · ')}
-                      </div>
+                  <Link href={`/poll/${p.id}`} className="flex gap-3 pr-10">
+                    {p.photoURL ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.photoURL} alt="" loading="lazy" decoding="async" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
                     ) : null}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold text-ink/55">
+                        <BarChart3 size={12} className="text-brand" />
+                        <span>{ended ? 'Ended' : 'Active'}</span>
+                        <span>·</span>
+                        <span>{total} votes</span>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-ink line-clamp-2">{p.question}</div>
+                      {opts.length > 0 ? (
+                        <div className="mt-1 text-[11px] text-ink/55 line-clamp-1">
+                          {opts.map((o) => o.text).join(' · ')}
+                        </div>
+                      ) : null}
+                    </div>
                   </Link>
                   {isSelf ? (
                     <div className="absolute right-3 top-3">
@@ -882,7 +967,6 @@ function ProfileTabsCard({
 function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string }) {
   const isOwner = sess.uid === myUid;
   const ended = sess.endsAt <= Date.now();
-  const locked = ended || isOwner;
   // Optimistic overlay so the vote pill flips + counters bump
   // immediately on tap instead of waiting for the RTDB transaction
   // round-trip. Cleared once the server snapshot confirms our vote.
@@ -892,6 +976,7 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
     if (optimistic && serverMy === optimistic.kind) setOptimistic(null);
   }, [serverMy, optimistic]);
   const my = optimistic ? optimistic.kind : serverMy;
+  const locked = ended || isOwner || !!my;
   let likes = sess.likes ?? 0;
   let dislikes = sess.dislikes ?? 0;
   if (optimistic) {
@@ -903,7 +988,7 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
   const cast = (kind: 'like' | 'dislike') => {
-    if (locked || my === kind) return;
+    if (locked) return;
     setOptimistic({ kind, prev: serverMy });
     voteRateMe(sess.id, myUid, kind).catch((e: any) => {
       setOptimistic(null);
@@ -917,9 +1002,14 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
       ? `${Math.ceil(remaining / 3_600_000)}h left`
       : `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
   return (
-    <article className="overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white">
+    <article className="relative overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white">
+      {isOwner ? (
+        <div className="absolute right-3 top-3 z-10">
+          <PostMenu isOwner onDelete={async () => { await deleteRateMeSession(sess.id, sess.uid); }} />
+        </div>
+      ) : null}
       <Link href={`/rateme/${sess.id}`} prefetch className="block">
-        <div className="flex items-center justify-between px-4 pt-4">
+        <div className={`flex items-center justify-between px-4 pt-4 ${isOwner ? 'pr-14' : ''}`}>
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Rate Me</div>
           <div className="text-[11px] font-semibold text-muted">{timeLabel}</div>
         </div>

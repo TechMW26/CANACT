@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { BarChart3, Camera, ChevronRight, Eye, Film, LifeBuoy, Sparkles } from './icons';
+import { BarChart3, Camera, ChevronRight, Eye, Film, HeartHandshake, Sparkles } from './icons';
 import { Sheet } from './Sheet';
 import type { LucideIcon } from 'lucide-react';
 
@@ -18,7 +18,7 @@ const ITEMS: Item[] = [
   { href: '/reel/create',  title: 'Reel',             desc: 'Short vertical clip. Coming soon.',      Icon: Film,      accent: 'from-[#FFF1F3] to-[#FFE3E7]' },
   { href: '/rateme/start', title: 'Rate Me',          desc: 'Front-camera selfie. Live for hours.',   Icon: Eye,       accent: 'from-[#FFEDF0] to-[#FFD8DD]' },
   { href: '/poll/create',  title: 'Poll · Ask',       desc: 'Quick read from your area.',             Icon: BarChart3, accent: 'from-[#FFF1F3] to-[#FFE3E7]' },
-  { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: LifeBuoy,  accent: 'from-[#FFF8F8] to-[#FFE3E7]' },
+  { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: HeartHandshake,  accent: 'from-[#FFF8F8] to-[#FFE3E7]' },
 ];
 
 export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => void }) {

@@ -23,24 +23,25 @@ import { useInboxBadges } from '@/lib/useInboxBadges';
 import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Home, LifeBuoy, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
+  Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
   Heart, Eye, Settings as SettingsIcon, Sparkles,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
 
 const TABS: Tab[] = [
-  { href: '/feed',        label: 'Feed',  Icon: Home },
-  { href: '/help',        label: 'Help',  Icon: LifeBuoy },
+  { href: '/',            label: 'Home',  Icon: Home },
+  { href: '/feed',        label: 'Feed',  Icon: Compass },
   { href: '/create',      label: '',      Icon: Plus, isFab: true },
   { href: '/leaderboard', label: 'Top',   Icon: Trophy },
   { href: '/profile',     label: 'Me',    Icon: UserIcon },
 ];
 
 const SIDE_LINKS = [
-  { href: '/feed',         label: 'Feed',          Icon: Home },
+  { href: '/',             label: 'Home',          Icon: Home },
+  { href: '/feed',         label: 'Feed',          Icon: Compass },
   { href: '/inbox',        label: 'Inbox',         Icon: MessageSquare },
-  { href: '/help',         label: 'Help',          Icon: LifeBuoy },
+  { href: '/help',         label: 'Help',          Icon: HeartHandshake },
   { href: '/leaderboard',  label: 'Leaderboard',   Icon: Trophy },
   { href: '/notifications',label: 'Notifications', Icon: Bell },
   { href: '/favourites',   label: 'Favourites',    Icon: Heart },
@@ -68,9 +69,22 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   const [mobileBottomNavSafeInset, setMobileBottomNavSafeInset] = useState<string | null>(null);
+  const [pageBlendChrome, setPageBlendChrome] = useState(false);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
-  const profileBlendChrome = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
+  const routeBlendChrome = !!pathname && (pathname === '/favourites' || pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
+  const profileBlendChrome = routeBlendChrome || pageBlendChrome;
+
+  useEffect(() => {
+    const onBlendChrome = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean }>).detail;
+      setPageBlendChrome(!!detail?.active);
+    };
+    window.addEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
+    return () => window.removeEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
+  }, []);
+
+  useEffect(() => { setPageBlendChrome(false); }, [pathname]);
 
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return; }
@@ -223,10 +237,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           (tablet portrait still gets the floating mobile header + bottom nav). */}
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white/60 lg:backdrop-blur lg:border-r lg:border-line lg:z-20">
         <div className="px-3 py-2 mb-2">
-          <Brand size={32} href="/feed" />
+          <Brand size={32} href="/" />
         </div>
         {SIDE_LINKS.map(({ href, label, Icon }) => {
-          const active = pathname === href || (href !== '/' && pathname?.startsWith(href));
+          const active = isNavLinkActive(pathname, href, user.uid);
           // Inbox link gets a live badge that includes both unread
           // messages and pending chat requests so the user can see at
           // a glance there's something to deal with.
@@ -264,7 +278,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           data-canact-header-spacer
           aria-hidden
           className="lg:hidden"
-          style={{ height: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 56px)` : '56px' }}
+          style={{ height: pageBlendChrome ? '0px' : mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 56px)` : '56px' }}
         />
         <div className="canact-col pb-20 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
@@ -278,59 +292,69 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {/* Mobile bottom nav is profile-blended on profile routes and standard
           white elsewhere. Active tab gets the brand pill treatment. */}
       <nav
+        data-canact-bottom-nav
         className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}
         style={{ paddingBottom: mobileBottomNavSafeInset ?? undefined }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
-            {TABS.map(({ href, label, Icon, isFab }) => {
-              const active = (pathname === href || pathname?.startsWith(href));
-              const isProfile = href === '/profile';
-              const onTap = () => {
-                if (isFab) { haptic('strong'); setPlusOpen(true); return; }
-                if (!active) haptic('selection');
-              };
-              const inner = (
-                <>
-                  {isProfile ? (
-                    <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-white/80' : ''}`}>
-                      <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={24} />
-                    </span>
-                  ) : (
-                    <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
-                  )}
-                  <span
-                    className={`overflow-hidden whitespace-nowrap text-sm font-extrabold transition-[max-width,margin,opacity] duration-300 ease-out ${
-                      active ? 'ml-2 max-w-[80px] opacity-100' : 'ml-0 max-w-0 opacity-0'
-                    }`}
-                  >
-                    {label || (isProfile ? 'Me' : isFab ? 'Add' : '')}
+          {TABS.map(({ href, label, Icon, isFab }) => {
+            const active = isNavLinkActive(pathname, href, user.uid);
+            const isProfile = href === '/profile';
+            const onTap = () => {
+              if (isFab) { haptic('strong'); setPlusOpen(true); return; }
+              if (!active) haptic('selection');
+            };
+            const inner = (
+              <>
+                {isProfile ? (
+                  <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-white/80' : ''}`}>
+                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={24} />
                   </span>
-                </>
-              );
-              const cls = `canact-bottom-tab group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color,box-shadow] duration-300 ease-out ${
-                active
-                  ? 'canact-bottom-tab-active bg-brand text-white pl-3 pr-4'
-                  : 'canact-bottom-tab-inactive text-ink/65 hover:text-ink'
-              }`;
-              if (isFab) {
-                return (
-                  <button key={href} type="button" onClick={onTap} aria-label="Create" className={cls}>
-                    {inner}
-                  </button>
-                );
-              }
+                ) : (
+                  <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
+                )}
+                <span
+                  className={`overflow-hidden whitespace-nowrap text-sm font-extrabold transition-[max-width,margin,opacity] duration-300 ease-out ${
+                    active ? 'ml-2 max-w-[80px] opacity-100' : 'ml-0 max-w-0 opacity-0'
+                  }`}
+                >
+                  {label || (isProfile ? 'Me' : isFab ? 'Add' : '')}
+                </span>
+              </>
+            );
+            const cls = `canact-bottom-tab group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color,box-shadow] duration-300 ease-out ${
+              active
+                ? 'canact-bottom-tab-active bg-brand text-white pl-3 pr-4'
+                : 'canact-bottom-tab-inactive text-ink/65 hover:text-ink'
+            }`;
+            if (isFab) {
               return (
-                <Link key={href} href={href} aria-label={label || href} onClick={onTap} className={cls}>
+                <button key={href} type="button" onClick={onTap} aria-label="Create" className={cls}>
                   {inner}
-                </Link>
+                </button>
               );
-            })}
+            }
+            return (
+              <Link key={href} href={href} aria-label={label || href} onClick={onTap} className={cls}>
+                {inner}
+              </Link>
+            );
+          })}
         </div>
       </nav>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
     </div>
   );
+}
+
+function isNavLinkActive(pathname: string | null, href: string, currentUid?: string | null) {
+  if (!pathname) return false;
+  if (href === '/profile') {
+    return pathname === '/profile' || (!!currentUid && pathname === `/profile/${encodeURIComponent(currentUid)}`);
+  }
+  if (href === '/') return pathname === '/';
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function detailPopupItemFromPath(path: string | null): PostDetailSheetItem | null {
@@ -389,6 +413,7 @@ function isIOSDevice() {
 
 function titleFor(path: string | null) {
   if (!path) return '';
+  if (path === '/') return 'Home';
   if (path.startsWith('/feed')) return 'Feed';
   if (path.startsWith('/help')) return 'Help';
   if (path.startsWith('/create')) return 'Create';
@@ -430,19 +455,22 @@ function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolea
       style={{ paddingTop: topInset ?? undefined }}
     >
       <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>
-        <Brand size={26} href="/feed" />
+        <Brand size={26} href="/" />
         <div className="ml-auto inline-flex items-center gap-2">
           <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={blendChrome} />
-          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
             <Search size={18} strokeWidth={2.2} />
           </Link>
-          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
             <Heart size={18} strokeWidth={2.2} />
             {pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
                 {pendingCount > 9 ? '9+' : pendingCount}
               </span>
             )}
+          </Link>
+          <Link href="/help" aria-label="Help" prefetch onClick={() => haptic('subtle')} style={{ color: '#dc2626' }} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white hover:bg-red-50 hover:text-red-700'}`}>
+            <HeartHandshake size={19} strokeWidth={2.3} />
           </Link>
         </div>
       </div>

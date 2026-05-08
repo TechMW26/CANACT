@@ -1,15 +1,16 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { MediaSlider } from './MediaSlider';
+import { PostMenu } from './PostMenu';
 import { Sheet } from './Sheet';
 import { toast } from './Toaster';
 import { Angry, Frown, Heart, MessageCircle, PartyPopper, Send, Share2, Smile, ThumbsDown, ThumbsUp } from './icons';
-import { addComment, listenComments, listenPost, reactWha } from '@/lib/services/wha';
-import { commentPoll, listenPoll, listenPollComments, reactPoll, votePoll } from '@/lib/services/poll';
-import { commentRateMe, listenRateMeComments, listenRateMeSession, voteRateMe } from '@/lib/services/rateme';
+import { addComment, deletePost, listenComments, listenPost, reactWha } from '@/lib/services/wha';
+import { commentPoll, deletePoll, listenPoll, listenPollComments, reactPoll, votePoll } from '@/lib/services/poll';
+import { commentRateMe, deleteRateMeSession, listenRateMeComments, listenRateMeSession, voteRateMe } from '@/lib/services/rateme';
 import type { ChatAttachment, Poll, RateMeSession, WhaPost } from '@/lib/types';
 import { timeAgo, timeLeft } from '@/lib/utils';
 
@@ -90,7 +91,7 @@ export function PostDetailSheet({
       };
     }
     if (item?.kind === 'poll' && poll) {
-      return { kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question };
+      return { kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL };
     }
     if (item?.kind === 'rateme' && rateMe) {
       return { kind: 'rateme', sessionId: rateMe.id, authorName: rateMe.authorName, thumbUrl: rateMe.photoURL };
@@ -123,7 +124,6 @@ export function PostDetailSheet({
   const share = () => {
     if (!attachment) return;
     onShare(attachment);
-    onClose();
   };
 
   return (
@@ -134,11 +134,11 @@ export function PostDetailSheet({
           on mobile). */}
       <div className="pb-24">
         {item?.kind === 'wha' && post ? (
-          <WhaPostDetails post={post} myUid={myUid} onShare={share} />
+          <WhaPostDetails post={post} myUid={myUid} onShare={share} onDeleted={onClose} />
         ) : item?.kind === 'poll' && poll ? (
-          <PollDetails poll={poll} myUid={myUid} onShare={share} />
+          <PollDetails poll={poll} myUid={myUid} onShare={share} onDeleted={onClose} />
         ) : item?.kind === 'rateme' && rateMe ? (
-          <RateMeDetails session={rateMe} myUid={myUid} onShare={share} />
+          <RateMeDetails session={rateMe} myUid={myUid} onShare={share} onDeleted={onClose} />
         ) : (
           <div className="py-16 text-center text-sm text-ink/55">Loading...</div>
         )}
@@ -172,7 +172,7 @@ export function PostDetailSheet({
         </section>
       </div>
 
-      <form onSubmit={submitComment} className="sticky bottom-0 left-0 right-0 z-10 -mx-4 flex shrink-0 items-end gap-2 bg-white px-4 pb-1 pt-2">
+      <form onSubmit={submitComment} className="sticky bottom-0 z-10 flex shrink-0 gap-2 bg-white px-1 pb-2 pt-2">
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -193,7 +193,7 @@ export function PostDetailSheet({
   );
 }
 
-function DetailHeader({ authorName, authorUid, authorPhoto, subline, onShare }: { authorName: string; authorUid: string; authorPhoto?: string | null; subline: string; onShare: () => void }) {
+function DetailHeader({ authorName, authorUid, authorPhoto, subline, onShare, onDelete }: { authorName: string; authorUid: string; authorPhoto?: string | null; subline: string; onShare: () => void; onDelete?: () => Promise<void> | void }) {
   return (
     <div className="flex items-center gap-3">
       <Link href={`/profile/${authorUid}`} className="shrink-0">
@@ -203,24 +203,80 @@ function DetailHeader({ authorName, authorUid, authorPhoto, subline, onShare }: 
         <Link href={`/profile/${authorUid}`} className="block truncate text-sm font-extrabold text-ink">{authorName}</Link>
         <div className="text-[11px] font-semibold text-ink/45">{subline}</div>
       </div>
-      <button type="button" onClick={onShare} aria-label="Share" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-light text-brand">
-        <Share2 size={17} />
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onShare} aria-label="Share" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-light text-brand">
+          <Share2 size={17} />
+        </button>
+        {onDelete ? <PostMenu isOwner onDelete={onDelete} /> : null}
+      </div>
     </div>
   );
 }
 
-function WhaPostDetails({ post, myUid, onShare }: { post: WhaPost; myUid: string; onShare: () => void }) {
+/**
+ * Full-bleed media block with the author/share header overlaid on top.
+ * The Sheet scroll container owns the side padding, so `-mx-4` reaches the
+ * true panel edges while `overflow-x-hidden` prevents horizontal scroll.
+ */
+function FullBleedMediaHeader({
+  authorName,
+  authorUid,
+  authorPhoto,
+  subline,
+  onShare,
+  onDelete,
+  children,
+}: {
+  authorName: string;
+  authorUid: string;
+  authorPhoto?: string | null;
+  subline: string;
+  onShare: () => void;
+  onDelete?: () => Promise<void> | void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative -mx-4 overflow-hidden bg-black">
+      {children}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
+      <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3">
+        <Link href={`/profile/${authorUid}`} className="shrink-0">
+          <Avatar src={authorPhoto ?? null} name={authorName} size={42} />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <Link href={`/profile/${authorUid}`} className="block truncate text-sm font-extrabold text-white drop-shadow">{authorName}</Link>
+          <div className="text-[11px] font-semibold text-white/85 drop-shadow">{subline}</div>
+        </div>
+        <button type="button" onClick={onShare} aria-label="Share" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/85 text-ink backdrop-blur">
+          <Share2 size={17} />
+        </button>
+        {onDelete ? <PostMenu isOwner onDelete={onDelete} variant="dark" /> : null}
+      </div>
+    </div>
+  );
+}
+
+function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; myUid: string; onShare: () => void; onDeleted: () => void }) {
   const myReact = post.reactionVoters?.[myUid];
+  const hasMedia = !!post.mediaUrls?.length;
+  const onDelete = post.uid === myUid ? async () => { await deletePost(post.id, post.uid); onDeleted(); } : undefined;
   return (
     <div>
-      <DetailHeader authorName={post.authorName} authorUid={post.uid} authorPhoto={post.authorPhoto} subline={timeAgo(post.createdAt)} onShare={onShare} />
+      {hasMedia ? (
+        <FullBleedMediaHeader
+          authorName={post.authorName}
+          authorUid={post.uid}
+          authorPhoto={post.authorPhoto}
+          subline={timeAgo(post.createdAt)}
+          onShare={onShare}
+          onDelete={onDelete}
+        >
+          <MediaSlider urls={post.mediaUrls!} posters={post.mediaPosters} rounded={false} />
+        </FullBleedMediaHeader>
+      ) : (
+        <DetailHeader authorName={post.authorName} authorUid={post.uid} authorPhoto={post.authorPhoto} subline={timeAgo(post.createdAt)} onShare={onShare} onDelete={onDelete} />
+      )}
       {post.text ? <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{post.text}</p> : null}
-      {post.mediaUrls?.length ? (
-        <div className="mt-4 overflow-hidden rounded-3xl border border-line bg-black">
-          <MediaSlider urls={post.mediaUrls} posters={post.mediaPosters} />
-        </div>
-      ) : null}
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
         {WHA_REACTIONS.map(({ id, Icon, label }) => (
           <button
@@ -237,15 +293,24 @@ function WhaPostDetails({ post, myUid, onShare }: { post: WhaPost; myUid: string
   );
 }
 
-function PollDetails({ poll, myUid, onShare }: { poll: Poll; myUid: string; onShare: () => void }) {
+function PollDetails({ poll, myUid, onShare, onDeleted }: { poll: Poll; myUid: string; onShare: () => void; onDeleted: () => void }) {
   const options = Array.isArray(poll.options) ? poll.options : [];
   const total = options.reduce((sum, option) => sum + (option.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const myReact = poll.reactionVoters?.[myUid];
   const ended = poll.endsAt < Date.now();
+  const locked = ended || !!mine;
+  const onDelete = poll.uid === myUid ? async () => { await deletePoll(poll.id, poll.uid); onDeleted(); } : undefined;
   return (
     <div>
-      <DetailHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} />
+      {poll.photoURL ? (
+        <FullBleedMediaHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} onDelete={onDelete}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={poll.photoURL} alt="" className="max-h-[58svh] w-full object-cover" />
+        </FullBleedMediaHeader>
+      ) : (
+        <DetailHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} onDelete={onDelete} />
+      )}
       <div className="mt-4 rounded-3xl bg-brand-light/55 p-4">
         <div className="text-lg font-black leading-tight text-ink">{poll.question}</div>
         {!poll.openEnded && options.length > 0 ? (
@@ -257,8 +322,8 @@ function PollDetails({ poll, myUid, onShare }: { poll: Poll; myUid: string; onSh
                 <button
                   key={option.id}
                   type="button"
-                  disabled={ended}
-                  onClick={() => votePoll(poll.id, myUid, option.id)}
+                  disabled={locked}
+                  onClick={() => { if (!locked) votePoll(poll.id, myUid, option.id); }}
                   className={`relative w-full overflow-hidden rounded-2xl border px-3 py-3 text-left ${selected ? 'border-brand' : 'border-line'} bg-white disabled:opacity-70`}
                 >
                   <div className="absolute inset-y-0 left-0 bg-brand-light" style={{ width: `${pct}%` }} />
@@ -269,7 +334,7 @@ function PollDetails({ poll, myUid, onShare }: { poll: Poll; myUid: string; onSh
                 </button>
               );
             })}
-            <div className="text-xs font-semibold text-ink/55">{total} votes</div>
+            <div className="text-xs font-semibold text-ink/55">{total} votes{mine ? ' · You voted' : ''}</div>
           </div>
         ) : (
           <div className="mt-3 rounded-2xl border border-dashed border-line bg-white px-3 py-3 text-sm text-ink/55">
@@ -289,31 +354,38 @@ function PollDetails({ poll, myUid, onShare }: { poll: Poll; myUid: string; onSh
   );
 }
 
-function RateMeDetails({ session, myUid, onShare }: { session: RateMeSession; myUid: string; onShare: () => void }) {
+function RateMeDetails({ session, myUid, onShare, onDeleted }: { session: RateMeSession; myUid: string; onShare: () => void; onDeleted: () => void }) {
   const isOwner = session.uid === myUid;
   const ended = session.endsAt <= Date.now();
-  const locked = ended || isOwner;
   const myVote = session.votes?.[myUid];
+  const locked = ended || isOwner || !!myVote;
   const likes = session.likes ?? 0;
   const dislikes = session.dislikes ?? 0;
   const total = likes + dislikes;
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
+  const onDelete = isOwner ? async () => { await deleteRateMeSession(session.id, session.uid); onDeleted(); } : undefined;
   const cast = (kind: 'like' | 'dislike') => {
-    if (locked || myVote === kind) return;
+    if (locked) return;
     voteRateMe(session.id, myUid, kind).catch((error: any) => toast(error?.message ?? 'Could not vote', 'error'));
   };
   return (
     <div>
-      <DetailHeader authorName={session.authorName} authorUid={session.uid} authorPhoto={session.photoURL} subline={ended ? 'Voting closed' : timeLeft(session.endsAt)} onShare={onShare} />
-      <div className="mt-4 overflow-hidden rounded-3xl bg-black">
+      <FullBleedMediaHeader
+        authorName={session.authorName}
+        authorUid={session.uid}
+        authorPhoto={session.photoURL}
+        subline={ended ? 'Voting closed' : timeLeft(session.endsAt)}
+        onShare={onShare}
+        onDelete={onDelete}
+      >
         {session.photoURL ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.photoURL} alt="" className="max-h-[58svh] w-full object-cover" />
+          <img src={session.photoURL} alt="" className="max-h-[62svh] w-full object-cover" />
         ) : (
           <div className="flex aspect-square w-full items-center justify-center bg-brand-light text-xl font-black text-brand">Rate Me</div>
         )}
-      </div>
+      </FullBleedMediaHeader>
       <div className="mt-4 rounded-3xl bg-brand-light/55 p-4">
         <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wide text-ink/55">
           <span className="text-rose-500">Down · {dislikes}</span>

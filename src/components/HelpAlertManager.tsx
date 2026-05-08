@@ -7,7 +7,7 @@ import { listenHelpFeed } from '@/lib/services/help';
 import { haversineMeters } from '@/lib/utils';
 import type { HelpRequest } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { LifeBuoy, HandHeart, X } from './icons';
+import { HeartHandshake, X } from './icons';
 
 type Alert =
   | { kind: 'request'; id: string; helpId: string; authorName: string; authorPhoto?: string; text: string; type: HelpRequest['type'] }
@@ -186,7 +186,7 @@ export function HelpAlertManager() {
         {current.kind === 'request' ? (
           <>
             <div className={`flex items-center gap-2 px-5 py-3 text-white font-bold ${TYPE_LABEL[current.type].tint}`}>
-              <LifeBuoy size={18} />
+              <HeartHandshake size={18} />
               <span>{TYPE_LABEL[current.type].label} nearby</span>
             </div>
             <div className="px-5 pt-5 pb-3 flex items-center gap-3">
@@ -203,7 +203,7 @@ export function HelpAlertManager() {
         ) : (
           <>
             <div className="flex items-center gap-2 px-5 py-3 bg-emerald-500 text-white font-bold">
-              <HandHeart size={18} />
+              <HeartHandshake size={18} />
               <span>Someone wants to help</span>
             </div>
             <div className="px-5 pt-5 pb-3 flex items-center gap-3">

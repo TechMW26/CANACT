@@ -1,4 +1,4 @@
-import { onValue, push, ref, runTransaction, set, update, get, query, orderByChild, limitToLast } from 'firebase/database';
+import { get, onValue, push, ref, remove, runTransaction, set, update, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { RateMeSession } from '../types';
 
@@ -21,6 +21,22 @@ export async function startRateMe(input: { uid: string; authorName: string; phot
 export async function stopRateMe(uid: string, sessionId: string) {
   await update(ref(db, `ratemeSessions/${sessionId}`), { endsAt: Date.now() });
   await update(ref(db, `users/${uid}`), { rateMeOn: false, rateMeUntil: 0 });
+}
+
+export async function deleteRateMeSession(sessionId: string, authorUid: string) {
+  const [sessionSnap, userSnap] = await Promise.all([
+    get(ref(db, `ratemeSessions/${sessionId}`)),
+    get(ref(db, `users/${authorUid}`)),
+  ]);
+  const session = sessionSnap.val() as RateMeSession | null;
+  const currentUntil = Number(userSnap.val()?.rateMeUntil ?? 0);
+  const shouldClearProfileFlag = !session || currentUntil <= (session.endsAt ?? 0);
+
+  await Promise.all([
+    remove(ref(db, `ratemeSessions/${sessionId}`)),
+    remove(ref(db, `ratemeComments/${sessionId}`)),
+    shouldClearProfileFlag ? update(ref(db, `users/${authorUid}`), { rateMeOn: false, rateMeUntil: 0 }) : Promise.resolve(),
+  ]);
 }
 
 export function listenActiveRateMe(cb: (items: RateMeSession[]) => void) {
@@ -78,23 +94,21 @@ export function listenUserRateMe(uid: string, cb: (items: RateMeSession[]) => vo
 }
 
 export async function voteRateMe(sessionId: string, voterUid: string, kind: 'like' | 'dislike') {
-  const sessSnap = await get(ref(db, `ratemeSessions/${sessionId}`));
-  const sess = sessSnap.val() as RateMeSession | null;
-  if (!sess) throw new Error('Session not found');
-  if (sess.uid === voterUid) throw new Error('Cannot vote on your own session');
-  if (sess.endsAt <= Date.now()) throw new Error('Voting has ended');
-  const voterRef = ref(db, `ratemeSessions/${sessionId}/votes/${voterUid}`);
-  const prev = (await get(voterRef)).val() as 'like' | 'dislike' | null;
-  if (prev === kind) return;
-  await runTransaction(ref(db, `ratemeSessions/${sessionId}`), (s: RateMeSession | null) => {
-    if (!s) return s;
-    s.likes = s.likes ?? 0; s.dislikes = s.dislikes ?? 0;
-    if (prev === 'like') s.likes = Math.max(0, s.likes - 1);
-    if (prev === 'dislike') s.dislikes = Math.max(0, s.dislikes - 1);
+  let rejectReason: string | null = null;
+  const result = await runTransaction(ref(db, `ratemeSessions/${sessionId}`), (s: RateMeSession | null) => {
+    rejectReason = null;
+    if (!s) { rejectReason = 'Session not found'; return; }
+    if (s.uid === voterUid) { rejectReason = 'Cannot vote on your own session'; return; }
+    if (s.endsAt <= Date.now()) { rejectReason = 'Voting has ended'; return; }
+    if (s.votes?.[voterUid]) { rejectReason = 'You have already voted'; return; }
+    s.likes = s.likes ?? 0;
+    s.dislikes = s.dislikes ?? 0;
+    s.votes = s.votes ?? {};
+    s.votes[voterUid] = kind;
     s[kind === 'like' ? 'likes' : 'dislikes'] += 1;
     return s;
   });
-  await set(voterRef, kind);
+  if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
 }
 
 export async function commentRateMe(sessionId: string, uid: string, name: string, text: string) {

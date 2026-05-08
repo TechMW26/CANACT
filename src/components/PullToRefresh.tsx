@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from './icons';
 import { haptic } from '@/lib/haptics';
+import { isCanactPopupInteractionActive } from '@/lib/popupGuards';
 
 /** Window event dispatched when a pull-to-refresh gesture completes. Pages
  *  that maintain their own RTDB subscriptions (e.g. /feed) listen for this
@@ -55,18 +56,28 @@ export function PullToRefresh({
       return Math.max(0, el?.scrollTop ?? window.scrollY ?? 0);
     };
 
+    const resetGesture = () => {
+      armed.current = false;
+      startY.current = null;
+      setPull(0);
+    };
+
     const onTouchStart = (e: TouchEvent) => {
       if (busyRef.current) return;
+      if (isCanactGestureSurface(e.target)) { resetGesture(); return; }
+      if (isCanactPopupInteractionActive(e.target)) { resetGesture(); return; }
       // Only arm if we're at the very top — otherwise this is a normal
       // scroll-up gesture and we must stay out of its way.
-      if (getScrollTop() > 1) { armed.current = false; startY.current = null; return; }
+      if (getScrollTop() > 1) { resetGesture(); return; }
       startY.current = e.touches[0]?.clientY ?? null;
       armed.current = startY.current != null;
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (isCanactGestureSurface(e.target)) { resetGesture(); return; }
+      if (isCanactPopupInteractionActive(e.target)) { resetGesture(); return; }
       if (!armed.current || startY.current == null) return;
       // If the document scrolled mid-gesture (user swiping up), abandon.
-      if (getScrollTop() > 1) { armed.current = false; setPull(0); return; }
+      if (getScrollTop() > 1) { resetGesture(); return; }
       const dy = (e.touches[0]?.clientY ?? 0) - startY.current;
       if (dy <= 0) { setPull(0); return; }
       // Soft resistance past the threshold so it never feels like a free fall.
@@ -74,6 +85,7 @@ export function PullToRefresh({
       setPull(Math.min(eased, threshold * 1.8));
     };
     const onTouchEnd = async () => {
+      if (isCanactPopupInteractionActive()) { resetGesture(); return; }
       if (!armed.current) { setPull(0); return; }
       armed.current = false;
       const reached = pullRef.current >= threshold;
@@ -129,4 +141,8 @@ export function PullToRefresh({
       {children}
     </>
   );
+}
+
+function isCanactGestureSurface(target?: EventTarget | null) {
+  return target instanceof Element && !!target.closest('[data-canact-map="true"], [data-canact-no-refresh="true"]');
 }

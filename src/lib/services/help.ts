@@ -2,7 +2,7 @@ import { onValue, push, ref, set, update, get, remove, query, orderByChild, runT
 import { db } from '../firebase';
 import { HelpRequest, HelpStatus } from '../types';
 import { pushNotification } from './notifications';
-import { sendPush } from './sendPush';
+import { sendPush, notifyHelpVicinity } from './sendPush';
 import { startOrGetThread, threadIdFor, sendChatMessage } from './chat';
 
 /** Recursively drop undefined fields — Firebase RTDB rejects them. */
@@ -46,6 +46,23 @@ export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | '
     if (msg.includes('PERMISSION_DENIED')) throw new Error('Not allowed to post help here. Try signing in again.');
     if (msg.toLowerCase().includes('network')) throw new Error('Network issue — check your connection and try again.');
     throw new Error(`Could not send help request: ${msg}`);
+  }
+  // Fan out a vicinity-aware push so anyone inside the chosen radius gets a
+  // shoulder-tap. Audience controls whether we include public users, only
+  // favourites or only friends. Best-effort, never blocks the create flow.
+  if (typeof help.lat === 'number' && typeof help.lng === 'number' && help.vicinityMeters > 0) {
+    const typeLabel = help.type === 'red' ? 'Red' : help.type === 'orange' ? 'Orange' : 'Yellow';
+    notifyHelpVicinity({
+      helpId: help.id,
+      lat: help.lat,
+      lng: help.lng,
+      vicinityMeters: help.vicinityMeters,
+      audience: help.audience,
+      title: `${typeLabel} Help nearby · ${help.authorName}`,
+      body: help.text.slice(0, 140),
+      url: `/help/${help.id}`,
+      tag: `help:${help.id}`,
+    });
   }
   return help;
 }

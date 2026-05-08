@@ -80,12 +80,13 @@ export function CameraCapture({
   const discardRecordingRef = useRef(false);
   const streamRequestIdRef = useRef(0);
   const recordingStreamCleanupRef = useRef<(() => void) | null>(null);
+  const zoomAnimationRef = useRef<number | null>(null);
+  const zoomTargetRef = useRef(1);
+  const zoomAppliedRef = useRef(1);
+  const zoomConstraintPendingRef = useRef(false);
 
   const [mode, setMode] = useState<Mode>(() => (initialMode === 'video' && allowVideo ? 'video' : 'photo'));
   const [facing, setFacing] = useState<Facing>(defaultFacing);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
-  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [shots, setShots] = useState<string[]>([]);
   const [streamReady, setStreamReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -94,6 +95,7 @@ export function CameraCapture({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomState>(FALLBACK_ZOOM);
   const [activeFps, setActiveFps] = useState<number | null>(null);
+  const androidCamera = useMemo(() => isAndroidRuntime(), []);
 
   const mediaRecorderSupported = typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined';
   const photoEnabled = allowPhoto;
@@ -112,19 +114,12 @@ export function CameraCapture({
     stopTimeoutRef.current = null;
     recordingStreamCleanupRef.current?.();
     recordingStreamCleanupRef.current = null;
+    if (zoomAnimationRef.current !== null) window.cancelAnimationFrame(zoomAnimationRef.current);
+    zoomAnimationRef.current = null;
+    zoomConstraintPendingRef.current = false;
     recorderRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-  }, []);
-
-  const refreshDevices = useCallback(async () => {
-    if (!navigator.mediaDevices?.enumerateDevices) return;
-    try {
-      const next = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
-      setDevices(next);
-    } catch {
-      setDevices([]);
-    }
   }, []);
 
   const activateStream = useCallback(async () => {
@@ -139,7 +134,7 @@ export function CameraCapture({
     stopCurrentStream();
 
     try {
-      const stream = await getBestCameraStream({ mode, facing, deviceId: selectedDeviceId });
+      const stream = await getBestCameraStream({ mode, facing });
       if (streamRequestIdRef.current !== requestId) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -157,11 +152,12 @@ export function CameraCapture({
       const track = stream.getVideoTracks()[0];
       await applyAutoCameraProcessing(track);
       const settings = track.getSettings?.() ?? {};
-      setActiveDeviceId(typeof settings.deviceId === 'string' ? settings.deviceId : selectedDeviceId);
       setActiveFps(typeof settings.frameRate === 'number' ? Math.round(settings.frameRate) : null);
-      setZoom(readZoomState(track));
+      const zoomState = readZoomState(track);
+      zoomTargetRef.current = zoomState.value;
+      zoomAppliedRef.current = zoomState.value;
+      setZoom(zoomState);
       setStreamReady(true);
-      await refreshDevices();
     } catch (error: any) {
       if (streamRequestIdRef.current !== requestId) return;
       setStreamReady(false);
@@ -169,7 +165,7 @@ export function CameraCapture({
       setActiveFps(null);
       setCameraError(error?.name === 'NotAllowedError' ? 'Camera permission needed' : 'Camera unavailable');
     }
-  }, [facing, mode, refreshDevices, selectedDeviceId, stopCurrentStream]);
+  }, [facing, mode, stopCurrentStream]);
 
   useEffect(() => {
     if (mode === 'photo' && !photoEnabled && videoEnabled) setMode('video');
@@ -191,8 +187,6 @@ export function CameraCapture({
     video.srcObject = streamRef.current;
   }, [streamReady]);
 
-  const lensDevices = useMemo(() => devicesForFacing(devices, facing), [devices, facing]);
-  const showLensControls = lensDevices.length > 1 && lensDevices.some((device) => device.label);
   const canRecordVideo = mode === 'video' && mediaRecorderSupported && streamReady;
   const showModeToggle = photoEnabled && videoEnabled;
 
@@ -230,7 +224,7 @@ export function CameraCapture({
     try {
       const rawBlob = await takeBestStill(track, videoRef.current);
       const selfieBlob = facing === 'user' ? await mirrorImageBlob(rawBlob) : rawBlob;
-      const enhancedBlob = await autoEnhanceImageBlob(selfieBlob);
+      const enhancedBlob = androidCamera ? selfieBlob : await autoEnhanceImageBlob(selfieBlob);
       appendPhotoUrls([await blobToDataUrl(enhancedBlob)]);
     } catch {
       nativePhotoRef.current?.click();
@@ -251,7 +245,7 @@ export function CameraCapture({
     discardRecordingRef.current = false;
     try {
       const mirroredRecording = facing === 'user' && videoRef.current
-        ? createMirroredRecordingStream(videoRef.current, streamRef.current, activeFps ?? 60)
+        ? createMirroredRecordingStream(videoRef.current, streamRef.current, androidCamera ? Math.min(activeFps ?? 30, 30) : (activeFps ?? 60))
         : null;
       const recordingStream = mirroredRecording?.stream ?? streamRef.current;
       recordingStreamCleanupRef.current = mirroredRecording?.cleanup ?? null;
@@ -300,18 +294,41 @@ export function CameraCapture({
 
   const switchFacing = () => {
     if (recording) return;
-    setSelectedDeviceId(null);
     setFacing((current) => (current === 'environment' ? 'user' : 'environment'));
   };
 
-  const applyZoomValue = async (value: number) => {
+  const applyTrackZoom = useCallback((value: number) => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track?.applyConstraints || zoomConstraintPendingRef.current) return;
+    zoomConstraintPendingRef.current = true;
+    track.applyConstraints({ advanced: [{ zoom: value }] as any })
+      .catch(() => undefined)
+      .finally(() => { zoomConstraintPendingRef.current = false; });
+  }, []);
+
+  const startSmoothZoom = useCallback(() => {
+    if (zoomAnimationRef.current !== null) return;
+    const tick = () => {
+      const targetValue = zoomTargetRef.current;
+      const currentValue = zoomAppliedRef.current;
+      const settled = Math.abs(targetValue - currentValue) < 0.015;
+      const nextValue = Number((settled ? targetValue : currentValue + (targetValue - currentValue) * 0.24).toFixed(2));
+      zoomAppliedRef.current = nextValue;
+      applyTrackZoom(nextValue);
+      if (!settled || zoomConstraintPendingRef.current) {
+        zoomAnimationRef.current = requestAnimationFrame(tick);
+      } else {
+        zoomAnimationRef.current = null;
+      }
+    };
+    zoomAnimationRef.current = requestAnimationFrame(tick);
+  }, [applyTrackZoom]);
+
+  const applyZoomValue = (value: number) => {
     const nextValue = Number(value.toFixed(2));
     setZoom((current) => ({ ...current, value: nextValue }));
-    const track = streamRef.current?.getVideoTracks()[0];
-    if (!track) return;
-    try {
-      await track.applyConstraints({ advanced: [{ zoom: nextValue }] as any });
-    } catch {}
+    zoomTargetRef.current = nextValue;
+    startSmoothZoom();
   };
 
   const handlePrimaryAction = () => {
@@ -335,7 +352,7 @@ export function CameraCapture({
 
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black text-white">
+    <div className={`fixed inset-0 z-[100] bg-black text-white ${androidCamera ? 'canact-android-camera' : ''}`}>
       <input
         ref={nativePhotoRef}
         type="file"
@@ -429,27 +446,6 @@ export function CameraCapture({
             </div>
           )}
 
-          {showLensControls && (
-            <div className="mb-3 flex justify-center">
-              <div className="flex max-w-full gap-2 overflow-x-auto rounded-full bg-black/30 p-1 backdrop-blur-xl ring-1 ring-white/15 no-scrollbar">
-                {lensDevices.map((device, index) => {
-                  const active = (activeDeviceId && device.deviceId === activeDeviceId) || (!activeDeviceId && index === 0);
-                  return (
-                    <button
-                      key={device.deviceId || index}
-                      type="button"
-                      disabled={recording}
-                      onClick={() => setSelectedDeviceId(device.deviceId)}
-                      className={`h-8 shrink-0 rounded-full px-3 text-xs font-bold transition disabled:opacity-45 ${active ? 'bg-white text-ink' : 'text-white/85'}`}
-                    >
-                      {lensLabel(device, index)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {zoom.supported && (
             <div className="mx-auto mb-4 flex w-full max-w-xs items-center gap-3 rounded-full bg-black/30 px-3 py-2 backdrop-blur-xl ring-1 ring-white/15">
               <span className="w-9 text-center text-xs font-bold">{zoom.value.toFixed(zoom.value < 10 ? 1 : 0)}x</span>
@@ -460,9 +456,8 @@ export function CameraCapture({
                 max={zoom.max}
                 step={zoom.step}
                 value={zoom.value}
-                disabled={recording}
                 onChange={(event) => applyZoomValue(Number(event.target.value))}
-                className="min-w-0 flex-1 accent-white disabled:opacity-45"
+                className="min-w-0 flex-1 accent-white"
               />
             </div>
           )}
@@ -533,43 +528,38 @@ export function CameraCapture({
   );
 }
 
-async function getBestCameraStream({ mode, facing, deviceId }: { mode: Mode; facing: Facing; deviceId: string | null }) {
+async function getBestCameraStream({ mode, facing }: { mode: Mode; facing: Facing }) {
   const attempts: MediaStreamConstraints[] = [];
+  const android = isAndroidRuntime();
   const audioAttempts = mode === 'video'
     ? [{ echoCancellation: false, noiseSuppression: false, autoGainControl: false }, false]
     : [false];
-  const frameRate60 = { ideal: 60, min: 30, max: 60 };
-  const frameRateBalanced = { ideal: mode === 'video' ? 60 : 30, max: 60 };
-  const frameRateSafe = { ideal: mode === 'video' ? 30 : 24, max: mode === 'video' ? 60 : 30 };
+  const frameRate60 = android ? { ideal: 30, max: 30 } : { ideal: 60, min: 30, max: 60 };
+  const frameRateBalanced = android ? { ideal: 30, max: 30 } : { ideal: mode === 'video' ? 60 : 30, max: 60 };
+  const frameRateSafe = { ideal: mode === 'video' ? 30 : 24, max: 30 };
   const baseHigh = {
-    width: { ideal: 3840 },
-    height: { ideal: 2160 },
+    width: { ideal: android ? 1280 : 3840 },
+    height: { ideal: android ? 720 : 2160 },
     frameRate: frameRate60,
-    resizeMode: 'none',
+    ...(android ? {} : { resizeMode: 'none' }),
   } as any;
   const baseBalanced = {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: android ? 1280 : 1920 },
+    height: { ideal: android ? 720 : 1080 },
     frameRate: frameRateBalanced,
-    resizeMode: 'none',
+    ...(android ? {} : { resizeMode: 'none' }),
   } as any;
   const baseSafe = {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: android ? 960 : 1920 },
+    height: { ideal: android ? 540 : 1080 },
     frameRate: frameRateSafe,
   } as any;
 
   for (const audio of audioAttempts) {
-    if (deviceId) {
-      attempts.push({ audio, video: { ...baseHigh, deviceId: { exact: deviceId } } as any });
-      attempts.push({ audio, video: { ...baseBalanced, deviceId: { exact: deviceId } } as any });
-      attempts.push({ audio, video: { ...baseSafe, deviceId: { exact: deviceId } } as any });
-    } else {
-      attempts.push({ audio, video: { ...baseHigh, facingMode: { exact: facing } } as any });
-      attempts.push({ audio, video: { ...baseHigh, facingMode: { ideal: facing } } as any });
-      attempts.push({ audio, video: { ...baseBalanced, facingMode: { ideal: facing } } as any });
-      attempts.push({ audio, video: { ...baseSafe, facingMode: { ideal: facing } } as any });
-    }
+    attempts.push({ audio, video: { ...baseHigh, facingMode: { exact: facing } } as any });
+    attempts.push({ audio, video: { ...baseHigh, facingMode: { ideal: facing } } as any });
+    attempts.push({ audio, video: { ...baseBalanced, facingMode: { ideal: facing } } as any });
+    attempts.push({ audio, video: { ...baseSafe, facingMode: { ideal: facing } } as any });
     attempts.push({ audio, video: { facingMode: { ideal: facing }, frameRate: frameRateSafe } as any });
     attempts.push({ audio, video: true });
   }
@@ -620,7 +610,7 @@ async function applyAutoCameraProcessing(track: MediaStreamTrack | undefined) {
       else if (options.includes('auto')) advanced[key] = 'auto';
     }
   }
-  if (Array.isArray(capabilities.resizeMode) && capabilities.resizeMode.includes('none')) advanced.resizeMode = 'none';
+  if (!isAndroidRuntime() && Array.isArray(capabilities.resizeMode) && capabilities.resizeMode.includes('none')) advanced.resizeMode = 'none';
   if (!Object.keys(advanced).length) return;
   try { await track.applyConstraints({ advanced: [advanced] as any }); } catch {}
 }
@@ -768,7 +758,7 @@ function createMirroredRecordingStream(video: HTMLVideoElement, sourceStream: Me
     rafId = requestAnimationFrame(tick);
   };
   drawFrame();
-  const captureFps = Math.min(60, Math.max(24, Math.round(fps || 60)));
+  const captureFps = Math.min(isAndroidRuntime() ? 30 : 60, Math.max(24, Math.round(fps || 30)));
   const canvasStream = canvas.captureStream(captureFps);
   sourceStream.getAudioTracks().forEach((track) => canvasStream.addTrack(track));
   rafId = requestAnimationFrame(tick);
@@ -831,26 +821,6 @@ function getRecorderOptions(stream: MediaStream): MediaRecorderOptions {
   };
 }
 
-function devicesForFacing(devices: MediaDeviceInfo[], facing: Facing) {
-  const labelled = devices.filter((device) => device.label);
-  if (!labelled.length) return devices;
-  const matcher = facing === 'environment'
-    ? /(back|rear|environment|wide|tele|ultra|macro|0\.5|1x|2x|3x)/i
-    : /(front|user|face|selfie)/i;
-  const matches = labelled.filter((device) => matcher.test(device.label));
-  return matches.length ? matches : labelled;
-}
-
-function lensLabel(device: MediaDeviceInfo, index: number) {
-  const label = device.label || `Lens ${index + 1}`;
-  if (/ultra|0\.5/i.test(label)) return '0.5x';
-  if (/tele|3x/i.test(label)) return '3x';
-  if (/2x/i.test(label)) return '2x';
-  if (/front|selfie|user/i.test(label)) return 'Selfie';
-  if (/wide|back|rear|environment/i.test(label)) return '1x';
-  return `Lens ${index + 1}`;
-}
-
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -864,6 +834,11 @@ function formatDuration(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function isAndroidRuntime() {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent || '');
 }
 
 export function isVideoUrl(url: string | undefined | null) {

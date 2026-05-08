@@ -59,6 +59,15 @@ export function StoryViewer({
     return lockPageScroll();
   }, []);
 
+  useEffect(() => {
+    document.documentElement.classList.add('canact-story-open');
+    document.body.classList.add('canact-story-open');
+    return () => {
+      document.documentElement.classList.remove('canact-story-open');
+      document.body.classList.remove('canact-story-open');
+    };
+  }, []);
+
   // Listen to live story (for likes / replies / viewers updates)
   useEffect(() => {
     const target = stories[index];
@@ -149,7 +158,7 @@ export function StoryViewer({
 
   return (
     <PortalWrap>
-      <div className="fixed inset-0 z-[100] bg-black text-white">
+      <div className="canact-story-viewer fixed inset-0 z-[100] bg-black text-white">
       <div className="mx-auto flex h-full max-w-md flex-col px-2 pb-3 pt-2 safe-top safe-bottom">
         {/* Segmented progress — only the CURRENT user's stories show up
             as bars, so the counter at the top accurately reflects "how

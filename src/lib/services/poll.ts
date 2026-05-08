@@ -31,6 +31,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
     uid: input.uid,
     authorName: input.authorName,
     question: input.question,
+    photoURL: input.photoURL,
     options,
     openEnded: input.openEnded,
     createdAt: Date.now(),
@@ -58,20 +59,24 @@ export function listenPoll(id: string, cb: (p: Poll | null) => void) {
 }
 
 export async function votePoll(pollId: string, uid: string, optionId: string) {
-  const voterRef = ref(db, `polls/${pollId}/voters/${uid}`);
-  const prev = (await get(voterRef)).val() as string | null;
-  if (prev === optionId) return;
-  await runTransaction(ref(db, `polls/${pollId}/options`), (opts: PollOption[] | Record<string, PollOption> | null) => {
-    const list = normalizeOptions(opts);
-    if (!list.length) return list;
-    return list.map((o) => {
-      let v = o.votes ?? 0;
-      if (prev && o.id === prev) v = Math.max(0, v - 1);
-      if (o.id === optionId) v += 1;
-      return { ...o, votes: v };
-    });
+  let rejectReason: string | null = null;
+  const result = await runTransaction(ref(db, `polls/${pollId}`), (poll: Poll | null) => {
+    rejectReason = null;
+    if (!poll) { rejectReason = 'Poll not found'; return; }
+    if (poll.endsAt <= Date.now()) { rejectReason = 'Poll has ended'; return; }
+    if (poll.voters?.[uid]) { rejectReason = 'You have already voted'; return; }
+    const list = normalizeOptions(poll.options);
+    if (!list.length || poll.openEnded) { rejectReason = 'Poll has no options'; return; }
+    if (!list.some((option) => option.id === optionId)) { rejectReason = 'Invalid option'; return; }
+    poll.options = list.map((option) => ({
+      ...option,
+      votes: (option.votes ?? 0) + (option.id === optionId ? 1 : 0),
+    }));
+    poll.voters = poll.voters ?? {};
+    poll.voters[uid] = optionId;
+    return poll;
   });
-  await set(voterRef, optionId);
+  if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
 }
 
 export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dislike') {

@@ -9,7 +9,7 @@ import { HelpStatsPills } from '@/components/HelpStatsPills';
 import { listenHelpFeed } from '@/lib/services/help';
 import { HelpRequest, HelpStatus } from '@/lib/types';
 import { formatDistance, haversineMeters, timeAgo } from '@/lib/utils';
-import { LifeBuoy } from '@/components/icons';
+import { HeartHandshake } from '@/components/icons';
 
 const TYPE_COLOR = { red: 'bg-red2', orange: 'bg-orange2', yellow: 'bg-yellow2' } as const;
 const TYPE_LABEL = { red: 'Red', orange: 'Orange', yellow: 'Yellow' } as const;
@@ -44,7 +44,7 @@ export default function HelpFeed() {
       <div className="sticky top-[68px] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-1 pb-2 bg-candy/85 backdrop-blur-md">
         <Link href="/help/create" className="block">
           <button className="w-full h-12 rounded-full bg-brand text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-brand-dark active:scale-[0.99] transition">
-            <LifeBuoy size={20} strokeWidth={2.4} /> Request Help
+            <HeartHandshake size={20} strokeWidth={2.4} /> Request Help
           </button>
         </Link>
       </div>

@@ -10,7 +10,7 @@ import { Button } from '@/components/Button';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenWhaFeed, reactWha, deletePost } from '@/lib/services/wha';
 import { listenPollFeed, votePoll, deletePoll } from '@/lib/services/poll';
-import { listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
+import { deleteRateMeSession, listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
 import { listenReels, deleteReel, toggleReelLike } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
@@ -576,6 +576,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
   const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
   const ended = poll.endsAt < Date.now();
+  const locked = ended || !!mine;
   const isOwner = poll.uid === myUid;
   return (
     <MediaOverlayTile
@@ -588,8 +589,8 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
       likeCount={total}
       commentCount={poll.commentCount ?? 0}
       onOpen={onOpen}
-      onLike={() => options[0] && !ended && votePoll(poll.id, myUid, options[0].id)}
-      onShare={() => onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question })}
+      onLike={() => options[0] && !locked && votePoll(poll.id, myUid, options[0].id)}
+      onShare={() => onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL })}
       isOwner={isOwner}
       onDelete={isOwner ? async () => {
         try { await deletePoll(poll.id, myUid); toast('Poll deleted', 'success'); }
@@ -608,9 +609,9 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
                 <button
                   key={option.id}
                   type="button"
-                  disabled={ended}
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); votePoll(poll.id, myUid, option.id); }}
-                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur ${selected ? 'bg-[#FF6B7A] text-white' : 'bg-white/90 text-neutral-800'}`}
+                  disabled={locked}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!locked) votePoll(poll.id, myUid, option.id); }}
+                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur disabled:opacity-75 ${selected ? 'bg-[#FF6B7A] text-white' : 'bg-white/90 text-neutral-800'}`}
                 >
                   {option.text} · {pct}%
                 </button>
@@ -625,18 +626,23 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
           <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(); }} aria-label="Open poll" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
             <MessageCircle size={15} />
           </button>
-          <button type="button" disabled={!options[0] || ended} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
+          <button type="button" disabled={!options[0] || locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && !locked && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
             <ThumbsUp size={15} />
           </button>
-          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
+          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
             <Share2 size={15} />
           </button>
         </div>
       )}
     >
-      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
-        <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{poll.question}</span>
-      </div>
+      {poll.photoURL ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={poll.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
+          <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{poll.question}</span>
+        </div>
+      )}
     </MediaOverlayTile>
   );
 }
@@ -644,13 +650,13 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
 function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateMeSession; myUid: string; onOpen: () => void; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const isOwner = sess.uid === myUid;
   const ended = sess.endsAt <= Date.now();
-  const locked = ended || isOwner;
   const [optimistic, setOptimistic] = useState<{ kind: 'like' | 'dislike'; prev: 'like' | 'dislike' | undefined } | null>(null);
   const serverMy = sess.votes?.[myUid];
   useEffect(() => {
     if (optimistic && serverMy === optimistic.kind) setOptimistic(null);
   }, [serverMy, optimistic]);
   const my = optimistic ? optimistic.kind : serverMy;
+  const locked = ended || isOwner || !!my;
   let likes = sess.likes ?? 0;
   let dislikes = sess.dislikes ?? 0;
   if (optimistic) {
@@ -663,7 +669,7 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
   const upPct = total ? Math.round((likes / total) * 100) : 0;
   const downPct = total ? 100 - upPct : 0;
   const cast = (kind: 'like' | 'dislike') => {
-    if (locked || my === kind) return;
+    if (locked) return;
     setOptimistic({ kind, prev: serverMy });
     voteRateMe(sess.id, myUid, kind).catch((error: any) => {
       setOptimistic(null);
@@ -684,7 +690,8 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
       onOpen={onOpen}
       onLike={() => cast('like')}
       onShare={() => onShare({ kind: 'rateme', sessionId: sess.id })}
-      isOwner={false}
+      isOwner={isOwner}
+      onDelete={isOwner ? async () => { await deleteRateMeSession(sess.id, sess.uid); } : undefined}
       statText={`${likes} up · ${dislikes} down`}
       bottomContent={(
         <div>

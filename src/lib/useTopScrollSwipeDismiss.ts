@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, type TouchEvent } from 'react';
+import { pushCanactPopupGesture } from './popupGuards';
 
 type Options = {
   onClose: () => void;
@@ -13,6 +14,7 @@ type GestureState = {
   closed: boolean;
   startX: number;
   startY: number;
+  releaseGesture: (() => void) | null;
 };
 
 export function useTopScrollSwipeDismiss({
@@ -23,7 +25,7 @@ export function useTopScrollSwipeDismiss({
 }: Options) {
   const closeRef = useRef(onClose);
   const getScrollElementRef = useRef(getScrollElement);
-  const gestureRef = useRef<GestureState>({ active: false, closed: false, startX: 0, startY: 0 });
+  const gestureRef = useRef<GestureState>({ active: false, closed: false, startX: 0, startY: 0, releaseGesture: null });
 
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
   useEffect(() => { getScrollElementRef.current = getScrollElement; }, [getScrollElement]);
@@ -34,7 +36,8 @@ export function useTopScrollSwipeDismiss({
   }, []);
 
   const reset = useCallback(() => {
-    gestureRef.current = { active: false, closed: false, startX: 0, startY: 0 };
+    gestureRef.current.releaseGesture?.();
+    gestureRef.current = { active: false, closed: false, startX: 0, startY: 0, releaseGesture: null };
   }, []);
 
   const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
@@ -42,13 +45,15 @@ export function useTopScrollSwipeDismiss({
       reset();
       return;
     }
+    event.stopPropagation();
     const touch = event.touches[0];
-    gestureRef.current = { active: true, closed: false, startX: touch.clientX, startY: touch.clientY };
+    gestureRef.current = { active: true, closed: false, startX: touch.clientX, startY: touch.clientY, releaseGesture: pushCanactPopupGesture() };
   }, [enabled, isScrollAtTop, reset]);
 
   const onTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
     const gesture = gestureRef.current;
     if (!gesture.active || gesture.closed || event.touches.length !== 1) return;
+    event.stopPropagation();
     if (!isScrollAtTop()) {
       reset();
       return;

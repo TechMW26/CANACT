@@ -85,8 +85,11 @@ export async function deletePost(postId: string, uid: string) {
     }
   } catch { /* ignore \u2014 deletion is the priority */ }
 
-  await remove(ref(db, `wha/${postId}`));
-  await remove(ref(db, `userPosts/${uid}/${postId}`));
+  await Promise.all([
+    remove(ref(db, `wha/${postId}`)),
+    remove(ref(db, `userPosts/${uid}/${postId}`)),
+    remove(ref(db, `whaComments/${postId}`)),
+  ]);
 
   if (urls.length && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
     try {

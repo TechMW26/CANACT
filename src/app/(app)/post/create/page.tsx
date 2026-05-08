@@ -1,30 +1,73 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { CameraCapture, isVideoUrl } from '@/components/CameraCapture';
+import { CameraCapture } from '@/components/CameraCapture';
 import { Textarea } from '@/components/Input';
 import { VideoPreview } from '@/components/VideoPreview';
-import { ArrowLeft, Camera, MapPin, Plus, X } from '@/components/icons';
+import { ArrowLeft, Camera, Loader2, MapPin, Plus, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { createWhaPost } from '@/lib/services/wha';
 import { notifyNearbyFriends } from '@/lib/services/sendPush';
-import { uploadMedia } from '@/lib/uploadMedia';
+import { dataUrlToBlob, prepareMedia, uploadMedia, type PreparedMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 
 const MAX_PHOTOS = 10;
+
+type DraftShot = {
+  id: string;
+  src: string;
+  isVideo: boolean;
+  poster?: string;
+  prepared?: PreparedMedia;
+};
 
 export default function PostCreatePage() {
   const { user, profile } = useAuth();
   const { coords } = useGeo();
   const router = useRouter();
   const [step, setStep] = useState<'capture' | 'compose'>('capture');
-  const [shots, setShots] = useState<string[]>([]);
+  const [shots, setShots] = useState<DraftShot[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const shotsRef = useRef<DraftShot[]>([]);
+
+  useEffect(() => { shotsRef.current = shots; }, [shots]);
+  useEffect(() => () => { shotsRef.current.forEach(revokeDraftShot); }, []);
+
+  const processCapturedUrls = async (urls: string[]) => {
+    if (!urls.length) return;
+    setPreparing(true);
+    try {
+      const drafts: DraftShot[] = [];
+      for (const source of urls) {
+        const blob = await dataUrlToBlob(source);
+        const prepared = await prepareMedia(blob);
+        const previewUrl = URL.createObjectURL(prepared.blob);
+        drafts.push({
+          id: `${Date.now()}-${drafts.length}-${Math.random().toString(36).slice(2)}`,
+          src: previewUrl,
+          isVideo: prepared.mime.startsWith('video/'),
+          poster: prepared.posterDataUrl,
+          prepared,
+        });
+      }
+      setShots((current) => {
+        const combined = [...current, ...drafts];
+        const next = combined.slice(0, MAX_PHOTOS);
+        combined.slice(MAX_PHOTOS).forEach(revokeDraftShot);
+        return next;
+      });
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not process media', 'error');
+    } finally {
+      setPreparing(false);
+    }
+  };
 
   if (!user || !profile) return null;
 
@@ -36,8 +79,8 @@ export default function PostCreatePage() {
         maxPhotos={MAX_PHOTOS}
         onCancel={() => router.replace('/create')}
         onCapture={(urls) => {
-          setShots(urls);
           setStep('compose');
+          void processCapturedUrls(urls);
         }}
       />
     );
@@ -72,17 +115,21 @@ export default function PostCreatePage() {
         </div>
 
         <div className="mt-3 -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-2 no-scrollbar">
-          {shots.map((src, i) => (
-            <div key={i} className="relative shrink-0 snap-start">
-              {isVideoUrl(src) ? (
-                <VideoPreview src={src} className="h-40 w-32 rounded-2xl" fit="cover" />
+          {shots.map((shot, i) => (
+            <div key={shot.id} className="relative shrink-0 snap-start">
+              {shot.isVideo ? (
+                <VideoPreview src={shot.src} poster={shot.poster} className="h-40 w-32 rounded-2xl" fit="cover" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" className="h-40 w-32 rounded-2xl object-cover" />
+                <img src={shot.src} alt="" className="h-40 w-32 rounded-2xl object-cover" />
               )}
               <button
                 type="button"
-                onClick={() => setShots((curr) => curr.filter((_, idx) => idx !== i))}
+                onClick={() => setShots((current) => {
+                  const removed = current[i];
+                  if (removed) revokeDraftShot(removed);
+                  return current.filter((_, idx) => idx !== i);
+                })}
                 className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
                 aria-label="Remove media"
               >
@@ -103,6 +150,12 @@ export default function PostCreatePage() {
               Add more
             </button>
           )}
+          {preparing && (
+            <div className="flex h-40 w-32 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl bg-brand-light/60 text-xs font-bold text-brand">
+              <Loader2 size={18} className="animate-spin" />
+              Processing
+            </div>
+          )}
         </div>
 
         <div className="mt-4">
@@ -118,9 +171,10 @@ export default function PostCreatePage() {
         <Button
           full
           size="lg"
-          loading={busy}
+          loading={busy || preparing}
           className="mt-4"
           onClick={async () => {
+            if (preparing) return;
             if (!text.trim() && shots.length === 0) return toast('Add a photo or caption', 'error');
             setBusy(true);
             try {
@@ -128,8 +182,8 @@ export default function PostCreatePage() {
               // returned public URLs in RTDB (data URLs would blow up the DB).
               const hostedUrls: string[] = [];
               const hostedPosters: string[] = [];
-              for (const s of shots) {
-                const { url, posterUrl, prepared } = await uploadMedia(s, { kind: 'post', uid: user.uid });
+              for (const shot of shots) {
+                const { url, posterUrl, prepared } = await uploadMedia(shot.prepared ?? shot.src, { kind: 'post', uid: user.uid });
                 hostedUrls.push(url);
                 // Images: reuse the image as its own thumbnail. Videos: use
                 // the uploaded first-frame JPEG. Empty string = poster gen
@@ -182,4 +236,8 @@ export default function PostCreatePage() {
       </div>
     </div>
   );
+}
+
+function revokeDraftShot(shot: DraftShot) {
+  if (shot.src.startsWith('blob:')) URL.revokeObjectURL(shot.src);
 }

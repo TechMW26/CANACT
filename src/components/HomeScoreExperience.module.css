@@ -1,0 +1,645 @@
+.animationStage {
+  --home-cherry: #DC143C;
+  --home-cherry-dark: #A0102C;
+  --home-bg: #FFF8F8;
+  --home-text: #1A1A1A;
+  --home-text-dim: rgba(30, 30, 30, .4);
+  --home-border: rgba(220, 20, 60, .12);
+  --home-footer-clearance: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 84px);
+  position: relative;
+  left: 50%;
+  width: 100vw;
+  height: calc(100svh - 8.5rem);
+  min-height: 0;
+  overflow: hidden;
+  transform: translateX(-50%);
+  background: var(--home-bg);
+  color: var(--home-text);
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.stageNearby {
+  background: #FFF8F8;
+  height: 100svh;
+}
+
+.greeting {
+  position: absolute;
+  top: 180px;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  text-align: center;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
+.greeting h2 {
+  margin-bottom: 4px;
+  color: var(--home-text-dim);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.greeting h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.greeting h1 span {
+  color: var(--home-cherry);
+}
+
+.scoreWrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  transform: translateY(276px);
+}
+
+.pillAura {
+  position: absolute;
+  display: none;
+  width: 180px;
+  height: 72px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(18px);
+  transform: scale(.9);
+  transition: background .25s ease;
+}
+
+.scoreCircle {
+  appearance: none;
+  border: 0;
+  position: relative;
+  display: flex;
+  width: 260px;
+  height: 260px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #FFF !important;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  pointer-events: auto;
+  will-change: transform, width, height, border-radius, background;
+}
+
+.scoreCirclePulse {
+  position: absolute;
+  display: none;
+  inset: -40px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(220, 20, 60, .16) 0%, transparent 70%);
+  animation: homeScorePulse 2s ease-in-out infinite;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.scoreInner {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  will-change: opacity, transform;
+}
+
+.scoreLabel {
+  color: var(--home-cherry);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+
+.scoreNum {
+  color: var(--home-cherry-dark);
+  font-size: 68px;
+  font-weight: 900;
+  line-height: 1;
+  transition: color .3s;
+}
+
+.scoreChange {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--home-cherry);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scoreSource {
+  margin-top: 8px;
+  color: var(--home-text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+
+.pillContent {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px) scale(.96);
+  white-space: nowrap;
+}
+
+.pillDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: none;
+}
+
+.pillScore {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .4px;
+  line-height: 1;
+}
+
+.pillLabel {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1;
+  opacity: .88;
+  text-transform: uppercase;
+}
+
+.scoreExcellent { color: #16A34A; }
+.scoreGood { color: #EAB308; }
+.scoreFair { color: #F97316; }
+.scorePoor { color: #DC2626; }
+
+/* When applied to .scoreCircle, propagate the score color to all the score
+   text + delta + label so the trust tier reads at a glance. */
+.scoreCircle.scoreExcellent .scoreNum,
+.scoreCircle.scoreExcellent .scoreLabel,
+.scoreCircle.scoreExcellent .scoreChange { color: #16A34A; }
+.scoreCircle.scoreGood .scoreNum,
+.scoreCircle.scoreGood .scoreLabel,
+.scoreCircle.scoreGood .scoreChange { color: #EAB308; }
+.scoreCircle.scoreFair .scoreNum,
+.scoreCircle.scoreFair .scoreLabel,
+.scoreCircle.scoreFair .scoreChange { color: #F97316; }
+.scoreCircle.scorePoor .scoreNum,
+.scoreCircle.scorePoor .scoreLabel,
+.scoreCircle.scorePoor .scoreChange { color: #DC2626; }
+
+.nearbyPanel {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  background: #FFF8F8;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(100%);
+  transition: transform .42s cubic-bezier(.22, 1, .36, 1), opacity .28s ease;
+}
+
+.nearbyPanelActive {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.nearbyMap {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.nearbyEmpty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 32%, rgba(220, 20, 60, .08), transparent 34%), #FFF8F8;
+}
+
+.nearbyEmptyTitle {
+  color: #1A1A1A;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.nearbyEmptyBody {
+  max-width: 260px;
+  color: rgba(26, 26, 26, .52);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.deckShell {
+  position: absolute;
+  left: 50%;
+  bottom: var(--home-footer-clearance);
+  z-index: 42;
+  width: min(calc(100vw - 24px), 430px);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.deckMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 auto 8px;
+  width: min(100%, 330px);
+  border: 1px solid rgba(240, 215, 220, .96);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, .92);
+  color: rgba(26, 26, 26, .58);
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 8px 22px rgba(54, 34, 40, .08);
+  backdrop-filter: blur(16px);
+}
+
+.swipeCard,
+.emptyDeck {
+  position: relative;
+  min-height: 168px;
+  border: 1px solid rgba(240, 215, 220, .98);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 18px 44px rgba(67, 38, 45, .16);
+  backdrop-filter: blur(18px);
+}
+
+.swipeCard {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  touch-action: none;
+  user-select: none;
+  transition: transform .16s ease;
+  will-change: transform;
+}
+
+.cardSignal {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  border: 2px solid currentColor;
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 1px;
+  transform: rotate(8deg);
+  pointer-events: none;
+}
+
+.cardSignal[data-kind="like"] {
+  color: #16A34A;
+}
+
+.cardSignal[data-kind="dislike"] {
+  color: #DC143C;
+  left: 16px;
+  right: auto;
+  transform: rotate(-8deg);
+}
+
+.cardText {
+  min-width: 0;
+}
+
+.cardText h3 {
+  overflow: hidden;
+  margin: 0;
+  color: #111;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardText p {
+  overflow: hidden;
+  margin-top: 5px;
+  color: rgba(17, 17, 17, .52);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardActions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.cardActions span {
+  color: rgba(17, 17, 17, .42);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.likeButton,
+.dislikeButton {
+  appearance: none;
+  display: inline-flex;
+  width: 54px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  color: #FFF;
+  box-shadow: 0 10px 22px rgba(17, 17, 17, .12);
+  transition: transform .15s ease, opacity .15s ease;
+}
+
+.likeButton {
+  background: linear-gradient(135deg, #16A34A, #22C55E);
+}
+
+.dislikeButton {
+  background: linear-gradient(135deg, #8E122B, #DC143C);
+}
+
+.likeButton:active,
+.dislikeButton:active {
+  transform: scale(.95);
+}
+
+.likeButton:disabled,
+.dislikeButton:disabled {
+  opacity: .55;
+}
+
+.emptyDeck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px;
+  text-align: center;
+}
+
+.emptyDeck strong {
+  color: #111;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.emptyDeck span {
+  color: rgba(17, 17, 17, .52);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mapRatingSheet {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--home-footer-clearance) + 210px);
+  z-index: 48;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: min(calc(100vw - 24px), 430px);
+  border: 1px solid rgba(240, 215, 220, .98);
+  border-radius: 24px;
+  padding: 12px 12px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 18px 44px rgba(67, 38, 45, .16);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.sheetClose {
+  appearance: none;
+  position: absolute;
+  top: -9px;
+  right: -8px;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(240, 215, 220, .98);
+  border-radius: 999px;
+  background: #FFF;
+  color: rgba(17, 17, 17, .58);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.sheetPersonText {
+  min-width: 0;
+}
+
+.sheetPersonText strong,
+.sheetPersonText span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheetPersonText strong {
+  color: #111;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.sheetPersonText span {
+  margin-top: 3px;
+  color: rgba(17, 17, 17, .52);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sheetActions {
+  display: flex;
+  gap: 8px;
+}
+
+.hint {
+  position: absolute;
+  top: min(620px, calc(100% - 72px));
+  left: 50%;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--home-text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: homeScoreBob 2s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@keyframes homeScorePulse {
+  0%, 100% { opacity: .3; transform: scale(1); }
+  50% { opacity: .7; transform: scale(1.1); }
+}
+
+@keyframes homeScoreBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(6px); }
+}
+
+@media (min-width: 1024px) {
+  .animationStage {
+    width: calc(100vw - 15rem);
+    height: calc(100svh - 3rem);
+  }
+}
+
+@media (max-height: 700px) {
+  .greeting {
+    top: 132px;
+  }
+
+  .deckMeta {
+    margin-bottom: 6px;
+  }
+
+  .swipeCard,
+  .emptyDeck {
+    min-height: 148px;
+  }
+
+  .swipeCard {
+    grid-template-columns: 62px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .cardActions {
+    margin-top: 0;
+  }
+
+  .mapRatingSheet {
+    bottom: calc(var(--home-footer-clearance) + 184px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scoreCirclePulse,
+  .hint {
+    animation: none;
+  }
+
+  .nearbyPanel,
+  .swipeCard {
+    transition: none;
+  }
+
+  .blob {
+    animation: none !important;
+  }
+}
+
+/* Subtle animated blobs sitting behind the score, drifting on a slow loop.
+   Their position/scale is also driven from JS via CSS vars to morph toward
+   the nearby map background as the user pulls down. */
+.blobLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--blob-layer-opacity, 1);
+  transition: opacity .35s ease;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  will-change: transform, opacity;
+  transform: translate3d(var(--blob-tx, 0px), var(--blob-ty, 0px), 0)
+             scale(var(--blob-scale, 1));
+  transition: transform .9s cubic-bezier(.22, 1, .36, 1), opacity .6s ease;
+}
+
+.blobA {
+  top: 38%;
+  right: -110px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, .85), rgba(255, 220, 226, .55) 60%, rgba(220, 20, 60, .08) 100%);
+  animation: homeBlobDrift 16s ease-in-out infinite;
+}
+
+.blobB {
+  bottom: 18%;
+  right: 10%;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle at 60% 40%, rgba(255, 255, 255, .72), rgba(255, 200, 210, .42) 60%, rgba(220, 20, 60, .04) 100%);
+  animation: homeBlobDrift 22s ease-in-out -6s infinite reverse;
+}
+
+.blobC {
+  top: 52%;
+  left: -90px;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .58), rgba(248, 215, 222, .38) 60%, rgba(220, 20, 60, .04) 100%);
+  animation: homeBlobDrift 19s ease-in-out -4s infinite;
+}
+
+.blobD {
+  top: 12%;
+  left: 14%;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .5), rgba(255, 220, 228, .32) 60%, rgba(220, 20, 60, .03) 100%);
+  animation: homeBlobDrift 24s ease-in-out -10s infinite reverse;
+}
+
+@keyframes homeBlobDrift {
+  0%, 100% { transform: translate3d(var(--blob-tx, 0px), var(--blob-ty, 0px), 0) scale(var(--blob-scale, 1)); }
+  50%      { transform: translate3d(calc(var(--blob-tx, 0px) + 18px), calc(var(--blob-ty, 0px) - 14px), 0) scale(calc(var(--blob-scale, 1) * 1.06)); }
+}

@@ -184,7 +184,9 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
 
 /** Upload a prepared media blob to Vercel Blob via the client-upload flow.
  * Returns the public URL. */
-export async function uploadPreparedMedia(prepared: PreparedMedia, opts: { kind: 'story' | 'reel' | 'post' | 'avatar'; uid: string }): Promise<string> {
+type UploadMediaKind = 'story' | 'reel' | 'post' | 'poll' | 'avatar';
+
+export async function uploadPreparedMedia(prepared: PreparedMedia, opts: { kind: UploadMediaKind; uid: string }): Promise<string> {
   const ts = Date.now();
   const pathname = `${opts.kind}/${opts.uid}/${ts}.${prepared.ext}`;
   const result = await upload(pathname, prepared.blob, {
@@ -200,7 +202,7 @@ export async function uploadPreparedMedia(prepared: PreparedMedia, opts: { kind:
  *  inside RTDB. Returns null if the poster is missing or the upload fails —
  *  callers should treat poster as best-effort and fall back to the video
  *  itself or a placeholder. */
-async function uploadPoster(posterDataUrl: string, opts: { kind: 'story' | 'reel' | 'post'; uid: string }): Promise<string | null> {
+async function uploadPoster(posterDataUrl: string, opts: { kind: 'story' | 'reel' | 'post' | 'poll'; uid: string }): Promise<string | null> {
   try {
     const blob = await dataUrlToBlob(posterDataUrl);
     if (!blob || blob.size === 0) return null;
@@ -222,19 +224,28 @@ async function uploadPoster(posterDataUrl: string, opts: { kind: 'story' | 'reel
  *  thumbnail without having to download the whole video for its first frame
  *  — critical for feed grid tiles, reels rail and chat attachments on slow
  *  networks. */
-export async function uploadMedia(input: Blob | File | string, opts: { kind: 'story' | 'reel' | 'post' | 'avatar'; uid: string }): Promise<{ url: string; posterUrl?: string; prepared: PreparedMedia }> {
-  const blob = typeof input === 'string' ? await dataUrlToBlob(input) : input;
-  const prepared = await prepareMedia(blob);
+export async function uploadMedia(input: Blob | File | string | PreparedMedia, opts: { kind: UploadMediaKind; uid: string }): Promise<{ url: string; posterUrl?: string; prepared: PreparedMedia }> {
+  const prepared = isPreparedMedia(input)
+    ? input
+    : await prepareMedia(typeof input === 'string' ? await dataUrlToBlob(input) : input);
   // Run the main upload + poster upload in parallel for videos so the user
   // doesn't pay the latency twice.
   const isVideo = prepared.mime.startsWith('video/');
   if (isVideo && prepared.posterDataUrl && opts.kind !== 'avatar') {
     const [url, posterUrl] = await Promise.all([
       uploadPreparedMedia(prepared, opts),
-      uploadPoster(prepared.posterDataUrl, opts as { kind: 'story' | 'reel' | 'post'; uid: string }),
+      uploadPoster(prepared.posterDataUrl, opts as { kind: 'story' | 'reel' | 'post' | 'poll'; uid: string }),
     ]);
     return { url, posterUrl: posterUrl ?? undefined, prepared };
   }
   const url = await uploadPreparedMedia(prepared, opts);
   return { url, prepared };
+}
+
+function isPreparedMedia(input: Blob | File | string | PreparedMedia): input is PreparedMedia {
+  return typeof input === 'object'
+    && input !== null
+    && 'blob' in input
+    && 'mime' in input
+    && 'ext' in input;
 }

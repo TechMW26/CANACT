@@ -56,3 +56,32 @@ export async function notifyNearbyFriends(input: {
     });
   } catch { /* ignore */ }
 }
+
+/**
+ * Fan a help-request notification out to every user (filtered by audience)
+ * whose stored lastLocation lies inside the request's vicinity radius.
+ */
+export async function notifyHelpVicinity(input: {
+  helpId: string;
+  lat: number;
+  lng: number;
+  vicinityMeters: number;
+  audience: 'public' | 'favourites' | 'contacts';
+  title: string;
+  body?: string;
+  url: string;
+  tag?: string;
+}) {
+  try {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+    const idToken = await user.getIdToken();
+    await fetch('/api/push/help-vicinity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify(input),
+      keepalive: true,
+    });
+  } catch { /* ignore */ }
+}

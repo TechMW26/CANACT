@@ -18,6 +18,7 @@ import type { ReelItem } from '@/lib/types';
 import { filterCss } from '@/lib/mediaFilters';
 import { lockPageScroll } from '@/lib/scrollLock';
 import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
+import { pushCanactPopupOpen } from '@/lib/popupGuards';
 
 export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   const { user, profile } = useAuth();
@@ -273,6 +274,7 @@ function CommentsSheet({
   });
 
   useEffect(() => listenReelComments(reel.id, setItems), [reel.id]);
+  useEffect(() => pushCanactPopupOpen(), []);
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [items.length]);
@@ -297,7 +299,7 @@ function CommentsSheet({
   const commentsSheetHeight = expanded ? 'var(--canact-popup-max-height)' : '58svh';
 
   return (
-    <div className="absolute inset-0 z-40" onClick={onClose}>
+    <div data-canact-popup="true" className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
         {...swipeDismissHandlers}

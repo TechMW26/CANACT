@@ -72,6 +72,7 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
           const snap = await get(ref(db, `polls/${attachment.pollId}`));
           const v = snap.val();
           if (cancelled || !v) return;
+          if (!thumb && v.photoURL) setThumb(v.photoURL);
           if (!text && v.question) setText(v.question);
           if (!author && v.authorName) setAuthor(v.authorName);
         } else if (attachment.kind === 'reel') {

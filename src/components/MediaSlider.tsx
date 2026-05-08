@@ -7,7 +7,7 @@ import { VideoPreview } from './VideoPreview';
  * Full-card-width image/video carousel with snap-scroll, page indicator pill
  * (e.g. "2/4"), and an animated dot bar. Used by feed cards and post detail.
  */
-export function MediaSlider({ urls, posters, aspect = '4/5' }: { urls: string[]; posters?: string[]; aspect?: string }) {
+export function MediaSlider({ urls, posters, aspect = '4/5', rounded = true }: { urls: string[]; posters?: string[]; aspect?: string; rounded?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
 
@@ -22,7 +22,7 @@ export function MediaSlider({ urls, posters, aspect = '4/5' }: { urls: string[];
     const u = urls[0];
     const p = posters?.[0] || undefined;
     return (
-      <div className="overflow-hidden rounded-[24px]" style={{ aspectRatio: aspect }}>
+      <div className={rounded ? 'overflow-hidden rounded-[24px]' : 'overflow-hidden'} style={{ aspectRatio: aspect }}>
         {isVideoUrl(u) ? (
           <VideoPreview src={u} poster={p} className="h-full w-full" fit="cover" />
         ) : (
@@ -38,7 +38,7 @@ export function MediaSlider({ urls, posters, aspect = '4/5' }: { urls: string[];
       <div
         ref={ref}
         onScroll={onScroll}
-        className="flex w-full snap-x snap-mandatory overflow-x-auto rounded-[24px] no-scrollbar"
+        className={`flex w-full snap-x snap-mandatory overflow-x-auto no-scrollbar ${rounded ? 'rounded-[24px]' : ''}`}
       >
         {urls.map((u, i) => (
           <div

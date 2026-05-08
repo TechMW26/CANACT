@@ -98,6 +98,7 @@ export interface Poll {
   uid: string;
   authorName: string;
   question: string;
+  photoURL?: string;
   options: PollOption[];
   openEnded: boolean;
   createdAt: number;

@@ -7,6 +7,7 @@ export {
   Compass,
   LifeBuoy,
   HandHeart,
+  HeartHandshake,
   Plus,
   Trophy,
   User as UserIcon,

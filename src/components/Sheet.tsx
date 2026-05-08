@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { lockPageScroll } from '@/lib/scrollLock';
+import { pushCanactPopupOpen, pushCanactSheetZoom } from '@/lib/popupGuards';
 import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 import { X } from './icons';
 
@@ -37,6 +38,9 @@ export function Sheet({
   const [entered, setEntered] = useState(false);
   const onCloseRef = useRef(onClose);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number[]>([]);
+  const closeTimerRef = useRef<number | null>(null);
+  const releaseZoomRef = useRef<(() => void) | null>(null);
   const swipeDismissHandlers = useTopScrollSwipeDismiss({
     onClose,
     getScrollElement: () => scrollRef.current,
@@ -44,46 +48,68 @@ export function Sheet({
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
+    const clearAnimationTimers = () => {
+      rafRef.current.forEach((rafId) => cancelAnimationFrame(rafId));
+      rafRef.current = [];
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    };
+    clearAnimationTimers();
     if (open) {
       setMounted(true);
+      setEntered(false);
       // Double rAF so the initial off-screen styles paint before we flip
       // `entered` — guarantees the transition fires on first open.
-      let raf2 = 0;
       const raf1 = requestAnimationFrame(() => {
-        raf2 = requestAnimationFrame(() => setEntered(true));
+        const raf2 = requestAnimationFrame(() => {
+          rafRef.current = [];
+          setEntered(true);
+        });
+        rafRef.current.push(raf2);
       });
-      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+      rafRef.current.push(raf1);
+      return clearAnimationTimers;
     }
     setEntered(false);
-    const t = setTimeout(() => setMounted(false), ANIM_MS);
-    return () => clearTimeout(t);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setMounted(false);
+    }, ANIM_MS);
+    return clearAnimationTimers;
   }, [open]);
 
   useEffect(() => {
     if (!mounted) return;
+    const releasePopupOpen = pushCanactPopupOpen();
     const unlockScroll = lockPageScroll();
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => {
+      releasePopupOpen();
       unlockScroll();
       window.removeEventListener('keydown', onKey);
-      const shell = document.getElementById('canact-app-content');
-      shell?.classList.remove('canact-sheet-zoom-out');
+      releaseZoomRef.current?.();
+      releaseZoomRef.current = null;
     };
   }, [mounted]);
 
   useEffect(() => {
+    releaseZoomRef.current?.();
+    releaseZoomRef.current = null;
     const shell = document.getElementById('canact-app-content');
-    if (!shell) return;
-    if (entered) shell.classList.add('canact-sheet-zoom-out');
-    else shell.classList.remove('canact-sheet-zoom-out');
+    if (!shell || !entered) return;
+    releaseZoomRef.current = pushCanactSheetZoom(shell);
+    return () => {
+      releaseZoomRef.current?.();
+      releaseZoomRef.current = null;
+    };
   }, [entered]);
 
   if (!mounted) return null;
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center overflow-hidden overscroll-none`} role="dialog" aria-modal="true">
+    <div data-canact-popup="true" className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center overflow-hidden overscroll-none`} role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Close"
@@ -97,18 +123,18 @@ export function Sheet({
           maxHeight: 'var(--canact-popup-max-height)',
           paddingBottom: 'var(--canact-popup-bottom-inset)',
         }}
-        className={`relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-[32px] bg-white px-4 pt-3 transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        className={`relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-white pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
         {title !== undefined && (
-          <div className="mb-3 flex shrink-0 items-center justify-between">
+          <div className="mb-3 flex shrink-0 items-center justify-between px-4">
             <h2 className="text-xl font-black tracking-tight text-ink">{title}</h2>
             <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-light/60 text-brand">
               <X size={16} />
             </button>
           </div>
         )}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pr-1 [-webkit-overflow-scrolling:touch]">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-2 [-webkit-overflow-scrolling:touch]">
           {children}
         </div>
       </div>

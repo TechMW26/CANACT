@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Canact – Score</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --cherry:#DC143C;
+  --cherry-dark:#A0102C;
+  --cherry-light:#FF3355;
+  --bg:#FFF;
+  --text:#1A1A1A;
+  --text-dim:rgba(30,30,30,.4);
+  --border:rgba(220,20,60,.12);
+}
+
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#FFF;
+  font-family:'Inter',sans-serif;
+  color:var(--text);
+}
+
+.animation-stage{
+  position:relative;
+  width:100vw;
+  height:100vh;
+  overflow:hidden;
+  background:var(--bg);
+}
+
+/* GREETING */
+.greeting{
+  position:absolute;
+  top:180px;
+  left:0;
+  right:0;
+  text-align:center;
+  will-change:opacity,transform;
+  z-index:20;
+}
+
+.greeting h2{
+  font-size:13px;
+  color:var(--text-dim);
+  font-weight:400;
+  margin-bottom:4px;
+}
+
+.greeting h1{
+  font-size:20px;
+  font-weight:700;
+}
+
+.greeting h1 span{
+  color:var(--cherry);
+}
+
+/* SCORE CIRCLE / PILL WRAP */
+.score-wrap{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  z-index:50;
+  display:flex;
+  justify-content:center;
+  pointer-events:none;
+  transform:translateY(276px);
+}
+
+/* SOFT GLOW ONLY AFTER PILL FORMS */
+.pill-aura{
+  position:absolute;
+  width:180px;
+  height:72px;
+  border-radius:999px;
+  opacity:0;
+  pointer-events:none;
+  filter:blur(18px);
+  transform:scale(.9);
+  transition:background .25s ease;
+}
+
+/* MORPHING ELEMENT */
+.score-circle{
+  position:relative;
+  width:260px;
+  height:260px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  background:#FFF;
+  box-shadow:0 4px 30px rgba(220,20,60,.08),0 0 0 2px var(--border);
+  will-change:transform,width,height,border-radius,background,box-shadow;
+  pointer-events:auto;
+  overflow:hidden;
+}
+
+.score-circle-pulse{
+  position:absolute;
+  inset:-40px;
+  border-radius:inherit;
+  background:radial-gradient(circle,rgba(220,20,60,.16) 0%,transparent 70%);
+  animation:pulse 2s ease-in-out infinite;
+  pointer-events:none;
+  z-index:-1;
+  will-change:opacity;
+}
+
+@keyframes pulse{
+  0%,100%{opacity:.3;transform:scale(1)}
+  50%{opacity:.7;transform:scale(1.1)}
+}
+
+.score-inner{
+  text-align:center;
+  position:relative;
+  z-index:2;
+  will-change:opacity,transform;
+}
+
+.score-label{
+  font-size:10px;
+  letter-spacing:2.5px;
+  text-transform:uppercase;
+  color:var(--cherry);
+  font-weight:700;
+}
+
+.score-num{
+  font-size:68px;
+  font-weight:900;
+  line-height:1;
+  color:var(--cherry-dark);
+  transition:color .3s;
+}
+
+.score-change{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-size:12px;
+  color:var(--cherry);
+  margin-top:6px;
+  font-weight:700;
+}
+
+.score-source{
+  font-size:10px;
+  color:var(--text-dim);
+  margin-top:8px;
+  letter-spacing:4px;
+  font-weight:600;
+}
+
+/* FINAL PILL CONTENT INSIDE THE MORPHED SHAPE */
+.pill-content{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  z-index:3;
+  opacity:0;
+  transform:translateY(2px) scale(.96);
+  pointer-events:none;
+  white-space:nowrap;
+}
+
+.pill-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 10px currentColor;
+  flex-shrink:0;
+}
+
+.pill-score{
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.4px;
+  line-height:1;
+}
+
+.pill-label{
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:1px;
+  line-height:1;
+  text-transform:uppercase;
+  opacity:.88;
+}
+
+.score-excellent{color:#22C55E}
+.score-good{color:#3B82F6}
+.score-fair{color:#FBBF24}
+.score-poor{color:#DC143C}
+
+/* SCROLLABLE CONTENT */
+.scroll-area{
+  position:absolute;
+  inset:0;
+  z-index:40;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+
+.scroll-area::-webkit-scrollbar{
+  display:none;
+}
+
+.scroll-spacer{
+  height:1612px;
+  position:relative;
+}
+
+.scroll-spacer .hint{
+  position:absolute;
+  top:620px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:11px;
+  color:var(--text-dim);
+  font-weight:500;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  animation:bob 2s ease-in-out infinite;
+  will-change:opacity;
+}
+
+@keyframes bob{
+  0%,100%{transform:translateX(-50%) translateY(0)}
+  50%{transform:translateX(-50%) translateY(6px)}
+}
+</style>
+</head>
+<body>
+
+<div class="animation-stage">
+
+  <div class="greeting" id="greeting">
+    <h2>hey sahil,</h2>
+    <h1>you're in the <span>800 club</span> now</h1>
+  </div>
+
+  <div class="score-wrap" id="scoreWrap">
+    <div class="pill-aura" id="pillAura"></div>
+    <div class="score-circle-pulse" id="scorePulse"></div>
+
+    <div class="score-circle" id="scoreCircle">
+      <div class="score-inner" id="scoreInner">
+        <div class="score-label">canact score</div>
+        <div class="score-num" id="scoreNum">803</div>
+        <div class="score-change">↑ 12</div>
+        <div class="score-source">T R U S T</div>
+      </div>
+
+      <div class="pill-content score-excellent" id="pillContent">
+        <span class="pill-dot"></span>
+        <span class="pill-score" id="pillScore">803</span>
+        <span class="pill-label" id="pillLabel">TRUST</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-area" id="scrollArea">
+    <div class="scroll-spacer">
+      <div class="hint" id="scrollHint">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(220,20,60,.5)" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        scroll slowly
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const circle = document.getElementById('scoreCircle');
+const scoreWrap = document.getElementById('scoreWrap');
+const scoreInner = document.getElementById('scoreInner');
+const scoreNum = document.getElementById('scoreNum');
+const scorePulse = document.getElementById('scorePulse');
+const greeting = document.getElementById('greeting');
+const scrollArea = document.getElementById('scrollArea');
+const scrollHint = document.getElementById('scrollHint');
+
+const pillContent = document.getElementById('pillContent');
+const pillScore = document.getElementById('pillScore');
+const pillLabel = document.getElementById('pillLabel');
+const pillAura = document.getElementById('pillAura');
+
+let currentScore = 803;
+
+function getScoreClass(score) {
+  if (score >= 750) return 'score-excellent';
+  if (score >= 650) return 'score-good';
+  if (score >= 500) return 'score-fair';
+  return 'score-poor';
+}
+
+function getScoreColor(score) {
+  if (score >= 750) return '#22C55E';
+  if (score >= 650) return '#3B82F6';
+  if (score >= 500) return '#FBBF24';
+  return '#DC143C';
+}
+
+function getScoreLabel(score) {
+  if (score >= 750) return 'TRUST';
+  if (score >= 650) return 'GOOD';
+  if (score >= 500) return 'FAIR';
+  return 'LOW';
+}
+
+function hexToRgb(hex) {
+  return {
+    r: parseInt(hex.substr(1,2),16),
+    g: parseInt(hex.substr(3,2),16),
+    b: parseInt(hex.substr(5,2),16)
+  };
+}
+
+function updatePill(score) {
+  const cls = getScoreClass(score);
+  pillContent.className = 'pill-content ' + cls;
+  pillScore.textContent = score;
+  pillLabel.textContent = getScoreLabel(score);
+
+  const color = getScoreColor(score);
+  const {r,g,b} = hexToRgb(color);
+
+  pillAura.style.background = `radial-gradient(ellipse at center, rgba(${r},${g},${b},0.26) 0%, rgba(${r},${g},${b},0.14) 35%, rgba(${r},${g},${b},0.04) 65%, rgba(${r},${g},${b},0) 100%)`;
+}
+
+function easeInOutQuart(t) {
+  return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+}
+
+function handleScroll() {
+  const st = scrollArea.scrollTop;
+  const maxScroll = 800;
+  const t = Math.min(Math.max(st / maxScroll, 0), 1);
+  const ease = easeInOutQuart(t);
+
+  const startW = 260, endW = 146;
+  const startH = 260, endH = 38;
+  const w = startW - ease * (startW - endW);
+  const h = startH - ease * (startH - endH);
+  const br = h / 2;
+
+  const startY = 276;
+  const endY = 14;
+  const y = startY - ease * (startY - endY);
+
+  const bgR = Math.round(255 - ease * (255 - 17));
+  const bgG = Math.round(255 - ease * (255 - 17));
+  const bgB = Math.round(255 - ease * (255 - 17));
+
+  const innerProgress = Math.min(t / 0.42, 1);
+  const innerOp = 1 - easeInOutQuart(innerProgress);
+  const innerScale = 1 - innerProgress * 0.5;
+
+  circle.style.width = w + 'px';
+  circle.style.height = h + 'px';
+  circle.style.borderRadius = br + 'px';
+  circle.style.background = `rgb(${bgR},${bgG},${bgB})`;
+
+  scoreWrap.style.transform = `translateY(${y}px)`;
+  scoreInner.style.opacity = innerOp;
+  scoreInner.style.transform = `scale(${innerScale})`;
+
+  greeting.style.opacity = 1 - Math.min(t / 0.2, 1);
+  greeting.style.transform = `translateY(${-ease * 50}px)`;
+
+  scrollHint.style.opacity = 1 - Math.min(t / 0.15, 1);
+
+  const pulseOp = 1 - Math.min(t / 0.32, 1);
+  scorePulse.style.opacity = pulseOp;
+
+  if (t > 0.82) {
+    const pillEase = (t - 0.82) / 0.18;
+    const color = getScoreColor(currentScore);
+    const {r,g,b} = hexToRgb(color);
+    circle.style.boxShadow = `0 6px 22px rgba(0,0,0,0.10), 0 0 0 1px rgba(255,255,255,0.02), 0 0 ${10 + 14 * pillEase}px rgba(${r},${g},${b},${0.10 * pillEase})`;
+  } else {
+    circle.style.boxShadow = `0 4px ${30 - ease * 18}px rgba(220,20,60,${0.08 * (1 - Math.min(ease*1.5, 1))}), 0 0 0 2px rgba(220,20,60,${0.12 * (1 - Math.min(ease*1.5, 1))})`;
+  }
+
+  /* PILL TEXT VISIBLE AFTER FORMATION */
+  if (t > 0.86) {
+    const textT = Math.min((t - 0.86) / 0.10, 1);
+    const textEase = easeInOutQuart(textT);
+    pillContent.style.opacity = textEase;
+    pillContent.style.transform = `translateY(${2 - 2 * textEase}px) scale(${0.96 + 0.04 * textEase})`;
+    updatePill(currentScore);
+  } else {
+    pillContent.style.opacity = 0;
+    pillContent.style.transform = 'translateY(2px) scale(.96)';
+  }
+
+  /* SOFT GLOW APPEARS ONLY AFTER PILL FORMS */
+  if (t > 0.93) {
+    const auraT = Math.min((t - 0.93) / 0.07, 1);
+    const auraEase = easeInOutQuart(auraT);
+    pillAura.style.opacity = 0.95 * auraEase;
+    pillAura.style.transform = `scale(${0.92 + 0.08 * auraEase})`;
+  } else {
+    pillAura.style.opacity = 0;
+    pillAura.style.transform = 'scale(.9)';
+  }
+}
+
+function simulateBackend() {
+  setInterval(() => {
+    const delta = Math.floor(Math.random() * 21) - 8;
+    currentScore = Math.max(300, Math.min(900, currentScore + delta));
+
+    scoreNum.textContent = currentScore;
+    updatePill(currentScore);
+
+    if (scrollArea.scrollTop / 800 > 0.82) {
+      const color = getScoreColor(currentScore);
+      const {r,g,b} = hexToRgb(color);
+      circle.style.boxShadow = `0 6px 22px rgba(0,0,0,0.10), 0 0 0 1px rgba(255,255,255,0.02), 0 0 18px rgba(${r},${g},${b},0.10)`;
+    }
+  }, 3500);
+}
+
+updatePill(currentScore);
+handleScroll();
+scrollArea.addEventListener('scroll', handleScroll, { passive: true });
+simulateBackend();
+</script>
+
+</body>
+</html>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import type { UserProfile } from '@/lib/types';
-import { LifeBuoy, ThumbsUp, Users } from './icons';
+import { HeartHandshake, ThumbsUp, Users } from './icons';
 
 /**
  * Compact pills showing a user's help track record:
@@ -28,7 +28,7 @@ export function HelpStatsPills({ uid, compact }: { uid: string; compact?: boolea
         <Users size={compact ? 9 : 11} /> {offered} offered
       </span>
       <span className={`inline-flex items-center rounded-full bg-rose-50 text-brand font-bold ${size}`}>
-        <LifeBuoy size={compact ? 9 : 11} /> {asked} asked
+        <HeartHandshake size={compact ? 9 : 11} /> {asked} asked
       </span>
     </div>
   );
