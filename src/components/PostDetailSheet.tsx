@@ -128,65 +128,67 @@ export function PostDetailSheet({
 
   return (
     <Sheet open={!!item} onClose={onClose} title={title} topmost>
-      <div className="flex max-h-[82svh] min-h-[58svh] flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto pr-1">
-          {item?.kind === 'wha' && post ? (
-            <WhaPostDetails post={post} myUid={myUid} onShare={share} />
-          ) : item?.kind === 'poll' && poll ? (
-            <PollDetails poll={poll} myUid={myUid} onShare={share} />
-          ) : item?.kind === 'rateme' && rateMe ? (
-            <RateMeDetails session={rateMe} myUid={myUid} onShare={share} />
-          ) : (
-            <div className="py-16 text-center text-sm text-ink/55">Loading...</div>
-          )}
+      {/* Render content directly into the Sheet's own scroll container so
+          the composer below can use `position: sticky` against it without
+          a nested scroll context (which previously clipped the composer
+          on mobile). */}
+      <div className="pb-24">
+        {item?.kind === 'wha' && post ? (
+          <WhaPostDetails post={post} myUid={myUid} onShare={share} />
+        ) : item?.kind === 'poll' && poll ? (
+          <PollDetails poll={poll} myUid={myUid} onShare={share} />
+        ) : item?.kind === 'rateme' && rateMe ? (
+          <RateMeDetails session={rateMe} myUid={myUid} onShare={share} />
+        ) : (
+          <div className="py-16 text-center text-sm text-ink/55">Loading...</div>
+        )}
 
-          <section className="mt-5 pt-4">
-            <div className="mb-3 flex items-center gap-2">
-              <MessageCircle size={16} className="text-brand" />
-              <h3 className="text-sm font-extrabold text-ink">Comments</h3>
-              <span className="text-xs font-semibold text-ink/45">{comments.length}</span>
+        <section className="mt-5 pt-4">
+          <div className="mb-3 flex items-center gap-2">
+            <MessageCircle size={16} className="text-brand" />
+            <h3 className="text-sm font-extrabold text-ink">Comments</h3>
+            <span className="text-xs font-semibold text-ink/45">{comments.length}</span>
+          </div>
+          {comments.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-ink/50">
+              Be the first to comment.
             </div>
-            {comments.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-ink/50">
-                Be the first to comment.
-              </div>
-            ) : (
-              <div className="space-y-3 pb-2">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex items-start gap-3">
-                    <Avatar name={comment.name} size={32} />
-                    <div className="min-w-0 flex-1 rounded-2xl bg-brand-light/45 px-3 py-2">
-                      <div className="flex items-baseline gap-2">
-                        <span className="truncate text-sm font-extrabold text-ink">{comment.name}</span>
-                        <span className="shrink-0 text-[10px] font-semibold text-ink/45">{timeAgo(comment.createdAt)}</span>
-                      </div>
-                      <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-ink/80">{comment.text}</p>
+          ) : (
+            <div className="space-y-3 pb-2">
+              {comments.map((comment) => (
+                <div key={comment.id} className="flex items-start gap-3">
+                  <Avatar name={comment.name} size={32} />
+                  <div className="min-w-0 flex-1 rounded-2xl bg-brand-light/45 px-3 py-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-sm font-extrabold text-ink">{comment.name}</span>
+                      <span className="shrink-0 text-[10px] font-semibold text-ink/45">{timeAgo(comment.createdAt)}</span>
                     </div>
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-ink/80">{comment.text}</p>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-
-        <form onSubmit={submitComment} className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-end gap-2 bg-white pt-3">
-          <textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={1}
-            placeholder={composerPlaceholder}
-            className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-line bg-white px-3 py-2.5 text-sm leading-snug outline-none focus:border-brand"
-          />
-          <button
-            type="submit"
-            disabled={sending || !text.trim()}
-            aria-label="Send comment"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-white disabled:opacity-45"
-          >
-            <Send size={17} />
-          </button>
-        </form>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
+
+      <form onSubmit={submitComment} className="sticky bottom-0 left-0 right-0 z-10 -mx-4 flex shrink-0 items-end gap-2 bg-white px-4 pb-1 pt-2">
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={1}
+          placeholder={composerPlaceholder}
+          className="max-h-28 min-h-11 flex-1 resize-none rounded-2xl border border-line bg-white px-3 py-2.5 text-sm leading-snug outline-none focus:border-brand"
+        />
+        <button
+          type="submit"
+          disabled={sending || !text.trim()}
+          aria-label="Send comment"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand text-white disabled:opacity-45"
+        >
+          <Send size={17} />
+        </button>
+      </form>
     </Sheet>
   );
 }

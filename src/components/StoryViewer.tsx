@@ -340,8 +340,8 @@ export function StoryViewer({
             ref={viewersSheetRef}
             onClick={(e) => e.stopPropagation()}
             style={{
-              maxHeight: 'min(70svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.7))',
-              paddingBottom: 'max(16px, var(--canact-popup-bottom-inset, 0px))',
+              maxHeight: '70svh',
+              paddingBottom: 'var(--canact-popup-bottom-inset)',
             }}
             className="w-[100vw] max-w-[100vw] overflow-y-auto rounded-t-[28px] bg-white px-4 pt-3 text-ink"
           >

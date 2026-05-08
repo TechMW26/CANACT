@@ -12,10 +12,12 @@
   --canact-profile-top-dark-opacity: 0;
   --canact-profile-bottom-light-opacity: 0;
   --canact-profile-bottom-dark-opacity: 1;
-  --canact-visual-viewport-height: 100vh;
-  --canact-visual-viewport-bottom: 0px;
-  --canact-popup-bottom-inset: max(env(safe-area-inset-bottom, 0px), var(--canact-visual-viewport-bottom));
-  --canact-popup-max-height: min(90svh, calc(var(--canact-visual-viewport-height) * 0.9));
+  /* Bottom-sheet sizing model.
+     - svh (small viewport) is stable across mobile chrome expand/retract.
+     - safe-area-inset-bottom is the only dynamic padding for the home indicator.
+     Apply once at the panel level — never stack on multiple ancestors. */
+  --canact-popup-bottom-inset: env(safe-area-inset-bottom, 0px);
+  --canact-popup-max-height: 90svh;
 }
 html, body { background: #FFFFFF; color: #0A0A0A; }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }

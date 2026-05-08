@@ -80,20 +80,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
-    const updateViewportChrome = () => {
-      updatePopupViewportVars();
-      setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
-    };
-    updateViewportChrome();
-    window.addEventListener('resize', updateViewportChrome);
-    window.addEventListener('orientationchange', updateViewportChrome);
-    window.visualViewport?.addEventListener('resize', updateViewportChrome);
-    window.visualViewport?.addEventListener('scroll', updateViewportChrome);
+    // Bottom-nav safe inset is a property of the device (notch / home
+    // indicator) and does not change while the app is running. Re-measuring
+    // it on visualViewport scroll/resize was causing the nav to jump up
+    // and down whenever a popup opened (scroll-lock + transform briefly
+    // perturb the visualViewport in iOS Safari, firing scroll events).
+    // Measure once on mount and refresh only on real layout changes.
+    const refreshBottomNavInset = () => setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
+    refreshBottomNavInset();
+    window.addEventListener('orientationchange', refreshBottomNavInset);
     return () => {
-      window.removeEventListener('resize', updateViewportChrome);
-      window.removeEventListener('orientationchange', updateViewportChrome);
-      window.visualViewport?.removeEventListener('resize', updateViewportChrome);
-      window.visualViewport?.removeEventListener('scroll', updateViewportChrome);
+      window.removeEventListener('orientationchange', refreshBottomNavInset);
     };
   }, []);
 
@@ -367,16 +364,6 @@ function getMobileBottomNavSafeInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined' || typeof document === 'undefined') return null;
   if (isIPhoneDevice()) return 'max(env(safe-area-inset-bottom, 0px), 8px)';
   return measureSafeAreaInsetBottom() > 0 ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : null;
-}
-
-function updatePopupViewportVars() {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  const viewport = window.visualViewport;
-  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
-  const bottomInset = Math.max(0, Math.round(window.innerHeight - (viewport?.height ?? window.innerHeight) - (viewport?.offsetTop ?? 0)));
-  const root = document.documentElement;
-  root.style.setProperty('--canact-visual-viewport-height', `${height}px`);
-  root.style.setProperty('--canact-visual-viewport-bottom', `${bottomInset}px`);
 }
 
 function measureSafeAreaInsetBottom() {

@@ -95,6 +95,7 @@ export function Sheet({
         style={{
           transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)',
           maxHeight: 'var(--canact-popup-max-height)',
+          paddingBottom: 'var(--canact-popup-bottom-inset)',
         }}
         className={`relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-[32px] bg-white px-4 pt-3 transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
@@ -107,7 +108,7 @@ export function Sheet({
             </button>
           </div>
         )}
-        <div ref={scrollRef} style={{ paddingBottom: 'max(16px, var(--canact-popup-bottom-inset, 0px))' }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pr-1 [-webkit-overflow-scrolling:touch]">
           {children}
         </div>
       </div>

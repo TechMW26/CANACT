@@ -294,16 +294,18 @@ function CommentsSheet({
     if (!expanded && e.currentTarget.scrollTop > 4) setExpanded(true);
   }
 
-  const commentsSheetHeight = expanded
-    ? 'var(--canact-popup-max-height)'
-    : 'min(58svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.58))';
+  const commentsSheetHeight = expanded ? 'var(--canact-popup-max-height)' : '58svh';
 
   return (
     <div className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
         {...swipeDismissHandlers}
-        style={{ height: commentsSheetHeight, maxHeight: 'var(--canact-popup-max-height)' }}
+        style={{
+          height: commentsSheetHeight,
+          maxHeight: 'var(--canact-popup-max-height)',
+          paddingBottom: 'var(--canact-popup-bottom-inset)',
+        }}
         className="absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height,max-height] duration-300 ease-out"
         onClick={(e) => e.stopPropagation()}
       >
@@ -340,8 +342,7 @@ function CommentsSheet({
         </div>
         <form
           onSubmit={(e) => { e.preventDefault(); send(); }}
-          style={{ paddingBottom: 'max(8px, var(--canact-popup-bottom-inset, 0px))' }}
-          className="flex items-center gap-2 bg-white px-3 pt-2"
+          className="flex items-center gap-2 bg-white px-3 pb-2 pt-2"
         >
           <Avatar src={myPhoto ?? null} name={myName} size={28} />
           <input

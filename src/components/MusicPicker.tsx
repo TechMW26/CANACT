@@ -55,7 +55,11 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
       <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div {...swipeDismissHandlers} style={{ maxHeight: 'min(80svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.8))' }} className="relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
+      <div
+        {...swipeDismissHandlers}
+        style={{ maxHeight: '80svh', paddingBottom: 'var(--canact-popup-bottom-inset)' }}
+        className="relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md"
+      >
         <div className="mb-3 flex items-center gap-2">
           <Music size={18} className="text-brand" />
           <div className="text-sm font-extrabold text-ink">Add music</div>
