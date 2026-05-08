@@ -542,7 +542,7 @@ export function HomeScoreExperience() {
                 <stop offset="100%" stopColor="var(--score-meter-end)" />
               </linearGradient>
             </defs>
-            <g transform="rotate(127 170 170)">
+            <g transform="rotate(128 170 170)">
               <circle className={styles.scoreMeterTrack} cx="170" cy="170" r="157" pathLength="100" />
               <circle className={styles.scoreMeterProgress} cx="170" cy="170" r="157" pathLength="100" />
             </g>

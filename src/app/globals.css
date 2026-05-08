@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Leaflet container baseline — disables default Leaflet zoom focus outlines and matches our warm map background. */
+.leaflet-container {
+  background: #FFF8F8 !important;
+  font-family: inherit;
+  outline: none;
+  /* Establish a local stacking context so Leaflet's high-z internal panes
+     (tile=200, overlay=400, marker=600, popup=700) cannot escape above the
+     app shell header/footer. */
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+.leaflet-container .leaflet-pane,
+.leaflet-container .leaflet-top,
+.leaflet-container .leaflet-bottom {
+  z-index: auto;
+}
+.leaflet-container .canact-tile-light {
+  filter: grayscale(1) sepia(1) saturate(2.6) hue-rotate(315deg) contrast(1.08) brightness(1.05);
+  mix-blend-mode: multiply;
+}
+.leaflet-container .canact-tile-sat,
+.leaflet-container .canact-tile-light,
+.leaflet-container .canact-tile-labels {
+  transition: opacity 600ms ease;
+}
+
 :root {
   color-scheme: light;
   --canact-viewport-height: 100dvh;
