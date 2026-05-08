@@ -154,7 +154,7 @@ export default function FavouritesPage() {
         <FriendsWorldMap
           friends={visiblePeople}
           currentLocation={currentLocation}
-          className="absolute inset-0 z-0 h-full min-h-full w-screen"
+          className="absolute inset-0 h-full min-h-full w-screen"
           emptyTitle={`No ${tab} locations yet`}
           emptyBody={`${tab === 'friends' ? 'Friends' : 'Favourites'} appear here from live location first, then selected city.`}
         />

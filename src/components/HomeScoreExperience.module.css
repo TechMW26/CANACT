@@ -278,9 +278,11 @@
   inset: 0;
   z-index: 2;
   overflow: hidden;
-  padding: var(--score-gradient-border-width);
+  border: 1px solid transparent;
   border-radius: inherit;
-  background: rgba(255, 255, 255, .72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 255, 255, .92)) padding-box,
+    linear-gradient(90deg, rgba(220, 20, 60, .46), rgba(255, 79, 115, .28), rgba(181, 15, 49, .42)) border-box;
   opacity: var(--score-pill-opacity);
   pointer-events: none;
   transform: scale(var(--score-pill-scale));
@@ -289,17 +291,6 @@
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, .68),
     0 12px 30px rgba(21, 32, 26, .10);
-}
-
-.scorePillFrame::before {
-  content: "";
-  position: absolute;
-  inset: -42%;
-  z-index: 0;
-  border-radius: inherit;
-  background: conic-gradient(from 0deg, #DC143C 0deg, #FF4F73 54deg, #FF9CAF 112deg, #FFD1DB 166deg, #B50F31 232deg, #8F0C28 296deg, #DC143C 360deg);
-  opacity: .92;
-  animation: homePillBorder 12s linear infinite;
 }
 
 .scorePillFill {
@@ -407,6 +398,7 @@
   transform: translateY(2px) scale(.96);
   white-space: nowrap;
   background: transparent;
+  color: var(--home-cherry);
 }
 
 .pillDot {
@@ -473,7 +465,7 @@
 
 .nearbyPanel::before {
   top: 0;
-  height: min(30dvh, 256px);
+  height: min(35dvh, 294px);
   background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 24%, rgba(255, 255, 255, .9) 38%, rgba(255, 255, 255, .48) 61%, rgba(255, 255, 255, 0) 100%);
 }
 
@@ -491,7 +483,6 @@
 .nearbyMap {
   position: absolute;
   inset: 0;
-  z-index: 0;
   height: 100%;
   width: 100%;
 }
@@ -824,11 +815,6 @@
 @keyframes homeScoreRing {
   0%, 100% { transform: rotate(-4deg) scale(var(--score-meter-scale)); }
   50% { transform: rotate(4deg) scale(calc(var(--score-meter-scale) * 1.012)); }
-}
-
-@keyframes homePillBorder {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 @media (min-width: 1024px) {

@@ -96,8 +96,6 @@ export function FriendsWorldMap({
   const selectedCluster = selectedClusterKey
     ? markerClusters.find((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1) ?? null
     : null;
-  const missingLocations = Math.max(0, friends.length - locatedFriends.length);
-
   useEffect(() => {
     if (!selectedClusterKey) return;
     if (!markerClusters.some((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1)) setSelectedClusterKey(null);
@@ -189,7 +187,7 @@ export function FriendsWorldMap({
 
       {userPinStyle ? (
         <div
-          className="absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand px-2 py-1 text-[10px] font-extrabold text-white shadow-sm"
+          className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-brand px-2 py-1 text-[10px] font-extrabold text-white shadow-sm"
           style={userPinStyle}
         >
           You
@@ -218,12 +216,6 @@ export function FriendsWorldMap({
         </div>
       ) : null}
 
-      <div className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 z-40 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-[10px] font-bold text-ink/65 backdrop-blur lg:bottom-3">
-        {locatedFriends.length} on map{missingLocations ? ` · ${missingLocations} without location` : ''}
-      </div>
-      <div className="absolute bottom-[var(--canact-floating-bottom-clearance)] right-3 z-40 rounded-full bg-white/80 px-2 py-1 text-[9px] font-semibold text-ink/55 backdrop-blur lg:bottom-3">
-        © OpenStreetMap © CARTO · Esri
-      </div>
     </div>
   );
 }
@@ -244,7 +236,7 @@ function MapMarkerCluster({
   const primary = cluster.friends[0];
   const stacked = cluster.friends.length > 1;
   const label = stacked ? `${cluster.friends.length} people` : primary.name;
-  const className = 'absolute z-30 flex -translate-x-1/2 -translate-y-full flex-col items-center gap-1 transition duration-200 active:scale-95';
+  const className = 'absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center gap-1 transition duration-200 active:scale-95';
   const style = { left: cluster.screen.x, top: cluster.screen.y };
   const marker = (
     <>
@@ -312,7 +304,7 @@ function MapMarkerCluster({
 function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: MarkerCluster; onClose: () => void; onPersonSelect?: (person: FriendMapPerson) => void }) {
   return (
     <div
-      className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[70] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white/96 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:bottom-5"
+      className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[80] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-5"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >

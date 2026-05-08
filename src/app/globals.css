@@ -417,7 +417,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 
 .canact-map-surface::before {
   top: 0;
-  height: min(30dvh, 256px);
+  height: min(35dvh, 294px);
   background: linear-gradient(
     180deg,
     rgb(255 255 255 / 1) 0%,

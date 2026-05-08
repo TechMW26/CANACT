@@ -223,8 +223,7 @@ export function HomeScoreExperience() {
     const currentScore = scoreSummary.score;
 
     const updatePill = (score: number) => {
-      const className = getScoreClass(score);
-      pillContent.className = `${styles.pillContent} ${styles[className]}`;
+      pillContent.className = styles.pillContent;
       pillScore.textContent = String(score);
       pillLabel.textContent = getScoreLabel(score);
     };
@@ -560,7 +559,7 @@ export function HomeScoreExperience() {
           <div className={styles.scorePillFrame} aria-hidden="true">
             <div className={styles.scorePillFill} />
           </div>
-          <div className={`${styles.pillContent} ${styles[getScoreClass(scoreSummary.score)]}`} ref={pillContentRef}>
+          <div className={styles.pillContent} ref={pillContentRef}>
             <span className={styles.pillDot} />
             <span className={styles.pillScore} ref={pillScoreRef}>{scoreSummary.score}</span>
             <span className={styles.pillLabel} ref={pillLabelRef}>TRUST</span>
