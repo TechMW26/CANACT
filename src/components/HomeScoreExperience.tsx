@@ -542,10 +542,8 @@ export function HomeScoreExperience() {
                 <stop offset="100%" stopColor="var(--score-meter-end)" />
               </linearGradient>
             </defs>
-            <g transform="rotate(128 170 170)">
-              <circle className={styles.scoreMeterTrack} cx="170" cy="170" r="157" pathLength="100" />
-              <circle className={styles.scoreMeterProgress} cx="170" cy="170" r="157" pathLength="100" />
-            </g>
+            <path className={styles.scoreMeterTrack} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
+            <path className={styles.scoreMeterProgress} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
           </svg>
           <div className={styles.scoreInner} ref={scoreInnerRef}>
             <div className={styles.scoreLabel}>canact score</div>
