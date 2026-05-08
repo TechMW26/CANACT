@@ -534,8 +534,10 @@ function unproject(pixel: { x: number; y: number }, zoom: number): Point {
 }
 
 function fitMapView(friends: FriendMapPerson[], currentLocation?: Point | null): MapView {
+  if (currentLocation) {
+    return { center: currentLocation, zoom: 17, key: `me:${currentLocation.lat.toFixed(4)},${currentLocation.lng.toFixed(4)}` };
+  }
   const points = friends.map((friend) => ({ lat: friend.lat!, lng: friend.lng! }));
-  if (points.length === 0 && currentLocation) return { center: currentLocation, zoom: 3.25, key: `${currentLocation.lat}:${currentLocation.lng}` };
   if (points.length === 0) return { center: DEFAULT_CENTER, zoom: 1.4, key: 'world' };
 
   const lats = points.map((point) => point.lat);

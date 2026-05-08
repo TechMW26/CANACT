@@ -464,9 +464,17 @@ export function HomeScoreExperience() {
     ? Math.max(0, Math.min(1, (scoreSummary.score - CANACT_SCORE_MIN) / (scoreSummary.max - CANACT_SCORE_MIN)))
     : 0;
   const meterArcLength = 79.5;
+  const targetMeterFill = scoreMeterProgress * meterArcLength;
+  const [revealedMeterFill, setRevealedMeterFill] = useState(0);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setRevealedMeterFill(targetMeterFill));
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [targetMeterFill]);
   const scoreMeterStyle = {
     '--score-meter-arc': String(meterArcLength),
-    '--score-meter-progress': String(scoreMeterProgress * meterArcLength),
+    '--score-meter-progress': String(revealedMeterFill),
   } as CSSProperties;
 
   return (
@@ -526,7 +534,7 @@ export function HomeScoreExperience() {
         <div className={styles.pillAura} ref={pillAuraRef} />
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
-        <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={stage === 'nearby' ? showScore : undefined} aria-label="Canact score">
+        <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={() => { if (stage === 'nearby' || progressRef.current > 0.6) showScore(); }} aria-label="Canact score">
           <svg className={styles.scoreMeterSvg} viewBox="0 0 340 340" aria-hidden="true">
             <defs>
               <linearGradient id="home-score-meter-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
@@ -534,8 +542,10 @@ export function HomeScoreExperience() {
                 <stop offset="100%" stopColor="var(--score-meter-end)" />
               </linearGradient>
             </defs>
-            <circle className={styles.scoreMeterTrack} cx="170" cy="170" r="157" pathLength="100" />
-            <circle className={styles.scoreMeterProgress} cx="170" cy="170" r="157" pathLength="100" />
+            <g transform="rotate(127 170 170)">
+              <circle className={styles.scoreMeterTrack} cx="170" cy="170" r="157" pathLength="100" />
+              <circle className={styles.scoreMeterProgress} cx="170" cy="170" r="157" pathLength="100" />
+            </g>
           </svg>
           <div className={styles.scoreInner} ref={scoreInnerRef}>
             <div className={styles.scoreLabel}>canact score</div>

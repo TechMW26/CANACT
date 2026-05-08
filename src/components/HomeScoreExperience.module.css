@@ -224,7 +224,7 @@
   opacity: var(--score-meter-opacity);
   pointer-events: none;
   transform-origin: 50% 50%;
-  transform: scale(var(--score-meter-scale)) rotate(38deg);
+  transform: scale(var(--score-meter-scale));
   animation: homeScoreRingPop 900ms cubic-bezier(.18, 1.24, .28, 1) 180ms both;
 }
 
@@ -243,7 +243,7 @@
 .scoreMeterProgress {
   stroke: url(#home-score-meter-gradient);
   stroke-dasharray: var(--score-meter-progress) 100;
-  transition: stroke-dasharray 420ms cubic-bezier(.22,.85,.3,1);
+  transition: stroke-dasharray 1400ms cubic-bezier(.22,.85,.3,1) 220ms;
 }
 
 .stageNearby .scoreCircle::before {
