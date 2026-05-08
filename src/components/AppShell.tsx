@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Avatar } from './Avatar';
@@ -71,8 +71,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
-  const routeBlendChrome = !!pathname && (pathname === '/favourites' || pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
+  const routeProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
+  const routeBlendChrome = !!pathname && (pathname === '/favourites' || routeProfileHero);
   const profileBlendChrome = routeBlendChrome || pageBlendChrome;
+
+  useLayoutEffect(() => {
+    document.documentElement.toggleAttribute('data-canact-profile-route', routeProfileHero);
+    return () => document.documentElement.removeAttribute('data-canact-profile-route');
+  }, [routeProfileHero]);
 
   useEffect(() => {
     const onBlendChrome = (event: Event) => {
@@ -141,7 +147,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // Cold-start route restore was sending users back to /inbox/<uid>
   // (or whatever screen they had open last) when they reopened the
   // app — which the user expects to feel like a fresh launch and land
-  // on /feed. We keep recording `canact:lastRoute` for in-session
+  // on home. We keep recording `canact:lastRoute` for in-session
   // recovery (e.g. WebView reload mid-call) but no longer hijack the
   // first navigation after a cold start.
   const restoredRouteRef = useRef(true);
@@ -280,7 +286,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           white elsewhere. Active tab gets the brand pill treatment. */}
       <nav
         data-canact-bottom-nav
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome pt-8' : 'bg-white'}`}
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileBlendChrome ? 'canact-profile-footer-chrome pt-8' : 'bg-white'}`}
         style={{ paddingBottom: 'var(--canact-footer-safe-padding)' }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
@@ -418,7 +424,7 @@ function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolea
   return (
     <header
       data-canact-header
-      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden transition-colors duration-500 ease-out ${blendChrome ? 'canact-profile-header-chrome pb-8' : 'bg-white'}`}
+      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${blendChrome ? 'canact-profile-header-chrome pb-8' : 'bg-white'}`}
       style={{ paddingTop: topInset ?? undefined }}
     >
       <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>

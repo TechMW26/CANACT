@@ -73,7 +73,7 @@ export default function OnboardPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/welcome');
-    else if (profile?.profileComplete) router.replace('/feed');
+    else if (profile?.profileComplete) router.replace('/');
   }, [user, profile, loading, router]);
 
   if (!user) {
@@ -119,7 +119,7 @@ export default function OnboardPage() {
                 profileComplete: true,
               });
               toast('Welcome to Canact!', 'success');
-              router.replace('/feed');
+              router.replace('/');
             } catch (err: any) {
               toast(err?.message ?? 'Could not save profile', 'error');
             } finally {

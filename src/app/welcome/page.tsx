@@ -47,11 +47,11 @@ export default function WelcomePage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    // Wait for the profile snapshot — existing users should land on /feed,
+    // Wait for the profile snapshot — existing users should land on home,
     // not bounce through /onboard.
     if (!profile && !profileTimedOut) return;
     if (!profile || profile.profileComplete === false) router.replace('/onboard');
-    else router.replace('/feed');
+    else router.replace('/');
   }, [user, profile, loading, profileTimedOut, router]);
 
   // While we're authenticated but waiting on routing, cover the page so the

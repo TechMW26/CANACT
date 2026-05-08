@@ -8,7 +8,7 @@ import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorld
 import { toast } from '@/components/Toaster';
 import { ThumbsDown, ThumbsUp } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
-import { calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
+import { CANACT_SCORE_MIN, calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { useDistance } from '@/lib/distance';
 import { db } from '@/lib/firebase';
 import { setLikeDislike } from '@/lib/services/votes';
@@ -231,13 +231,12 @@ export function HomeScoreExperience() {
 
     const applyProgress = (progress: number) => {
       const eased = easeInOutQuart(progress);
-      const stageHeight = scoreWrap.parentElement?.getBoundingClientRect().height || window.innerHeight;
+      const stageRect = scoreWrap.parentElement?.getBoundingClientRect();
+      const stageHeight = stageRect?.height || window.innerHeight;
       const viewportWidth = window.innerWidth || 390;
       const compactHeight = stageHeight < 620 || window.innerHeight < 740;
-      const topClearance = compactHeight ? 176 : 230;
-      const bottomClearance = compactHeight ? 72 : 96;
       const widthScale = Math.max(0.62, Math.min(1, (viewportWidth - 44) / 324));
-      const heightScale = Math.max(0.62, Math.min(1, (stageHeight - topClearance - bottomClearance) / 304));
+      const heightScale = Math.max(0.54, Math.min(1, (stageHeight - (compactHeight ? 32 : 44)) / 334));
       const circleScale = Math.min(widthScale, heightScale);
 
       const startWidth = Math.round(304 * circleScale);
@@ -247,12 +246,12 @@ export function HomeScoreExperience() {
       const width = startWidth - eased * (startWidth - endWidth);
       const height = startHeight - eased * (startHeight - endHeight);
 
-      const availableY = stageHeight - topClearance - bottomClearance - startHeight;
-      const startY = Math.round(Math.min(
-        Math.max(118, topClearance + Math.max(0, availableY * 0.35)),
-        Math.max(118, stageHeight - startHeight - bottomClearance),
-      ));
-      const endY = 82;
+      const startY = Math.round(Math.max(0, (stageHeight - startHeight) / 2));
+      const header = document.querySelector('[data-canact-header]');
+      const headerBottom = stageRect && header instanceof HTMLElement
+        ? Math.max(0, header.getBoundingClientRect().bottom - stageRect.top)
+        : 82;
+      const endY = Math.round(Math.max(82, headerBottom + 10));
       const y = startY - eased * (startY - endY);
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
@@ -461,8 +460,14 @@ export function HomeScoreExperience() {
     ? `${scoreSummary.baseline} baseline`
     : `${scoreSummary.delta > 0 ? '↑' : '↓'} ${Math.abs(scoreSummary.delta)}`;
   const radiusLabel = Number.isFinite(radius) ? formatDistance(radius) : 'anywhere';
-  const scoreMeterProgress = scoreSummary.max > 0 ? Math.max(0, Math.min(1, scoreSummary.score / scoreSummary.max)) : 0;
-  const scoreMeterStyle = { '--score-meter-angle': `${Math.round(scoreMeterProgress * 360)}deg` } as CSSProperties;
+  const scoreMeterProgress = scoreSummary.max > CANACT_SCORE_MIN
+    ? Math.max(0, Math.min(1, (scoreSummary.score - CANACT_SCORE_MIN) / (scoreSummary.max - CANACT_SCORE_MIN)))
+    : 0;
+  const meterArcLength = 79.5;
+  const scoreMeterStyle = {
+    '--score-meter-arc': String(meterArcLength),
+    '--score-meter-progress': String(scoreMeterProgress * meterArcLength),
+  } as CSSProperties;
 
   return (
     <section
@@ -522,6 +527,16 @@ export function HomeScoreExperience() {
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
         <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={stage === 'nearby' ? showScore : undefined} aria-label="Canact score">
+          <svg className={styles.scoreMeterSvg} viewBox="0 0 340 340" aria-hidden="true">
+            <defs>
+              <linearGradient id="home-score-meter-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="var(--score-meter-start)" />
+                <stop offset="100%" stopColor="var(--score-meter-end)" />
+              </linearGradient>
+            </defs>
+            <circle className={styles.scoreMeterTrack} cx="170" cy="170" r="157" pathLength="100" />
+            <circle className={styles.scoreMeterProgress} cx="170" cy="170" r="157" pathLength="100" />
+          </svg>
           <div className={styles.scoreInner} ref={scoreInnerRef}>
             <div className={styles.scoreLabel}>canact score</div>
             <div className={styles.scoreNum} ref={scoreNumRef}>{scoreSummary.score}</div>

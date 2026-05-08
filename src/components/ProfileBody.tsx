@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
@@ -393,7 +393,7 @@ function sampleProfileImageTones(src: string): Promise<{ top: ChromeTone; bottom
 }
 
 function useAdaptiveProfileChrome(heroSrc: string | null) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     let cancelled = false;
     applyProfileChrome(PROFILE_CHROME_FALLBACK.top, PROFILE_CHROME_FALLBACK.bottom);
     if (heroSrc) {

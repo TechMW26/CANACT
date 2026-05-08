@@ -7,8 +7,9 @@ import { usePathname } from 'next/navigation';
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const instantProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
   return (
-    <div key={pathname} className="canact-fade-in">
+    <div key={pathname} className={instantProfileHero ? undefined : 'canact-fade-in'}>
       {children}
     </div>
   );
