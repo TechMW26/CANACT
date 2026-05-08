@@ -122,7 +122,7 @@ export default function SearchPage() {
   const rightCol = visibleRows.filter((_, index) => index % 2 === 1);
 
   return (
-    <div className="relative left-1/2 min-h-[100svh] w-screen -translate-x-1/2 bg-[#FFF8F8] lg:left-auto lg:w-full lg:translate-x-0">
+    <div className="relative left-1/2 min-h-[var(--canact-viewport-height)] w-screen -translate-x-1/2 bg-[#FFF8F8] lg:left-auto lg:w-full lg:translate-x-0">
       <div className="bg-[#FFF8F8]">
         <div className="relative z-10 bg-[#FFF8F8] px-4 pb-3 pt-4">
           <div className="flex items-center gap-2">

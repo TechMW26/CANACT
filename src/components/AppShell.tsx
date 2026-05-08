@@ -183,7 +183,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   if (isFullScreen) {
     return (
-      <div id="canact-app-shell" className="min-h-screen">
+      <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
         <ScrollRestoration />
         {/* Pull-to-refresh is intentionally NOT mounted on chat threads:
             those use their own scroll container and a downward swipe at the
@@ -199,7 +199,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-screen pb-[calc(var(--canact-bottom-nav-height)_+_16px)] lg:pb-6">
+    <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)] pb-[calc(var(--canact-bottom-nav-height)_+_16px)] lg:pb-6">
       <ScrollDirectionWatcher />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so

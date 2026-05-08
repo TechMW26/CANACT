@@ -9,7 +9,7 @@
   position: relative;
   left: 50%;
   width: 100vw;
-  height: calc(100svh - 8.5rem);
+  height: calc(var(--canact-viewport-height) - 8.5rem);
   min-height: 0;
   overflow: hidden;
   transform: translateX(-50%);
@@ -59,7 +59,7 @@
 
 .stageNearby {
   background: #FFF8F8;
-  height: 100svh;
+  height: var(--canact-viewport-height);
 }
 
 .stageNearby::before,
@@ -721,7 +721,7 @@
 @media (min-width: 1024px) {
   .animationStage {
     width: calc(100vw - 15rem);
-    height: calc(100svh - 3rem);
+    height: calc(var(--canact-viewport-height) - 3rem);
   }
 }
 

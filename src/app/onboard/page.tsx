@@ -78,7 +78,7 @@ export default function OnboardPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[var(--canact-viewport-height)] flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     );
@@ -90,7 +90,7 @@ export default function OnboardPage() {
     || user.displayName?.split(' ')[0] || 'there';
 
   return (
-    <div className="min-h-[100svh] flex items-center justify-center px-5 py-8 sm:py-12">
+    <div className="min-h-[var(--canact-viewport-height)] flex items-center justify-center px-5 py-8 sm:py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-5">
           <div className="flex justify-center mb-3"><BrandMark size={64} /></div>

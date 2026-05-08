@@ -553,7 +553,7 @@ function CanactPagesProfileUI({
 
   return (
     <div className="fixed inset-0 z-[25] overflow-y-auto bg-black">
-      <div className="relative min-h-[100svh] overflow-hidden bg-black">
+      <div className="relative min-h-[var(--canact-viewport-height)] overflow-hidden bg-black">
         {heroSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={heroSrc} alt={userProfile.fullName} className="absolute inset-0 h-full w-full object-cover" />

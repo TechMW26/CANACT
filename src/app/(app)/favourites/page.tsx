@@ -123,12 +123,16 @@ export default function FavouritesPage() {
   useLockPageScroll(mapMode);
   useEffect(() => {
     document.documentElement.toggleAttribute('data-canact-map-fade', mapMode);
-    return () => { document.documentElement.removeAttribute('data-canact-map-fade'); };
+    document.documentElement.toggleAttribute('data-canact-fullscreen-page', mapMode);
+    return () => {
+      document.documentElement.removeAttribute('data-canact-map-fade');
+      document.documentElement.removeAttribute('data-canact-fullscreen-page');
+    };
   }, [mapMode]);
 
   if (!user) return null;
   return (
-    <div className={mapMode ? 'fixed inset-0 h-[100svh] w-screen overflow-hidden bg-[#FFF8F8]' : 'relative left-1/2 min-h-[calc(100svh-8.5rem)] w-screen -translate-x-1/2 overflow-hidden bg-[#FFF8F8] lg:min-h-[calc(100svh-3rem)]'}>
+    <div className={mapMode ? 'fixed left-0 right-0 top-0 h-[var(--canact-viewport-height)] min-h-[var(--canact-viewport-height)] w-screen overflow-hidden bg-[#FFF8F8]' : 'relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 overflow-hidden bg-[#FFF8F8] lg:min-h-[calc(var(--canact-viewport-height)-3rem)]'}>
       {tab === 'requests' ? (
         <RequestsSurface
           friendReqs={friendReqs}
@@ -150,7 +154,7 @@ export default function FavouritesPage() {
         <FriendsWorldMap
           friends={visiblePeople}
           currentLocation={currentLocation}
-          className="absolute inset-0 h-[100svh] w-screen"
+          className="absolute inset-0 h-full min-h-full w-screen"
           emptyTitle={`No ${tab} locations yet`}
           emptyBody={`${tab === 'friends' ? 'Friends' : 'Favourites'} appear here from live location first, then selected city.`}
         />

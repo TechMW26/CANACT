@@ -160,7 +160,7 @@ export function HomeScoreExperience() {
     html.style.overflow = 'hidden';
     html.style.overscrollBehavior = 'none';
     if (shell) {
-      shell.style.height = '100svh';
+      shell.style.height = 'var(--canact-viewport-height)';
       shell.style.overflow = 'hidden';
     }
 
@@ -180,10 +180,12 @@ export function HomeScoreExperience() {
     const active = stage === 'nearby';
     document.documentElement.toggleAttribute('data-canact-home-nearby', active);
     document.documentElement.toggleAttribute('data-canact-map-fade', active);
+    document.documentElement.toggleAttribute('data-canact-fullscreen-page', active);
     window.dispatchEvent(new CustomEvent('canact:set-page-blend-chrome', { detail: { active } }));
     return () => {
       document.documentElement.removeAttribute('data-canact-home-nearby');
       document.documentElement.removeAttribute('data-canact-map-fade');
+      document.documentElement.removeAttribute('data-canact-fullscreen-page');
       window.dispatchEvent(new CustomEvent('canact:set-page-blend-chrome', { detail: { active: false } }));
     };
   }, [stage]);

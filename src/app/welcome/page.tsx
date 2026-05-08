@@ -61,7 +61,7 @@ export default function WelcomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+    <div className="min-h-[var(--canact-viewport-height)] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
         <div className="flex justify-center mb-4"><BrandMark size={96} /></div>
         <h1 className="text-4xl font-extrabold text-brand">Canact</h1>
