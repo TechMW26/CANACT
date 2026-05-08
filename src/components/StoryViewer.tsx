@@ -339,7 +339,11 @@ export function StoryViewer({
             {...viewersSwipeDismissHandlers}
             ref={viewersSheetRef}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[70vh] w-[100vw] max-w-[100vw] overflow-y-auto rounded-t-[28px] bg-white px-4 pb-6 pt-3 text-ink safe-bottom"
+            style={{
+              maxHeight: 'min(70svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.7))',
+              paddingBottom: 'max(16px, var(--canact-popup-bottom-inset, 0px))',
+            }}
+            className="w-[100vw] max-w-[100vw] overflow-y-auto rounded-t-[28px] bg-white px-4 pt-3 text-ink"
           >
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-ink/10" />
             <div className="mb-2 flex items-center justify-between">

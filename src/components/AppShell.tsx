@@ -80,15 +80,20 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
-    const updateBottomSafeInset = () => setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
-    updateBottomSafeInset();
-    window.addEventListener('resize', updateBottomSafeInset);
-    window.addEventListener('orientationchange', updateBottomSafeInset);
-    window.visualViewport?.addEventListener('resize', updateBottomSafeInset);
+    const updateViewportChrome = () => {
+      updatePopupViewportVars();
+      setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
+    };
+    updateViewportChrome();
+    window.addEventListener('resize', updateViewportChrome);
+    window.addEventListener('orientationchange', updateViewportChrome);
+    window.visualViewport?.addEventListener('resize', updateViewportChrome);
+    window.visualViewport?.addEventListener('scroll', updateViewportChrome);
     return () => {
-      window.removeEventListener('resize', updateBottomSafeInset);
-      window.removeEventListener('orientationchange', updateBottomSafeInset);
-      window.visualViewport?.removeEventListener('resize', updateBottomSafeInset);
+      window.removeEventListener('resize', updateViewportChrome);
+      window.removeEventListener('orientationchange', updateViewportChrome);
+      window.visualViewport?.removeEventListener('resize', updateViewportChrome);
+      window.visualViewport?.removeEventListener('scroll', updateViewportChrome);
     };
   }, []);
 
@@ -362,6 +367,16 @@ function getMobileBottomNavSafeInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined' || typeof document === 'undefined') return null;
   if (isIPhoneDevice()) return 'max(env(safe-area-inset-bottom, 0px), 8px)';
   return measureSafeAreaInsetBottom() > 0 ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : null;
+}
+
+function updatePopupViewportVars() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const viewport = window.visualViewport;
+  const height = Math.max(0, Math.round(viewport?.height ?? window.innerHeight));
+  const bottomInset = Math.max(0, Math.round(window.innerHeight - (viewport?.height ?? window.innerHeight) - (viewport?.offsetTop ?? 0)));
+  const root = document.documentElement;
+  root.style.setProperty('--canact-visual-viewport-height', `${height}px`);
+  root.style.setProperty('--canact-visual-viewport-bottom', `${bottomInset}px`);
 }
 
 function measureSafeAreaInsetBottom() {

@@ -92,8 +92,11 @@ export function Sheet({
       />
       <div
         {...swipeDismissHandlers}
-        style={{ transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)' }}
-        className={`relative flex max-h-[90vh] w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-[32px] bg-white px-4 pt-3 safe-bottom transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        style={{
+          transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)',
+          maxHeight: 'var(--canact-popup-max-height)',
+        }}
+        className={`relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-[32px] bg-white px-4 pt-3 transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
         {title !== undefined && (
@@ -104,7 +107,7 @@ export function Sheet({
             </button>
           </div>
         )}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-8 pr-1 [-webkit-overflow-scrolling:touch]">
+        <div ref={scrollRef} style={{ paddingBottom: 'max(16px, var(--canact-popup-bottom-inset, 0px))' }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
           {children}
         </div>
       </div>

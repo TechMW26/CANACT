@@ -55,7 +55,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
       <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div {...swipeDismissHandlers} className="relative flex max-h-[80vh] w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
+      <div {...swipeDismissHandlers} style={{ maxHeight: 'min(80svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.8))' }} className="relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md">
         <div className="mb-3 flex items-center gap-2">
           <Music size={18} className="text-brand" />
           <div className="text-sm font-extrabold text-ink">Add music</div>
@@ -72,7 +72,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
             className="w-full bg-transparent text-sm outline-none"
           />
         </label>
-        <ul ref={listRef} className="flex-1 overflow-y-auto">
+        <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
           {list.map((t) => (
             <li key={t.id} className="flex items-center gap-3 border-b border-ink/5 py-2">
               <button

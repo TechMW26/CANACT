@@ -294,12 +294,17 @@ function CommentsSheet({
     if (!expanded && e.currentTarget.scrollTop > 4) setExpanded(true);
   }
 
+  const commentsSheetHeight = expanded
+    ? 'var(--canact-popup-max-height)'
+    : 'min(58svh, calc(var(--canact-visual-viewport-height, 100vh) * 0.58))';
+
   return (
     <div className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
       <div
         {...swipeDismissHandlers}
-        className={`absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height] duration-300 ease-out ${expanded ? 'h-[90vh]' : 'h-[58dvh] max-h-[90vh]'}`}
+        style={{ height: commentsSheetHeight, maxHeight: 'var(--canact-popup-max-height)' }}
+        className="absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height,max-height] duration-300 ease-out"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -316,7 +321,7 @@ function CommentsSheet({
             <X size={18} />
           </button>
         </div>
-        <div ref={listRef} onScroll={onListScroll} className="flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
+        <div ref={listRef} onScroll={onListScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
           {items.length === 0 ? (
             <div className="py-10 text-center text-sm text-muted">Be the first to comment.</div>
           ) : (
@@ -335,7 +340,8 @@ function CommentsSheet({
         </div>
         <form
           onSubmit={(e) => { e.preventDefault(); send(); }}
-          className="flex items-center gap-2 border-t border-line bg-white px-3 py-2 safe-bottom"
+          style={{ paddingBottom: 'max(8px, var(--canact-popup-bottom-inset, 0px))' }}
+          className="flex items-center gap-2 bg-white px-3 pt-2"
         >
           <Avatar src={myPhoto ?? null} name={myName} size={28} />
           <input

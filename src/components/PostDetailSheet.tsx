@@ -140,7 +140,7 @@ export function PostDetailSheet({
             <div className="py-16 text-center text-sm text-ink/55">Loading...</div>
           )}
 
-          <section className="mt-5 border-t border-line pt-4">
+          <section className="mt-5 pt-4">
             <div className="mb-3 flex items-center gap-2">
               <MessageCircle size={16} className="text-brand" />
               <h3 className="text-sm font-extrabold text-ink">Comments</h3>
@@ -169,7 +169,7 @@ export function PostDetailSheet({
           </section>
         </div>
 
-        <form onSubmit={submitComment} className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-end gap-2 border-t border-line bg-white pt-3">
+        <form onSubmit={submitComment} className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-end gap-2 bg-white pt-3">
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
