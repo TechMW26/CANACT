@@ -30,6 +30,7 @@ type LocatedFriend = FriendMapPerson & Point;
 type MarkerCluster = { key: string; friends: LocatedFriend[]; screen: ScreenPoint };
 
 const TILE_SIZE = 256;
+const TILE_OVERLAP = 1.25;
 const MARKER_CLUSTER_DISTANCE = 56;
 const DEFAULT_CENTER: Point = { lat: 20, lng: 0 };
 const MAP_TILE_CACHE = 'canact-map-tiles-v1';
@@ -77,6 +78,7 @@ export function FriendsWorldMap({
     height: Math.max(1, mapSize.height / tileScale),
   }), [mapSize.width, mapSize.height, tileScale]);
   const satelliteOpacity = smoothStep(4.25, 5.25, zoom);
+  const lightLayerOpacity = Math.max(0.14, 1 - satelliteOpacity);
   const showMarkerNames = zoom >= 5.15;
   const viewport = useMemo(
     () => buildTileViewport(view.center, tileZoom, tileViewportSize),
@@ -176,7 +178,7 @@ export function FriendsWorldMap({
       onWheel={handleWheel}
       className={`relative touch-none overflow-hidden overscroll-contain bg-[#FFF8F8] cursor-grab active:cursor-grabbing ${className ?? 'h-[58svh] min-h-[390px] max-h-[620px]'}`}
     >
-      <TileLayer tiles={viewport.tiles} kind="light" opacity={1 - satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} />
+      <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} />
       <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} />
       <div className="pointer-events-none absolute inset-0 bg-[#FFF8F8]/10" />
 
@@ -211,10 +213,10 @@ export function FriendsWorldMap({
         </div>
       ) : null}
 
-      <div className="absolute bottom-24 left-3 z-40 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-[10px] font-bold text-ink/65 backdrop-blur lg:bottom-3">
+      <div className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 z-40 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-[10px] font-bold text-ink/65 backdrop-blur lg:bottom-3">
         {locatedFriends.length} on map{missingLocations ? ` · ${missingLocations} without location` : ''}
       </div>
-      <div className="absolute bottom-24 right-3 z-40 rounded-full bg-white/80 px-2 py-1 text-[9px] font-semibold text-ink/55 backdrop-blur lg:bottom-3">
+      <div className="absolute bottom-[var(--canact-floating-bottom-clearance)] right-3 z-40 rounded-full bg-white/80 px-2 py-1 text-[9px] font-semibold text-ink/55 backdrop-blur lg:bottom-3">
         © OpenStreetMap © CARTO · Esri
       </div>
     </div>
@@ -305,7 +307,7 @@ function MapMarkerCluster({
 function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: MarkerCluster; onClose: () => void; onPersonSelect?: (person: FriendMapPerson) => void }) {
   return (
     <div
-      className="absolute bottom-24 left-3 right-3 z-[70] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white/96 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:bottom-5"
+      className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[70] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white/96 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:bottom-5"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
@@ -372,15 +374,17 @@ function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[
           decoding="async"
           loading="eager"
           referrerPolicy="no-referrer-when-downgrade"
-          className="absolute h-64 w-64 select-none"
+          className="absolute select-none bg-[#EEE7DC]"
           style={{
-            left: tile.left,
-            top: tile.top,
+            left: tile.left - TILE_OVERLAP / 2,
+            top: tile.top - TILE_OVERLAP / 2,
+            width: TILE_SIZE + TILE_OVERLAP,
+            height: TILE_SIZE + TILE_OVERLAP,
             filter: kind === 'light' ? 'grayscale(1) sepia(1) saturate(2.8) hue-rotate(315deg) contrast(1.12) brightness(1.06)' : undefined,
             opacity: kind === 'light' ? 0.72 : 1,
           }}
           onError={(event) => {
-            if (kind !== 'light' || event.currentTarget.dataset.fallback) return;
+            if (event.currentTarget.dataset.fallback) return;
             event.currentTarget.dataset.fallback = '1';
             event.currentTarget.src = osmTileUrl(tile.z, tile.x, tile.y);
           }}

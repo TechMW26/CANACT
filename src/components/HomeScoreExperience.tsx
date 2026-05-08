@@ -50,11 +50,13 @@ export function HomeScoreExperience() {
   const [selectedMapPerson, setSelectedMapPerson] = useState<NearbyPerson | null>(null);
   const [ratingUid, setRatingUid] = useState<string | null>(null);
   const [dragX, setDragX] = useState(0);
+  const [liveProfile, setLiveProfile] = useState<UserProfile | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; active: boolean } | null>(null);
   const stageGestureRef = useRef<{ startX: number; startY: number } | null>(null);
   const progressRef = useRef(0);
-  const scoreSummary = useMemo(() => calculateCanactScore(profile), [profile]);
-  const firstName = useMemo(() => getFirstName(profile?.firstName || profile?.fullName), [profile?.firstName, profile?.fullName]);
+  const scoreProfile = liveProfile ?? profile;
+  const scoreSummary = useMemo(() => calculateCanactScore(scoreProfile), [scoreProfile]);
+  const firstName = useMemo(() => getFirstName(scoreProfile?.firstName || scoreProfile?.fullName), [scoreProfile?.firstName, scoreProfile?.fullName]);
   const circleRef = useRef<HTMLButtonElement | null>(null);
   const scoreWrapRef = useRef<HTMLDivElement | null>(null);
   const scoreInnerRef = useRef<HTMLDivElement | null>(null);
@@ -68,6 +70,23 @@ export function HomeScoreExperience() {
   const pillAuraRef = useRef<HTMLDivElement | null>(null);
   const prevScoreRef = useRef<number | null>(null);
   const scoreCounterFrameRef = useRef(0);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let frame = 0;
+    const updateLayout = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => setLayoutVersion((version) => version + 1));
+    };
+    window.addEventListener('resize', updateLayout);
+    window.visualViewport?.addEventListener('resize', updateLayout);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateLayout);
+      window.visualViewport?.removeEventListener('resize', updateLayout);
+    };
+  }, []);
 
   useEffect(() => {
     return onValue(ref(db, 'users'), (snapshot) => {
@@ -76,6 +95,13 @@ export function HomeScoreExperience() {
       setAllProfiles(profiles);
     });
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) { setLiveProfile(null); return; }
+    return onValue(ref(db, `users/${user.uid}`), (snapshot) => {
+      setLiveProfile(snapshot.val() as UserProfile | null);
+    });
+  }, [user?.uid]);
 
   const currentLocation = useMemo<LocationPoint | null>(() => {
     if (coords) return coords;
@@ -203,17 +229,31 @@ export function HomeScoreExperience() {
 
     const applyProgress = (progress: number) => {
       const eased = easeInOutQuart(progress);
+      const stageHeight = scoreWrap.parentElement?.getBoundingClientRect().height || window.innerHeight;
+      const viewportWidth = window.innerWidth || 390;
+      const compactHeight = stageHeight < 620 || window.innerHeight < 740;
+      const topClearance = compactHeight ? 176 : 230;
+      const bottomClearance = compactHeight ? 72 : 96;
+      const widthScale = Math.max(0.62, Math.min(1, (viewportWidth - 44) / 324));
+      const heightScale = Math.max(0.62, Math.min(1, (stageHeight - topClearance - bottomClearance) / 304));
+      const circleScale = Math.min(widthScale, heightScale);
 
-      const startWidth = 304;
-      const endWidth = 178;
-      const startHeight = 304;
-      const endHeight = 46;
+      const startWidth = Math.round(304 * circleScale);
+      const endWidth = Math.round(178 * Math.max(0.88, Math.min(1, widthScale)));
+      const startHeight = startWidth;
+      const endHeight = Math.round(46 * Math.max(0.92, Math.min(1, widthScale)));
       const width = startWidth - eased * (startWidth - endWidth);
       const height = startHeight - eased * (startHeight - endHeight);
 
-      const startY = 258;
+      const availableY = stageHeight - topClearance - bottomClearance - startHeight;
+      const startY = Math.round(Math.min(
+        Math.max(118, topClearance + Math.max(0, availableY * 0.35)),
+        Math.max(118, stageHeight - startHeight - bottomClearance),
+      ));
       const endY = 82;
       const y = startY - eased * (startY - endY);
+      const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
+      const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
 
       const innerProgress = Math.min(progress / 0.42, 1);
       const innerOpacity = 1 - easeInOutQuart(innerProgress);
@@ -222,6 +262,11 @@ export function HomeScoreExperience() {
       circle.style.width = `${width}px`;
       circle.style.height = `${height}px`;
       circle.style.borderRadius = `${height / 2}px`;
+      circle.style.setProperty('--score-circle-scale', String(circleScale));
+      circle.style.setProperty('--score-meter-opacity', String(meterReveal));
+      circle.style.setProperty('--score-meter-scale', String(0.78 + meterReveal * 0.22));
+      circle.style.setProperty('--score-gradient-border-width', `${3 + gradientBorderProgress * 7}px`);
+      circle.toggleAttribute('data-pill-border', progress > 0.72);
       scoreWrap.style.transform = `translateY(${y}px)`;
       scoreInner.style.opacity = String(innerOpacity);
       scoreInner.style.transform = `scale(${innerScale})`;
@@ -271,7 +316,7 @@ export function HomeScoreExperience() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [scoreSummary.score, stage]);
+  }, [layoutVersion, scoreSummary.score, stage]);
 
   // Animated sliding counter: animates from previous (or 0 on first mount) to
   // the current score, and toasts when the score changes between renders.

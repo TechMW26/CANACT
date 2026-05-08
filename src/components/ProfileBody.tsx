@@ -572,7 +572,7 @@ function CanactPagesProfileUI({
           <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} />
         ) : null}
 
-        <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+108px)]">
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(var(--canact-floating-bottom-clearance)_+_24px)]">
           <div className="mb-3">
             <div className="w-fit rounded-full p-[2.5px]" style={{ background: 'linear-gradient(135deg, #FF6B7A, #FFB3B8)' }}>
               <div className="h-[46px] w-[46px] overflow-hidden rounded-full ring-[2px] ring-black/30">

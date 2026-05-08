@@ -9,15 +9,18 @@
   --canact-profile-bottom-rgb: 255 255 255;
   --canact-profile-top-ink: 10 10 10;
   --canact-profile-bottom-ink: 10 10 10;
+  --canact-footer-safe-padding: 0.5em;
+  --canact-bottom-nav-height: calc(4rem + var(--canact-footer-safe-padding));
+  --canact-floating-bottom-clearance: calc(var(--canact-bottom-nav-height) + 12px);
   --canact-profile-top-light-opacity: 1;
   --canact-profile-top-dark-opacity: 0;
   --canact-profile-bottom-light-opacity: 1;
   --canact-profile-bottom-dark-opacity: 0;
   /* Bottom-sheet sizing model.
      - svh (small viewport) is stable across mobile chrome expand/retract.
-     - safe-area-inset-bottom is the only dynamic padding for the home indicator.
+      - fullscreen iOS builds should not inherit dynamic home-indicator spacing.
      Apply once at the panel level — never stack on multiple ancestors. */
-  --canact-popup-bottom-inset: env(safe-area-inset-bottom, 0px);
+    --canact-popup-bottom-inset: 0px;
   --canact-popup-max-height: 90svh;
 }
 
@@ -81,8 +84,8 @@ html, body { overflow-x: clip; max-width: 100vw; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Basic safe-area paddings for bottom nav on iOS Safari */
-.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+/* Compact fullscreen padding. The app shell owns the footer clearance. */
+.safe-bottom { padding-bottom: max(var(--canact-footer-safe-padding), 8px); }
 .safe-top { padding-top: max(env(safe-area-inset-top), 12px); }
 
 input, textarea, select, button { font: inherit; }

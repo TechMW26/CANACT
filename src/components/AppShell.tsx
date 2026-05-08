@@ -68,7 +68,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
-  const [mobileBottomNavSafeInset, setMobileBottomNavSafeInset] = useState<string | null>(null);
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
@@ -94,18 +93,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
-    // Bottom-nav safe inset is a property of the device (notch / home
-    // indicator) and does not change while the app is running. Re-measuring
-    // it on visualViewport scroll/resize was causing the nav to jump up
-    // and down whenever a popup opened (scroll-lock + transform briefly
-    // perturb the visualViewport in iOS Safari, firing scroll events).
-    // Measure once on mount and refresh only on real layout changes.
-    const refreshBottomNavInset = () => setMobileBottomNavSafeInset(getMobileBottomNavSafeInset());
-    refreshBottomNavInset();
-    window.addEventListener('orientationchange', refreshBottomNavInset);
-    return () => {
-      window.removeEventListener('orientationchange', refreshBottomNavInset);
-    };
   }, []);
 
   useEffect(() => {
@@ -212,7 +199,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-screen pb-28 lg:pb-6">
+    <div id="canact-app-shell" className="min-h-screen pb-[calc(var(--canact-bottom-nav-height)_+_16px)] lg:pb-6">
       <ScrollDirectionWatcher />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
@@ -294,7 +281,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <nav
         data-canact-bottom-nav
         className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome pt-8' : 'bg-white'}`}
-        style={{ paddingBottom: mobileBottomNavSafeInset ?? undefined }}
+        style={{ paddingBottom: 'var(--canact-footer-safe-padding)' }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
           {TABS.map(({ href, label, Icon, isFab }) => {
@@ -382,21 +369,6 @@ function getMobileHeaderTopInset() {
     window.matchMedia?.('(display-mode: fullscreen)').matches
   );
   return nativeShell || androidWebView || standalone ? 'max(env(safe-area-inset-top, 0px), 24px)' : null;
-}
-
-function getMobileBottomNavSafeInset() {
-  if (typeof navigator === 'undefined' || typeof window === 'undefined' || typeof document === 'undefined') return null;
-  if (isIOSDevice()) return null;
-  return measureSafeAreaInsetBottom() > 0 ? 'env(safe-area-inset-bottom, 0px)' : null;
-}
-
-function measureSafeAreaInsetBottom() {
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;left:0;bottom:0;height:0;width:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px);';
-  document.body.appendChild(probe);
-  const value = Number.parseFloat(window.getComputedStyle(probe).paddingBottom) || 0;
-  probe.remove();
-  return value;
 }
 
 function isIOSDevice() {

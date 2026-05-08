@@ -20,6 +20,7 @@ export function lockPageScroll() {
   if (lockCount === 1) {
     const body = document.body;
     const html = document.documentElement;
+    const keepFixedFooterStable = !!document.querySelector('[data-canact-bottom-nav]');
     const scrollY = window.scrollY || html.scrollTop || 0;
     restoreState = {
       scrollY,
@@ -37,11 +38,13 @@ export function lockPageScroll() {
     html.style.overscrollBehavior = 'none';
     body.style.overflow = 'hidden';
     body.style.overscrollBehavior = 'none';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.left = '0';
-    body.style.right = '0';
-    body.style.width = '100%';
+    if (!keepFixedFooterStable) {
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.left = '0';
+      body.style.right = '0';
+      body.style.width = '100%';
+    }
   }
 
   let released = false;

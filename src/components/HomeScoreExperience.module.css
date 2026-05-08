@@ -5,7 +5,7 @@
   --home-text: #1A1A1A;
   --home-text-dim: rgba(30, 30, 30, .4);
   --home-border: rgba(220, 20, 60, .12);
-  --home-footer-clearance: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 84px);
+  --home-footer-clearance: var(--canact-floating-bottom-clearance);
   position: relative;
   left: 50%;
   width: 100vw;
@@ -121,6 +121,10 @@
 
 .scoreCircle {
   --score-meter-angle: 0deg;
+  --score-circle-scale: 1;
+  --score-meter-opacity: 1;
+  --score-meter-scale: 1;
+  --score-gradient-border-width: 0px;
   --score-meter-start: #F4C84E;
   --score-meter-end: #27C76F;
   --score-meter-track: rgba(219, 225, 221, .78);
@@ -145,9 +149,21 @@
   cursor: pointer;
   font: inherit;
   padding: 0;
+  outline: none;
   pointer-events: auto;
   isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
   will-change: transform, width, height, border-radius, background, box-shadow;
+}
+
+.scoreCircle:focus,
+.scoreCircle:focus-visible,
+.scoreCircle:active {
+  outline: none;
+}
+
+.scoreCircle::-moz-focus-inner {
+  border: 0;
 }
 
 .scoreCircle.scoreExcellent {
@@ -186,9 +202,10 @@
   inset: -10px;
   z-index: 0;
   background:
-    conic-gradient(from 218deg at 50% 50%, var(--score-meter-start) 0deg, var(--score-meter-end) var(--score-meter-angle), var(--score-meter-track) var(--score-meter-angle) 360deg);
+    conic-gradient(from 218deg at 50% 50%, #F4C84E 0deg, #35CA7A var(--score-meter-angle), #7ADFD0 var(--score-meter-angle), var(--score-meter-track) var(--score-meter-angle) 360deg);
   box-shadow: 0 20px 46px rgba(22, 28, 25, .12);
-  opacity: 1;
+  opacity: var(--score-meter-opacity);
+  transform: scale(var(--score-meter-scale));
   animation: homeScoreRing 12s ease-in-out infinite;
 }
 
@@ -208,8 +225,8 @@
   opacity: 0;
 }
 
-.stageNearby .scoreCircle {
-  border-width: 1.5px;
+.scoreCircle[data-pill-border="true"] {
+  border-width: var(--score-gradient-border-width);
   overflow: hidden;
   background:
     linear-gradient(#FFFFFF, #FFFFFF) padding-box,
@@ -217,6 +234,26 @@
   background-size: 100% 100%, 220% 100%;
   box-shadow: none;
   animation: homePillBorder 4.8s linear infinite;
+}
+
+.scoreCircle[data-pill-border="true"]::before {
+  inset: 0;
+  z-index: 4;
+  padding: var(--score-gradient-border-width);
+  background: linear-gradient(110deg, #F4C84E 0%, #35CA7A 32%, #7ADFD0 54%, #FF8EAF 76%, #F4C84E 100%);
+  background-size: 220% 100%;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  animation: homePillBorder 4.8s linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+.stageNearby .scoreCircle[data-pill-border="true"]::before {
+  opacity: 1;
 }
 
 .scoreCirclePulse {
@@ -240,7 +277,7 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  padding: 46px 38px 40px;
+  padding: calc(46px * var(--score-circle-scale)) calc(38px * var(--score-circle-scale)) calc(40px * var(--score-circle-scale));
   text-align: center;
   will-change: opacity, transform;
 }
@@ -248,16 +285,16 @@
 .scoreLabel {
   order: 3;
   color: rgba(24, 28, 30, .62);
-  font-size: 11px;
+  font-size: calc(11px * var(--score-circle-scale));
   font-weight: 800;
-  letter-spacing: 1.8px;
+  letter-spacing: calc(1.8px * var(--score-circle-scale));
   text-transform: uppercase;
 }
 
 .scoreNum {
   order: 2;
   color: #17211B;
-  font-size: 114px;
+  font-size: calc(114px * var(--score-circle-scale));
   font-weight: 950;
   line-height: 1;
   letter-spacing: 0;
@@ -273,20 +310,20 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin: 0 0 8px;
+  margin: 0 0 calc(8px * var(--score-circle-scale));
   color: #1BAE67;
-  font-size: 12px;
+  font-size: calc(12px * var(--score-circle-scale));
   font-weight: 900;
   line-height: 1;
 }
 
 .scoreSource {
   order: 4;
-  margin-top: 8px;
+  margin-top: calc(8px * var(--score-circle-scale));
   color: rgba(24, 28, 30, .38);
-  font-size: 10px;
+  font-size: calc(10px * var(--score-circle-scale));
   font-weight: 800;
-  letter-spacing: 3px;
+  letter-spacing: calc(3px * var(--score-circle-scale));
 }
 
 .pillContent {
@@ -672,8 +709,8 @@
 }
 
 @keyframes homeScoreRing {
-  0%, 100% { transform: rotate(-4deg) scale(1); }
-  50% { transform: rotate(4deg) scale(1.012); }
+  0%, 100% { transform: rotate(-4deg) scale(var(--score-meter-scale)); }
+  50% { transform: rotate(4deg) scale(calc(var(--score-meter-scale) * 1.012)); }
 }
 
 @keyframes homePillBorder {
@@ -713,6 +750,21 @@
 
   .mapRatingSheet {
     bottom: calc(var(--home-footer-clearance) + 184px);
+  }
+}
+
+@media (max-height: 620px), (max-width: 340px) {
+  .greeting {
+    top: 92px;
+  }
+
+  .greeting h1 {
+    font-size: 18px;
+  }
+
+  .hint {
+    top: auto;
+    bottom: 18px;
   }
 }
 
