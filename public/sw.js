@@ -37,9 +37,22 @@ const MEDIA_CACHE = 'canact-media-v1';
 const MAP_TILE_CACHE = 'canact-map-tiles-v1';
 const MEDIA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MEDIA_CACHE_MAX = 250;
-const MAP_TILE_CACHE_MAX = 650;
+const MAP_TILE_CACHE_MAX = 900;
+const MAP_PREFETCH_MAX_URLS = 180;
+const MAP_PREFETCH_CONCURRENCY = 4;
 const MEDIA_HOSTS = ['public.blob.vercel-storage.com', 'googleusercontent.com'];
 const MAP_TILE_HOSTS = ['basemaps.cartocdn.com', 'tile.openstreetmap.org', 'server.arcgisonline.com'];
+const PRECACHE_ASSETS = [
+  '/manifest.json',
+  '/favicon-32.png',
+  '/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/logo.png',
+  '/ringer.mp3',
+  '/ringtone.mp3',
+  '/video-poster.svg',
+];
 
 // Hostnames that must always hit the network.
 const DATA_HOSTS = [
@@ -56,8 +69,18 @@ const DATA_HOSTS = [
 const DATA_PATH_PREFIXES = ['/api/', '/__/'];
 
 self.addEventListener('install', (event) => {
-  // Activate immediately so the new shell takes effect on next navigation.
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    (async () => {
+      try {
+        const cache = await caches.open(SHELL_CACHE);
+        await cache.addAll(PRECACHE_ASSETS.map((url) => new Request(url, { cache: 'reload' })));
+      } catch {
+        // A failed decorative asset should never block SW activation.
+      }
+      // Activate immediately so the new shell takes effect on next navigation.
+      await self.skipWaiting();
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -72,6 +95,7 @@ self.addEventListener('activate', (event) => {
       await self.clients.claim();
       // Opportunistic GC: evict media entries that exceeded TTL.
       try { await pruneMediaCache(); } catch {}
+      try { await pruneMapTileCache(); } catch {}
     })()
   );
 });
@@ -147,6 +171,44 @@ async function cacheFirstMapTile(req) {
     pruneMapTileCache().catch(() => {});
   }
   return res;
+}
+
+async function prefetchMapTiles(urls) {
+  if (!Array.isArray(urls) || !urls.length) return;
+  const cleanUrls = [];
+  const seen = new Set();
+  for (const rawUrl of urls) {
+    if (cleanUrls.length >= MAP_PREFETCH_MAX_URLS) break;
+    try {
+      const url = new URL(rawUrl);
+      if (!isMapTileRequest(url)) continue;
+      if (seen.has(url.href)) continue;
+      seen.add(url.href);
+      cleanUrls.push(url.href);
+    } catch {}
+  }
+  if (!cleanUrls.length) return;
+
+  const cache = await caches.open(MAP_TILE_CACHE);
+  let index = 0;
+  const worker = async () => {
+    while (index < cleanUrls.length) {
+      const url = cleanUrls[index];
+      index += 1;
+      if (!url) continue;
+      try {
+        const req = new Request(url, { mode: 'no-cors', credentials: 'omit', cache: 'force-cache' });
+        const cached = await cache.match(req, { ignoreVary: true });
+        if (cached) continue;
+        const res = await fetch(req);
+        if (res && (res.ok || res.type === 'opaque')) await cache.put(req, res.clone());
+      } catch {
+        // Best-effort warm-up only.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(MAP_PREFETCH_CONCURRENCY, cleanUrls.length) }, worker));
+  await pruneMapTileCache();
 }
 
 async function pruneMapTileCache() {
@@ -310,5 +372,9 @@ self.addEventListener('message', (event) => {
   }
   if (data.type === 'PRUNE_MEDIA') {
     event.waitUntil(pruneMediaCache());
+    return;
+  }
+  if (data.type === 'PREFETCH_MAP_TILES' && Array.isArray(data.urls)) {
+    event.waitUntil(prefetchMapTiles(data.urls));
   }
 });

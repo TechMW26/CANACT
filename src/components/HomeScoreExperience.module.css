@@ -288,9 +288,7 @@
   transform: scale(var(--score-pill-scale));
   filter: saturate(1.05);
   isolation: isolate;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, .68),
-    0 12px 30px rgba(21, 32, 26, .10);
+  box-shadow: none;
 }
 
 .scorePillFill {
@@ -303,9 +301,7 @@
     linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(255, 255, 255, .90) 100%);
   -webkit-backdrop-filter: blur(18px) saturate(1.06);
   backdrop-filter: blur(18px) saturate(1.06);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .98),
-    inset 0 -10px 20px rgba(21, 32, 26, .045);
+  box-shadow: none;
 }
 
 .scoreCirclePulse {
@@ -463,7 +459,7 @@
 
 .nearbyPanel::before {
   top: var(--canact-map-header-fade-start, 55px);
-  height: min(35dvh, 294px);
+  height: min(29.75dvh, 250px);
   background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 24%, rgba(255, 255, 255, .9) 38%, rgba(255, 255, 255, .48) 61%, rgba(255, 255, 255, 0) 100%);
 }
 
@@ -890,6 +886,36 @@
   }
 }
 
+@media (hover: none), (update: slow) {
+  .animationStage::before,
+  .animationStage::after {
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+
+  .animationStage::before {
+    opacity: .46;
+  }
+
+  .animationStage::after {
+    opacity: .24;
+  }
+
+  .hint {
+    animation: none;
+  }
+
+  .scorePillFill,
+  .deckMeta,
+  .swipeCard,
+  .emptyDeck,
+  .mapRatingSheet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animationStage::before,
   .animationStage::after,
@@ -905,6 +931,8 @@
   }
 
   .nearbyPanel,
+  .nearbyMap,
+  .nearbyEmpty,
   .swipeCard {
     transition: none;
   }

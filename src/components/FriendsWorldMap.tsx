@@ -29,6 +29,7 @@ type MapView = { center: Point; zoom: number; key: string };
 type Gesture = { center: Point; zoom: number; midpoint: ScreenPoint; distance: number };
 type LocatedFriend = FriendMapPerson & Point;
 type MarkerCluster = { key: string; friends: LocatedFriend[]; screen: ScreenPoint };
+type MapTileKind = 'light' | 'satellite';
 
 const TILE_SIZE = 256;
 const TILE_OVERLAP = 2;
@@ -37,6 +38,7 @@ const MARKER_CLUSTER_DISTANCE = 56;
 const DEFAULT_CENTER: Point = { lat: 20, lng: 0 };
 const MAP_TILE_CACHE = 'canact-map-tiles-v1';
 const MAX_PREFETCH_TILE_URLS = 120;
+const MAP_PREFETCH_IDLE_TIMEOUT_MS = 1400;
 const prefetchedTileUrls = new Set<string>();
 
 export function FriendsWorldMap({
@@ -81,6 +83,14 @@ export function FriendsWorldMap({
   }), [mapSize.width, mapSize.height, tileScale]);
   const satelliteOpacity = smoothStep(4.25, 5.25, zoom);
   const lightLayerOpacity = Math.max(0.14, 1 - satelliteOpacity);
+  const renderSatelliteLayer = satelliteOpacity > 0.02;
+  const renderLightLayer = satelliteOpacity < 0.98 || lightLayerOpacity > 0.18;
+  const activeTileKinds = useMemo<MapTileKind[]>(() => {
+    const kinds: MapTileKind[] = [];
+    if (renderLightLayer) kinds.push('light');
+    if (renderSatelliteLayer) kinds.push('satellite');
+    return kinds.length ? kinds : ['light'];
+  }, [renderLightLayer, renderSatelliteLayer]);
   const showMarkerNames = zoom >= 5.15;
   const viewport = useMemo(
     () => buildTileViewport(view.center, tileZoom, tileViewportSize),
@@ -90,9 +100,16 @@ export function FriendsWorldMap({
     () => buildMarkerClusters(locatedFriends, view.center, zoom, mapSize),
     [locatedFriends, view.center.lat, view.center.lng, zoom, mapSize.width, mapSize.height],
   );
+  const visibleTileUrls = useMemo(
+    () => buildTileUrls(viewport.tiles, activeTileKinds),
+    [viewport.tiles, activeTileKinds],
+  );
   const prefetchTileUrls = useMemo(
-    () => buildMapTilePrefetchUrls(locatedFriends, currentLocation, tileZoom),
-    [locatedFriends, currentLocation?.lat, currentLocation?.lng, tileZoom],
+    () => uniqueStrings([
+      ...visibleTileUrls,
+      ...buildMapTilePrefetchUrls(locatedFriends, currentLocation, tileZoom, activeTileKinds),
+    ]).slice(0, MAX_PREFETCH_TILE_URLS),
+    [visibleTileUrls, locatedFriends, currentLocation?.lat, currentLocation?.lng, tileZoom, activeTileKinds],
   );
   const selectedCluster = selectedClusterKey
     ? markerClusters.find((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1) ?? null
@@ -104,8 +121,14 @@ export function FriendsWorldMap({
 
   useEffect(() => {
     if (!prefetchTileUrls.length) return;
-    const timer = window.setTimeout(() => { void prefetchMapTileUrls(prefetchTileUrls); }, 650);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    const cancelIdle = scheduleIdleWork(() => {
+      if (!cancelled) scheduleMapTilePrefetch(prefetchTileUrls);
+    }, MAP_PREFETCH_IDLE_TIMEOUT_MS);
+    return () => {
+      cancelled = true;
+      cancelIdle();
+    };
   }, [prefetchTileUrls]);
 
   const adjustZoom = useCallback((delta: number) => {
@@ -182,8 +205,8 @@ export function FriendsWorldMap({
       onWheel={handleWheel}
       className={`relative touch-none overflow-hidden overscroll-contain bg-[#FFF8F8] cursor-grab active:cursor-grabbing ${className ?? 'h-[58svh] min-h-[390px] max-h-[620px]'}`}
     >
-      <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} />
-      <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} />
+      {renderLightLayer ? <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
+      {renderSatelliteLayer ? <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
       <div className="pointer-events-none absolute inset-0 bg-[#FFF8F8]/10" />
 
       {userPinStyle ? (
@@ -352,14 +375,15 @@ function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: Mar
   return createPortal(panel, document.body);
 }
 
-function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[]; kind: 'light' | 'satellite'; opacity: number; scale: number; viewportSize: Size }) {
+function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[]; kind: MapTileKind; opacity: number; scale: number; viewportSize: Size }) {
   return (
     <div
-      className="pointer-events-none absolute left-0 top-0 transition-opacity duration-700 ease-out will-change-transform"
+      className="pointer-events-none absolute left-0 top-0 transition-opacity duration-500 ease-out"
       style={{
-        opacity,
+        opacity: kind === 'light' ? opacity * 0.72 : opacity,
         width: viewportSize.width,
         height: viewportSize.height,
+        filter: kind === 'light' ? 'grayscale(1) sepia(1) saturate(2.8) hue-rotate(315deg) contrast(1.12) brightness(1.06)' : undefined,
         transform: `scale(${scale}) translateZ(0)`,
         transformOrigin: 'top left',
         backgroundColor: kind === 'light' ? '#FFF8F8' : undefined,
@@ -381,8 +405,6 @@ function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[
             top: Math.round(tile.top - TILE_OVERLAP / 2),
             width: TILE_SIZE + TILE_OVERLAP,
             height: TILE_SIZE + TILE_OVERLAP,
-            filter: kind === 'light' ? 'grayscale(1) sepia(1) saturate(2.8) hue-rotate(315deg) contrast(1.12) brightness(1.06)' : undefined,
-            opacity: kind === 'light' ? 0.72 : 1,
           }}
           onError={(event) => {
             if (event.currentTarget.dataset.fallback) return;
@@ -435,7 +457,15 @@ function buildTileViewport(center: Point, zoom: number, size: Size) {
   return { tiles };
 }
 
-function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Point | null | undefined, tileZoom: number) {
+function buildTileUrls(tiles: Tile[], kinds: MapTileKind[]) {
+  const urls: string[] = [];
+  for (const tile of tiles) {
+    for (const kind of kinds) urls.push(tileUrl(kind, tile.z, tile.x, tile.y));
+  }
+  return urls;
+}
+
+function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Point | null | undefined, tileZoom: number, kinds: MapTileKind[]) {
   const points: Point[] = [...friends];
   if (currentLocation) points.unshift(currentLocation);
   if (!points.length) return [];
@@ -454,7 +484,7 @@ function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Poi
           const tileX = wrap(centerTile.x + tileXOffset, 2 ** zoom);
           const tileY = centerTile.y + tileYOffset;
           if (tileY < 0 || tileY >= 2 ** zoom) continue;
-          for (const kind of ['light', 'satellite'] as const) {
+          for (const kind of kinds) {
             const url = tileUrl(kind, zoom, tileX, tileY);
             if (seen.has(url)) continue;
             seen.add(url);
@@ -478,6 +508,10 @@ function pointToTile(point: Point, zoom: number) {
 
 function uniqueNumbers(values: number[]) {
   return [...new Set(values.map((value) => Math.round(value)))];
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values)];
 }
 
 function buildMarkerClusters(friends: LocatedFriend[], center: Point, zoom: number, size: Size): MarkerCluster[] {
@@ -563,7 +597,7 @@ function mapLocationLabel(friend: FriendMapPerson) {
   return place || 'Live location';
 }
 
-function tileUrl(kind: 'light' | 'satellite', z: number, x: number, y: number) {
+function tileUrl(kind: MapTileKind, z: number, x: number, y: number) {
   if (kind === 'satellite') return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   return `https://a.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`;
 }
@@ -572,24 +606,78 @@ function osmTileUrl(z: number, x: number, y: number) {
   return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 }
 
+function scheduleMapTilePrefetch(urls: string[]) {
+  if (typeof window === 'undefined') return;
+  const nextUrls = takeFreshPrefetchUrls(urls);
+  if (!nextUrls.length) return;
+  const controller = navigator.serviceWorker?.controller;
+  if (controller) {
+    controller.postMessage({ type: 'PREFETCH_MAP_TILES', urls: nextUrls });
+    return;
+  }
+  void prefetchMapTileUrls(nextUrls);
+}
+
+function takeFreshPrefetchUrls(urls: string[]) {
+  const nextUrls: string[] = [];
+  for (const url of urls) {
+    if (prefetchedTileUrls.has(url)) continue;
+    prefetchedTileUrls.add(url);
+    nextUrls.push(url);
+  }
+  return nextUrls;
+}
+
+function scheduleIdleWork(callback: () => void, timeout: number) {
+  if (typeof window === 'undefined') return () => {};
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+    const id = idleWindow.requestIdleCallback(callback, { timeout });
+    return () => idleWindow.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(callback, 450);
+  return () => window.clearTimeout(id);
+}
+
 async function prefetchMapTileUrls(urls: string[]) {
   if (typeof window === 'undefined') return;
-  const nextUrls = urls.filter((url) => !prefetchedTileUrls.has(url));
-  if (!nextUrls.length) return;
-  nextUrls.forEach((url) => prefetchedTileUrls.add(url));
   const cache = 'caches' in window ? await caches.open(MAP_TILE_CACHE).catch(() => null) : null;
-  for (const url of nextUrls) {
-    try {
-      if (cache) {
-        const cached = await cache.match(url);
-        if (cached) continue;
-      }
-      const response = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-      if (cache && response.ok) await cache.put(url, response.clone());
-    } catch {
-      // Best-effort prefetch only.
+  let index = 0;
+  const concurrency = Math.min(getMapPrefetchConcurrency(), urls.length);
+  const worker = async () => {
+    while (index < urls.length) {
+      const url = urls[index];
+      index += 1;
+      if (!url) continue;
+      await prefetchOneMapTile(url, cache);
     }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+}
+
+async function prefetchOneMapTile(url: string, cache: Cache | null) {
+  const request = new Request(url, { mode: 'no-cors', credentials: 'omit', cache: 'force-cache' });
+  try {
+    if (cache) {
+      const cached = await cache.match(request, { ignoreVary: true });
+      if (cached) return;
+    }
+    const response = await fetch(request);
+    if (cache && response && (response.ok || response.type === 'opaque')) await cache.put(request, response.clone());
+  } catch {
+    // Best-effort prefetch only.
   }
+}
+
+function getMapPrefetchConcurrency() {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  if (connection?.saveData) return 1;
+  if (connection?.effectiveType && /(^|-)2g$/.test(connection.effectiveType)) return 1;
+  if (connection?.effectiveType === '3g') return 2;
+  return 4;
 }
 
 function midpointOf(a: ScreenPoint, b: ScreenPoint): ScreenPoint {

@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Country, City } from 'country-state-city';
 import type { CountryCode } from 'libphonenumber-js';
 import { Button } from '@/components/Button';
 import { Combobox, type ComboOption } from '@/components/Combobox';
@@ -11,6 +10,7 @@ import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
 
 type StepId = 'name' | 'phone' | 'dob' | 'country' | 'city' | 'gender';
+type CountryCityApi = typeof import('country-state-city');
 
 const STEPS: { id: StepId; title: string }[] = [
   { id: 'name', title: 'Name' },
@@ -35,18 +35,32 @@ export function ProfileCompletionPrompt() {
   const [country, setCountry] = useState('India');
   const [city, setCity] = useState('');
   const [gender, setGender] = useState<'female' | 'male' | 'nonbinary' | 'other' | ''>('');
+  const [countryCityApi, setCountryCityApi] = useState<CountryCityApi | null>(null);
 
   const incomplete = !!profile && profile.profileComplete === false;
   const lockedIdentity = !!profile?.profileVerified;
   const step = STEPS[stepIndex];
   const phoneValid = useMemo(() => isPhoneValid(phoneCountry, mobile), [phoneCountry, mobile]);
+  useEffect(() => {
+    if (!incomplete) return;
+    let cancelled = false;
+    import('country-state-city')
+      .then((module) => { if (!cancelled) setCountryCityApi(module); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [incomplete]);
+
   const countryOptions: ComboOption[] = useMemo(
-    () => Country.getAllCountries().map((item) => ({ value: item.isoCode, label: item.name, flag: item.isoCode })),
-    [],
+    () => countryCityApi
+      ? countryCityApi.Country.getAllCountries().map((item) => ({ value: item.isoCode, label: item.name, flag: item.isoCode }))
+      : countryCode && country
+        ? [{ value: countryCode, label: country, flag: countryCode }]
+        : [],
+    [country, countryCityApi, countryCode],
   );
   const cityOptions: ComboOption[] = useMemo(() => {
-    if (!countryCode) return [];
-    const cities = City.getCitiesOfCountry(countryCode) ?? [];
+    if (!countryCityApi || !countryCode) return city ? [{ value: city, label: city }] : [];
+    const cities = countryCityApi.City.getCitiesOfCountry(countryCode) ?? [];
     const seen = new Set<string>();
     const out: ComboOption[] = [];
     for (const item of cities) {
@@ -56,7 +70,7 @@ export function ProfileCompletionPrompt() {
     }
     out.sort((left, right) => left.label.localeCompare(right.label));
     return out;
-  }, [countryCode]);
+  }, [city, countryCityApi, countryCode]);
 
   useEffect(() => {
     if (!profile) return;
@@ -69,15 +83,15 @@ export function ProfileCompletionPrompt() {
     setDob(profile.dateOfBirth || '');
     if (profile.countryCode) {
       setCountryCode(profile.countryCode);
-      setCountry(Country.getCountryByCode(profile.countryCode)?.name || profile.country || '');
+      setCountry(countryCityApi?.Country.getCountryByCode(profile.countryCode)?.name || profile.country || '');
     } else if (profile.country) {
-      const match = Country.getAllCountries().find((item) => item.name.toLowerCase() === profile.country!.toLowerCase());
+      const match = countryCityApi?.Country.getAllCountries().find((item) => item.name.toLowerCase() === profile.country!.toLowerCase());
       setCountryCode(match?.isoCode || '');
       setCountry(match?.name || profile.country);
     }
     setCity(profile.city || '');
     setGender(profile.gender || '');
-  }, [profile]);
+  }, [countryCityApi, profile]);
 
   useEffect(() => {
     if (!incomplete) setOpen(false);

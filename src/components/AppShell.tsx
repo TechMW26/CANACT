@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Avatar } from './Avatar';
@@ -51,6 +51,24 @@ const SIDE_LINKS = [
   { href: '/settings',     label: 'Settings',      Icon: SettingsIcon },
 ];
 
+const ROUTE_PREFETCH_HREFS = [
+  '/',
+  '/feed',
+  '/leaderboard',
+  '/profile',
+  '/favourites',
+  '/search',
+  '/inbox',
+  '/help',
+  '/notifications',
+  '/settings',
+  '/post/create',
+  '/story/create',
+  '/poll/create',
+  '/rateme/start',
+  '/help/create',
+];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <DistanceProvider>
@@ -66,17 +84,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [plusOpen, setPlusOpen] = useState(false);
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
-  const [profileTimedOut, setProfileTimedOut] = useState(false);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
+  const prefetchedRoutesRef = useRef(new Set<string>());
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
   const routeFadeChrome = !!pathname && pathname === '/favourites';
   const routeFeed = pathname === '/feed';
   const profileChrome = routeProfileHero;
-  const fadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
-  const chromeOverContent = profileChrome || fadeChrome;
+  const footerFadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
+  const chromeOverContent = profileChrome || footerFadeChrome;
 
   useLayoutEffect(() => {
     document.documentElement.toggleAttribute('data-canact-profile-route', routeProfileHero);
@@ -94,11 +112,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setPageBlendChrome(false); }, [pathname]);
 
+  const prefetchRoute = useCallback((href: string) => {
+    if (href === '/create' || prefetchedRoutesRef.current.has(href)) return;
+    prefetchedRoutesRef.current.add(href);
+    try { router.prefetch(href); } catch { /* prefetch is best-effort */ }
+  }, [router]);
+
   useEffect(() => {
-    if (!user || profile) { setProfileTimedOut(false); return; }
-    const id = setTimeout(() => setProfileTimedOut(true), 7000);
-    return () => clearTimeout(id);
-  }, [user, profile]);
+    if (!user) return;
+    const cancelIdle = scheduleIdleWork(() => {
+      ROUTE_PREFETCH_HREFS.forEach(prefetchRoute);
+    }, 1800);
+    return cancelIdle;
+  }, [prefetchRoute, user]);
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
@@ -158,7 +184,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // first navigation after a cold start.
   const restoredRouteRef = useRef(true);
 
-  if (loading || !user || (!profile && !profileTimedOut)) {
+  if (loading || !user) {
     // Mount the ringer + deep-link router OUTSIDE the splash return so a
     // call answered from the lockscreen notification doesn't have to wait
     // for the WebView to finish loading the full app + profile data
@@ -248,6 +274,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <Link
               key={href}
               href={href}
+              prefetch
+              onPointerEnter={() => prefetchRoute(href)}
+              onPointerDown={() => prefetchRoute(href)}
+              onFocus={() => prefetchRoute(href)}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${active ? 'bg-brand-light text-brand font-bold' : 'text-ink hover:bg-brand-light/60'}`}
             >
               <Icon size={20} strokeWidth={active ? 2.4 : 1.9} />
@@ -270,7 +300,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader profileChrome={profileChrome} fadeChrome={fadeChrome} topInset={mobileHeaderTopInset} />
+        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />
         {/* Spacer mirroring the fixed top bar so page content starts below it.
           Top bar = safe-area-inset-top + 56px (h-14 row). */}
         <div
@@ -292,7 +322,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           over map surfaces, and standard white elsewhere. */}
       <nav
         data-canact-bottom-nav
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileChrome ? 'canact-profile-footer-chrome pt-8' : fadeChrome ? 'canact-fade-footer-chrome bg-white' : 'bg-white'}`}
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileChrome ? 'canact-profile-footer-chrome pt-8' : footerFadeChrome ? 'canact-fade-footer-chrome bg-white' : 'bg-white'}`}
         style={{ paddingBottom: 'var(--canact-footer-safe-padding)' }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
@@ -334,7 +364,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               );
             }
             return (
-              <Link key={href} href={href} aria-label={label || href} onClick={onTap} className={cls}>
+              <Link key={href} href={href} aria-label={label || href} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={() => prefetchRoute(href)} onFocus={() => prefetchRoute(href)} onClick={onTap} className={cls}>
                 {inner}
               </Link>
             );
@@ -388,6 +418,20 @@ function isIOSDevice() {
   const ua = navigator.userAgent || '';
   const platform = navigator.platform || '';
   return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function scheduleIdleWork(callback: () => void, timeout: number) {
+  if (typeof window === 'undefined') return () => {};
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+    const id = idleWindow.requestIdleCallback(callback, { timeout });
+    return () => idleWindow.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(callback, 500);
+  return () => window.clearTimeout(id);
 }
 
 function titleFor(path: string | null) {

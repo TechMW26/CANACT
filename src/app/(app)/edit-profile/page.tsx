@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Country, City } from 'country-state-city';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input, Textarea } from '@/components/Input';
@@ -16,6 +15,7 @@ import { uploadMedia } from '@/lib/uploadMedia';
 import { Camera, Lock, Trash2, UserIcon, MapPin, Phone, Sparkles } from '@/components/icons';
 
 const MAX_BIO = 300;
+type CountryCityApi = typeof import('country-state-city');
 
 export default function EditProfilePage() {
   const { profile, updateMyProfile } = useAuth();
@@ -35,6 +35,15 @@ export default function EditProfilePage() {
   const [country, setCountry] = useState(profile?.country ?? 'India');
   const [city, setCity] = useState(profile?.city ?? '');
   const [busy, setBusy] = useState(false);
+  const [countryCityApi, setCountryCityApi] = useState<CountryCityApi | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('country-state-city')
+      .then((module) => { if (!cancelled) setCountryCityApi(module); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Hydrate when profile arrives later
   useEffect(() => {
@@ -48,12 +57,16 @@ export default function EditProfilePage() {
   }, [mobile, photo, profile]);
 
   const countryOptions: ComboOption[] = useMemo(
-    () => Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name, flag: c.isoCode })),
-    [],
+    () => countryCityApi
+      ? countryCityApi.Country.getAllCountries().map((c) => ({ value: c.isoCode, label: c.name, flag: c.isoCode }))
+      : countryCode && country
+        ? [{ value: countryCode, label: country, flag: countryCode }]
+        : [],
+    [country, countryCityApi, countryCode],
   );
   const cityOptions: ComboOption[] = useMemo(() => {
-    if (!countryCode) return [];
-    const cities = City.getCitiesOfCountry(countryCode) ?? [];
+    if (!countryCityApi || !countryCode) return city ? [{ value: city, label: city }] : [];
+    const cities = countryCityApi.City.getCitiesOfCountry(countryCode) ?? [];
     const seen = new Set<string>();
     const out: ComboOption[] = [];
     for (const c of cities) {
@@ -63,7 +76,7 @@ export default function EditProfilePage() {
     }
     out.sort((a, b) => a.label.localeCompare(b.label));
     return out;
-  }, [countryCode]);
+  }, [city, countryCityApi, countryCode]);
 
   if (!profile) return null;
   const locked = !!profile.profileVerified;

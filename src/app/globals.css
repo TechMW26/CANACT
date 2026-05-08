@@ -418,7 +418,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 .canact-map-surface::before {
   position: fixed;
   top: var(--canact-map-header-fade-start);
-  height: min(35dvh, 294px);
+  height: min(29.75dvh, 250px);
   background: linear-gradient(
     180deg,
     rgb(255 255 255 / 1) 0%,
@@ -537,9 +537,36 @@ html[data-canact-map-fade="true"] [data-canact-header] * {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
   .canact-fade-in { animation: none !important; opacity: 1 !important; transform: none !important; }
   .canact-splash-pulse { animation: none !important; }
   .canact-glow-border { animation: none !important; }
+}
+
+@media (update: slow) {
+  .canact-fade-in,
+  .canact-splash-pulse,
+  .canact-glow-border,
+  .canact-profile-header-chrome,
+  .canact-profile-footer-chrome,
+  .canact-fade-header-chrome,
+  .canact-fade-footer-chrome {
+    animation: none !important;
+  }
+
+  .canact-profile-header-icon,
+  .canact-profile-header-select {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* Story-ring "breathing" border. A thin animated highlight sweeps across
