@@ -122,11 +122,14 @@ export default function FavouritesPage() {
   const mapMode = tab !== 'requests' && peopleView === 'map';
   useLockPageScroll(mapMode);
   useEffect(() => {
-    document.documentElement.toggleAttribute('data-canact-map-fade', mapMode);
-    document.documentElement.toggleAttribute('data-canact-fullscreen-page', mapMode);
+    const root = document.documentElement;
+    root.toggleAttribute('data-canact-map-fade', mapMode);
+    root.toggleAttribute('data-canact-friends-map-fade', mapMode);
+    root.toggleAttribute('data-canact-fullscreen-page', mapMode);
     return () => {
-      document.documentElement.removeAttribute('data-canact-map-fade');
-      document.documentElement.removeAttribute('data-canact-fullscreen-page');
+      root.removeAttribute('data-canact-map-fade');
+      root.removeAttribute('data-canact-friends-map-fade');
+      root.removeAttribute('data-canact-fullscreen-page');
     };
   }, [mapMode]);
 

@@ -343,7 +343,7 @@ export function StoryViewer({
 
       {/* Viewers sheet (owner) */}
       {showViewers && isMine ? (
-        <div className="absolute inset-0 z-[110] flex items-end bg-black/55" onClick={() => setShowViewers(false)}>
+        <div className="absolute inset-0 z-[110] flex items-end bg-transparent backdrop-blur-sm" onClick={() => setShowViewers(false)}>
           <div
             {...viewersSwipeDismissHandlers}
             ref={viewersSheetRef}

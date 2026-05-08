@@ -4,7 +4,8 @@
 
 :root {
   color-scheme: light;
-  --canact-viewport-height: 100dvh;
+  --canact-vh: 1vh;
+  --canact-viewport-height: calc(var(--canact-vh) * 100);
   --canact-ui-scale: 1;
   --canact-profile-top-rgb: 255 255 255;
   --canact-profile-bottom-rgb: 255 255 255;
@@ -24,6 +25,10 @@
   --canact-popup-bottom-inset: 0px;
   --canact-popup-max-height: 90svh;
   --canact-map-header-fade-start: 55px;
+}
+
+@supports (height: 100dvh) {
+  :root { --canact-vh: 1dvh; }
 }
 
 @media (max-width: 380px), (max-height: 720px) {
@@ -204,6 +209,9 @@ input[type="time"]::-webkit-date-and-time-value {
 
 /* ---------- Plus sheet: slide-up + body scale-down ---------- */
 .canact-sheet-backdrop {
+  background: transparent !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   opacity: 0;
   animation: canactBackdropIn 220ms ease-out forwards;
   will-change: opacity;
@@ -271,10 +279,9 @@ body.canact-story-open {
 }
 .canact-sheet-zoom-out {
   transform: scale(0.9);
-  filter: brightness(0.85);
   border-radius: 24px;
   overflow: hidden;
-  will-change: transform, filter;
+  will-change: transform;
 }
 #canact-app-content[data-disable-sheet-zoom="true"].canact-sheet-zoom-out {
   transform: none;
@@ -418,7 +425,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 .canact-map-surface::before {
   position: fixed;
   top: var(--canact-map-header-fade-start);
-  height: min(29.75dvh, 250px);
+  height: min(calc(var(--canact-vh) * 29.75), 250px);
   background: linear-gradient(
     180deg,
     rgb(255 255 255 / 1) 0%,
@@ -432,7 +439,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 .canact-map-surface::after {
   position: absolute;
   bottom: 0;
-  height: min(36dvh, 300px);
+  height: min(calc(var(--canact-vh) * 30.6), 255px);
   background: linear-gradient(
     0deg,
     rgb(255 255 255 / 1) 0%,
@@ -458,7 +465,7 @@ html[data-canact-map-fade="true"] [data-canact-bottom-nav]::before {
   right: 0;
   bottom: 0;
   z-index: 0;
-  height: min(42dvh, 360px);
+  height: min(calc(var(--canact-vh) * 42), 360px);
   pointer-events: none;
   background: linear-gradient(
     0deg,
@@ -468,6 +475,10 @@ html[data-canact-map-fade="true"] [data-canact-bottom-nav]::before {
     rgb(255 255 255 / 0.48) 78%,
     rgb(255 255 255 / 0) 100%
   );
+}
+
+html[data-canact-friends-map-fade="true"] [data-canact-bottom-nav]::before {
+  height: min(calc(var(--canact-vh) * 35.7), 306px);
 }
 
 html[data-canact-map-fade="true"] [data-canact-header],

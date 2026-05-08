@@ -10,7 +10,7 @@ export function Modal({ open, onClose, title, children, footer }: { open: boolea
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-black/40 p-0 lg:items-center lg:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-transparent p-0 backdrop-blur-sm lg:items-center lg:p-4" onClick={onClose}>
       <div className="max-h-[90svh] w-[100vw] max-w-[100vw] overflow-auto overscroll-contain rounded-t-2xl border border-line bg-surface [-webkit-overflow-scrolling:touch] lg:w-full lg:max-w-md lg:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         {title && <div className="px-5 py-4 border-b border-line text-lg font-bold">{title}</div>}
         <div className="p-5">{children}</div>

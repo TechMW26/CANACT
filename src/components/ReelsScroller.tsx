@@ -300,7 +300,7 @@ function CommentsSheet({
 
   return (
     <div data-canact-popup="true" className="absolute inset-0 z-40" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 canact-sheet-backdrop" />
+      <div className="absolute inset-0 bg-transparent backdrop-blur-sm canact-sheet-backdrop" />
       <div
         {...swipeDismissHandlers}
         style={{

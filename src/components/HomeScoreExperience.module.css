@@ -69,7 +69,7 @@
 
 .greeting {
   position: absolute;
-  top: clamp(74px, 13.5dvh, 142px);
+  top: clamp(74px, calc(var(--canact-vh) * 13.5), 142px);
   left: 0;
   right: 0;
   z-index: 20;
@@ -459,13 +459,13 @@
 
 .nearbyPanel::before {
   top: var(--canact-map-header-fade-start, 55px);
-  height: min(29.75dvh, 250px);
+  height: min(calc(var(--canact-vh) * 29.75), 250px);
   background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 24%, rgba(255, 255, 255, .9) 38%, rgba(255, 255, 255, .48) 61%, rgba(255, 255, 255, 0) 100%);
 }
 
 .nearbyPanel::after {
   bottom: 0;
-  height: min(34dvh, 280px);
+  height: min(calc(var(--canact-vh) * 34), 280px);
   background: linear-gradient(0deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, .92) 24%, rgba(255, 255, 255, .52) 62%, rgba(255, 255, 255, 0) 100%);
 }
 

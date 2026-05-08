@@ -51,7 +51,7 @@ function RatingPromptModal({
   const [busy, setBusy] = useState(false);
   const minutes = Math.max(1, Math.round(pending.durationMs / 60000));
   return (
-    <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-ink/40 backdrop-blur-sm p-3">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-transparent p-3 backdrop-blur-sm md:items-center">
       <div className="w-full max-w-sm rounded-3xl bg-white p-5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">

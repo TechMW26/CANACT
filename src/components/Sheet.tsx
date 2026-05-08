@@ -114,7 +114,7 @@ export function Sheet({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-transparent backdrop-blur-sm transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         {...swipeDismissHandlers}

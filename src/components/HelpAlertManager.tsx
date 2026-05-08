@@ -180,8 +180,7 @@ export function HelpAlertManager() {
       aria-modal="true"
       aria-labelledby="help-alert-title"
     >
-      {/* Solid dark backdrop — clicks do NOT dismiss. */}
-      <div className="absolute inset-0 bg-ink/70 backdrop-blur-sm" aria-hidden="true" />
+      <div className="absolute inset-0 bg-transparent backdrop-blur-sm" aria-hidden="true" />
       <div className="relative w-full max-w-sm rounded-3xl bg-white ring-1 ring-black/5 overflow-hidden">
         {current.kind === 'request' ? (
           <>
