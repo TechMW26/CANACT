@@ -32,6 +32,9 @@ type MarkerCluster = { key: string; friends: LocatedFriend[]; screen: ScreenPoin
 const TILE_SIZE = 256;
 const MARKER_CLUSTER_DISTANCE = 56;
 const DEFAULT_CENTER: Point = { lat: 20, lng: 0 };
+const MAP_TILE_CACHE = 'canact-map-tiles-v1';
+const MAX_PREFETCH_TILE_URLS = 120;
+const prefetchedTileUrls = new Set<string>();
 
 export function FriendsWorldMap({
   friends,
@@ -59,6 +62,7 @@ export function FriendsWorldMap({
 
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => {
+    if (viewRef.current.key === 'manual') return;
     activePointersRef.current.clear();
     gestureRef.current = null;
     setView(baseView);
@@ -82,6 +86,10 @@ export function FriendsWorldMap({
     () => buildMarkerClusters(locatedFriends, view.center, zoom, mapSize),
     [locatedFriends, view.center.lat, view.center.lng, zoom, mapSize.width, mapSize.height],
   );
+  const prefetchTileUrls = useMemo(
+    () => buildMapTilePrefetchUrls(locatedFriends, currentLocation, tileZoom),
+    [locatedFriends, currentLocation?.lat, currentLocation?.lng, tileZoom],
+  );
   const selectedCluster = selectedClusterKey
     ? markerClusters.find((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1) ?? null
     : null;
@@ -91,6 +99,12 @@ export function FriendsWorldMap({
     if (!selectedClusterKey) return;
     if (!markerClusters.some((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1)) setSelectedClusterKey(null);
   }, [markerClusters, selectedClusterKey]);
+
+  useEffect(() => {
+    if (!prefetchTileUrls.length) return;
+    const timer = window.setTimeout(() => { void prefetchMapTileUrls(prefetchTileUrls); }, 650);
+    return () => window.clearTimeout(timer);
+  }, [prefetchTileUrls]);
 
   const adjustZoom = useCallback((delta: number) => {
     setView((current) => ({ ...current, zoom: clamp(current.zoom + delta, 1, 19), key: 'manual' }));
@@ -416,6 +430,51 @@ function buildTileViewport(center: Point, zoom: number, size: Size) {
   return { tiles };
 }
 
+function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Point | null | undefined, tileZoom: number) {
+  const points: Point[] = [...friends];
+  if (currentLocation) points.unshift(currentLocation);
+  if (!points.length) return [];
+  const prefetchZooms = uniqueNumbers([
+    clamp(Math.floor(tileZoom), 3, 16),
+    clamp(Math.floor(tileZoom) + 1, 3, 16),
+    clamp(Math.max(5, Math.floor(tileZoom)), 5, 16),
+  ]);
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  for (const point of points) {
+    for (const zoom of prefetchZooms) {
+      const centerTile = pointToTile(point, zoom);
+      for (let tileXOffset = -1; tileXOffset <= 1; tileXOffset += 1) {
+        for (let tileYOffset = -1; tileYOffset <= 1; tileYOffset += 1) {
+          const tileX = wrap(centerTile.x + tileXOffset, 2 ** zoom);
+          const tileY = centerTile.y + tileYOffset;
+          if (tileY < 0 || tileY >= 2 ** zoom) continue;
+          for (const kind of ['light', 'satellite'] as const) {
+            const url = tileUrl(kind, zoom, tileX, tileY);
+            if (seen.has(url)) continue;
+            seen.add(url);
+            urls.push(url);
+            if (urls.length >= MAX_PREFETCH_TILE_URLS) return urls;
+          }
+        }
+      }
+    }
+  }
+  return urls;
+}
+
+function pointToTile(point: Point, zoom: number) {
+  const pixel = project(point, zoom);
+  return {
+    x: Math.floor(pixel.x / TILE_SIZE),
+    y: clamp(Math.floor(pixel.y / TILE_SIZE), 0, 2 ** zoom - 1),
+  };
+}
+
+function uniqueNumbers(values: number[]) {
+  return [...new Set(values.map((value) => Math.round(value)))];
+}
+
 function buildMarkerClusters(friends: LocatedFriend[], center: Point, zoom: number, size: Size): MarkerCluster[] {
   const clusters: MarkerCluster[] = [];
   friends.forEach((friend) => {
@@ -500,6 +559,26 @@ function mapLocationLabel(friend: FriendMapPerson) {
 function tileUrl(kind: 'light' | 'satellite', z: number, x: number, y: number) {
   if (kind === 'satellite') return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   return `https://a.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`;
+}
+
+async function prefetchMapTileUrls(urls: string[]) {
+  if (typeof window === 'undefined') return;
+  const nextUrls = urls.filter((url) => !prefetchedTileUrls.has(url));
+  if (!nextUrls.length) return;
+  nextUrls.forEach((url) => prefetchedTileUrls.add(url));
+  const cache = 'caches' in window ? await caches.open(MAP_TILE_CACHE).catch(() => null) : null;
+  for (const url of nextUrls) {
+    try {
+      const request = new Request(url, { mode: 'no-cors', credentials: 'omit' });
+      if (cache && await cache.match(request, { ignoreVary: true })) continue;
+      const response = await fetch(request);
+      if (cache && (response.ok || response.type === 'opaque')) {
+        await cache.put(request, response.clone()).catch(() => undefined);
+      }
+    } catch {
+      prefetchedTileUrls.delete(url);
+    }
+  }
 }
 
 function osmTileUrl(z: number, x: number, y: number) {

@@ -293,7 +293,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           white elsewhere. Active tab gets the brand pill treatment. */}
       <nav
         data-canact-bottom-nav
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome border-t-0 pt-8' : 'bg-white border-t border-line'}`}
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 transition-colors duration-500 ease-out ${profileBlendChrome ? 'canact-profile-footer-chrome pt-8' : 'bg-white'}`}
         style={{ paddingBottom: mobileBottomNavSafeInset ?? undefined }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
@@ -386,8 +386,8 @@ function getMobileHeaderTopInset() {
 
 function getMobileBottomNavSafeInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined' || typeof document === 'undefined') return null;
-  if (isIPhoneDevice()) return 'max(env(safe-area-inset-bottom, 0px), 8px)';
-  return measureSafeAreaInsetBottom() > 0 ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : null;
+  if (isIOSDevice()) return null;
+  return measureSafeAreaInsetBottom() > 0 ? 'env(safe-area-inset-bottom, 0px)' : null;
 }
 
 function measureSafeAreaInsetBottom() {
@@ -397,11 +397,6 @@ function measureSafeAreaInsetBottom() {
   const value = Number.parseFloat(window.getComputedStyle(probe).paddingBottom) || 0;
   probe.remove();
   return value;
-}
-
-function isIPhoneDevice() {
-  if (typeof navigator === 'undefined') return false;
-  return /iPhone|iPod/.test(navigator.userAgent || '');
 }
 
 function isIOSDevice() {
@@ -451,7 +446,7 @@ function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolea
   return (
     <header
       data-canact-header
-      className={`fixed top-0 left-0 right-0 z-30 lg:hidden transition-colors duration-500 ease-out ${blendChrome ? 'canact-profile-header-chrome border-b-0 pb-8' : 'bg-white border-b border-line'}`}
+      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden transition-colors duration-500 ease-out ${blendChrome ? 'canact-profile-header-chrome pb-8' : 'bg-white'}`}
       style={{ paddingTop: topInset ?? undefined }}
     >
       <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>

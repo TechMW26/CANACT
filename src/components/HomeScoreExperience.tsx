@@ -1,6 +1,6 @@
 'use client';
 
-import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { Avatar } from '@/components/Avatar';
@@ -66,7 +66,6 @@ export function HomeScoreExperience() {
   const pillScoreRef = useRef<HTMLSpanElement | null>(null);
   const pillLabelRef = useRef<HTMLSpanElement | null>(null);
   const pillAuraRef = useRef<HTMLDivElement | null>(null);
-  const blobLayerRef = useRef<HTMLDivElement | null>(null);
   const prevScoreRef = useRef<number | null>(null);
   const scoreCounterFrameRef = useRef(0);
 
@@ -205,14 +204,14 @@ export function HomeScoreExperience() {
     const applyProgress = (progress: number) => {
       const eased = easeInOutQuart(progress);
 
-      const startWidth = 260;
-      const endWidth = 146;
-      const startHeight = 260;
-      const endHeight = 38;
+      const startWidth = 304;
+      const endWidth = 178;
+      const startHeight = 304;
+      const endHeight = 46;
       const width = startWidth - eased * (startWidth - endWidth);
       const height = startHeight - eased * (startHeight - endHeight);
 
-      const startY = 276;
+      const startY = 258;
       const endY = 82;
       const y = startY - eased * (startY - endY);
 
@@ -223,7 +222,6 @@ export function HomeScoreExperience() {
       circle.style.width = `${width}px`;
       circle.style.height = `${height}px`;
       circle.style.borderRadius = `${height / 2}px`;
-      circle.style.background = '#fff';
       scoreWrap.style.transform = `translateY(${y}px)`;
       scoreInner.style.opacity = String(innerOpacity);
       scoreInner.style.transform = `scale(${innerScale})`;
@@ -232,7 +230,6 @@ export function HomeScoreExperience() {
       scrollHint.style.opacity = String(1 - Math.min(progress / 0.15, 1));
       scorePulse.style.opacity = '0';
       pillAura.style.opacity = '0';
-      circle.style.boxShadow = 'none';
 
       if (progress > 0.86) {
         const textProgress = Math.min((progress - 0.86) / 0.10, 1);
@@ -246,19 +243,6 @@ export function HomeScoreExperience() {
       }
 
       pillAura.style.transform = 'scale(.9)';
-
-      // Drive blob morph toward the map: blobs fan outward and fade as the
-      // score collapses into a pill so they appear to seed the next screen.
-      const blobLayer = blobLayerRef.current;
-      if (blobLayer) {
-        const spread = eased * 90;
-        const lift = eased * -40;
-        const scale = 1 + eased * 0.55;
-        blobLayer.style.setProperty('--blob-layer-opacity', String(1 - eased * 0.6));
-        blobLayer.style.setProperty('--blob-tx', `${spread}px`);
-        blobLayer.style.setProperty('--blob-ty', `${lift}px`);
-        blobLayer.style.setProperty('--blob-scale', String(scale));
-      }
     };
 
     updatePill(currentScore);
@@ -430,6 +414,8 @@ export function HomeScoreExperience() {
     ? `${scoreSummary.baseline} baseline`
     : `${scoreSummary.delta > 0 ? '↑' : '↓'} ${Math.abs(scoreSummary.delta)}`;
   const radiusLabel = Number.isFinite(radius) ? formatDistance(radius) : 'anywhere';
+  const scoreMeterProgress = scoreSummary.max > 0 ? Math.max(0, Math.min(1, scoreSummary.score / scoreSummary.max)) : 0;
+  const scoreMeterStyle = { '--score-meter-angle': `${Math.round(scoreMeterProgress * 360)}deg` } as CSSProperties;
 
   return (
     <section
@@ -440,13 +426,6 @@ export function HomeScoreExperience() {
       onPointerDown={handleStagePointerDown}
       onPointerUp={handleStagePointerUp}
     >
-      <div className={styles.blobLayer} ref={blobLayerRef} aria-hidden>
-        <div className={`${styles.blob} ${styles.blobA}`} />
-        <div className={`${styles.blob} ${styles.blobB}`} />
-        <div className={`${styles.blob} ${styles.blobC}`} />
-        <div className={`${styles.blob} ${styles.blobD}`} />
-      </div>
-
       <div className={`${styles.nearbyPanel} ${stage === 'nearby' ? styles.nearbyPanelActive : ''}`} aria-hidden={stage !== 'nearby'}>
         {currentLocation ? (
           <FriendsWorldMap
@@ -495,7 +474,7 @@ export function HomeScoreExperience() {
         <div className={styles.pillAura} ref={pillAuraRef} />
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
-        <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} onClick={stage === 'nearby' ? showScore : undefined} aria-label="Canact score">
+        <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={stage === 'nearby' ? showScore : undefined} aria-label="Canact score">
           <div className={styles.scoreInner} ref={scoreInnerRef}>
             <div className={styles.scoreLabel}>canact score</div>
             <div className={styles.scoreNum} ref={scoreNumRef}>{scoreSummary.score}</div>

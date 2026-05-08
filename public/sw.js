@@ -34,9 +34,12 @@ const RUNTIME_CACHE = `canact-runtime-${BUILD_ID}`;
 // stamp at write time and culled to MEDIA_CACHE_MAX entries (LRU-ish:
 // oldest entry by stored timestamp wins eviction).
 const MEDIA_CACHE = 'canact-media-v1';
+const MAP_TILE_CACHE = 'canact-map-tiles-v1';
 const MEDIA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MEDIA_CACHE_MAX = 250;
+const MAP_TILE_CACHE_MAX = 650;
 const MEDIA_HOSTS = ['public.blob.vercel-storage.com', 'googleusercontent.com'];
+const MAP_TILE_HOSTS = ['basemaps.cartocdn.com', 'tile.openstreetmap.org', 'server.arcgisonline.com'];
 
 // Hostnames that must always hit the network.
 const DATA_HOSTS = [
@@ -63,7 +66,7 @@ self.addEventListener('activate', (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter((n) => n !== SHELL_CACHE && n !== RUNTIME_CACHE && n !== MEDIA_CACHE)
+          .filter((n) => n !== SHELL_CACHE && n !== RUNTIME_CACHE && n !== MEDIA_CACHE && n !== MAP_TILE_CACHE)
           .map((n) => caches.delete(n))
       );
       await self.clients.claim();
@@ -75,6 +78,10 @@ self.addEventListener('activate', (event) => {
 
 function isMediaRequest(url) {
   return MEDIA_HOSTS.some((h) => url.hostname.endsWith(h));
+}
+
+function isMapTileRequest(url) {
+  return MAP_TILE_HOSTS.some((h) => url.hostname.endsWith(h));
 }
 
 function isDataRequest(url) {
@@ -128,6 +135,29 @@ async function cacheFirstMedia(req) {
     } catch { /* cache failure is non-fatal */ }
   }
   return res;
+}
+
+async function cacheFirstMapTile(req) {
+  const cache = await caches.open(MAP_TILE_CACHE);
+  const cached = await cache.match(req, { ignoreVary: true });
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res && (res.ok || res.type === 'opaque')) {
+    cache.put(req, res.clone()).catch(() => {});
+    pruneMapTileCache().catch(() => {});
+  }
+  return res;
+}
+
+async function pruneMapTileCache() {
+  const cache = await caches.open(MAP_TILE_CACHE);
+  const reqs = await cache.keys();
+  if (reqs.length <= MAP_TILE_CACHE_MAX) return;
+  await Promise.all(
+    reqs
+      .slice(0, reqs.length - MAP_TILE_CACHE_MAX)
+      .map((req) => cache.delete(req, { ignoreVary: true }).catch(() => {}))
+  );
 }
 
 /** Evict expired entries first, then trim oldest until we're under cap. */
@@ -244,6 +274,11 @@ self.addEventListener('fetch', (event) => {
   // re-render instantly from disk on revisit instead of re-hitting the CDN.
   if (isMediaRequest(url)) {
     event.respondWith(cacheFirstMedia(req));
+    return;
+  }
+
+  if (isMapTileRequest(url)) {
+    event.respondWith(cacheFirstMapTile(req));
     return;
   }
 
