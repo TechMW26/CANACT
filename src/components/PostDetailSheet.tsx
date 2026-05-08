@@ -225,6 +225,7 @@ function FullBleedMediaHeader({
   subline,
   onShare,
   onDelete,
+  bottomOverlay,
   children,
 }: {
   authorName: string;
@@ -233,12 +234,21 @@ function FullBleedMediaHeader({
   subline: string;
   onShare: () => void;
   onDelete?: () => Promise<void> | void;
+  bottomOverlay?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="relative -mx-4 overflow-hidden bg-black">
       {children}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
+      {bottomOverlay ? (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/58 via-black/22 to-transparent" />
+          <div className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pb-5">
+            {bottomOverlay}
+          </div>
+        </>
+      ) : null}
       <div className="pointer-events-auto absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3">
         <Link href={`/profile/${authorUid}`} className="shrink-0">
           <Avatar src={authorPhoto ?? null} name={authorName} size={42} />
@@ -257,7 +267,6 @@ function FullBleedMediaHeader({
 }
 
 function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; myUid: string; onShare: () => void; onDeleted: () => void }) {
-  const myReact = post.reactionVoters?.[myUid];
   const hasMedia = !!post.mediaUrls?.length;
   const onDelete = post.uid === myUid ? async () => { await deletePost(post.id, post.uid); onDeleted(); } : undefined;
   return (
@@ -270,6 +279,7 @@ function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; my
           subline={timeAgo(post.createdAt)}
           onShare={onShare}
           onDelete={onDelete}
+          bottomOverlay={<WhaReactionBar post={post} myUid={myUid} overlay />}
         >
           <MediaSlider urls={post.mediaUrls!} posters={post.mediaPosters} rounded={false} />
         </FullBleedMediaHeader>
@@ -277,18 +287,31 @@ function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; my
         <DetailHeader authorName={post.authorName} authorUid={post.uid} authorPhoto={post.authorPhoto} subline={timeAgo(post.createdAt)} onShare={onShare} onDelete={onDelete} />
       )}
       {post.text ? <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{post.text}</p> : null}
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-        {WHA_REACTIONS.map(({ id, Icon, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => reactWha(post.id, myUid, id)}
-            className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold ${myReact === id ? 'border-brand bg-brand text-white' : 'border-line bg-white text-ink'}`}
-          >
-            <Icon size={14} /> {post.reactions?.[id] ?? 0}<span className="sr-only">{label}</span>
-          </button>
-        ))}
-      </div>
+      {!hasMedia ? <WhaReactionBar post={post} myUid={myUid} /> : null}
+    </div>
+  );
+}
+
+function WhaReactionBar({ post, myUid, overlay = false }: { post: WhaPost; myUid: string; overlay?: boolean }) {
+  const myReact = post.reactionVoters?.[myUid];
+  return (
+    <div className={`${overlay ? '' : 'mt-4'} flex gap-2 overflow-x-auto pb-1 no-scrollbar`}>
+      {WHA_REACTIONS.map(({ id, Icon, label }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => reactWha(post.id, myUid, id)}
+          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold backdrop-blur ${
+            myReact === id
+              ? 'border-brand bg-brand text-white'
+              : overlay
+                ? 'border-white/70 bg-white/92 text-ink'
+                : 'border-line bg-white text-ink'
+          }`}
+        >
+          <Icon size={14} /> {post.reactions?.[id] ?? 0}<span className="sr-only">{label}</span>
+        </button>
+      ))}
     </div>
   );
 }

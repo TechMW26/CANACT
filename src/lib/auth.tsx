@@ -93,7 +93,7 @@ function isMobile(): boolean {
 }
 
 /** Seed a minimal profile after first Google sign-in. Profile is marked incomplete
- * so the app can route the user to /onboard to fill the rest. Safe to call repeatedly. */
+ * so the profile page can prompt the user to finish it. Safe to call repeatedly. */
 async function seedProfileIfMissing(u: FbUser) {
   const snap = await get(ref(db, `users/${u.uid}`));
   if (snap.exists()) return;
@@ -129,6 +129,12 @@ async function seedProfileIfMissing(u: FbUser) {
   await set(ref(db, `users/${u.uid}`), cleaned);
 }
 
+async function routeAfterSignIn(u: FbUser) {
+  await seedProfileIfMissing(u);
+  const snap = await get(ref(db, `users/${u.uid}/profileComplete`));
+  return snap.val() === false ? '/profile' : '/';
+}
+
 /** Fire-and-forget seed. Errors are logged but never thrown so they cannot
  * stall the auth listener or block routing. */
 function seedInBackground(u: FbUser) {
@@ -148,13 +154,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const auth = getFirebaseAuth();
     // Pick up redirect result (mobile flow). On success, force a hard reload to
-    // '/' so React/Next state can't drift from Firebase state — the / route
-    // then routes to /onboard or /feed based on profileComplete.
+    // '/' so React/Next state can't drift from Firebase state.
     getRedirectResult(auth)
-      .then((r) => {
+      .then(async (r) => {
         if (r?.user && typeof window !== 'undefined') {
+          const destination = await routeAfterSignIn(r.user).catch(() => '/');
           // Replace history so back-button doesn't return to /welcome.
-          window.location.replace('/');
+          window.location.replace(destination);
         }
       })
       .catch((err) => {

@@ -240,9 +240,9 @@ export function HomeScoreExperience() {
       const circleScale = Math.min(widthScale, heightScale);
 
       const startWidth = Math.round(304 * circleScale);
-      const endWidth = Math.round(178 * Math.max(0.88, Math.min(1, widthScale)));
+      const endWidth = Math.round(188 * Math.max(0.88, Math.min(1, widthScale)));
       const startHeight = startWidth;
-      const endHeight = Math.round(46 * Math.max(0.92, Math.min(1, widthScale)));
+      const endHeight = Math.round(44 * Math.max(0.92, Math.min(1, widthScale)));
       const width = startWidth - eased * (startWidth - endWidth);
       const height = startHeight - eased * (startHeight - endHeight);
 
@@ -255,6 +255,8 @@ export function HomeScoreExperience() {
       const y = startY - eased * (startY - endY);
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
+      const pillReveal = easeInOutQuart(Math.max(0, Math.min(1, (progress - 0.72) / 0.22)));
+      const meterInset = Math.max(10, Math.round(18 * (width / 304)));
 
       const innerProgress = Math.min(progress / 0.42, 1);
       const innerOpacity = 1 - easeInOutQuart(innerProgress);
@@ -266,7 +268,10 @@ export function HomeScoreExperience() {
       circle.style.setProperty('--score-circle-scale', String(circleScale));
       circle.style.setProperty('--score-meter-opacity', String(meterReveal));
       circle.style.setProperty('--score-meter-scale', String(0.78 + meterReveal * 0.22));
-      circle.style.setProperty('--score-gradient-border-width', `${3 + gradientBorderProgress * 7}px`);
+      circle.style.setProperty('--score-meter-inset', `${meterInset}px`);
+      circle.style.setProperty('--score-gradient-border-width', `${2 + gradientBorderProgress * 2}px`);
+      circle.style.setProperty('--score-pill-opacity', String(pillReveal));
+      circle.style.setProperty('--score-pill-scale', String(0.985 + pillReveal * 0.015));
       circle.toggleAttribute('data-pill-border', progress > 0.72);
       scoreWrap.style.transform = `translateY(${y}px)`;
       scoreInner.style.opacity = String(innerOpacity);
@@ -552,6 +557,9 @@ export function HomeScoreExperience() {
             <div className={styles.scoreSource}>{scoreSummary.max} MAX</div>
           </div>
 
+          <div className={styles.scorePillFrame} aria-hidden="true">
+            <div className={styles.scorePillFill} />
+          </div>
           <div className={`${styles.pillContent} ${styles[getScoreClass(scoreSummary.score)]}`} ref={pillContentRef}>
             <span className={styles.pillDot} />
             <span className={styles.pillScore} ref={pillScoreRef}>{scoreSummary.score}</span>

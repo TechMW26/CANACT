@@ -125,7 +125,10 @@
   --score-circle-scale: 1;
   --score-meter-opacity: 1;
   --score-meter-scale: 1;
+  --score-meter-inset: 18px;
   --score-gradient-border-width: 0px;
+  --score-pill-opacity: 0;
+  --score-pill-scale: .985;
   --score-meter-start: #F4C84E;
   --score-meter-end: #27C76F;
   --score-meter-track: rgba(219, 225, 221, .78);
@@ -218,7 +221,7 @@
 
 .scoreMeterSvg {
   position: absolute;
-  inset: -18px;
+  inset: calc(var(--score-meter-inset) * -1);
   z-index: 0;
   overflow: visible;
   opacity: var(--score-meter-opacity);
@@ -253,33 +256,16 @@
 .scoreCircle[data-pill-border="true"] {
   border-width: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, .88);
-  backdrop-filter: blur(18px);
+  background: transparent;
+  backdrop-filter: none;
   box-shadow: none;
 }
 
 .scoreCircle[data-pill-border="true"]::before {
-  display: block;
-  inset: 0;
-  z-index: 4;
-  padding: var(--score-gradient-border-width);
-  background: linear-gradient(110deg, #F4C84E 0%, #35CA7A 32%, #7ADFD0 54%, #FF8EAF 76%, #F4C84E 100%);
-  background-size: 220% 100%;
-  box-shadow: none;
-  opacity: 1;
-  transform: none;
-  animation: homePillBorder 4.8s linear infinite;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  display: none;
 }
 
 .scoreCircle[data-pill-border="true"]::after {
-  inset: var(--score-gradient-border-width);
-  z-index: 1;
-  background: transparent;
-  box-shadow: none;
   opacity: 0;
 }
 
@@ -287,8 +273,48 @@
   opacity: 0;
 }
 
-.stageNearby .scoreCircle[data-pill-border="true"]::before {
-  opacity: 1;
+.scorePillFrame {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  padding: var(--score-gradient-border-width);
+  border-radius: inherit;
+  background: rgba(255, 255, 255, .72);
+  opacity: var(--score-pill-opacity);
+  pointer-events: none;
+  transform: scale(var(--score-pill-scale));
+  filter: saturate(1.05);
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .68),
+    0 12px 30px rgba(21, 32, 26, .10);
+}
+
+.scorePillFrame::before {
+  content: "";
+  position: absolute;
+  inset: -42%;
+  z-index: 0;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, #DC143C 0deg, #FF4F73 54deg, #FF9CAF 112deg, #FFD1DB 166deg, #B50F31 232deg, #8F0C28 296deg, #DC143C 360deg);
+  opacity: .92;
+  animation: homePillBorder 12s linear infinite;
+}
+
+.scorePillFill {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(255, 255, 255, .90) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+  backdrop-filter: blur(18px) saturate(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .98),
+    inset 0 -10px 20px rgba(21, 32, 26, .045);
 }
 
 .scoreCirclePulse {
@@ -371,11 +397,11 @@
 .pillContent {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   opacity: 0;
   pointer-events: none;
   transform: translateY(2px) scale(.96);
@@ -388,16 +414,16 @@
 }
 
 .pillScore {
-  font-size: 13px;
+  font-size: 21px;
   font-weight: 900;
-  letter-spacing: .4px;
+  letter-spacing: .6px;
   line-height: 1;
 }
 
 .pillLabel {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 2.2px;
   line-height: 1;
   opacity: .88;
   text-transform: uppercase;
@@ -433,9 +459,39 @@
   transform: translateY(0);
 }
 
+.nearbyPanel::before,
+.nearbyPanel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 24;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .28s ease;
+}
+
+.nearbyPanel::before {
+  top: 0;
+  height: min(30dvh, 256px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 24%, rgba(255, 255, 255, .9) 38%, rgba(255, 255, 255, .48) 61%, rgba(255, 255, 255, 0) 100%);
+}
+
+.nearbyPanel::after {
+  bottom: 0;
+  height: min(34dvh, 280px);
+  background: linear-gradient(0deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, .92) 24%, rgba(255, 255, 255, .52) 62%, rgba(255, 255, 255, 0) 100%);
+}
+
+.nearbyPanelActive::before,
+.nearbyPanelActive::after {
+  opacity: 1;
+}
+
 .nearbyMap {
   position: absolute;
   inset: 0;
+  z-index: 0;
   height: 100%;
   width: 100%;
 }
@@ -771,8 +827,8 @@
 }
 
 @keyframes homePillBorder {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 220% 50%; }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @media (min-width: 1024px) {

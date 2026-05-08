@@ -72,8 +72,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
-  const routeBlendChrome = !!pathname && (pathname === '/favourites' || routeProfileHero);
-  const profileBlendChrome = routeBlendChrome || pageBlendChrome;
+  const routeFadeChrome = !!pathname && pathname === '/favourites';
+  const profileChrome = routeProfileHero;
+  const fadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
+  const chromeOverContent = profileChrome || fadeChrome;
 
   useLayoutEffect(() => {
     document.documentElement.toggleAttribute('data-canact-profile-route', routeProfileHero);
@@ -104,12 +106,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) { router.replace('/welcome'); return; }
-    // Don't bounce to /onboard while the profile subscription is still pending.
-    if (!profile && !profileTimedOut) return;
-    if ((!profile || profile.profileComplete === false) && !pathname?.startsWith('/onboard')) {
-      router.replace('/onboard');
-    }
-  }, [user, profile, loading, pathname, router, profileTimedOut]);
+  }, [user, loading, router]);
 
   useEffect(() => {
     if (pathname !== '/create') return;
@@ -224,7 +221,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           shell has multiple ancestors with `overflow` set, and even the
           slightest CSS containment / transform on any of them silently
           breaks `position: sticky`. Fixed has none of those constraints. */}
-      <div id="canact-app-content" data-disable-sheet-zoom={profileBlendChrome ? 'true' : undefined} className="lg:w-full lg:pl-60">
+      <div id="canact-app-content" data-disable-sheet-zoom={chromeOverContent ? 'true' : undefined} className="lg:w-full lg:pl-60">
       {/* Desktop sidebar — fixed to the viewport so it's always in view
           regardless of how far the main column scrolls. Hidden under lg
           (tablet portrait still gets the floating mobile header + bottom nav). */}
@@ -264,7 +261,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader blendChrome={profileBlendChrome} topInset={mobileHeaderTopInset} />
+        <UnifiedHeader profileChrome={profileChrome} fadeChrome={fadeChrome} topInset={mobileHeaderTopInset} />
         {/* Spacer mirroring the fixed top bar so page content starts below it.
           Top bar = safe-area-inset-top + 56px (h-14 row). */}
         <div
@@ -282,11 +279,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </main>
       </div>{/* /canact-app-content */}
 
-        {/* Mobile bottom nav is profile-blended on profile routes and standard
-          white elsewhere. Active tab gets the brand pill treatment. */}
+        {/* Mobile bottom nav is profile-blended on profile routes, white/faded
+          over map surfaces, and standard white elsewhere. */}
       <nav
         data-canact-bottom-nav
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileBlendChrome ? 'canact-profile-footer-chrome pt-8' : 'bg-white'}`}
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileChrome ? 'canact-profile-footer-chrome pt-8' : fadeChrome ? 'canact-fade-footer-chrome bg-white' : 'bg-white'}`}
         style={{ paddingBottom: 'var(--canact-footer-safe-padding)' }}
       >
         <div className="relative z-10 flex h-16 items-center justify-around px-2">
@@ -401,7 +398,7 @@ function titleFor(path: string | null) {
   return '';
 }
 
-function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolean; topInset?: string | null }) {
+function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
@@ -421,20 +418,22 @@ function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolea
     return () => { off1?.(); off2?.(); };
   }, [user?.uid]);
 
+  const headerChromeClass = profileChrome ? 'canact-profile-header-chrome pb-8' : fadeChrome ? 'canact-fade-header-chrome bg-white' : 'bg-white';
+
   return (
     <header
       data-canact-header
-      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${blendChrome ? 'canact-profile-header-chrome pb-8' : 'bg-white'}`}
+      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${headerChromeClass}`}
       style={{ paddingTop: topInset ?? undefined }}
     >
-      <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${blendChrome ? 'canact-profile-header-content' : ''}`}>
+      <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={26} href="/" />
         <div className="ml-auto inline-flex items-center gap-2">
-          <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={blendChrome} />
-          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+          <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
+          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
             <Search size={18} strokeWidth={2.2} />
           </Link>
-          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
             <Heart size={18} strokeWidth={2.2} />
             {pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
@@ -442,7 +441,7 @@ function UnifiedHeader({ blendChrome = false, topInset }: { blendChrome?: boolea
               </span>
             )}
           </Link>
-          <Link href="/help" aria-label="Help" prefetch onClick={() => haptic('subtle')} style={{ color: '#dc2626' }} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${blendChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white hover:bg-red-50 hover:text-red-700'}`}>
+          <Link href="/help" aria-label="Help" prefetch onClick={() => haptic('subtle')} style={{ color: '#dc2626' }} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white hover:bg-red-50 hover:text-red-700'}`}>
             <HeartHandshake size={19} strokeWidth={2.3} />
           </Link>
         </div>
