@@ -23,6 +23,7 @@
      Apply once at the panel level — never stack on multiple ancestors. */
   --canact-popup-bottom-inset: 0px;
   --canact-popup-max-height: 90svh;
+  --canact-map-header-fade-start: 55px;
 }
 
 @media (max-width: 380px), (max-height: 720px) {
@@ -408,7 +409,6 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 .canact-map-surface::before,
 .canact-map-surface::after {
   content: "";
-  position: absolute;
   left: 0;
   right: 0;
   z-index: 20;
@@ -416,7 +416,8 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 }
 
 .canact-map-surface::before {
-  top: 0;
+  position: fixed;
+  top: var(--canact-map-header-fade-start);
   height: min(35dvh, 294px);
   background: linear-gradient(
     180deg,
@@ -429,6 +430,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
 }
 
 .canact-map-surface::after {
+  position: absolute;
   bottom: 0;
   height: min(36dvh, 300px);
   background: linear-gradient(

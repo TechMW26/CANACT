@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Avatar } from './Avatar';
 
 export type FriendMapPerson = {
@@ -302,9 +303,9 @@ function MapMarkerCluster({
 }
 
 function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: MarkerCluster; onClose: () => void; onPersonSelect?: (person: FriendMapPerson) => void }) {
-  return (
+  const panel = (
     <div
-      className="absolute bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[80] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-5"
+      className="fixed bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[110] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-5"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
@@ -346,6 +347,9 @@ function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: Mar
       </ul>
     </div>
   );
+
+  if (typeof document === 'undefined') return panel;
+  return createPortal(panel, document.body);
 }
 
 function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[]; kind: 'light' | 'satellite'; opacity: number; scale: number; viewportSize: Size }) {

@@ -73,6 +73,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
   const routeFadeChrome = !!pathname && pathname === '/favourites';
+  const routeFeed = pathname === '/feed';
   const profileChrome = routeProfileHero;
   const fadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
   const chromeOverContent = profileChrome || fadeChrome;
@@ -102,6 +103,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--canact-map-header-fade-start', mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 55px)` : '55px');
+    return () => {
+      root.style.removeProperty('--canact-map-header-fade-start');
+    };
+  }, [mobileHeaderTopInset]);
 
   useEffect(() => {
     if (loading) return;
@@ -270,7 +279,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           className="lg:hidden"
           style={{ height: pageBlendChrome ? '0px' : mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 56px)` : '56px' }}
         />
-        <div className="canact-col pb-20 lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6"><PageTransition>{children}</PageTransition></div>
+        <div className={`canact-col ${routeFeed ? 'pb-0' : 'pb-20'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />

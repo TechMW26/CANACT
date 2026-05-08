@@ -176,7 +176,7 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
-    <div className="min-h-[var(--canact-viewport-height)] pt-4 pb-24 md:pb-10">
+    <div className="pt-4 pb-2 md:pb-4">
 
       <section className="canact-stories-strip flex items-center gap-2 pb-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
