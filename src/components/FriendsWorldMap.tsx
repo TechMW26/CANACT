@@ -46,6 +46,7 @@ export function FriendsWorldMap({
   friends,
   currentLocation,
   focusPoint,
+  liteMode = false,
   className,
   emptyTitle = 'No friend locations yet',
   emptyBody = 'Friends appear here after they have a recent app location.',
@@ -54,6 +55,7 @@ export function FriendsWorldMap({
   friends: FriendMapPerson[];
   currentLocation?: Point | null;
   focusPoint?: Point | null;
+  liteMode?: boolean;
   className?: string;
   emptyTitle?: string;
   emptyBody?: string;
@@ -117,8 +119,8 @@ export function FriendsWorldMap({
   }), [mapSize.width, mapSize.height, tileScale]);
   const satelliteOpacity = smoothStep(4.25, 5.25, zoom);
   const lightLayerOpacity = Math.max(0.14, 1 - satelliteOpacity);
-  const renderSatelliteLayer = satelliteOpacity > 0.02;
-  const renderLightLayer = satelliteOpacity < 0.98 || lightLayerOpacity > 0.18;
+  const renderSatelliteLayer = !liteMode && satelliteOpacity > 0.02;
+  const renderLightLayer = liteMode || satelliteOpacity < 0.98 || lightLayerOpacity > 0.18;
   const activeTileKinds = useMemo<MapTileKind[]>(() => {
     const kinds: MapTileKind[] = [];
     if (renderLightLayer) kinds.push('light');
@@ -248,8 +250,8 @@ export function FriendsWorldMap({
       onWheel={handleWheel}
       className={`relative touch-none overflow-hidden overscroll-contain bg-white cursor-grab active:cursor-grabbing ${className ?? 'h-[58svh] min-h-[390px] max-h-[620px]'}`}
     >
-      {renderLightLayer ? <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
-      {renderSatelliteLayer ? <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
+      {renderLightLayer ? <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} liteMode={liteMode} /> : null}
+      {renderSatelliteLayer ? <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} liteMode={liteMode} /> : null}
       <div className="pointer-events-none absolute inset-0 bg-white/0" />
 
       {userPinStyle ? (
@@ -369,67 +371,98 @@ function MapMarkerCluster({
 }
 
 function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: MarkerCluster; onClose: () => void; onPersonSelect?: (person: FriendMapPerson) => void }) {
+  const [hasEntered, setHasEntered] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setHasEntered(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    window.setTimeout(onClose, 170);
+  }, [isClosing, onClose]);
+
+  const overlayVisible = hasEntered && !isClosing;
+
   const panel = (
-    <div
-      className="fixed bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[110] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-5"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="flex items-center justify-between gap-3 px-2 py-2">
-        <div className="min-w-0">
-          <div className="text-sm font-extrabold text-ink">{cluster.friends.length} people here</div>
-          <div className="truncate text-xs font-semibold text-ink/50">Select who you want to open</div>
+    <>
+      <button
+        type="button"
+        aria-label="Close people list"
+        className="fixed inset-0 z-[34] bg-white/22 backdrop-blur-[10px] transition-opacity duration-200 ease-out"
+        style={{ opacity: overlayVisible ? 1 : 0 }}
+        onClick={requestClose}
+      />
+      <div
+        className="fixed bottom-[var(--canact-floating-bottom-clearance)] left-3 right-3 z-[36] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-5"
+        style={{
+          opacity: overlayVisible ? 1 : 0,
+          transform: overlayVisible ? 'translateY(0) scale(1)' : 'translateY(20px) scale(.96)',
+          transition: 'opacity .2s ease, transform .22s cubic-bezier(.22, .88, .32, 1)',
+          pointerEvents: isClosing ? 'none' : 'auto',
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-2 py-2">
+          <div className="min-w-0">
+            <div className="text-sm font-extrabold text-ink">{cluster.friends.length} people here</div>
+            <div className="truncate text-xs font-semibold text-ink/50">Select who you want to open</div>
+          </div>
+          <button type="button" onClick={requestClose} className="h-8 rounded-full px-3 text-xs font-extrabold text-ink/55 active:bg-brand-light">
+            Close
+          </button>
         </div>
-        <button type="button" onClick={onClose} className="h-8 rounded-full px-3 text-xs font-extrabold text-ink/55 active:bg-brand-light">
-          Close
-        </button>
+        <ul className="max-h-[42svh] overflow-y-auto divide-y divide-line">
+          {cluster.friends.map((friend) => (
+            <li key={friend.uid}>
+              {onPersonSelect ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left active:bg-brand-light"
+                  onClick={() => { onPersonSelect(friend); requestClose(); }}
+                >
+                  <Avatar src={friend.photoURL ?? null} name={friend.name} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-extrabold text-ink">{friend.name}</div>
+                    <div className="mt-0.5 truncate text-xs font-semibold text-ink/45">{mapLocationLabel(friend)}</div>
+                  </div>
+                </button>
+              ) : (
+                <Link href={`/profile/${friend.uid}`} prefetch className="flex items-center gap-3 rounded-2xl px-2 py-3 active:bg-brand-light" onClick={requestClose}>
+                  <Avatar src={friend.photoURL ?? null} name={friend.name} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-extrabold text-ink">{friend.name}</div>
+                    <div className="mt-0.5 truncate text-xs font-semibold text-ink/45">{mapLocationLabel(friend)}</div>
+                  </div>
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="max-h-[42svh] overflow-y-auto divide-y divide-line">
-        {cluster.friends.map((friend) => (
-          <li key={friend.uid}>
-            {onPersonSelect ? (
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left active:bg-brand-light"
-                onClick={() => { onPersonSelect(friend); onClose(); }}
-              >
-                <Avatar src={friend.photoURL ?? null} name={friend.name} size={40} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-extrabold text-ink">{friend.name}</div>
-                  <div className="mt-0.5 truncate text-xs font-semibold text-ink/45">{mapLocationLabel(friend)}</div>
-                </div>
-              </button>
-            ) : (
-              <Link href={`/profile/${friend.uid}`} prefetch className="flex items-center gap-3 rounded-2xl px-2 py-3 active:bg-brand-light" onClick={onClose}>
-                <Avatar src={friend.photoURL ?? null} name={friend.name} size={40} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-extrabold text-ink">{friend.name}</div>
-                  <div className="mt-0.5 truncate text-xs font-semibold text-ink/45">{mapLocationLabel(friend)}</div>
-                </div>
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+    </>
   );
 
   if (typeof document === 'undefined') return panel;
   return createPortal(panel, document.body);
 }
 
-function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[]; kind: MapTileKind; opacity: number; scale: number; viewportSize: Size }) {
+function TileLayer({ tiles, kind, opacity, scale, viewportSize, liteMode }: { tiles: Tile[]; kind: MapTileKind; opacity: number; scale: number; viewportSize: Size; liteMode?: boolean }) {
   return (
     <div
-      className="pointer-events-none absolute left-0 top-0 transition-opacity duration-500 ease-out"
+      className={`pointer-events-none absolute left-0 top-0 ${liteMode ? '' : 'transition-opacity duration-500 ease-out'}`}
       style={{
-        opacity: kind === 'light' ? opacity * 0.72 : opacity,
+        opacity: kind === 'light' ? (liteMode ? 1 : opacity * 0.72) : opacity,
         width: viewportSize.width,
         height: viewportSize.height,
-        filter: kind === 'light' ? 'grayscale(1) saturate(.9) contrast(1.06) brightness(1.08)' : undefined,
-        transform: `scale(${scale}) translateZ(0)`,
+        filter: !liteMode && kind === 'light' ? 'grayscale(1) saturate(.9) contrast(1.06) brightness(1.08)' : undefined,
+        transform: liteMode ? `scale(${scale})` : `scale(${scale}) translateZ(0)`,
         transformOrigin: 'top left',
-        willChange: 'transform, opacity',
+        willChange: liteMode ? 'auto' : 'transform, opacity',
         backgroundColor: kind === 'light' ? '#FFFFFF' : undefined,
         mixBlendMode: 'normal',
       }}

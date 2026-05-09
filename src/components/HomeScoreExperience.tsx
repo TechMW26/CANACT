@@ -3,6 +3,7 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref, get } from 'firebase/database';
+import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
 import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorldMap';
 import { toast } from '@/components/Toaster';
@@ -121,10 +122,33 @@ export function HomeScoreExperience() {
   const [tipIndex, setTipIndex] = useState(0);
   const [tipEnterKey, setTipEnterKey] = useState(0);
   const [leavingTip, setLeavingTip] = useState<{ id: number; text: string } | null>(null);
+  const [isPerfLite, setIsPerfLite] = useState(false);
   const stageRef = useRef<HTMLElement | null>(null);
   const tipCardRef = useRef<HTMLDivElement | null>(null);
   const tipPrevRef = useRef<string>('');
   const tipTransitionIdRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => {
+      const nav = navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string };
+        deviceMemory?: number;
+      };
+      const reduceMotion = media.matches;
+      const lowCpu = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+      const lowMemory = typeof nav.deviceMemory === 'number' && nav.deviceMemory <= 4;
+      const saveData = Boolean(nav.connection?.saveData);
+      const slowNetwork = typeof nav.connection?.effectiveType === 'string' && /2g|3g/.test(nav.connection.effectiveType);
+      setIsPerfLite(reduceMotion || lowCpu || lowMemory || saveData || slowNetwork);
+    };
+    update();
+    media.addEventListener?.('change', update);
+    return () => {
+      media.removeEventListener?.('change', update);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -431,7 +455,7 @@ export function HomeScoreExperience() {
       applyProgress(targetProgress);
     } else {
       const startedAt = performance.now();
-      const duration = 420;
+      const duration = isPerfLite ? 260 : 420;
       const animate = (time: number) => {
         const progress = Math.min((time - startedAt) / duration, 1);
         const eased = easeInOutQuart(progress);
@@ -446,7 +470,7 @@ export function HomeScoreExperience() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [layoutVersion, scoreSummary.score, stage, tipIndex]);
+  }, [isPerfLite, layoutVersion, scoreSummary.score, stage, tipIndex]);
 
   // Animated sliding counter: animates from previous (or 0 on first mount) to
   // the current score, and toasts when the score changes between renders.
@@ -479,7 +503,7 @@ export function HomeScoreExperience() {
 
     if (scoreCounterFrameRef.current) window.cancelAnimationFrame(scoreCounterFrameRef.current);
     const startedAt = performance.now();
-    const duration = previous == null ? 1400 : 700;
+    const duration = previous == null ? (isPerfLite ? 780 : 1400) : (isPerfLite ? 420 : 700);
     const tick = (time: number) => {
       const progress = Math.min((time - startedAt) / duration, 1);
       const eased = easeInOutQuart(progress);
@@ -499,7 +523,7 @@ export function HomeScoreExperience() {
         scoreCounterFrameRef.current = 0;
       }
     };
-  }, [scoreSummary.score]);
+  }, [isPerfLite, scoreSummary.score]);
 
   const showNearby = useCallback(() => {
     setStage('nearby');
@@ -765,13 +789,15 @@ export function HomeScoreExperience() {
   }, [scoreProfile?.city, scoreProfile?.photoURL, scoreSummary.delta, scoreSummary.score]);
   const activeTip = scoreTips[tipIndex] ?? 'Small daily consistency keeps your trust score healthy.';
   const leavingTipGlyphs = useMemo(() => {
+    if (isPerfLite) return [];
     if (!leavingTip) return [];
     return buildTipGlyphs(leavingTip.text, 73);
-  }, [leavingTip]);
+  }, [isPerfLite, leavingTip]);
   const activeTipGlyphs = useMemo(() => {
+    if (isPerfLite) return [];
     const origin = leavingTipGlyphs.length ? leavingTipGlyphs : undefined;
     return buildTipGlyphs(activeTip, 17, origin);
-  }, [activeTip, leavingTipGlyphs]);
+  }, [activeTip, isPerfLite, leavingTipGlyphs]);
 
   useEffect(() => {
     setTipIndex(0);
@@ -781,11 +807,16 @@ export function HomeScoreExperience() {
     if (stage !== 'score' || scoreTips.length <= 1) return;
     const id = window.setInterval(() => {
       setTipIndex((index) => (index + 1) % scoreTips.length);
-    }, 4200);
+    }, isPerfLite ? 5400 : 4200);
     return () => window.clearInterval(id);
-  }, [scoreTips.length, stage]);
+  }, [isPerfLite, scoreTips.length, stage]);
 
   useEffect(() => {
+    if (isPerfLite) {
+      tipPrevRef.current = activeTip;
+      if (leavingTip) setLeavingTip(null);
+      return;
+    }
     if (!tipPrevRef.current) {
       tipPrevRef.current = activeTip;
       return;
@@ -795,7 +826,7 @@ export function HomeScoreExperience() {
     setLeavingTip({ id: tipTransitionIdRef.current, text: tipPrevRef.current });
     setTipEnterKey((value) => value + 1);
     tipPrevRef.current = activeTip;
-  }, [activeTip]);
+  }, [activeTip, isPerfLite, leavingTip]);
 
   useEffect(() => {
     if (!leavingTip) return;
@@ -825,7 +856,7 @@ export function HomeScoreExperience() {
   return (
     <section
       ref={stageRef}
-      className={`${styles.animationStage} ${stage === 'nearby' ? styles.stageNearby : ''}`}
+      className={`${styles.animationStage} ${stage === 'nearby' ? styles.stageNearby : ''} ${isPerfLite ? styles.perfLite : ''}`}
       aria-label="Canact score"
       data-canact-no-refresh="true"
       onWheel={handleStageWheel}
@@ -833,22 +864,23 @@ export function HomeScoreExperience() {
       onPointerUp={handleStagePointerUp}
     >
       <div className={`${styles.nearbyPanel} ${stage === 'nearby' ? styles.nearbyPanelActive : ''}`} aria-hidden={stage !== 'nearby'}>
-        {currentLocation ? (
+        {stage === 'nearby' && currentLocation ? (
           <FriendsWorldMap
             friends={nearbyPeople}
             currentLocation={currentLocation}
             focusPoint={activeCardFocusPoint}
+            liteMode={isPerfLite}
             className={styles.nearbyMap}
             emptyTitle="No nearby users yet"
             emptyBody={`People inside ${radiusLabel} will appear here when they share a recent location.`}
             onPersonSelect={handleMapPersonSelect}
           />
-        ) : (
+        ) : stage === 'nearby' ? (
           <div className={styles.nearbyEmpty}>
             <div className={styles.nearbyEmptyTitle}>Waiting for location</div>
             <div className={styles.nearbyEmptyBody}>Nearby people appear once your live location is available.</div>
           </div>
-        )}
+        ) : null}
         <NearbyDeck
           people={unratedPeople}
           total={unratedPeople.length}
@@ -870,33 +902,42 @@ export function HomeScoreExperience() {
             onDislike={() => handleRate(selectedMapPerson, 'dislike')}
           />
         ) : null}
-        {expandedCardUid && expandedCardPerson ? (
-          <ExpandedCardModal
-            person={expandedCardPerson}
-            personProfile={expandedCardProfile}
-            posts={expandedUserPosts}
-            postIndex={expandedPostIndex}
-            friendStatus={expandedFriendStatus}
-            busy={expandedBusy}
-            dragX={dragX}
-            ratingUid={ratingUid}
-            myVoteAttr={expandedMyVoteAttr}
-            isClosing={expandedCardClosing}
-            onPostIndexChange={setExpandedPostIndex}
-            onClose={handleCloseExpandedCard}
-            onCloseComplete={handleExpandedCardClosed}
-            onAddFriend={handleAddFriend}
-            onAddFavourite={handleAddFavourite}
-            onUnfriend={handleUnfriend}
-            onNavigateProfile={handleNavigateToProfile}
-            onAttr={handleExpandedAttr}
-            onLike={() => handleRate(expandedCardPerson, 'like')}
-            onDislike={() => handleRate(expandedCardPerson, 'dislike')}
-            onPointerDown={handleCardPointerDown}
-            onPointerMove={handleCardPointerMove}
-            onPointerEnd={handleCardPointerEnd}
-          />
-        ) : null}
+        {expandedCardUid && expandedCardPerson && typeof document !== 'undefined'
+          ? createPortal(
+            <>
+              <div
+                aria-hidden="true"
+                className={`${styles.expandedBackdrop} ${expandedCardClosing ? styles.expandedBackdropClosing : ''}`}
+              />
+              <ExpandedCardModal
+                person={expandedCardPerson}
+                personProfile={expandedCardProfile}
+                posts={expandedUserPosts}
+                postIndex={expandedPostIndex}
+                friendStatus={expandedFriendStatus}
+                busy={expandedBusy}
+                dragX={dragX}
+                ratingUid={ratingUid}
+                myVoteAttr={expandedMyVoteAttr}
+                isClosing={expandedCardClosing}
+                onPostIndexChange={setExpandedPostIndex}
+                onClose={handleCloseExpandedCard}
+                onCloseComplete={handleExpandedCardClosed}
+                onAddFriend={handleAddFriend}
+                onAddFavourite={handleAddFavourite}
+                onUnfriend={handleUnfriend}
+                onNavigateProfile={handleNavigateToProfile}
+                onAttr={handleExpandedAttr}
+                onLike={() => handleRate(expandedCardPerson, 'like')}
+                onDislike={() => handleRate(expandedCardPerson, 'dislike')}
+                onPointerDown={handleCardPointerDown}
+                onPointerMove={handleCardPointerMove}
+                onPointerEnd={handleCardPointerEnd}
+              />
+            </>,
+            document.body,
+          )
+          : null}
       </div>
 
       <div className={styles.greeting} ref={greetingRef}>
@@ -934,45 +975,49 @@ export function HomeScoreExperience() {
 
       {stage === 'score' ? (
         <div ref={tipCardRef} className={styles.tipCard} aria-live="polite" aria-label={activeTip}>
-          <span className={styles.tipTextViewport} aria-hidden="true">
-            {leavingTip ? (
-              <span key={`leave-${leavingTip.id}`} className={`${styles.tipTextLayer} ${styles.tipTextLayerExit}`}>
-                {leavingTipGlyphs.map((glyph, index) => (
+          {isPerfLite ? (
+            <span key={`lite-tip-${tipEnterKey}-${activeTip}`} className={styles.tipTextLite}>{activeTip}</span>
+          ) : (
+            <span className={styles.tipTextViewport} aria-hidden="true">
+              {leavingTip ? (
+                <span key={`leave-${leavingTip.id}`} className={`${styles.tipTextLayer} ${styles.tipTextLayerExit}`}>
+                  {leavingTipGlyphs.map((glyph, index) => (
+                    <span
+                      key={`leave-${leavingTip.id}-${glyph.char}-${index}`}
+                      className={`${styles.tipGlyph} ${styles.tipGlyphExit}`}
+                      style={{
+                        '--tip-shadow-y': `${glyph.yOffset}px`,
+                        '--tip-shadow-x': `${glyph.xOffset}px`,
+                        '--tip-shadow-blur': `${glyph.blur}px`,
+                        '--tip-delay': `${glyph.delay}ms`,
+                      } as CSSProperties}
+                    >
+                      {glyph.char === ' ' ? '\u00A0' : glyph.char}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+              <span
+                key={`enter-${tipEnterKey}-${activeTip}`}
+                className={`${styles.tipTextLayer} ${styles.tipTextLayerEnter} ${leavingTip ? styles.tipTextLayerEnterDelayed : ''}`}
+              >
+                {activeTipGlyphs.map((glyph, index) => (
                   <span
-                    key={`leave-${leavingTip.id}-${glyph.char}-${index}`}
-                    className={`${styles.tipGlyph} ${styles.tipGlyphExit}`}
+                    key={`enter-${tipEnterKey}-${glyph.char}-${index}`}
+                    className={`${styles.tipGlyph} ${styles.tipGlyphEnter}`}
                     style={{
                       '--tip-shadow-y': `${glyph.yOffset}px`,
                       '--tip-shadow-x': `${glyph.xOffset}px`,
                       '--tip-shadow-blur': `${glyph.blur}px`,
-                      '--tip-delay': `${glyph.delay}ms`,
+                      '--tip-delay': `${glyph.delay + (leavingTip ? 240 : 0)}ms`,
                     } as CSSProperties}
                   >
                     {glyph.char === ' ' ? '\u00A0' : glyph.char}
                   </span>
                 ))}
               </span>
-            ) : null}
-            <span
-              key={`enter-${tipEnterKey}-${activeTip}`}
-              className={`${styles.tipTextLayer} ${styles.tipTextLayerEnter} ${leavingTip ? styles.tipTextLayerEnterDelayed : ''}`}
-            >
-              {activeTipGlyphs.map((glyph, index) => (
-                <span
-                  key={`enter-${tipEnterKey}-${glyph.char}-${index}`}
-                  className={`${styles.tipGlyph} ${styles.tipGlyphEnter}`}
-                  style={{
-                    '--tip-shadow-y': `${glyph.yOffset}px`,
-                    '--tip-shadow-x': `${glyph.xOffset}px`,
-                    '--tip-shadow-blur': `${glyph.blur}px`,
-                    '--tip-delay': `${glyph.delay + (leavingTip ? 240 : 0)}ms`,
-                  } as CSSProperties}
-                >
-                  {glyph.char === ' ' ? '\u00A0' : glyph.char}
-                </span>
-              ))}
             </span>
-          </span>
+          )}
         </div>
       ) : null}
 
