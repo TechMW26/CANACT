@@ -344,7 +344,7 @@ export function HomeScoreExperience() {
       circle.style.setProperty('--score-pill-opacity', String(pillReveal));
       circle.style.setProperty('--score-pill-scale', String(0.985 + pillReveal * 0.015));
       circle.toggleAttribute('data-pill-border', progress > 0.72);
-      scoreWrap.style.transform = `translateY(${y}px)`;
+      scoreWrap.style.transform = `translate(-50%, ${y}px)`;
       scoreInner.style.opacity = String(innerOpacity);
       scoreInner.style.transform = `scale(${innerScale})`;
       greeting.style.opacity = String(1 - Math.min(progress / 0.2, 1));
@@ -782,16 +782,18 @@ export function HomeScoreExperience() {
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
         <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={() => { if (stage === 'nearby' || progressRef.current > 0.6) showScore(); }} aria-label="Canact score">
-          <svg className={styles.scoreMeterSvg} viewBox="0 0 340 340" aria-hidden="true">
-            <defs>
-              <linearGradient id="home-score-meter-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="var(--score-meter-start)" />
-                <stop offset="100%" stopColor="var(--score-meter-end)" />
-              </linearGradient>
-            </defs>
-            <path className={styles.scoreMeterTrack} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
-            <path className={styles.scoreMeterProgress} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
-          </svg>
+          <div className={styles.scoreMeterCanvas} aria-hidden="true">
+            <svg className={styles.scoreMeterSvg} viewBox="0 0 340 340">
+              <defs>
+                <linearGradient id="home-score-meter-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="var(--score-meter-start)" />
+                  <stop offset="100%" stopColor="var(--score-meter-end)" />
+                </linearGradient>
+              </defs>
+              <path className={styles.scoreMeterTrack} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
+              <path className={styles.scoreMeterProgress} d="M 75.734 295.55 A 157 157 0 1 1 264.266 295.55" pathLength="79.5" />
+            </svg>
+          </div>
           <div className={styles.scoreInner} ref={scoreInnerRef}>
             <div className={styles.scoreLabel}>canact score</div>
             <div className={styles.scoreNum} ref={scoreNumRef}>{scoreSummary.score}</div>

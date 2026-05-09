@@ -86,13 +86,14 @@
 .scoreWrap {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
   z-index: 50;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  width: min(100vw, 430px);
   pointer-events: none;
-  transform: translateY(258px);
+  transform: translate(-50%, 258px);
+  will-change: transform;
 }
 
 .pillAura {
@@ -148,6 +149,7 @@
   -webkit-tap-highlight-color: transparent;
   will-change: transform, width, height, border-radius, background, box-shadow;
   transform-origin: 50% 50%;
+  contain: layout paint;
   animation: homeScoreCirclePop 860ms cubic-bezier(.18, 1.36, .26, 1) 120ms both;
 }
 
@@ -208,22 +210,33 @@
     0 18px 42px rgba(22, 28, 25, .08);
 }
 
-.scoreMeterSvg {
+.scoreMeterCanvas {
   position: absolute;
-  inset: calc(var(--score-meter-inset) * -1);
+  top: 50%;
+  left: 50%;
+  width: calc(100% + (var(--score-meter-inset) * 2));
+  height: calc(100% + (var(--score-meter-inset) * 2));
   z-index: 0;
-  overflow: visible;
   opacity: var(--score-meter-opacity);
   pointer-events: none;
+  overflow: visible;
+  translate: -50% -50%;
   transform-origin: 50% 50%;
   transform: scale(var(--score-meter-scale));
   animation: homeScoreRingPop 900ms cubic-bezier(.18, 1.24, .28, 1) 180ms both;
 }
 
+.scoreMeterSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
 .scoreMeterTrack,
 .scoreMeterProgress {
   fill: none;
-  stroke-width: 14;
+  stroke-width: 18;
   stroke-linecap: round;
 }
 
@@ -258,7 +271,7 @@
   opacity: 0;
 }
 
-.scoreCircle[data-pill-border="true"] .scoreMeterSvg {
+.scoreCircle[data-pill-border="true"] .scoreMeterCanvas {
   opacity: 0;
 }
 
