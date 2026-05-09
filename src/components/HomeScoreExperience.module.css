@@ -43,18 +43,7 @@
 }
 
 .animationStage::after {
-  left: 50%;
-  top: 314px;
-  z-index: 1;
-  width: min(86vw, 382px);
-  height: min(86vw, 382px);
-  border-radius: 999px;
-  background:
-    conic-gradient(from 220deg, rgba(239, 186, 72, .58), rgba(61, 214, 142, .48), rgba(113, 233, 204, .36), rgba(255, 255, 255, 0) 58%, rgba(255, 255, 255, 0));
-  filter: blur(28px);
-  opacity: .52;
-  transform: translate3d(-50%, -50%, 0) rotate(0deg);
-  animation: homeScoreAura 16s linear infinite;
+  display: none;
 }
 
 .stageNearby {

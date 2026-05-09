@@ -28,7 +28,7 @@ type LoadedImageSource = {
 };
 
 const PHOTO_QUALITY = 0.96;
-const FALLBACK_ZOOM: ZoomState = { supported: false, min: 1, max: 1, step: 0.1, value: 1 };
+const FALLBACK_ZOOM: ZoomState = { supported: false, min: 1, max: 4, step: 0.1, value: 1 };
 const VIDEO_MIME_CANDIDATES_WITH_AUDIO = [
   'video/mp4;codecs=h264,aac',
   'video/mp4',
@@ -84,6 +84,7 @@ export function CameraCapture({
   const zoomTargetRef = useRef(1);
   const zoomAppliedRef = useRef(1);
   const zoomConstraintPendingRef = useRef(false);
+  const digitalZoomWrapRef = useRef<HTMLDivElement | null>(null);
 
   const [mode, setMode] = useState<Mode>(() => (initialMode === 'video' && allowVideo ? 'video' : 'photo'));
   const [facing, setFacing] = useState<Facing>(defaultFacing);
@@ -117,6 +118,7 @@ export function CameraCapture({
     if (zoomAnimationRef.current !== null) window.cancelAnimationFrame(zoomAnimationRef.current);
     zoomAnimationRef.current = null;
     zoomConstraintPendingRef.current = false;
+    if (digitalZoomWrapRef.current) digitalZoomWrapRef.current.style.transform = '';
     recorderRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -299,11 +301,23 @@ export function CameraCapture({
 
   const applyTrackZoom = useCallback((value: number) => {
     const track = streamRef.current?.getVideoTracks()[0];
-    if (!track?.applyConstraints || zoomConstraintPendingRef.current) return;
-    zoomConstraintPendingRef.current = true;
-    track.applyConstraints({ advanced: [{ zoom: value }] as any })
-      .catch(() => undefined)
-      .finally(() => { zoomConstraintPendingRef.current = false; });
+    const capabilities = track?.getCapabilities?.() as any;
+    const hasNativeZoom =
+      !!capabilities?.zoom &&
+      typeof capabilities.zoom.min === 'number' &&
+      typeof capabilities.zoom.max === 'number' &&
+      capabilities.zoom.max > capabilities.zoom.min;
+    if (hasNativeZoom && track?.applyConstraints && !zoomConstraintPendingRef.current) {
+      zoomConstraintPendingRef.current = true;
+      track.applyConstraints({ advanced: [{ zoom: value }] as any })
+        .catch(() => undefined)
+        .finally(() => { zoomConstraintPendingRef.current = false; });
+    } else {
+      // Digital zoom fallback: scale a wrapper div so it never conflicts with
+      // the video's mirror-flip class or React-managed styles.
+      const wrap = digitalZoomWrapRef.current;
+      if (wrap) wrap.style.transform = value > 1.005 ? `scale(${value})` : '';
+    }
   }, []);
 
   const startSmoothZoom = useCallback(() => {
@@ -385,13 +399,16 @@ export function CameraCapture({
         onChange={(event) => onPickFiles(event.target.files)}
       />
 
-      <video
-        ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? '-scale-x-100' : ''}`}
-        autoPlay
-        muted
-        playsInline
-      />
+      {/* digitalZoomWrapRef scales for CSS digital zoom; video keeps mirror-flip class untouched */}
+      <div ref={digitalZoomWrapRef} className="absolute inset-0 overflow-hidden">
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? '-scale-x-100' : ''}`}
+          autoPlay
+          muted
+          playsInline
+        />
+      </div>
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/5 to-black/78" />
 
       <div className="relative flex h-full w-full flex-col">
@@ -446,21 +463,49 @@ export function CameraCapture({
             </div>
           )}
 
-          {zoom.supported && (
-            <div className="mx-auto mb-4 flex w-full max-w-xs items-center gap-3 rounded-full bg-black/30 px-3 py-2 backdrop-blur-xl ring-1 ring-white/15">
-              <span className="w-9 text-center text-xs font-bold">{zoom.value.toFixed(zoom.value < 10 ? 1 : 0)}x</span>
-              <input
-                aria-label="Camera zoom"
-                type="range"
-                min={zoom.min}
-                max={zoom.max}
-                step={zoom.step}
-                value={zoom.value}
-                onChange={(event) => applyZoomValue(Number(event.target.value))}
-                className="min-w-0 flex-1 accent-white"
-              />
-            </div>
-          )}
+          {streamReady && (() => {
+            const snapLevels = [0.5, 1, 2, 3].filter((level) => level >= zoom.min && level <= zoom.max);
+            return (
+              <div className="mx-auto mb-4 w-full max-w-xs space-y-2">
+                {snapLevels.length > 1 && (
+                  <div className="flex justify-center gap-2">
+                    {snapLevels.map((level) => {
+                      const active = Math.abs(zoom.value - level) < 0.12;
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => applyZoomValue(level)}
+                          className={`rounded-full px-3 py-1 text-xs font-bold transition active:scale-95 ${
+                            active
+                              ? 'bg-white text-black shadow-lg'
+                              : 'bg-black/40 text-white/80 backdrop-blur-xl ring-1 ring-white/20'
+                          }`}
+                        >
+                          {level}×
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-center gap-3 rounded-full bg-black/30 px-3 py-2 backdrop-blur-xl ring-1 ring-white/15">
+                  <span className="w-9 text-center text-xs font-bold">
+                    {zoom.value.toFixed(zoom.value < 10 ? 1 : 0)}×
+                  </span>
+                  <input
+                    aria-label="Camera zoom"
+                    type="range"
+                    min={zoom.min}
+                    max={zoom.max}
+                    step={zoom.step}
+                    value={zoom.value}
+                    onChange={(event) => applyZoomValue(Number(event.target.value))}
+                    className="min-w-0 flex-1 accent-white"
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="grid grid-cols-[56px_1fr_56px] items-center gap-5">
             <button

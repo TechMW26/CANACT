@@ -244,8 +244,17 @@ export function HomeScoreExperience() {
       const endHeight = Math.round(44 * Math.max(0.92, Math.min(1, widthScale)));
       const width = startWidth - eased * (startWidth - endWidth);
       const height = startHeight - eased * (startHeight - endHeight);
+      const meterInset = Math.max(10, Math.round(18 * (width / 304)));
 
-      const startY = Math.round(Math.max(0, (stageHeight - startHeight) / 2));
+      const greetingRect = greeting.getBoundingClientRect();
+      const greetingBottom = stageRect
+        ? Math.max(0, greetingRect.bottom - stageRect.top)
+        : greetingRect.bottom;
+      // Top of the visible meter ring sits at startY - meterInset, so we need
+      // (startY - meterInset) >= greetingBottom + gap to avoid overlap.
+      const minStartY = Math.round(greetingBottom + 18 + meterInset);
+      const centeredStartY = Math.round((stageHeight - startHeight) / 2);
+      const startY = Math.max(0, Math.max(minStartY, centeredStartY));
       const header = document.querySelector('[data-canact-header]');
       const headerBottom = stageRect && header instanceof HTMLElement
         ? Math.max(0, header.getBoundingClientRect().bottom - stageRect.top)
@@ -255,7 +264,6 @@ export function HomeScoreExperience() {
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
       const pillReveal = easeInOutQuart(Math.max(0, Math.min(1, (progress - 0.72) / 0.22)));
-      const meterInset = Math.max(10, Math.round(18 * (width / 304)));
 
       const innerProgress = Math.min(progress / 0.42, 1);
       const innerOpacity = 1 - easeInOutQuart(innerProgress);

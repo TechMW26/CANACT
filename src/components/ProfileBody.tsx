@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FastAverageColor } from 'fast-average-color';
 import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
@@ -343,62 +345,72 @@ function imageCoverRect(image: HTMLImageElement, viewportWidth: number, viewport
   return { sx: 0, sy: (imageHeight - sourceHeight) / 2, sw: imageWidth, sh: sourceHeight };
 }
 
-function averageZoneLuma(data: Uint8ClampedArray, width: number, startY: number, endY: number) {
-  let total = 0;
-  let count = 0;
-  for (let y = startY; y < endY; y += 1) {
-    for (let x = 0; x < width; x += 2) {
-      const offset = (y * width + x) * 4;
-      const alpha = data[offset + 3] / 255;
-      if (alpha <= 0) continue;
-      total += (0.2126 * data[offset] + 0.7152 * data[offset + 1] + 0.0722 * data[offset + 2]) * alpha;
-      count += alpha;
-    }
-  }
-  return count ? total / count : 0;
+let profileAverageColor: FastAverageColor | null = null;
+
+function getProfileAverageColor() {
+  if (!profileAverageColor) profileAverageColor = new FastAverageColor();
+  return profileAverageColor;
 }
 
-function sampleProfileImageTones(src: string): Promise<{ top: ChromeTone; bottom: ChromeTone }> {
-  return new Promise((resolve) => {
+function loadProfileImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.crossOrigin = 'anonymous';
     image.decoding = 'async';
-    image.onload = () => {
-      try {
-        const width = 48;
-        const height = 96;
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) {
-          resolve(PROFILE_CHROME_FALLBACK);
-          return;
-        }
-        const viewportWidth = Math.max(window.innerWidth || 1, 1);
-        const viewportHeight = Math.max(window.innerHeight || 1, 1);
-        const rect = imageCoverRect(image, viewportWidth, viewportHeight);
-        context.drawImage(image, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, width, height);
-        const pixels = context.getImageData(0, 0, width, height).data;
-        const topLuma = averageZoneLuma(pixels, width, 0, Math.floor(height * 0.2));
-        const bottomLuma = averageZoneLuma(pixels, width, Math.floor(height * 0.8), height) * 0.68;
-        resolve({ top: toneFromLuma(topLuma), bottom: toneFromLuma(bottomLuma) });
-      } catch {
-        resolve(PROFILE_CHROME_FALLBACK);
-      }
-    };
-    image.onerror = () => resolve(PROFILE_CHROME_FALLBACK);
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Image load failed'));
     image.src = src;
   });
 }
 
+function lumaFromRgba(colorValue: [number, number, number, number]) {
+  const alpha = colorValue[3] / 255;
+  if (alpha <= 0) return 0;
+  return (0.2126 * colorValue[0] + 0.7152 * colorValue[1] + 0.0722 * colorValue[2]) * alpha;
+}
+
+async function sampleProfileImageTones(src: string): Promise<{ top: ChromeTone; bottom: ChromeTone }> {
+  try {
+    const image = await loadProfileImage(src);
+    const viewportWidth = Math.max(window.innerWidth || 1, 1);
+    const viewportHeight = Math.max(window.innerHeight || 1, 1);
+    const rect = imageCoverRect(image, viewportWidth, viewportHeight);
+    const fac = getProfileAverageColor();
+    const topColor = await fac.getColorAsync(image, {
+      left: rect.sx,
+      top: rect.sy,
+      width: rect.sw,
+      height: Math.max(1, rect.sh * 0.22),
+      algorithm: 'sqrt',
+    });
+    const bottomColor = await fac.getColorAsync(image, {
+      left: rect.sx,
+      top: rect.sy + (rect.sh * 0.76),
+      width: rect.sw,
+      height: Math.max(1, rect.sh * 0.24),
+      algorithm: 'sqrt',
+    });
+    const topLuma = lumaFromRgba(topColor.value as [number, number, number, number]);
+    const bottomLuma = lumaFromRgba(bottomColor.value as [number, number, number, number]) * 0.68;
+    return { top: toneFromLuma(topLuma), bottom: toneFromLuma(bottomLuma) };
+  } catch {
+    return PROFILE_CHROME_FALLBACK;
+  }
+}
+
 function useAdaptiveProfileChrome(heroSrc: string | null) {
+  const [tone, setTone] = useState(PROFILE_CHROME_FALLBACK);
+
   useLayoutEffect(() => {
     let cancelled = false;
+    setTone(PROFILE_CHROME_FALLBACK);
     applyProfileChrome(PROFILE_CHROME_FALLBACK.top, PROFILE_CHROME_FALLBACK.bottom);
     if (heroSrc) {
-      sampleProfileImageTones(heroSrc).then(({ top, bottom }) => {
-        if (!cancelled) applyProfileChrome(top, bottom);
+      sampleProfileImageTones(heroSrc).then((nextTone) => {
+        if (!cancelled) {
+          setTone(nextTone);
+          applyProfileChrome(nextTone.top, nextTone.bottom);
+        }
       });
     }
     return () => {
@@ -406,6 +418,8 @@ function useAdaptiveProfileChrome(heroSrc: string | null) {
       clearProfileChrome();
     };
   }, [heroSrc]);
+
+  return tone;
 }
 
 function postCover(post: WhaPost) {
@@ -458,20 +472,25 @@ function ProfileVotePill({
   vote,
   busy,
   onVote,
+  topTone,
 }: {
   vote?: 'like' | 'dislike';
   busy: boolean;
   onVote: (kind: 'like' | 'dislike') => Promise<void>;
+  topTone: ChromeTone;
 }) {
+  const lightTop = topTone === 'light';
   const buttonClass = (kind: 'like' | 'dislike') => {
     const active = vote === kind;
     if (active && kind === 'like') return 'bg-white text-emerald-600';
     if (active && kind === 'dislike') return 'bg-white text-rose-600';
-    return 'text-white/72 hover:bg-white/12 active:bg-white/18';
+    return lightTop
+      ? 'text-black/70 hover:bg-black/8 active:bg-black/14'
+      : 'text-white/72 hover:bg-white/12 active:bg-white/18';
   };
 
-  return (
-    <div className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+86px)] z-20 inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/18 p-1 backdrop-blur-md lg:top-6">
+  const node = (
+    <div className={`fixed right-4 top-[calc(env(safe-area-inset-top,0px)+86px)] z-[31] inline-flex items-center gap-1 rounded-full p-1 backdrop-blur-md lg:top-6 ${lightTop ? 'border border-black/25 bg-white/70' : 'border border-white/25 bg-black/18'}`}>
       <button
         type="button"
         disabled={busy}
@@ -494,6 +513,8 @@ function ProfileVotePill({
       </button>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(node, document.body) : null;
 }
 
 function CanactPagesProfileUI({
@@ -537,7 +558,7 @@ function CanactPagesProfileUI({
 }) {
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
-  useAdaptiveProfileChrome(heroSrc);
+  const chromeTone = useAdaptiveProfileChrome(heroSrc);
   const nameLines = splitProfileName(userProfile.fullName);
   const role = userProfile.tags?.[0] || locationText || `${(userProfile.rating ?? 0).toFixed(1)} rating`;
   const supportLabel = isSelf
@@ -564,12 +585,12 @@ function CanactPagesProfileUI({
         <div
           className="absolute inset-0 transition-opacity duration-500"
           style={{
-            background: 'linear-gradient(180deg, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.30) 0%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.20) 20%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.08) 42%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.10) 55%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.48) 78%, rgb(var(--canact-profile-bottom-rgb, 0 0 0) / 0.92) 100%)',
+            background: 'linear-gradient(180deg, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.30) 0%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.20) 20%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.08) 42%, rgb(0 0 0 / 0.10) 55%, rgb(0 0 0 / 0.56) 78%, rgb(0 0 0 / 0.94) 100%)',
           }}
         />
 
         {!isSelf ? (
-          <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} />
+          <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} />
         ) : null}
 
         <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(var(--canact-floating-bottom-clearance)_+_24px)]">
@@ -585,7 +606,7 @@ function CanactPagesProfileUI({
             <h1 className="text-[42px] font-extrabold leading-none text-white" style={{ letterSpacing: -1.5 }}>
               {nameLines.map((line) => <span key={line} className="block break-words">{line}</span>)}
             </h1>
-            <p className="mt-2 text-xs text-white/55">
+            <p className="mt-2 text-xs text-white/75">
               iAm @{profileSlug(userProfile)} &nbsp;·&nbsp; {role}{age ? ` · ${age}` : ''}{isVerified ? ' · Verified' : ''}
             </p>
             {userProfile.bio ? (
@@ -629,7 +650,11 @@ function CanactPagesProfileUI({
               const active = activeTab === id;
               return (
                 <button key={id} type="button" onClick={() => setTab(id)} className="relative flex items-center justify-center">
-                  <Icon size={18} strokeWidth={active ? 2.2 : 1.6} style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'color 0.2s' }} />
+                  <Icon
+                    size={18}
+                    strokeWidth={active ? 2.2 : 1.6}
+                    style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'color 0.2s' }}
+                  />
                   {active ? <span className="absolute -bottom-3 left-0 right-0 h-[2px] rounded-full bg-white" /> : null}
                 </button>
               );

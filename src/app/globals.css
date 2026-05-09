@@ -477,8 +477,28 @@ html[data-canact-map-fade="true"] [data-canact-bottom-nav]::before {
   );
 }
 
+html[data-canact-friends-map-fade="true"] .canact-map-surface::after {
+  height: min(calc(var(--canact-vh) * 26.01), 216.75px);
+  background: linear-gradient(
+    0deg,
+    rgb(255 255 255 / 0.85) 0%,
+    rgb(255 255 255 / 0.85) 20%,
+    rgb(255 255 255 / 0.731) 42%,
+    rgb(255 255 255 / 0.357) 74%,
+    rgb(255 255 255 / 0) 100%
+  );
+}
+
 html[data-canact-friends-map-fade="true"] [data-canact-bottom-nav]::before {
-  height: min(calc(var(--canact-vh) * 35.7), 306px);
+  height: min(calc(var(--canact-vh) * 30.345), 260.1px);
+  background: linear-gradient(
+    0deg,
+    rgb(255 255 255 / 0.85) 0%,
+    rgb(255 255 255 / 0.85) 28%,
+    rgb(255 255 255 / 0.765) 48%,
+    rgb(255 255 255 / 0.408) 78%,
+    rgb(255 255 255 / 0) 100%
+  );
 }
 
 html[data-canact-map-fade="true"] [data-canact-header],
