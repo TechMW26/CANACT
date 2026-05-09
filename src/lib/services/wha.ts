@@ -29,15 +29,31 @@ export function listenWhaFeed(cb: (items: WhaPost[]) => void) {
 }
 
 /** Listen for posts authored by a specific user (Instagram-style profile grid).
- * Filters client-side and includes expired posts so the grid does not empty out. */
+ * Caches locally to avoid re-filtering all posts on every listen. */
+const _userPostCache = new Map<string, { unsub: () => void; data: WhaPost[] }>();
 export function listenUserWhaPosts(uid: string, cb: (items: WhaPost[]) => void) {
+  if (_userPostCache.has(uid)) {
+    const cached = _userPostCache.get(uid)!;
+    cb(cached.data);
+    return cached.unsub;
+  }
   const r = query(ref(db, 'wha'), orderByChild('createdAt'));
-  return onValue(r, (snap) => {
-    const out: WhaPost[] = [];
-    snap.forEach((c) => { const v = c.val() as WhaPost; if (v && v.uid === uid) out.push(v); });
-    out.sort((a, b) => b.createdAt - a.createdAt);
-    cb(out);
+  const data: WhaPost[] = [];
+  const unsub = onValue(r, (snap) => {
+    data.length = 0;
+    snap.forEach((c) => {
+      const v = c.val() as WhaPost;
+      if (v && v.uid === uid) data.push(v);
+    });
+    data.sort((a, b) => b.createdAt - a.createdAt);
+    cb(data);
   });
+  const cleanup = () => {
+    unsub();
+    _userPostCache.delete(uid);
+  };
+  _userPostCache.set(uid, { unsub: cleanup, data });
+  return cleanup;
 }
 
 export function listenPost(id: string, cb: (p: WhaPost | null) => void) {

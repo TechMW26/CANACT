@@ -69,8 +69,13 @@ export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | '
 
 export function listenHelpFeed(cb: (items: HelpRequest[]) => void) {
   return onValue(query(ref(db, 'help'), orderByChild('createdAt')), (snap) => {
-    const out: HelpRequest[] = []; snap.forEach((c) => { out.push(c.val()); });
-    out.sort((a, b) => b.createdAt - a.createdAt); cb(out);
+    const out: HelpRequest[] = [];
+    snap.forEach((c) => {
+      const v = c.val() as HelpRequest | null;
+      if (v && v.status && v.status !== 'closed') out.push(v);
+    });
+    out.sort((a, b) => b.createdAt - a.createdAt);
+    cb(out.slice(0, 100));
   });
 }
 export function listenHelp(id: string, cb: (h: HelpRequest | null) => void) {

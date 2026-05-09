@@ -4,6 +4,18 @@ import { AttrKey, CardKey, POSITIVE_ATTRS, UserProfile } from '../types';
 
 export const SIX_HOURS = 6 * 3600 * 1000;
 
+// Local cache for vote lookups to avoid redundant get() calls
+const _voteCache = new Map<string, { vote: any; expiresAt: number }>();
+function cacheVote(key: string, vote: any) {
+  _voteCache.set(key, { vote, expiresAt: Date.now() + 10000 });
+}
+function getCachedVote(key: string): any {
+  const entry = _voteCache.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.vote;
+  _voteCache.delete(key);
+  return undefined;
+}
+
 function recomputeRating(u: UserProfile) {
   const total = (u.likesCount ?? 0) + (u.dislikesCount ?? 0);
   if (total === 0) { u.rating = 0; u.ratingCount = 0; return; }
@@ -13,7 +25,12 @@ function recomputeRating(u: UserProfile) {
 
 export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like' | 'dislike') {
   const myVoteRef = ref(db, `votes/${toUid}/${fromUid}/main`);
-  const prev = (await get(myVoteRef)).val() as 'like' | 'dislike' | null;
+  const cacheKey = `${toUid}/${fromUid}/main`;
+  let prev = getCachedVote(cacheKey);
+  if (prev === undefined) {
+    prev = (await get(myVoteRef)).val() as 'like' | 'dislike' | null;
+    cacheVote(cacheKey, prev);
+  }
   if (prev === kind) return;
   await runTransaction(ref(db, `users/${toUid}`), (u: UserProfile | null) => {
     if (!u) return u;
@@ -29,11 +46,21 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
 
 export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<{ ok: boolean; waitMs?: number }> {
   const attrVoteRef = ref(db, `votes/${toUid}/${fromUid}/attr`);
-  const cur = (await get(attrVoteRef)).val() as { key: AttrKey; at: number } | null;
+  const attrCacheKey = `${toUid}/${fromUid}/attr`;
+  let cur = getCachedVote(attrCacheKey);
+  if (cur === undefined) {
+    cur = (await get(attrVoteRef)).val() as { key: AttrKey; at: number } | null;
+    cacheVote(attrCacheKey, cur);
+  }
   if (cur && Date.now() - cur.at < SIX_HOURS) return { ok: false, waitMs: SIX_HOURS - (Date.now() - cur.at) };
 
   const mainRef = ref(db, `votes/${toUid}/${fromUid}/main`);
-  const main = (await get(mainRef)).val() as 'like' | 'dislike' | null;
+  const mainCacheKey = `${toUid}/${fromUid}/main`;
+  let main = getCachedVote(mainCacheKey);
+  if (main === undefined) {
+    main = (await get(mainRef)).val() as 'like' | 'dislike' | null;
+    cacheVote(mainCacheKey, main);
+  }
   if (!main) {
     const auto = (POSITIVE_ATTRS as readonly string[]).includes(attr) ? 'like' : 'dislike';
     await setLikeDislike(toUid, fromUid, auto);
@@ -51,14 +78,24 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
 
 export async function giveCard(toUid: string, fromUid: string, card: CardKey) {
   const cref = ref(db, `votes/${toUid}/${fromUid}/cards/${card}`);
-  const cur = (await get(cref)).val();
+  const cardCacheKey = `${toUid}/${fromUid}/cards/${card}`;
+  let cur = getCachedVote(cardCacheKey);
+  if (cur === undefined) {
+    cur = (await get(cref)).val();
+    cacheVote(cardCacheKey, cur);
+  }
   if (cur) return;
   await runTransaction(ref(db, `users/${toUid}/cardsReceived/${card}`), (n: number) => (n ?? 0) + 1);
   await set(cref, Date.now());
 }
 export async function takeBackCard(toUid: string, fromUid: string, card: CardKey) {
   const cref = ref(db, `votes/${toUid}/${fromUid}/cards/${card}`);
-  const cur = (await get(cref)).val();
+  const cardCacheKey = `${toUid}/${fromUid}/cards/${card}`;
+  let cur = getCachedVote(cardCacheKey);
+  if (cur === undefined) {
+    cur = (await get(cref)).val();
+    cacheVote(cardCacheKey, cur);
+  }
   if (!cur) return;
   await runTransaction(ref(db, `users/${toUid}/cardsReceived/${card}`), (n: number) => Math.max(0, (n ?? 0) - 1));
   await remove(cref);

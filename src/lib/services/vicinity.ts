@@ -98,6 +98,27 @@ async function maybeFinalizeDeparted(myUid: string) {
   const snap = await get(ref(db, 'encounters'));
   const all = (snap.val() ?? {}) as Record<string, Encounter & { meta?: any }>;
   const now = Date.now();
+  
+  // Batch reads for rated pairs to reduce individual get() calls
+  const otherUidsToCheck = new Set<string>();
+  for (const enc of Object.values(all)) {
+    if (!enc || (enc.a !== myUid && enc.b !== myUid)) continue;
+    const stale = (now - (enc.lastSeen ?? 0)) > VICINITY.DEPART_GAP_MS;
+    if (stale && enc.qualified) {
+      const otherUid = enc.a === myUid ? enc.b : enc.a;
+      otherUidsToCheck.add(otherUid);
+    }
+  }
+  
+  // Batch-fetch rated pairs (single multi-read if possible, or parallel gets)
+  const ratedPairs = new Map<string, { at: number } | null>();
+  await Promise.all(Array.from(otherUidsToCheck).map(async (otherUid) => {
+    try {
+      const snap = await get(ref(db, `ratedPairs/${myUid}/${otherUid}`));
+      ratedPairs.set(otherUid, snap.val() as { at: number } | null);
+    } catch { ratedPairs.set(otherUid, null); }
+  }));
+
   for (const [key, enc] of Object.entries(all)) {
     if (!enc) continue;
     if (enc.a !== myUid && enc.b !== myUid) continue;
@@ -105,11 +126,8 @@ async function maybeFinalizeDeparted(myUid: string) {
     if (!stale) continue;
     if (enc.qualified) {
       const otherUid = enc.a === myUid ? enc.b : enc.a;
-      // Skip if I already rated/dismissed this person within the cooldown.
-      const ratedSnap = await get(ref(db, `ratedPairs/${myUid}/${otherUid}`));
-      const rated = ratedSnap.val() as { at: number } | null;
+      const rated = ratedPairs.get(otherUid);
       if (rated && (now - (rated.at ?? 0)) < VICINITY.RATING_COOLDOWN_MS) {
-        // Mark this encounter as handled to prevent re-prompts within cooldown.
         await remove(ref(db, `encounters/${key}`));
         continue;
       }
@@ -126,7 +144,6 @@ async function maybeFinalizeDeparted(myUid: string) {
         durationMs: Math.max(0, enc.lastSeen - enc.startedAt),
       };
       await set(ref(db, `pendingRatings/${myUid}/${key}`), pending);
-      // Notify the rater that there is someone waiting to be rated.
       sendPush({
         toUid: myUid,
         title: 'Rate your recent meet',
@@ -134,12 +151,9 @@ async function maybeFinalizeDeparted(myUid: string) {
         url: '/feed',
         tag: `rate:${key}`,
       });
-      // Clear the encounter so a fresh one will be created if we meet again later.
       await remove(ref(db, `encounters/${key}`));
       continue;
     }
-    // Only the user whose tick discovers it removes the encounter when *both* sides are stale.
-    // Heuristic: if the gap is well past the threshold, just remove.
     if ((now - (enc.lastSeen ?? 0)) > VICINITY.DEPART_GAP_MS * 2) {
       await remove(ref(db, `encounters/${key}`));
     }

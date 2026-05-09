@@ -40,18 +40,36 @@ export function listenThread(threadId: string, cb: (t: ChatThread | null) => voi
 }
 
 export function listenMyThreads(uid: string, cb: (threads: ChatThread[]) => void) {
-  return onValue(ref(db, `userThreads/${uid}`), async (snap) => {
+  let cancelled = false;
+  const unsub = onValue(ref(db, `userThreads/${uid}`), (snap) => {
     const ids: string[] = [];
     snap.forEach((c) => { ids.push(c.key as string); });
     const out: ChatThread[] = [];
-    await Promise.all(ids.map(async (id) => {
-      const s = await get(ref(db, `chatThreads/${id}`));
-      const v = s.val() as ChatThread | null;
-      if (v) out.push(v);
-    }));
-    out.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    cb(out);
+    let resolved = 0;
+    if (ids.length === 0) { cb([]); return; }
+    ids.forEach((id) => {
+      get(ref(db, `chatThreads/${id}`)).then((s) => {
+        if (cancelled) return;
+        const v = s.val() as ChatThread | null;
+        if (v) out.push(v);
+        resolved += 1;
+        if (resolved === ids.length) {
+          out.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+          cb(out);
+        }
+      }).catch(() => {
+        resolved += 1;
+        if (resolved === ids.length) {
+          out.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+          cb(out);
+        }
+      });
+    });
   });
+  return () => {
+    cancelled = true;
+    unsub();
+  };
 }
 
 export async function sendChatMessage(

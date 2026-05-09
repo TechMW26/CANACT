@@ -2,17 +2,20 @@
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { onValue, ref } from 'firebase/database';
+import { onValue, ref, get } from 'firebase/database';
 import { Avatar } from '@/components/Avatar';
 import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorldMap';
 import { toast } from '@/components/Toaster';
-import { ThumbsDown, ThumbsUp } from '@/components/icons';
+import { ThumbsDown, ThumbsUp, UserPlus, MapPin, Heart } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { CANACT_SCORE_MIN, calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { useDistance } from '@/lib/distance';
 import { db } from '@/lib/firebase';
-import { setLikeDislike } from '@/lib/services/votes';
-import type { UserProfile } from '@/lib/types';
+import { setLikeDislike, setAttribute, SIX_HOURS } from '@/lib/services/votes';
+import { listenUserWhaPosts } from '@/lib/services/wha';
+import { sendFriendRequest, listenFriendStatus } from '@/lib/services/friends';
+import type { UserProfile, WhaPost, FriendStatus, AttrKey } from '@/lib/types';
+import { POSITIVE_ATTRS, NEGATIVE_ATTRS } from '@/lib/types';
 import { formatDistance, haversineMeters } from '@/lib/utils';
 import { useGeo } from '@/lib/useGeo';
 import styles from './HomeScoreExperience.module.css';
@@ -48,10 +51,18 @@ export function HomeScoreExperience() {
   const [ratedUids, setRatedUids] = useState<Set<string>>(() => new Set());
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [selectedMapPerson, setSelectedMapPerson] = useState<NearbyPerson | null>(null);
+  const [expandedCardUid, setExpandedCardUid] = useState<string | null>(null);
+  const [expandedUserPosts, setExpandedUserPosts] = useState<WhaPost[]>([]);
+  const [expandedPostIndex, setExpandedPostIndex] = useState(0);
+  const [expandedFriendStatus, setExpandedFriendStatus] = useState<FriendStatus>('none');
+  const [expandedBusy, setExpandedBusy] = useState(false);
+  const [expandedCardProfile, setExpandedCardProfile] = useState<UserProfile | null>(null);
+  const [expandedMyVoteAttr, setExpandedMyVoteAttr] = useState<{ key: AttrKey; at: number } | null>(null);
   const [ratingUid, setRatingUid] = useState<string | null>(null);
   const [dragX, setDragX] = useState(0);
   const [liveProfile, setLiveProfile] = useState<UserProfile | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; active: boolean } | null>(null);
+  const [ratedUidsWithCooldown, setRatedUidsWithCooldown] = useState<Map<string, number>>(() => new Map());
+  const dragRef = useRef<{ startX: number; startY: number; active: boolean; isDrag: boolean } | null>(null);
   const stageGestureRef = useRef<{ startX: number; startY: number } | null>(null);
   const progressRef = useRef(0);
   const scoreProfile = liveProfile ?? profile;
@@ -71,20 +82,48 @@ export function HomeScoreExperience() {
   const prevScoreRef = useRef<number | null>(null);
   const scoreCounterFrameRef = useRef(0);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const stageRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let frame = 0;
+    let stabilizeTimerA = 0;
+    let stabilizeTimerB = 0;
+    let resizeObserver: ResizeObserver | null = null;
     const updateLayout = () => {
       if (frame) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => setLayoutVersion((version) => version + 1));
     };
+
+    const stageEl = stageRef.current;
+    const headerEl = document.querySelector('[data-canact-header]');
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => updateLayout());
+      if (stageEl) resizeObserver.observe(stageEl);
+      if (headerEl instanceof HTMLElement) resizeObserver.observe(headerEl);
+    }
+
+    // iOS Safari can settle viewport + safe-area metrics after first paint.
+    // Force two follow-up recalculations so the score ring starts aligned.
+    stabilizeTimerA = window.setTimeout(updateLayout, 80);
+    stabilizeTimerB = window.setTimeout(updateLayout, 320);
+
+    document.fonts?.ready.then(() => updateLayout()).catch(() => {});
+
+    updateLayout();
     window.addEventListener('resize', updateLayout);
+    window.addEventListener('orientationchange', updateLayout);
     window.visualViewport?.addEventListener('resize', updateLayout);
+    window.visualViewport?.addEventListener('scroll', updateLayout);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (stabilizeTimerA) window.clearTimeout(stabilizeTimerA);
+      if (stabilizeTimerB) window.clearTimeout(stabilizeTimerB);
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', updateLayout);
+      window.removeEventListener('orientationchange', updateLayout);
       window.visualViewport?.removeEventListener('resize', updateLayout);
+      window.visualViewport?.removeEventListener('scroll', updateLayout);
     };
   }, []);
 
@@ -136,7 +175,15 @@ export function HomeScoreExperience() {
       .sort((left, right) => left.distanceMeters - right.distanceMeters);
   }, [allProfiles, currentLocation, radius, user?.uid]);
 
-  const unratedPeople = useMemo(() => nearbyPeople.filter((person) => !ratedUids.has(person.uid)), [nearbyPeople, ratedUids]);
+  const COOLDOWN_24H = 24 * 3600 * 1000;
+  const unratedPeople = useMemo(() => {
+    const now = Date.now();
+    return nearbyPeople.filter((person) => {
+      const ratedAt = ratedUidsWithCooldown.get(person.uid);
+      if (!ratedAt) return true;
+      return now - ratedAt >= COOLDOWN_24H;
+    });
+  }, [nearbyPeople, ratedUidsWithCooldown]);
   const activeCardPerson = unratedPeople[Math.min(activeCardIndex, Math.max(unratedPeople.length - 1, 0))] ?? null;
 
   useEffect(() => { setActiveCardIndex(0); }, [nearbyPeople.map((person) => person.uid).join('|')]);
@@ -424,14 +471,14 @@ export function HomeScoreExperience() {
     setRatingUid(person.uid);
     try {
       await setLikeDislike(person.uid, user.uid, kind);
-      setRatedUids((current) => {
-        const next = new Set(current);
-        next.add(person.uid);
+      setRatedUidsWithCooldown((current) => {
+        const next = new Map(current);
+        next.set(person.uid, Date.now());
         return next;
       });
       setSelectedMapPerson(null);
       setDragX(0);
-      toast(kind === 'like' ? 'Liked' : 'Disliked', 'success');
+      toast(kind === 'like' ? 'Liked · reappears in 24h' : 'Disliked · reappears in 24h', 'success');
     } catch (error: any) {
       toast(error?.message ?? 'Could not rate user', 'error');
     } finally {
@@ -442,14 +489,22 @@ export function HomeScoreExperience() {
   const handleCardPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!activeCardPerson) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { startX: event.clientX, startY: event.clientY, active: true };
+    dragRef.current = { startX: event.clientX, startY: event.clientY, active: true, isDrag: false };
   }, [activeCardPerson]);
 
   const handleCardPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag?.active) return;
-    const nextX = event.clientX - drag.startX;
-    setDragX(Math.max(-130, Math.min(130, nextX)));
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = Math.abs(event.clientY - drag.startY);
+    
+    if (!drag.isDrag && Math.abs(deltaX) > 8) {
+      drag.isDrag = true;
+    }
+    
+    if (drag.isDrag) {
+      setDragX(Math.max(-130, Math.min(130, deltaX)));
+    }
   }, []);
 
   const handleCardPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
@@ -459,14 +514,104 @@ export function HomeScoreExperience() {
       setDragX(0);
       return;
     }
-    const deltaX = event.clientX - drag.startX;
-    const deltaY = Math.abs(event.clientY - drag.startY);
-    if (Math.abs(deltaX) > 76 && Math.abs(deltaX) > deltaY) {
-      void handleRate(activeCardPerson, deltaX > 0 ? 'like' : 'dislike');
-      return;
+    
+    if (drag.isDrag) {
+      const deltaX = event.clientX - drag.startX;
+      const deltaY = Math.abs(event.clientY - drag.startY);
+      if (Math.abs(deltaX) > 76 && Math.abs(deltaX) > deltaY) {
+        void handleRate(activeCardPerson, deltaX > 0 ? 'like' : 'dislike');
+        return;
+      }
+    } else if (expandedCardUid === null) {
+      handleExpandCard(activeCardPerson);
     }
     setDragX(0);
-  }, [activeCardPerson, handleRate]);
+  }, [activeCardPerson, expandedCardUid, handleRate]);
+
+  const handleExpandCard = useCallback((person: NearbyPerson) => {
+    if (!user?.uid) return;
+    setExpandedCardUid(person.uid);
+    setExpandedPostIndex(0);
+  }, [user?.uid]);
+
+  const handleCloseExpandedCard = useCallback(() => {
+    setExpandedCardUid(null);
+    setExpandedUserPosts([]);
+    setExpandedPostIndex(0);
+    setDragX(0);
+  }, []);
+
+  const handleAddFriend = useCallback(async () => {
+    if (!user?.uid || !user.displayName || !expandedCardUid) return;
+    setExpandedBusy(true);
+    try {
+      const otherUserSnap = await get(ref(db, `users/${expandedCardUid}`));
+      const otherUser = otherUserSnap.val() as UserProfile | null;
+      if (!otherUser) {
+        toast('User not found', 'error');
+        return;
+      }
+      await sendFriendRequest(
+        { uid: user.uid, name: user.displayName, photoURL: user.photoURL ?? undefined },
+        { uid: expandedCardUid, name: otherUser.fullName || otherUser.firstName || 'Canact user', photoURL: otherUser.photoURL ?? undefined }
+      );
+      toast('Friend request sent', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not send friend request', 'error');
+    } finally {
+      setExpandedBusy(false);
+    }
+  }, [user?.uid, user?.displayName, user?.photoURL, expandedCardUid]);
+
+  const handleNavigateToProfile = useCallback(() => {
+    if (!expandedCardUid) return;
+    window.location.href = `/profile/${expandedCardUid}`;
+  }, [expandedCardUid]);
+
+  useEffect(() => {
+    if (!expandedCardUid || !user?.uid) return;
+    const unsub = listenUserWhaPosts(expandedCardUid, (posts) => {
+      setExpandedUserPosts(posts);
+      if (expandedPostIndex >= posts.length && posts.length > 0) {
+        setExpandedPostIndex(Math.max(0, posts.length - 1));
+      }
+    });
+    return unsub;
+  }, [expandedCardUid, user?.uid, expandedPostIndex]);
+
+  useEffect(() => {
+    if (!expandedCardUid || !user?.uid) return;
+    const unsub = listenFriendStatus(user.uid, expandedCardUid, (status) => {
+      setExpandedFriendStatus(status);
+    });
+    return unsub;
+  }, [expandedCardUid, user?.uid]);
+
+  useEffect(() => {
+    if (!expandedCardUid) return;
+    return onValue(ref(db, `users/${expandedCardUid}`), (s) => setExpandedCardProfile(s.val() as UserProfile | null));
+  }, [expandedCardUid]);
+
+  useEffect(() => {
+    if (!expandedCardUid || !user?.uid) return;
+    return onValue(ref(db, `votes/${expandedCardUid}/${user.uid}`), (s) => {
+      const vote = s.val() ?? {};
+      setExpandedMyVoteAttr(vote?.attr ?? null);
+    });
+  }, [expandedCardUid, user?.uid]);
+
+  const handleExpandedAttr = useCallback(async (k: AttrKey) => {
+    if (!user?.uid || !expandedCardUid) return;
+    try {
+      const result = await setAttribute(expandedCardUid, user.uid, k);
+      if (!result.ok) {
+        const m = Math.ceil((result.waitMs ?? 0) / 60000);
+        toast(`Wait ${Math.ceil(m / 60)}h to vote attributes again`, 'error');
+      } else toast('Attribute updated', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not update attribute', 'error');
+    }
+  }, [user?.uid, expandedCardUid]);
 
   const deltaLabel = scoreSummary.delta === 0
     ? `${scoreSummary.baseline} baseline`
@@ -491,6 +636,7 @@ export function HomeScoreExperience() {
 
   return (
     <section
+      ref={stageRef}
       className={`${styles.animationStage} ${stage === 'nearby' ? styles.stageNearby : ''}`}
       aria-label="Canact score"
       data-canact-no-refresh="true"
@@ -533,6 +679,29 @@ export function HomeScoreExperience() {
             onClose={() => setSelectedMapPerson(null)}
             onLike={() => handleRate(selectedMapPerson, 'like')}
             onDislike={() => handleRate(selectedMapPerson, 'dislike')}
+          />
+        ) : null}
+        {expandedCardUid && activeCardPerson ? (
+          <ExpandedCardModal
+            person={activeCardPerson}
+            personProfile={expandedCardProfile}
+            posts={expandedUserPosts}
+            postIndex={expandedPostIndex}
+            friendStatus={expandedFriendStatus}
+            busy={expandedBusy}
+            dragX={dragX}
+            ratingUid={ratingUid}
+            myVoteAttr={expandedMyVoteAttr}
+            onPostIndexChange={setExpandedPostIndex}
+            onClose={handleCloseExpandedCard}
+            onAddFriend={handleAddFriend}
+            onNavigateProfile={handleNavigateToProfile}
+            onAttr={handleExpandedAttr}
+            onLike={() => handleRate(activeCardPerson, 'like')}
+            onDislike={() => handleRate(activeCardPerson, 'dislike')}
+            onPointerDown={handleCardPointerDown}
+            onPointerMove={handleCardPointerMove}
+            onPointerEnd={handleCardPointerEnd}
           />
         ) : null}
       </div>
@@ -680,6 +849,251 @@ function MapRatingSheet({
         <button type="button" className={styles.likeButton} disabled={busy} onClick={onLike} aria-label="Like">
           <ThumbsUp size={19} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ExpandedCardModal({
+  person,
+  personProfile,
+  posts,
+  postIndex,
+  friendStatus,
+  busy,
+  dragX,
+  ratingUid,
+  myVoteAttr,
+  onPostIndexChange,
+  onClose,
+  onAddFriend,
+  onNavigateProfile,
+  onAttr,
+  onLike,
+  onDislike,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
+}: {
+  person: NearbyPerson;
+  personProfile: UserProfile | null;
+  posts: WhaPost[];
+  postIndex: number;
+  friendStatus: FriendStatus;
+  busy: boolean;
+  dragX: number;
+  ratingUid: string | null;
+  myVoteAttr: { key: AttrKey; at: number } | null;
+  onPostIndexChange: (index: number) => void;
+  onClose: () => void;
+  onAddFriend: () => void;
+  onNavigateProfile: () => void;
+  onAttr: (attr: AttrKey) => Promise<void>;
+  onLike: () => void | Promise<void>;
+  onDislike: () => void | Promise<void>;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const postGestureRef = useRef<{ postStartX: number; postStartY: number; active: boolean } | null>(null);
+  const [postDragX, setPostDragX] = useState(0);
+  const currentPost = posts[postIndex] ?? null;
+  
+  const handlePostPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    postGestureRef.current = { postStartX: event.clientX, postStartY: event.clientY, active: true };
+  }, []);
+
+  const handlePostPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!postGestureRef.current?.active) return;
+    const deltaX = event.clientX - postGestureRef.current.postStartX;
+    setPostDragX(Math.max(-130, Math.min(130, deltaX)));
+  }, []);
+
+  const handlePostPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = postGestureRef.current;
+    postGestureRef.current = null;
+    if (!gesture?.active) return;
+    
+    const deltaX = event.clientX - gesture.postStartX;
+    const deltaY = Math.abs(event.clientY - gesture.postStartY);
+    
+    if (Math.abs(deltaX) > 76 && Math.abs(deltaX) > deltaY) {
+      const nextIndex = deltaX > 0 ? postIndex - 1 : postIndex + 1;
+      if (nextIndex >= 0 && nextIndex < posts.length) {
+        onPostIndexChange(nextIndex);
+      }
+      setPostDragX(0);
+    } else if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) {
+      onNavigateProfile();
+    } else {
+      setPostDragX(0);
+    }
+  }, [postIndex, posts.length, onPostIndexChange, onNavigateProfile]);
+
+  const friendButtonText = friendStatus === 'friends' ? 'Friends' : friendStatus === 'requested' ? 'Requested' : friendStatus === 'incoming' ? 'Accept' : 'Add Friend';
+  const friendButtonDisabled = friendStatus === 'friends' || friendStatus === 'requested' || busy;
+  
+  return (
+    <div className={styles.expandedModal}>
+      <button type="button" className={styles.expandedClose} onClick={onClose} aria-label="Close">×</button>
+      
+      <div className={styles.expandedPhotoSection}>
+        <Avatar src={person.photoURL ?? null} name={person.name} size={200} />
+      </div>
+
+      <div className={styles.expandedPostsSection}>
+        {posts.length > 0 ? (
+          <div
+            className={styles.expandedPost}
+            style={{ transform: `translateX(${postDragX}px)` }}
+            onPointerDown={handlePostPointerDown}
+            onPointerMove={handlePostPointerMove}
+            onPointerUp={handlePostPointerEnd}
+            onPointerCancel={handlePostPointerEnd}
+          >
+            {currentPost?.mediaUrls?.[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={currentPost.mediaPosters?.[0] || currentPost.mediaUrls[0]} alt="User post" className={styles.expandedPostImage} />
+            ) : (
+              <div className={styles.expandedPostEmpty}>No posts</div>
+            )}
+            <div className={styles.expandedPostNavigation}>
+              {posts.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={styles.expandedNavButton}
+                    onClick={() => onPostIndexChange(Math.max(0, postIndex - 1))}
+                    disabled={postIndex === 0}
+                    aria-label="Previous post"
+                  >
+                    ‹
+                  </button>
+                  <span className={styles.expandedPostIndicator}>{postIndex + 1} / {posts.length}</span>
+                  <button
+                    type="button"
+                    className={styles.expandedNavButton}
+                    onClick={() => onPostIndexChange(Math.min(posts.length - 1, postIndex + 1))}
+                    disabled={postIndex === posts.length - 1}
+                    aria-label="Next post"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.expandedPostEmpty}>No posts yet</div>
+        )}
+      </div>
+
+      <div className={styles.expandedDetails}>
+        <div className={styles.expandedPersonInfo}>
+          <h2>{person.name}</h2>
+          <p className={styles.expandedLocation}>
+            <MapPin size={12} />
+            {formatDistance(person.distanceMeters)} away {person.city ? `· ${person.city}` : ''}
+          </p>
+        </div>
+
+        <div className={styles.expandedRatings}>
+          {typeof person.rating === 'number' && (
+            <div className={styles.expandedRatingItem}>
+              <Heart size={14} />
+              <span>{person.rating.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.expandedAttrSection}>
+          <div className={styles.expandedAttrGroup}>
+            <h3 className={styles.expandedAttrGroupTitle}>Positive Traits</h3>
+            <div className={styles.expandedAttrs}>
+              {POSITIVE_ATTRS.map((attr) => {
+                const selected = myVoteAttr?.key === attr;
+                const cooldownLeft = (() => {
+                  if (!myVoteAttr?.at || myVoteAttr.key !== attr) return 0;
+                  const left = SIX_HOURS - (Date.now() - myVoteAttr.at);
+                  return left > 0 ? left : 0;
+                })();
+                const disabled = cooldownLeft > 0;
+                const count = personProfile?.attrs?.[attr] ?? 0;
+                return (
+                  <button
+                    key={attr}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onAttr(attr)}
+                    className={`${styles.expandedAttrButton} ${selected ? styles.expandedAttrSelected : ''} ${disabled ? styles.expandedAttrDisabled : ''}`}
+                    title={disabled ? `Available in ${Math.ceil(cooldownLeft / 3600000)}h` : undefined}
+                  >
+                    <span className={styles.expandedAttrName}>{attr}</span>
+                    <span className={styles.expandedAttrCount}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className={styles.expandedAttrGroup}>
+            <h3 className={styles.expandedAttrGroupTitle}>Concerns</h3>
+            <div className={styles.expandedAttrs}>
+              {NEGATIVE_ATTRS.map((attr) => {
+                const selected = myVoteAttr?.key === attr;
+                const cooldownLeft = (() => {
+                  if (!myVoteAttr?.at || myVoteAttr.key !== attr) return 0;
+                  const left = SIX_HOURS - (Date.now() - myVoteAttr.at);
+                  return left > 0 ? left : 0;
+                })();
+                const disabled = cooldownLeft > 0;
+                const count = personProfile?.attrs?.[attr] ?? 0;
+                return (
+                  <button
+                    key={attr}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onAttr(attr)}
+                    className={`${styles.expandedAttrButton} ${selected ? styles.expandedAttrSelected : ''} ${disabled ? styles.expandedAttrDisabled : ''}`}
+                    title={disabled ? `Available in ${Math.ceil(cooldownLeft / 3600000)}h` : undefined}
+                  >
+                    <span className={styles.expandedAttrName}>{attr}</span>
+                    <span className={styles.expandedAttrCount}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.expandedActions}>
+          <button
+            type="button"
+            className={styles.dislikeButton}
+            disabled={ratingUid === person.uid}
+            onClick={onDislike}
+            aria-label="Dislike"
+          >
+            <ThumbsDown size={20} />
+          </button>
+          <button
+            type="button"
+            className={styles.friendButton}
+            disabled={friendButtonDisabled}
+            onClick={onAddFriend}
+          >
+            <UserPlus size={18} />
+            {friendButtonText}
+          </button>
+          <button
+            type="button"
+            className={styles.likeButton}
+            disabled={ratingUid === person.uid}
+            onClick={onLike}
+            aria-label="Like"
+          >
+            <ThumbsUp size={20} />
+          </button>
+        </div>
       </div>
     </div>
   );

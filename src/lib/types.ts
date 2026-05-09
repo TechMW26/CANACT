@@ -63,6 +63,8 @@ export interface UserProfile {
     offered?: number;   // offers extended by this user
     confirmed?: number; // offers asker confirmed
     resolved?: number;  // helps closed as resolved that this user worked on
+    failed?: number;    // help offers that failed/didn't help
+    noShow?: number;    // offers where user didn't show up
     asked?: number;     // help requests posted by this user
     taken?: number;     // their help requests that closed (any outcome)
   };

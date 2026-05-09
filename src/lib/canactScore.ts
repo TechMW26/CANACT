@@ -1,8 +1,8 @@
 import { CARD_KEYS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type UserProfile } from './types';
 
-export const CANACT_SCORE_MIN = 300;
-export const CANACT_SCORE_BASELINE = 750;
-export const CANACT_SCORE_MAX = 900;
+export const CANACT_SCORE_MIN = 250;
+export const CANACT_SCORE_BASELINE = 700;
+export const CANACT_SCORE_MAX = 950;
 
 export type CanactScoreSummary = {
   score: number;
@@ -18,51 +18,73 @@ export function calculateCanactScore(profile?: UserProfile | null): CanactScoreS
 
   let adjustment = 0;
 
-  const ratingCount = nonNegative(profile.ratingCount);
-  if (ratingCount > 0) {
-    const rating = clampNumber(profile.rating, 0, 5);
-    const confidence = confidenceFromCount(ratingCount, 18);
-    adjustment += clampNumber(((rating - 3.75) / 1.25) * 70, -105, 70) * confidence;
-  }
-
+  // === PROFILE RATING (most critical) ===
+  // Likes/dislikes from proximity encounters - direct trust signal
   const likes = nonNegative(profile.likesCount);
   const dislikes = nonNegative(profile.dislikesCount);
   const sentimentTotal = likes + dislikes;
   if (sentimentTotal > 0) {
     const sentiment = (likes - dislikes) / sentimentTotal;
-    adjustment += sentiment * 45 * confidenceFromCount(sentimentTotal, 24);
+    // Asymmetric: very harsh on dislikes, moderate gain on likes
+    const confidence = confidenceFromCount(sentimentTotal, 20);
+    const base = sentiment >= 0 
+      ? sentiment * 55  // Gains: max +55 for perfect
+      : sentiment * 120; // Penalties: min -120 for all dislikes
+    adjustment += Math.max(-120, base) * confidence;
   }
 
+  // === ATTRIBUTE BIAS (character assessment) ===
   const positiveAttrs = POSITIVE_ATTRS.reduce((sum, key) => sum + nonNegative(profile.attrs?.[key]), 0);
   const negativeAttrs = NEGATIVE_ATTRS.reduce((sum, key) => sum + nonNegative(profile.attrs?.[key]), 0);
   const attrTotal = positiveAttrs + negativeAttrs;
   if (attrTotal > 0) {
-    adjustment += ((positiveAttrs - negativeAttrs) / attrTotal) * 55 * confidenceFromCount(attrTotal, 18);
+    const bias = (positiveAttrs - negativeAttrs) / attrTotal;
+    const confidence = confidenceFromCount(attrTotal, 16);
+    // Asymmetric: heavy penalty for negative bias
+    const base = bias >= 0
+      ? bias * 65   // Gains: max +65
+      : bias * 140; // Penalties: min -140
+    adjustment += Math.max(-140, base) * confidence;
   }
 
-  const cardsTotal = CARD_KEYS.reduce((sum, key) => sum + nonNegative(profile.cardsReceived?.[key]), 0);
-  if (cardsTotal > 0) adjustment += Math.min(38, Math.log1p(cardsTotal) * 14);
-
+  // === HELP REPUTATION (actions matter) ===
   const helpStats = profile.helpStats;
   if (helpStats) {
-    const helpSignal =
-      nonNegative(helpStats.confirmed) * 1.2 +
-      nonNegative(helpStats.resolved) * 1.5 +
-      nonNegative(helpStats.offered) * 0.35;
-    if (helpSignal > 0) adjustment += Math.min(42, Math.log1p(helpSignal) * 16);
+    const resolved = nonNegative(helpStats.resolved);
+    const confirmed = nonNegative(helpStats.confirmed);
+    const offered = nonNegative(helpStats.offered);
+    const failed = nonNegative(helpStats.failed);
+    const noShow = nonNegative(helpStats.noShow);
+
+    // Positive signals
+    let helpGain = 0;
+    if (resolved > 0) helpGain += Math.min(45, Math.log1p(resolved) * 18); // +45 max for resolved
+    if (confirmed > 0) helpGain += Math.min(30, Math.log1p(confirmed) * 12); // +30 max for confirmed
+
+    // Negative signals (severe penalties)
+    let helpLoss = 0;
+    if (failed > 0) helpLoss -= Math.min(80, Math.log1p(failed) * 32); // -80 max for failed
+    if (noShow > 0) helpLoss -= Math.min(100, Math.log1p(noShow) * 40); // -100 max for no-shows
+
+    adjustment += helpGain + helpLoss;
   }
 
-  if (profile.profileVerified) adjustment += 12;
+  // === CARDS (minor positive factor) ===
+  const cardsTotal = CARD_KEYS.reduce((sum, key) => sum + nonNegative(profile.cardsReceived?.[key]), 0);
+  if (cardsTotal > 0) adjustment += Math.min(25, Math.log1p(cardsTotal) * 10); // Minor: max +25
+
+  // === VERIFICATION (small bonus) ===
+  if (profile.profileVerified) adjustment += 15;
   const nonVerificationBadges = (profile.badges ?? []).filter((badge) => badge.toLowerCase() !== 'verified').length;
-  if (nonVerificationBadges > 0) adjustment += Math.min(12, nonVerificationBadges * 2);
+  if (nonVerificationBadges > 0) adjustment += Math.min(10, nonVerificationBadges * 2);
 
   return makeSummary(CANACT_SCORE_BASELINE + adjustment);
 }
 
 export function getCanactScoreLabel(score: number): CanactScoreSummary['label'] {
-  if (score >= 750) return 'TRUST';
-  if (score >= 650) return 'GOOD';
-  if (score >= 500) return 'FAIR';
+  if (score >= 800) return 'TRUST';
+  if (score >= 680) return 'GOOD';
+  if (score >= 520) return 'FAIR';
   return 'LOW';
 }
 

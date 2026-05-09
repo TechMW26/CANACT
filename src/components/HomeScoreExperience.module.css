@@ -927,3 +927,302 @@
   }
 
 }
+
+/* Expanded Card Modal */
+
+.expandedModal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: #FFF8F8;
+  animation: expandedModalIn .3s ease;
+  touch-action: none;
+  overflow: hidden;
+}
+
+@keyframes expandedModalIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.expandedClose {
+  appearance: none;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 110;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(240, 215, 220, .98);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .96);
+  color: rgba(17, 17, 17, .58);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease;
+  backdrop-filter: blur(18px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.expandedClose:active {
+  transform: scale(.95);
+}
+
+.expandedPhotoSection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 280px;
+  padding: 40px 24px 24px;
+}
+
+.expandedPhotoSection img {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 18px 44px rgba(67, 38, 45, .16);
+}
+
+.expandedPostsSection {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.expandedPost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #FFF8F8;
+  will-change: transform;
+  transition: transform .16s ease;
+}
+
+.expandedPostImage {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.expandedPostEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(17, 17, 17, .42);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.expandedPostNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .96);
+  border-top: 1px solid rgba(240, 215, 220, .98);
+}
+
+.expandedNavButton {
+  appearance: none;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(220, 20, 60, .1);
+  color: #DC143C;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.expandedNavButton:active:not(:disabled) {
+  transform: scale(.95);
+}
+
+.expandedNavButton:disabled {
+  opacity: .35;
+}
+
+.expandedPostIndicator {
+  color: rgba(17, 17, 17, .52);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.expandedDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  background: #FFF8F8;
+  flex-shrink: 0;
+}
+
+.expandedPersonInfo {
+  text-align: center;
+}
+
+.expandedPersonInfo h2 {
+  margin: 0 0 6px;
+  color: #111;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.expandedLocation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: rgba(17, 17, 17, .52);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.expandedRatings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.expandedRatingItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #DC143C;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.expandedAttrSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.expandedAttrGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expandedAttrGroupTitle {
+  margin: 0;
+  color: rgba(17, 17, 17, .52);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.expandedAttrs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.expandedAttrButton {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border: 1px solid rgba(220, 20, 60, .2);
+  border-radius: 12px;
+  background: #FFFFFF;
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.expandedAttrButton:active:not(:disabled) {
+  transform: scale(.95);
+}
+
+.expandedAttrButton:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.expandedAttrButton.expandedAttrSelected {
+  background: linear-gradient(135deg, rgba(220, 20, 60, .12), rgba(220, 20, 60, .08));
+  border-color: #DC143C;
+  color: #DC143C;
+}
+
+.expandedAttrName {
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.expandedAttrCount {
+  font-size: 10px;
+  opacity: .65;
+  font-weight: 700;
+}
+
+.expandedActions {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  gap: 12px;
+}
+
+.friendButton {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #3B82F6, #6366F1);
+  color: #FFF;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .15s ease, opacity .15s ease;
+  box-shadow: 0 10px 22px rgba(17, 17, 17, .12);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.friendButton:active:not(:disabled) {
+  transform: scale(.95);
+}
+
+.friendButton:disabled {
+  opacity: .55;
+}
