@@ -18,16 +18,20 @@ const MAX_BIO = 300;
 type CountryCityApi = typeof import('country-state-city');
 
 export default function EditProfilePage() {
-  const { profile, updateMyProfile } = useAuth();
+  const { user, profile, updateMyProfile } = useAuth();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const displayName = (profile?.fullName || user?.displayName || user?.email?.split('@')[0] || '').trim();
+  const displayNameParts = displayName.split(/\s+/).filter(Boolean);
+  const fallbackFirstName = displayNameParts[0] || '';
+  const fallbackLastName = displayNameParts.length > 1 ? displayNameParts[displayNameParts.length - 1] : '';
   const initialPhone = splitStoredPhone(profile?.mobile, (profile?.countryCode as CountryCode) || 'IN');
-  const [photo, setPhoto] = useState(profile?.photoURL ?? '');
+  const [photo, setPhoto] = useState(profile?.photoURL ?? user?.photoURL ?? '');
   const [photoEditorFile, setPhotoEditorFile] = useState<File | null>(null);
   const [photoEditorOpen, setPhotoEditorOpen] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
-  const [firstName, setFirstName] = useState(profile?.firstName ?? '');
-  const [lastName, setLastName] = useState(profile?.lastName ?? '');
+  const [firstName, setFirstName] = useState(profile?.firstName ?? fallbackFirstName);
+  const [lastName, setLastName] = useState(profile?.lastName ?? fallbackLastName);
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>(initialPhone.country);
   const [mobile, setMobile] = useState(initialPhone.national);
@@ -48,13 +52,19 @@ export default function EditProfilePage() {
   // Hydrate when profile arrives later
   useEffect(() => {
     if (!profile) return;
-    if (!photo && profile.photoURL) setPhoto(profile.photoURL);
+    if (!photo) setPhoto(profile.photoURL || user?.photoURL || '');
+    if (!firstName) setFirstName(profile.firstName || fallbackFirstName);
+    if (!lastName) setLastName(profile.lastName || fallbackLastName);
+    if (!bio && profile.bio) setBio(profile.bio);
+    if (!countryCode && profile.countryCode) setCountryCode(profile.countryCode);
+    if (!country && profile.country) setCountry(profile.country);
+    if (!city && profile.city) setCity(profile.city);
     if (!mobile && profile.mobile) {
       const parsed = splitStoredPhone(profile.mobile, (profile.countryCode as CountryCode) || 'IN');
       setPhoneCountry(parsed.country);
       setMobile(parsed.national);
     }
-  }, [mobile, photo, profile]);
+  }, [bio, city, country, countryCode, fallbackFirstName, fallbackLastName, firstName, lastName, mobile, photo, profile, user?.photoURL]);
 
   const countryOptions: ComboOption[] = useMemo(
     () => countryCityApi
@@ -137,7 +147,7 @@ export default function EditProfilePage() {
     }
     setBusy(true);
     try {
-      const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.fullName;
+      const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.fullName || displayName || 'Canact user';
       await updateMyProfile({
         photoURL: photo,
         firstName: firstName || undefined,
@@ -164,7 +174,7 @@ export default function EditProfilePage() {
       <Card className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
         <div className="relative">
           <span key={photo} className="block">
-            <Avatar src={photo} name={profile.fullName} size={96} />
+            <Avatar src={photo} name={profile.fullName || displayName || 'Canact user'} size={96} />
           </span>
           <button
             type="button"
@@ -177,7 +187,7 @@ export default function EditProfilePage() {
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
         </div>
         <div className="flex-1 text-center sm:text-left">
-          <h2 className="text-lg font-extrabold text-ink">{profile.fullName}</h2>
+          <h2 className="text-lg font-extrabold text-ink">{profile.fullName || displayName || 'Canact user'}</h2>
           <p className="mt-0.5 text-sm text-muted">JPG, PNG or WebP. Adjust crop and colour before it saves.</p>
           <div className="mt-3 inline-flex flex-wrap justify-center gap-2 sm:justify-start">
             <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} loading={photoBusy}>
@@ -229,7 +239,7 @@ export default function EditProfilePage() {
             value={mobile}
             onChange={setMobile}
           />
-          <Input label="Email" value={profile.email ?? ''} disabled hint="Linked to your Google account" />
+          <Input label="Email" value={profile.email ?? user?.email ?? ''} disabled hint="Linked to your Google account" />
         </div>
       </Card>
 

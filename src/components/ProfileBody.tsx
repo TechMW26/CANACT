@@ -258,15 +258,16 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
 type ProfileTabKey = 'posts' | 'reels' | 'polls' | 'rateme';
 
 function profileSlug(user: UserProfile) {
-  return (user.fullName || user.email || user.mobile || 'canact')
+  return String(user.fullName || user.email || user.mobile || 'canact')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '')
     .slice(0, 18) || 'canact';
 }
 
-function splitProfileName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return [name || 'CANACT', 'Profile'];
+function splitProfileName(name?: string | null) {
+  const safeName = String(name || '').trim();
+  const parts = safeName.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return [safeName || 'CANACT', 'Profile'];
   return [parts[0], parts.slice(1).join(' ')];
 }
 
@@ -557,9 +558,10 @@ function CanactPagesProfileUI({
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
 }) {
   const activeTab = tab === 'rateme' ? 'polls' : tab;
+  const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
   const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
   const chromeTone = useAdaptiveProfileChrome(heroSrc);
-  const nameLines = splitProfileName(userProfile.fullName);
+  const nameLines = splitProfileName(displayName);
   const role = userProfile.tags?.[0] || locationText || `${(userProfile.rating ?? 0).toFixed(1)} rating`;
   const supportLabel = isSelf
     ? 'Edit'
@@ -577,7 +579,7 @@ function CanactPagesProfileUI({
       <div className="relative min-h-[var(--canact-viewport-height)] overflow-hidden bg-black">
         {heroSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={heroSrc} alt={userProfile.fullName} className="absolute inset-0 h-full w-full object-cover" />
+          <img src={heroSrc} alt={displayName} className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,107,122,0.55),transparent_32%),linear-gradient(145deg,#1c1c1f,#050505)]" />
         )}
@@ -597,7 +599,7 @@ function CanactPagesProfileUI({
           <div className="mb-3">
             <div className="w-fit rounded-full p-[2.5px]" style={{ background: 'linear-gradient(135deg, #FF6B7A, #FFB3B8)' }}>
               <div className="h-[46px] w-[46px] overflow-hidden rounded-full ring-[2px] ring-black/30">
-                <Avatar src={userProfile.photoURL} name={userProfile.fullName} size={46} />
+                <Avatar src={userProfile.photoURL} name={displayName} size={46} />
               </div>
             </div>
           </div>

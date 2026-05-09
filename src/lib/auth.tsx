@@ -87,6 +87,22 @@ function toSession(u: FbUser): SessionUser {
   };
 }
 
+function splitNameParts(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.length > 1 ? parts[parts.length - 1] : '',
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
+  };
+}
+
+function fallbackDisplayName(u: Pick<FbUser, 'displayName' | 'email'>): string {
+  const candidate = (u.displayName || '').trim();
+  if (candidate) return candidate;
+  if (u.email) return u.email.split('@')[0] || 'Canact user';
+  return 'Canact user';
+}
+
 function isMobile(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -97,11 +113,8 @@ function isMobile(): boolean {
 async function seedProfileIfMissing(u: FbUser) {
   const snap = await get(ref(db, `users/${u.uid}`));
   if (snap.exists()) return;
-  const fullName = u.displayName ?? (u.email ? u.email.split('@')[0] : 'New User');
-  const parts = fullName.trim().split(/\s+/);
-  const firstName = parts[0] ?? '';
-  const lastName = parts.length > 1 ? parts[parts.length - 1] : '';
-  const middleName = parts.length > 2 ? parts.slice(1, -1).join(' ') : '';
+  const fullName = fallbackDisplayName(u);
+  const { firstName, lastName, middleName } = splitNameParts(fullName);
   const seed: UserProfile = {
     uid: u.uid,
     fullName,
@@ -127,6 +140,24 @@ async function seedProfileIfMissing(u: FbUser) {
   const cleaned: Record<string, any> = {};
   for (const [k, v] of Object.entries(seed)) if (v !== undefined) cleaned[k] = v;
   await set(ref(db, `users/${u.uid}`), cleaned);
+}
+
+function profileBackfillFromAuth(u: SessionUser, profile: UserProfile | null): Partial<UserProfile> {
+  const patch: Partial<UserProfile> = {};
+  if (!profile) return patch;
+  const authName = (u.displayName || '').trim();
+  const profileName = typeof profile.fullName === 'string' ? profile.fullName.trim() : '';
+  const fullName = profileName || authName || (u.email ? u.email.split('@')[0] : 'Canact user');
+  if (!profileName && fullName) patch.fullName = fullName;
+
+  const nameParts = splitNameParts(fullName);
+  if (!profile.firstName && nameParts.firstName) patch.firstName = nameParts.firstName;
+  if (!profile.lastName && nameParts.lastName) patch.lastName = nameParts.lastName;
+  if (!profile.middleName && nameParts.middleName) patch.middleName = nameParts.middleName;
+  if (!profile.email && u.email) patch.email = u.email;
+  if (!profile.photoURL && u.photoURL) patch.photoURL = u.photoURL;
+
+  return patch;
 }
 
 async function routeAfterSignIn(u: FbUser) {
@@ -249,7 +280,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ref(db, `users/${user.uid}`),
       (snap) => {
         const v = snap.val() as UserProfile | null;
-        setProfile(v ?? null);
+        if (!v) {
+          setProfile(null);
+          return;
+        }
+
+        const patch = profileBackfillFromAuth(user, v);
+        const hasPatch = Object.keys(patch).length > 0;
+        const merged = hasPatch ? ({ ...v, ...patch } as UserProfile) : v;
+        setProfile(merged);
+
+        if (hasPatch) {
+          update(ref(db, `users/${user.uid}`), patch).catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[auth] profile backfill failed', err);
+          });
+        }
       },
       (err) => {
         // eslint-disable-next-line no-console

@@ -22,7 +22,7 @@ const STEPS: { id: StepId; title: string }[] = [
 ];
 
 export function ProfileCompletionPrompt() {
-  const { profile, updateMyProfile } = useAuth();
+  const { user, profile, updateMyProfile } = useAuth();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -73,25 +73,25 @@ export function ProfileCompletionPrompt() {
   }, [city, countryCityApi, countryCode]);
 
   useEffect(() => {
-    if (!profile) return;
-    const nameParts = (profile.fullName || '').trim().split(/\s+/).filter(Boolean);
-    setFirstName(profile.firstName || nameParts[0] || '');
-    setLastName(profile.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''));
-    const parsed = splitStoredPhone(profile.mobile, (profile.countryCode as CountryCode) || 'IN');
+    const baseName = (profile?.fullName || user?.displayName || user?.email?.split('@')[0] || '').trim();
+    const nameParts = baseName.split(/\s+/).filter(Boolean);
+    setFirstName(profile?.firstName || nameParts[0] || '');
+    setLastName(profile?.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''));
+    const parsed = splitStoredPhone(profile?.mobile, (profile?.countryCode as CountryCode) || 'IN');
     setPhoneCountry(parsed.country);
     setMobile(parsed.national);
-    setDob(profile.dateOfBirth || '');
-    if (profile.countryCode) {
+    setDob(profile?.dateOfBirth || '');
+    if (profile?.countryCode) {
       setCountryCode(profile.countryCode);
       setCountry(countryCityApi?.Country.getCountryByCode(profile.countryCode)?.name || profile.country || '');
-    } else if (profile.country) {
+    } else if (profile?.country) {
       const match = countryCityApi?.Country.getAllCountries().find((item) => item.name.toLowerCase() === profile.country!.toLowerCase());
       setCountryCode(match?.isoCode || '');
       setCountry(match?.name || profile.country);
     }
-    setCity(profile.city || '');
-    setGender(profile.gender || '');
-  }, [countryCityApi, profile]);
+    setCity(profile?.city || '');
+    setGender(profile?.gender || '');
+  }, [countryCityApi, profile, user?.displayName, user?.email]);
 
   useEffect(() => {
     if (!incomplete) setOpen(false);
