@@ -43,6 +43,40 @@ function easeInOutQuart(value: number) {
   return value < 0.5 ? 8 * value * value * value * value : 1 - ((-2 * value + 2) ** 4) / 2;
 }
 
+function seededUnit(seed: number) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+type TipGlyph = {
+  char: string;
+  blur: number;
+  yOffset: number;
+  xOffset: number;
+  delay: number;
+};
+
+function buildTipGlyphs(text: string, phaseSeed: number, originGlyphs?: TipGlyph[]): TipGlyph[] {
+  const hasOrigin = Boolean(originGlyphs && originGlyphs.length);
+  return Array.from(text).map((char, index) => {
+    const baseSeed = (text.charCodeAt(index) || 32) * (index + 11 + phaseSeed);
+    const ySign = seededUnit(baseSeed + 1) > 0.5 ? 1 : -1;
+    const xSign = seededUnit(baseSeed + 2) > 0.5 ? 1 : -1;
+    const blur = 3 + Math.floor(seededUnit(baseSeed + 3) * 4);
+    const yOffset = (2 + Math.floor(seededUnit(baseSeed + 4) * 6)) * ySign;
+    const xOffset = (2 + Math.floor(seededUnit(baseSeed + 5) * 6)) * xSign;
+    const delay = index * 10;
+    const origin = hasOrigin ? originGlyphs?.[index % (originGlyphs?.length || 1)] : null;
+    return {
+      char,
+      blur: origin?.blur ?? blur,
+      yOffset: origin?.yOffset ?? yOffset,
+      xOffset: origin?.xOffset ?? xOffset,
+      delay: origin?.delay ?? delay,
+    };
+  });
+}
+
 export function HomeScoreExperience() {
   const { user, profile } = useAuth();
   const { coords } = useGeo();
@@ -77,7 +111,6 @@ export function HomeScoreExperience() {
   const scoreNumRef = useRef<HTMLDivElement | null>(null);
   const scorePulseRef = useRef<HTMLDivElement | null>(null);
   const greetingRef = useRef<HTMLDivElement | null>(null);
-  const scrollHintRef = useRef<HTMLDivElement | null>(null);
   const pillContentRef = useRef<HTMLDivElement | null>(null);
   const pillScoreRef = useRef<HTMLSpanElement | null>(null);
   const pillLabelRef = useRef<HTMLSpanElement | null>(null);
@@ -85,7 +118,13 @@ export function HomeScoreExperience() {
   const prevScoreRef = useRef<number | null>(null);
   const scoreCounterFrameRef = useRef(0);
   const [layoutVersion, setLayoutVersion] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+  const [tipEnterKey, setTipEnterKey] = useState(0);
+  const [leavingTip, setLeavingTip] = useState<{ id: number; text: string } | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
+  const tipCardRef = useRef<HTMLDivElement | null>(null);
+  const tipPrevRef = useRef<string>('');
+  const tipTransitionIdRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -202,6 +241,12 @@ export function HomeScoreExperience() {
     });
   }, [nearbyPeople, ratedUidsWithCooldown]);
   const activeCardPerson = unratedPeople[Math.min(activeCardIndex, Math.max(unratedPeople.length - 1, 0))] ?? null;
+  const activeCardFocusPoint = useMemo(
+    () => (activeCardPerson && typeof activeCardPerson.lat === 'number' && typeof activeCardPerson.lng === 'number'
+      ? { lat: activeCardPerson.lat, lng: activeCardPerson.lng }
+      : null),
+    [activeCardPerson],
+  );
 
   useEffect(() => { setActiveCardIndex(0); }, [nearbyPeople.map((person) => person.uid).join('|')]);
   useEffect(() => {
@@ -242,12 +287,16 @@ export function HomeScoreExperience() {
 
   useEffect(() => {
     const active = stage === 'nearby';
+    const scoreActive = stage === 'score';
+    const fullScreenActive = active || scoreActive;
     document.documentElement.toggleAttribute('data-canact-home-nearby', active);
+    document.documentElement.toggleAttribute('data-canact-home-score', scoreActive);
     document.documentElement.toggleAttribute('data-canact-map-fade', active);
-    document.documentElement.toggleAttribute('data-canact-fullscreen-page', active);
+    document.documentElement.toggleAttribute('data-canact-fullscreen-page', fullScreenActive);
     window.dispatchEvent(new CustomEvent('canact:set-page-blend-chrome', { detail: { active } }));
     return () => {
       document.documentElement.removeAttribute('data-canact-home-nearby');
+      document.documentElement.removeAttribute('data-canact-home-score');
       document.documentElement.removeAttribute('data-canact-map-fade');
       document.documentElement.removeAttribute('data-canact-fullscreen-page');
       window.dispatchEvent(new CustomEvent('canact:set-page-blend-chrome', { detail: { active: false } }));
@@ -277,12 +326,12 @@ export function HomeScoreExperience() {
     const scoreNum = scoreNumRef.current;
     const scorePulse = scorePulseRef.current;
     const greeting = greetingRef.current;
-    const scrollHint = scrollHintRef.current;
+    const tipCard = tipCardRef.current;
     const pillContent = pillContentRef.current;
     const pillScore = pillScoreRef.current;
     const pillLabel = pillLabelRef.current;
     const pillAura = pillAuraRef.current;
-    if (!circle || !scoreWrap || !scoreInner || !scoreNum || !scorePulse || !greeting || !scrollHint || !pillContent || !pillScore || !pillLabel || !pillAura) return;
+    if (!circle || !scoreWrap || !scoreInner || !scoreNum || !scorePulse || !greeting || !pillContent || !pillScore || !pillLabel || !pillAura) return;
 
     const currentScore = scoreSummary.score;
 
@@ -294,8 +343,8 @@ export function HomeScoreExperience() {
 
     const applyProgress = (progress: number) => {
       const eased = easeInOutQuart(progress);
-      const stageRect = scoreWrap.parentElement?.getBoundingClientRect();
-      const stageHeight = stageRect?.height || window.innerHeight;
+      const stageRect = stageRef.current?.getBoundingClientRect();
+      const stageHeight = window.innerHeight || stageRect?.height || scoreWrap.parentElement?.getBoundingClientRect().height || 0;
       const viewportWidth = window.innerWidth || 390;
       const compactHeight = stageHeight < 620 || window.innerHeight < 740;
       const widthScale = Math.max(0.62, Math.min(1, (viewportWidth - 44) / 324));
@@ -310,21 +359,23 @@ export function HomeScoreExperience() {
       const height = startHeight - eased * (startHeight - endHeight);
       const meterInset = Math.max(10, Math.round(18 * (width / 304)));
 
-      const greetingRect = greeting.getBoundingClientRect();
-      const greetingBottom = stageRect
-        ? Math.max(0, greetingRect.bottom - stageRect.top)
-        : greetingRect.bottom;
-      // Top of the visible meter ring sits at startY - meterInset, so we need
-      // (startY - meterInset) >= greetingBottom + gap to avoid overlap.
-      const minStartY = Math.round(greetingBottom + 18 + meterInset);
-      const centeredStartY = Math.round((stageHeight - startHeight) / 2);
-      const startY = Math.max(0, Math.max(minStartY, centeredStartY));
       const header = document.querySelector('[data-canact-header]');
-      const headerBottom = stageRect && header instanceof HTMLElement
-        ? Math.max(0, header.getBoundingClientRect().bottom - stageRect.top)
-        : 82;
-      const endY = Math.round(Math.max(82, headerBottom + 10));
-      const y = startY - eased * (startY - endY);
+      const bottomNav = document.querySelector('[data-canact-bottom-nav]');
+      const headerBottom = header instanceof HTMLElement ? header.getBoundingClientRect().bottom : 82;
+      const navTop = bottomNav instanceof HTMLElement ? bottomNav.getBoundingClientRect().top : (window.innerHeight - 76);
+      const laneTop = stage === 'score' ? 0 : Math.max(0, headerBottom + 14);
+      const laneBottom = Math.max(laneTop + startHeight, navTop - 14);
+      const startCenterY = Math.round(laneTop + ((laneBottom - laneTop) / 2));
+      const endCenterY = Math.round(Math.max(laneTop + (height / 2), (stage === 'score' ? 0 : (headerBottom + 10)) + (height / 2)));
+      const y = startCenterY - eased * (startCenterY - endCenterY);
+      const circleTop = y - (height / 2);
+      const circleBottom = y + (height / 2);
+      const surroundGap = Math.round(Math.max(22, Math.min(52, stageHeight * 0.06)));
+      const greetingHeight = greeting.getBoundingClientRect().height || 56;
+      const tipStableHeight = 58;
+      const tipBottomInset = 12;
+      const greetingTop = Math.max(10, Math.round(circleTop - surroundGap - greetingHeight));
+      const tipTop = Math.round(Math.min(stageHeight - tipStableHeight - tipBottomInset, circleBottom + surroundGap));
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
       const pillReveal = easeInOutQuart(Math.max(0, Math.min(1, (progress - 0.72) / 0.22)));
@@ -344,12 +395,14 @@ export function HomeScoreExperience() {
       circle.style.setProperty('--score-pill-opacity', String(pillReveal));
       circle.style.setProperty('--score-pill-scale', String(0.985 + pillReveal * 0.015));
       circle.toggleAttribute('data-pill-border', progress > 0.72);
-      scoreWrap.style.transform = `translate(-50%, ${y}px)`;
+      scoreWrap.style.top = `${y}px`;
+      scoreWrap.style.transform = 'translate(-50%, -50%)';
+      greeting.style.top = `${greetingTop}px`;
+      if (tipCard) tipCard.style.top = `${tipTop}px`;
       scoreInner.style.opacity = String(innerOpacity);
       scoreInner.style.transform = `scale(${innerScale})`;
       greeting.style.opacity = String(1 - Math.min(progress / 0.2, 1));
       greeting.style.transform = `translateY(${-eased * 50}px)`;
-      scrollHint.style.opacity = String(1 - Math.min(progress / 0.15, 1));
       scorePulse.style.opacity = '0';
       pillAura.style.opacity = '0';
 
@@ -393,7 +446,7 @@ export function HomeScoreExperience() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [layoutVersion, scoreSummary.score, stage]);
+  }, [layoutVersion, scoreSummary.score, stage, tipIndex]);
 
   // Animated sliding counter: animates from previous (or 0 on first mount) to
   // the current score, and toasts when the score changes between renders.
@@ -456,6 +509,18 @@ export function HomeScoreExperience() {
     setSelectedMapPerson(null);
     setStage('score');
   }, []);
+
+  const nearbyAvatarUsers = useMemo(() => nearbyPeople.slice(0, 5), [nearbyPeople]);
+  const nearbyAvatarOverflow = Math.max(0, nearbyPeople.length - nearbyAvatarUsers.length);
+
+  const handleNearbyAvatarJump = useCallback(() => {
+    showNearby();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      });
+    });
+  }, [showNearby]);
 
   const handleStageWheel = useCallback((event: ReactWheelEvent<HTMLElement>) => {
     if (stage !== 'score') return;
@@ -678,6 +743,67 @@ export function HomeScoreExperience() {
   const deltaLabel = scoreSummary.delta === 0
     ? `${scoreSummary.baseline} baseline`
     : `${scoreSummary.delta > 0 ? '↑' : '↓'} ${Math.abs(scoreSummary.delta)}`;
+  const scoreTips = useMemo(() => {
+    const tips: string[] = [];
+    if (scoreSummary.delta > 0) {
+      tips.push(`Momentum up ${scoreSummary.delta}. Keep consistent responses to sustain growth.`);
+    } else if (scoreSummary.delta < 0) {
+      tips.push(`Momentum down ${Math.abs(scoreSummary.delta)}. A few reliable interactions can recover quickly.`);
+    } else {
+      tips.push('Your score is steady. Consistent quality interactions are the fastest way to move up.');
+    }
+
+    if (!scoreProfile?.photoURL) tips.push('Add a profile photo to improve trust signals for new viewers.');
+    if ((scoreProfile?.city || '').trim().length === 0) tips.push('Set your city so nearby users can trust your location context.');
+    if (scoreSummary.score < 750) {
+      tips.push('Reply fast and avoid no-shows this week to push toward the next club.');
+    } else {
+      tips.push('You are in a high-trust tier. Protect it with reliable follow-through every day.');
+    }
+
+    return Array.from(new Set(tips)).slice(0, 5);
+  }, [scoreProfile?.city, scoreProfile?.photoURL, scoreSummary.delta, scoreSummary.score]);
+  const activeTip = scoreTips[tipIndex] ?? 'Small daily consistency keeps your trust score healthy.';
+  const leavingTipGlyphs = useMemo(() => {
+    if (!leavingTip) return [];
+    return buildTipGlyphs(leavingTip.text, 73);
+  }, [leavingTip]);
+  const activeTipGlyphs = useMemo(() => {
+    const origin = leavingTipGlyphs.length ? leavingTipGlyphs : undefined;
+    return buildTipGlyphs(activeTip, 17, origin);
+  }, [activeTip, leavingTipGlyphs]);
+
+  useEffect(() => {
+    setTipIndex(0);
+  }, [scoreTips.join('|')]);
+
+  useEffect(() => {
+    if (stage !== 'score' || scoreTips.length <= 1) return;
+    const id = window.setInterval(() => {
+      setTipIndex((index) => (index + 1) % scoreTips.length);
+    }, 4200);
+    return () => window.clearInterval(id);
+  }, [scoreTips.length, stage]);
+
+  useEffect(() => {
+    if (!tipPrevRef.current) {
+      tipPrevRef.current = activeTip;
+      return;
+    }
+    if (tipPrevRef.current === activeTip) return;
+    tipTransitionIdRef.current += 1;
+    setLeavingTip({ id: tipTransitionIdRef.current, text: tipPrevRef.current });
+    setTipEnterKey((value) => value + 1);
+    tipPrevRef.current = activeTip;
+  }, [activeTip]);
+
+  useEffect(() => {
+    if (!leavingTip) return;
+    const id = window.setTimeout(() => {
+      setLeavingTip((current) => (current?.id === leavingTip.id ? null : current));
+    }, 980);
+    return () => window.clearTimeout(id);
+  }, [leavingTip]);
   const radiusLabel = Number.isFinite(radius) ? formatDistance(radius) : 'anywhere';
   const scoreMeterProgress = scoreSummary.max > CANACT_SCORE_MIN
     ? Math.max(0, Math.min(1, (scoreSummary.score - CANACT_SCORE_MIN) / (scoreSummary.max - CANACT_SCORE_MIN)))
@@ -711,6 +837,7 @@ export function HomeScoreExperience() {
           <FriendsWorldMap
             friends={nearbyPeople}
             currentLocation={currentLocation}
+            focusPoint={activeCardFocusPoint}
             className={styles.nearbyMap}
             emptyTitle="No nearby users yet"
             emptyBody={`People inside ${radiusLabel} will appear here when they share a recent location.`}
@@ -773,11 +900,83 @@ export function HomeScoreExperience() {
       </div>
 
       <div className={styles.greeting} ref={greetingRef}>
+        {stage === 'score' ? (
+          <button
+            type="button"
+            className={styles.greetingAvatarRail}
+            onClick={handleNearbyAvatarJump}
+            aria-label="Open nearby users"
+          >
+            <div className={styles.greetingAvatars}>
+              {nearbyAvatarUsers.map((person, index) => (
+                <span
+                  key={`nearby-avatar-${person.uid}`}
+                  className={styles.greetingAvatarItem}
+                  style={{ zIndex: nearbyAvatarUsers.length - index } as CSSProperties}
+                >
+                  {person.photoURL ? (
+                    <img className={styles.greetingAvatarImage} src={person.photoURL} alt={person.name || 'Nearby user'} />
+                  ) : (
+                    <span className={styles.greetingAvatarFallback}>{(person.name || '?').slice(0, 1).toUpperCase()}</span>
+                  )}
+                </span>
+              ))}
+              {nearbyAvatarOverflow > 0 ? (
+                <span className={styles.greetingAvatarCount}>+{nearbyAvatarOverflow}</span>
+              ) : null}
+            </div>
+            <span className={styles.greetingAvatarHint}>Nearby people</span>
+          </button>
+        ) : null}
         <h2>hey {firstName},</h2>
         <h1>you&apos;re in the <span>{scoreSummary.club} club</span> now</h1>
       </div>
 
-      <div className={styles.scoreWrap} ref={scoreWrapRef}>
+      {stage === 'score' ? (
+        <div ref={tipCardRef} className={styles.tipCard} aria-live="polite" aria-label={activeTip}>
+          <span className={styles.tipTextViewport} aria-hidden="true">
+            {leavingTip ? (
+              <span key={`leave-${leavingTip.id}`} className={`${styles.tipTextLayer} ${styles.tipTextLayerExit}`}>
+                {leavingTipGlyphs.map((glyph, index) => (
+                  <span
+                    key={`leave-${leavingTip.id}-${glyph.char}-${index}`}
+                    className={`${styles.tipGlyph} ${styles.tipGlyphExit}`}
+                    style={{
+                      '--tip-shadow-y': `${glyph.yOffset}px`,
+                      '--tip-shadow-x': `${glyph.xOffset}px`,
+                      '--tip-shadow-blur': `${glyph.blur}px`,
+                      '--tip-delay': `${glyph.delay}ms`,
+                    } as CSSProperties}
+                  >
+                    {glyph.char === ' ' ? '\u00A0' : glyph.char}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+            <span
+              key={`enter-${tipEnterKey}-${activeTip}`}
+              className={`${styles.tipTextLayer} ${styles.tipTextLayerEnter} ${leavingTip ? styles.tipTextLayerEnterDelayed : ''}`}
+            >
+              {activeTipGlyphs.map((glyph, index) => (
+                <span
+                  key={`enter-${tipEnterKey}-${glyph.char}-${index}`}
+                  className={`${styles.tipGlyph} ${styles.tipGlyphEnter}`}
+                  style={{
+                    '--tip-shadow-y': `${glyph.yOffset}px`,
+                    '--tip-shadow-x': `${glyph.xOffset}px`,
+                    '--tip-shadow-blur': `${glyph.blur}px`,
+                    '--tip-delay': `${glyph.delay + (leavingTip ? 240 : 0)}ms`,
+                  } as CSSProperties}
+                >
+                  {glyph.char === ' ' ? '\u00A0' : glyph.char}
+                </span>
+              ))}
+            </span>
+          </span>
+        </div>
+      ) : null}
+
+      <div className={`${styles.scoreWrap} ${stage === 'score' ? styles.scoreWrapFixed : ''}`} ref={scoreWrapRef}>
         <div className={styles.pillAura} ref={pillAuraRef} />
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
@@ -812,12 +1011,6 @@ export function HomeScoreExperience() {
         </button>
       </div>
 
-      <div className={styles.hint} ref={scrollHintRef}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(220,20,60,.5)" strokeWidth="2" aria-hidden>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        scroll
-      </div>
     </section>
   );
 }

@@ -412,6 +412,40 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
   display: none;
 }
 
+html[data-canact-home-score="true"] [data-canact-bottom-nav] {
+  background: #fff !important;
+  border-top: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+html[data-canact-home-score="true"] [data-canact-header] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-100%) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-canact-home-score="true"] [data-canact-header-spacer] {
+  height: 0 !important;
+}
+
+html[data-canact-home-score="true"] [data-canact-bottom-nav]::before {
+  display: none !important;
+}
+
+html[data-canact-home-score="true"] [data-canact-bottom-nav]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 3px;
+  background: #fff;
+  pointer-events: none;
+}
+
 /* Friends/favourites map fades live above map tiles but below controls. */
 .canact-map-surface::before,
 .canact-map-surface::after {

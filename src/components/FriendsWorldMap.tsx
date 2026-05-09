@@ -32,18 +32,20 @@ type MarkerCluster = { key: string; friends: LocatedFriend[]; screen: ScreenPoin
 type MapTileKind = 'light' | 'satellite';
 
 const TILE_SIZE = 256;
-const TILE_OVERLAP = 2;
+const TILE_OVERLAP = 4;
+const TILE_BUFFER = 2;
 const DEFAULT_USER_ZOOM = 18;
 const MARKER_CLUSTER_DISTANCE = 56;
 const DEFAULT_CENTER: Point = { lat: 20, lng: 0 };
 const MAP_TILE_CACHE = 'canact-map-tiles-v1';
-const MAX_PREFETCH_TILE_URLS = 120;
+const MAX_PREFETCH_TILE_URLS = 240;
 const MAP_PREFETCH_IDLE_TIMEOUT_MS = 1400;
 const prefetchedTileUrls = new Set<string>();
 
 export function FriendsWorldMap({
   friends,
   currentLocation,
+  focusPoint,
   className,
   emptyTitle = 'No friend locations yet',
   emptyBody = 'Friends appear here after they have a recent app location.',
@@ -51,6 +53,7 @@ export function FriendsWorldMap({
 }: {
   friends: FriendMapPerson[];
   currentLocation?: Point | null;
+  focusPoint?: Point | null;
   className?: string;
   emptyTitle?: string;
   emptyBody?: string;
@@ -60,6 +63,7 @@ export function FriendsWorldMap({
   const baseView = useMemo(() => fitMapView(locatedFriends, currentLocation), [locatedFriends, currentLocation?.lat, currentLocation?.lng]);
   const [view, setView] = useState<MapView>(baseView);
   const viewRef = useRef(view);
+  const focusPanFrameRef = useRef(0);
   const activePointersRef = useRef<Map<number, ScreenPoint>>(new Map());
   const gestureRef = useRef<Gesture | null>(null);
   const [selectedClusterKey, setSelectedClusterKey] = useState<string | null>(null);
@@ -67,11 +71,41 @@ export function FriendsWorldMap({
 
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => {
+    return () => {
+      if (focusPanFrameRef.current) window.cancelAnimationFrame(focusPanFrameRef.current);
+    };
+  }, []);
+  useEffect(() => {
     if (viewRef.current.key === 'manual') return;
     activePointersRef.current.clear();
     gestureRef.current = null;
     setView(baseView);
   }, [baseView]);
+
+  useEffect(() => {
+    if (!focusPoint || !Number.isFinite(focusPoint.lat) || !Number.isFinite(focusPoint.lng)) return;
+    const current = viewRef.current.center;
+    const latDelta = Math.abs(focusPoint.lat - current.lat);
+    const lngDelta = Math.abs(shortestLngDelta(current.lng, focusPoint.lng));
+    if (latDelta < 0.00005 && lngDelta < 0.00005) return;
+    if (focusPanFrameRef.current) window.cancelAnimationFrame(focusPanFrameRef.current);
+    const from = viewRef.current.center;
+    const to = { lat: focusPoint.lat, lng: focusPoint.lng };
+    const startedAt = performance.now();
+    const duration = 520;
+    const animate = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      const eased = smoothStep(0, 1, progress);
+      const center = interpolatePoint(from, to, eased);
+      setView((currentView) => ({ ...currentView, center, key: 'manual' }));
+      if (progress < 1) {
+        focusPanFrameRef.current = window.requestAnimationFrame(animate);
+      } else {
+        focusPanFrameRef.current = 0;
+      }
+    };
+    focusPanFrameRef.current = window.requestAnimationFrame(animate);
+  }, [focusPoint?.lat, focusPoint?.lng]);
 
   const mapSize = size.width && size.height ? size : { width: 640, height: 420 };
   const zoom = clamp(view.zoom, 1, 19);
@@ -107,9 +141,9 @@ export function FriendsWorldMap({
   const prefetchTileUrls = useMemo(
     () => uniqueStrings([
       ...visibleTileUrls,
-      ...buildMapTilePrefetchUrls(locatedFriends, currentLocation, tileZoom, activeTileKinds),
+      ...buildMapTilePrefetchUrls(locatedFriends, currentLocation, tileZoom, activeTileKinds, focusPoint),
     ]).slice(0, MAX_PREFETCH_TILE_URLS),
-    [visibleTileUrls, locatedFriends, currentLocation?.lat, currentLocation?.lng, tileZoom, activeTileKinds],
+    [visibleTileUrls, locatedFriends, currentLocation?.lat, currentLocation?.lng, tileZoom, activeTileKinds, focusPoint?.lat, focusPoint?.lng],
   );
   const selectedCluster = selectedClusterKey
     ? markerClusters.find((cluster) => cluster.key === selectedClusterKey && cluster.friends.length > 1) ?? null
@@ -130,6 +164,15 @@ export function FriendsWorldMap({
       cancelIdle();
     };
   }, [prefetchTileUrls]);
+
+  // Warm tiles around the destination pin immediately so panning to a new card
+  // doesn't briefly reveal blank map while tile requests start.
+  useEffect(() => {
+    if (!focusPoint || !Number.isFinite(focusPoint.lat) || !Number.isFinite(focusPoint.lng)) return;
+    const urls = buildPointTilePrefetchUrls(focusPoint, tileZoom, activeTileKinds, 2);
+    if (!urls.length) return;
+    scheduleMapTilePrefetch(urls);
+  }, [focusPoint?.lat, focusPoint?.lng, tileZoom, activeTileKinds]);
 
   const adjustZoom = useCallback((delta: number) => {
     setView((current) => ({ ...current, zoom: clamp(current.zoom + delta, 1, 19), key: 'manual' }));
@@ -203,11 +246,11 @@ export function FriendsWorldMap({
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onWheel={handleWheel}
-      className={`relative touch-none overflow-hidden overscroll-contain bg-[#FFF8F8] cursor-grab active:cursor-grabbing ${className ?? 'h-[58svh] min-h-[390px] max-h-[620px]'}`}
+      className={`relative touch-none overflow-hidden overscroll-contain bg-white cursor-grab active:cursor-grabbing ${className ?? 'h-[58svh] min-h-[390px] max-h-[620px]'}`}
     >
       {renderLightLayer ? <TileLayer tiles={viewport.tiles} kind="light" opacity={lightLayerOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
       {renderSatelliteLayer ? <TileLayer tiles={viewport.tiles} kind="satellite" opacity={satelliteOpacity} scale={tileScale} viewportSize={tileViewportSize} /> : null}
-      <div className="pointer-events-none absolute inset-0 bg-[#FFF8F8]/10" />
+      <div className="pointer-events-none absolute inset-0 bg-white/0" />
 
       {userPinStyle ? (
         <div
@@ -383,11 +426,12 @@ function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[
         opacity: kind === 'light' ? opacity * 0.72 : opacity,
         width: viewportSize.width,
         height: viewportSize.height,
-        filter: kind === 'light' ? 'grayscale(1) sepia(1) saturate(2.8) hue-rotate(315deg) contrast(1.12) brightness(1.06)' : undefined,
+        filter: kind === 'light' ? 'grayscale(1) saturate(.9) contrast(1.06) brightness(1.08)' : undefined,
         transform: `scale(${scale}) translateZ(0)`,
         transformOrigin: 'top left',
-        backgroundColor: kind === 'light' ? '#FFF8F8' : undefined,
-        mixBlendMode: kind === 'light' ? 'multiply' : 'normal',
+        willChange: 'transform, opacity',
+        backgroundColor: kind === 'light' ? '#FFFFFF' : undefined,
+        mixBlendMode: 'normal',
       }}
     >
       {tiles.map((tile) => (
@@ -401,10 +445,12 @@ function TileLayer({ tiles, kind, opacity, scale, viewportSize }: { tiles: Tile[
           referrerPolicy="no-referrer-when-downgrade"
           className="absolute block select-none bg-[#EEE7DC]"
           style={{
-            left: Math.round(tile.left - TILE_OVERLAP / 2),
-            top: Math.round(tile.top - TILE_OVERLAP / 2),
+            left: tile.left - TILE_OVERLAP / 2,
+            top: tile.top - TILE_OVERLAP / 2,
             width: TILE_SIZE + TILE_OVERLAP,
             height: TILE_SIZE + TILE_OVERLAP,
+            transform: 'translate3d(0, 0, 0)',
+            backfaceVisibility: 'hidden',
           }}
           onError={(event) => {
             if (event.currentTarget.dataset.fallback) return;
@@ -443,10 +489,10 @@ function buildTileViewport(center: Point, zoom: number, size: Size) {
   const centerPx = project(center, zoom);
   const originX = centerPx.x - size.width / 2;
   const originY = centerPx.y - size.height / 2;
-  const minTileX = Math.floor(originX / TILE_SIZE) - 1;
-  const maxTileX = Math.floor((originX + size.width) / TILE_SIZE) + 1;
-  const minTileY = Math.max(0, Math.floor(originY / TILE_SIZE) - 1);
-  const maxTileY = Math.min(2 ** zoom - 1, Math.floor((originY + size.height) / TILE_SIZE) + 1);
+  const minTileX = Math.floor(originX / TILE_SIZE) - TILE_BUFFER;
+  const maxTileX = Math.floor((originX + size.width) / TILE_SIZE) + TILE_BUFFER;
+  const minTileY = Math.max(0, Math.floor(originY / TILE_SIZE) - TILE_BUFFER);
+  const maxTileY = Math.min(2 ** zoom - 1, Math.floor((originY + size.height) / TILE_SIZE) + TILE_BUFFER);
   const tiles: Tile[] = [];
   for (let x = minTileX; x <= maxTileX; x += 1) {
     for (let y = minTileY; y <= maxTileY; y += 1) {
@@ -465,18 +511,35 @@ function buildTileUrls(tiles: Tile[], kinds: MapTileKind[]) {
   return urls;
 }
 
-function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Point | null | undefined, tileZoom: number, kinds: MapTileKind[]) {
-  const points: Point[] = [...friends];
-  if (currentLocation) points.unshift(currentLocation);
+function buildMapTilePrefetchUrls(
+  friends: LocatedFriend[],
+  currentLocation: Point | null | undefined,
+  tileZoom: number,
+  kinds: MapTileKind[],
+  focusPoint?: Point | null,
+) {
+  const points: Point[] = [];
+  if (focusPoint) points.push(focusPoint);
+  if (currentLocation) points.push(currentLocation);
+  points.push(...friends);
   if (!points.length) return [];
+
+  const dedupedPoints = uniquePoints(points);
+  const anchor = focusPoint ?? currentLocation ?? dedupedPoints[0];
+  if (anchor) {
+    dedupedPoints.sort((a, b) => haversineMetersApprox(anchor, a) - haversineMetersApprox(anchor, b));
+  }
+
   const prefetchZooms = uniqueNumbers([
     clamp(Math.floor(tileZoom), 3, 18),
     clamp(Math.floor(tileZoom) + 1, 3, 18),
+    clamp(Math.floor(tileZoom) + 2, 3, 18),
     clamp(Math.max(5, Math.floor(tileZoom)), 5, 18),
+    DEFAULT_USER_ZOOM,
   ]);
   const urls: string[] = [];
   const seen = new Set<string>();
-  for (const point of points) {
+  for (const point of dedupedPoints) {
     for (const zoom of prefetchZooms) {
       const centerTile = pointToTile(point, zoom);
       for (let tileXOffset = -1; tileXOffset <= 1; tileXOffset += 1) {
@@ -498,6 +561,34 @@ function buildMapTilePrefetchUrls(friends: LocatedFriend[], currentLocation: Poi
   return urls;
 }
 
+function buildPointTilePrefetchUrls(point: Point, tileZoom: number, kinds: MapTileKind[], radius: number) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const prefetchZooms = uniqueNumbers([
+    clamp(Math.floor(tileZoom), 3, 18),
+    clamp(Math.floor(tileZoom) + 1, 3, 18),
+    DEFAULT_USER_ZOOM,
+  ]);
+  for (const zoom of prefetchZooms) {
+    const centerTile = pointToTile(point, zoom);
+    for (let tileXOffset = -radius; tileXOffset <= radius; tileXOffset += 1) {
+      for (let tileYOffset = -radius; tileYOffset <= radius; tileYOffset += 1) {
+        const tileX = wrap(centerTile.x + tileXOffset, 2 ** zoom);
+        const tileY = centerTile.y + tileYOffset;
+        if (tileY < 0 || tileY >= 2 ** zoom) continue;
+        for (const kind of kinds) {
+          const url = tileUrl(kind, zoom, tileX, tileY);
+          if (seen.has(url)) continue;
+          seen.add(url);
+          urls.push(url);
+          if (urls.length >= 96) return urls;
+        }
+      }
+    }
+  }
+  return urls;
+}
+
 function pointToTile(point: Point, zoom: number) {
   const pixel = project(point, zoom);
   return {
@@ -512,6 +603,28 @@ function uniqueNumbers(values: number[]) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values)];
+}
+
+function uniquePoints(points: Point[]) {
+  const seen = new Set<string>();
+  const next: Point[] = [];
+  for (const point of points) {
+    const key = `${point.lat.toFixed(5)}:${point.lng.toFixed(5)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(point);
+  }
+  return next;
+}
+
+function haversineMetersApprox(a: Point, b: Point) {
+  const toRad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toRad;
+  const dLng = (b.lng - a.lng) * toRad;
+  const lat1 = a.lat * toRad;
+  const lat2 = b.lat * toRad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 function buildMarkerClusters(friends: LocatedFriend[], center: Point, zoom: number, size: Size): MarkerCluster[] {
@@ -699,4 +812,16 @@ function clamp(value: number, min: number, max: number) {
 function smoothStep(edge0: number, edge1: number, value: number) {
   const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
+}
+
+function shortestLngDelta(fromLng: number, toLng: number) {
+  return ((((toLng - fromLng) + 540) % 360) + 360) % 360 - 180;
+}
+
+function interpolatePoint(from: Point, to: Point, t: number): Point {
+  const lngDelta = shortestLngDelta(from.lng, to.lng);
+  return {
+    lat: from.lat + (to.lat - from.lat) * t,
+    lng: wrap(from.lng + lngDelta * t + 180, 360) - 180,
+  };
 }
