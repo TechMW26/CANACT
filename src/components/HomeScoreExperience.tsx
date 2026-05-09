@@ -6,14 +6,15 @@ import { onValue, ref, get } from 'firebase/database';
 import { Avatar } from '@/components/Avatar';
 import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorldMap';
 import { toast } from '@/components/Toaster';
-import { ThumbsDown, ThumbsUp, UserPlus, MapPin, Heart } from '@/components/icons';
+import { ThumbsDown, ThumbsUp, UserPlus, UserMinus, MapPin, Heart, MessageSquare, Eye, Star } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { CANACT_SCORE_MIN, calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { useDistance } from '@/lib/distance';
 import { db } from '@/lib/firebase';
 import { setLikeDislike, setAttribute, SIX_HOURS } from '@/lib/services/votes';
 import { listenUserWhaPosts } from '@/lib/services/wha';
-import { sendFriendRequest, listenFriendStatus } from '@/lib/services/friends';
+import { sendFriendRequest, listenFriendStatus, unfriend } from '@/lib/services/friends';
+import { requestFollow } from '@/lib/services/favourites';
 import type { UserProfile, WhaPost, FriendStatus, AttrKey } from '@/lib/types';
 import { POSITIVE_ATTRS, NEGATIVE_ATTRS } from '@/lib/types';
 import { formatDistance, haversineMeters } from '@/lib/utils';
@@ -52,9 +53,11 @@ export function HomeScoreExperience() {
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [selectedMapPerson, setSelectedMapPerson] = useState<NearbyPerson | null>(null);
   const [expandedCardUid, setExpandedCardUid] = useState<string | null>(null);
+  const [expandedCardPerson, setExpandedCardPerson] = useState<NearbyPerson | null>(null);
+  const [expandedCardClosing, setExpandedCardClosing] = useState(false);
   const [expandedUserPosts, setExpandedUserPosts] = useState<WhaPost[]>([]);
   const [expandedPostIndex, setExpandedPostIndex] = useState(0);
-  const [expandedFriendStatus, setExpandedFriendStatus] = useState<FriendStatus>('none');
+  const [expandedFriendStatus, setExpandedFriendStatus] = useState<FriendStatus | null>(null);
   const [expandedBusy, setExpandedBusy] = useState(false);
   const [expandedCardProfile, setExpandedCardProfile] = useState<UserProfile | null>(null);
   const [expandedMyVoteAttr, setExpandedMyVoteAttr] = useState<{ key: AttrKey; at: number } | null>(null);
@@ -533,27 +536,50 @@ export function HomeScoreExperience() {
       const deltaX = event.clientX - drag.startX;
       const deltaY = Math.abs(event.clientY - drag.startY);
       if (Math.abs(deltaX) > 76 && Math.abs(deltaX) > deltaY) {
-        void handleRate(activeCardPerson, deltaX > 0 ? 'like' : 'dislike');
+        const direction = deltaX > 0 ? 1 : -1;
+        setDragX(direction * 180);
+        window.setTimeout(() => {
+          void handleRate(activeCardPerson, direction > 0 ? 'like' : 'dislike');
+        }, 110);
         return;
       }
-    } else if (expandedCardUid === null) {
+    } else if (expandedCardUid === null && !expandedCardClosing) {
       handleExpandCard(activeCardPerson);
     }
     setDragX(0);
-  }, [activeCardPerson, expandedCardUid, handleRate]);
+  }, [activeCardPerson, expandedCardUid, expandedCardClosing, handleRate]);
 
   const handleExpandCard = useCallback((person: NearbyPerson) => {
     if (!user?.uid) return;
+    setExpandedCardClosing(false);
+    setExpandedFriendStatus(null);
+    setExpandedCardPerson(person);
     setExpandedCardUid(person.uid);
     setExpandedPostIndex(0);
   }, [user?.uid]);
 
   const handleCloseExpandedCard = useCallback(() => {
+    if (expandedCardClosing) return;
+    setExpandedCardClosing(true);
+  }, [expandedCardClosing]);
+
+  const handleExpandedCardClosed = useCallback(() => {
     setExpandedCardUid(null);
+    setExpandedCardPerson(null);
+    setExpandedCardClosing(false);
+    setExpandedFriendStatus(null);
     setExpandedUserPosts([]);
     setExpandedPostIndex(0);
     setDragX(0);
   }, []);
+
+  useEffect(() => {
+    if (!expandedCardClosing) return;
+    const id = window.setTimeout(() => {
+      handleExpandedCardClosed();
+    }, 360);
+    return () => window.clearTimeout(id);
+  }, [expandedCardClosing, handleExpandedCardClosed]);
 
   const handleAddFriend = useCallback(async () => {
     if (!user?.uid || !user.displayName || !expandedCardUid) return;
@@ -582,12 +608,34 @@ export function HomeScoreExperience() {
     window.location.href = `/profile/${expandedCardUid}`;
   }, [expandedCardUid]);
 
+  const handleAddFavourite = useCallback(async () => {
+    if (!user?.uid || !expandedCardUid) return;
+    const name = profile?.fullName || user.displayName || 'Someone';
+    try {
+      await requestFollow(user.uid, name, expandedCardUid);
+      toast('Favourite request sent', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not send favourite request', 'error');
+    }
+  }, [user?.uid, user?.displayName, profile?.fullName, expandedCardUid]);
+
+  const handleUnfriend = useCallback(async () => {
+    if (!user?.uid || !expandedCardUid) return;
+    try {
+      await unfriend(user.uid, expandedCardUid);
+      toast('Removed from friends', 'success');
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not remove friend', 'error');
+    }
+  }, [user?.uid, expandedCardUid]);
+
   useEffect(() => {
     if (!expandedCardUid || !user?.uid) return;
     const unsub = listenUserWhaPosts(expandedCardUid, (posts) => {
       setExpandedUserPosts(posts);
-      if (expandedPostIndex >= posts.length && posts.length > 0) {
-        setExpandedPostIndex(Math.max(0, posts.length - 1));
+      const maxIndex = posts.length;
+      if (expandedPostIndex > maxIndex) {
+        setExpandedPostIndex(maxIndex);
       }
     });
     return unsub;
@@ -675,7 +723,7 @@ export function HomeScoreExperience() {
           </div>
         )}
         <NearbyDeck
-          person={activeCardPerson}
+          people={unratedPeople}
           total={unratedPeople.length}
           nearbyCount={nearbyPeople.length}
           dragX={dragX}
@@ -695,9 +743,9 @@ export function HomeScoreExperience() {
             onDislike={() => handleRate(selectedMapPerson, 'dislike')}
           />
         ) : null}
-        {expandedCardUid && activeCardPerson ? (
+        {expandedCardUid && expandedCardPerson ? (
           <ExpandedCardModal
-            person={activeCardPerson}
+            person={expandedCardPerson}
             personProfile={expandedCardProfile}
             posts={expandedUserPosts}
             postIndex={expandedPostIndex}
@@ -706,13 +754,17 @@ export function HomeScoreExperience() {
             dragX={dragX}
             ratingUid={ratingUid}
             myVoteAttr={expandedMyVoteAttr}
+            isClosing={expandedCardClosing}
             onPostIndexChange={setExpandedPostIndex}
             onClose={handleCloseExpandedCard}
+            onCloseComplete={handleExpandedCardClosed}
             onAddFriend={handleAddFriend}
+            onAddFavourite={handleAddFavourite}
+            onUnfriend={handleUnfriend}
             onNavigateProfile={handleNavigateToProfile}
             onAttr={handleExpandedAttr}
-            onLike={() => handleRate(activeCardPerson, 'like')}
-            onDislike={() => handleRate(activeCardPerson, 'dislike')}
+            onLike={() => handleRate(expandedCardPerson, 'like')}
+            onDislike={() => handleRate(expandedCardPerson, 'dislike')}
             onPointerDown={handleCardPointerDown}
             onPointerMove={handleCardPointerMove}
             onPointerEnd={handleCardPointerEnd}
@@ -769,7 +821,7 @@ export function HomeScoreExperience() {
 }
 
 function NearbyDeck({
-  person,
+  people,
   total,
   nearbyCount,
   dragX,
@@ -780,7 +832,7 @@ function NearbyDeck({
   onPointerMove,
   onPointerEnd,
 }: {
-  person: NearbyPerson | null;
+  people: NearbyPerson[];
   total: number;
   nearbyCount: number;
   dragX: number;
@@ -791,6 +843,9 @@ function NearbyDeck({
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const visibleDeckPeople = people.slice(0, 3);
+  const person = visibleDeckPeople[0] ?? null;
+  const stack = visibleDeckPeople.slice(1);
   const rotation = dragX / 18;
   return (
     <div className={styles.deckShell}>
@@ -798,6 +853,33 @@ function NearbyDeck({
         <span>Nearby</span>
         <span>{nearbyCount} found</span>
       </div>
+      {stack.length > 0 ? (
+        <div className={styles.deckStack} aria-hidden="true">
+          {stack.slice().reverse().map((candidate, index) => {
+            const depth = stack.length - index;
+            return (
+              <div
+                key={candidate.uid}
+                className={styles.swipeCardBack}
+                style={{ '--stack-depth': String(depth) } as CSSProperties}
+              >
+                <div className={styles.cardBackContent}>
+                  <Avatar src={candidate.photoURL ?? null} name={candidate.name} size={66} />
+                  <div className={styles.cardBackText}>
+                    <h4>{candidate.name}</h4>
+                    <p>{formatDistance(candidate.distanceMeters)} away{candidate.city ? ` · ${candidate.city}` : ''}</p>
+                  </div>
+                  <div className={styles.cardBackActions}>
+                    <span className={styles.cardBackGhostBtn} />
+                    <span className={styles.cardBackCounter}>next</span>
+                    <span className={styles.cardBackGhostBtn} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
       {person ? (
         <div
           className={styles.swipeCard}
@@ -878,9 +960,13 @@ function ExpandedCardModal({
   dragX,
   ratingUid,
   myVoteAttr,
+  isClosing,
   onPostIndexChange,
   onClose,
+  onCloseComplete,
   onAddFriend,
+  onAddFavourite,
+  onUnfriend,
   onNavigateProfile,
   onAttr,
   onLike,
@@ -893,14 +979,18 @@ function ExpandedCardModal({
   personProfile: UserProfile | null;
   posts: WhaPost[];
   postIndex: number;
-  friendStatus: FriendStatus;
+  friendStatus: FriendStatus | null;
   busy: boolean;
   dragX: number;
   ratingUid: string | null;
   myVoteAttr: { key: AttrKey; at: number } | null;
+  isClosing: boolean;
   onPostIndexChange: (index: number) => void;
   onClose: () => void;
+  onCloseComplete: () => void;
   onAddFriend: () => void;
+  onAddFavourite: () => void;
+  onUnfriend: () => void;
   onNavigateProfile: () => void;
   onAttr: (attr: AttrKey) => Promise<void>;
   onLike: () => void | Promise<void>;
@@ -909,12 +999,19 @@ function ExpandedCardModal({
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const postGestureRef = useRef<{ postStartX: number; postStartY: number; active: boolean } | null>(null);
   const [postDragX, setPostDragX] = useState(0);
-  const currentPost = posts[postIndex] ?? null;
+  const [postDragging, setPostDragging] = useState(false);
+  const mediaItems = useMemo(() => {
+    const items: Array<{ kind: 'profile' } | { kind: 'post'; post: WhaPost }> = [{ kind: 'profile' }];
+    posts.forEach((post) => items.push({ kind: 'post', post }));
+    return items;
+  }, [posts]);
   
   const handlePostPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     postGestureRef.current = { postStartX: event.clientX, postStartY: event.clientY, active: true };
+    setPostDragging(true);
   }, []);
 
   const handlePostPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
@@ -926,80 +1023,137 @@ function ExpandedCardModal({
   const handlePostPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const gesture = postGestureRef.current;
     postGestureRef.current = null;
-    if (!gesture?.active) return;
+    if (!gesture?.active) {
+      setPostDragX(0);
+      setPostDragging(false);
+      return;
+    }
     
     const deltaX = event.clientX - gesture.postStartX;
     const deltaY = Math.abs(event.clientY - gesture.postStartY);
     
     if (Math.abs(deltaX) > 76 && Math.abs(deltaX) > deltaY) {
       const nextIndex = deltaX > 0 ? postIndex - 1 : postIndex + 1;
-      if (nextIndex >= 0 && nextIndex < posts.length) {
+      if (nextIndex >= 0 && nextIndex < mediaItems.length) {
         onPostIndexChange(nextIndex);
       }
       setPostDragX(0);
+      setPostDragging(false);
     } else if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) {
+      setPostDragX(0);
+      setPostDragging(false);
       onNavigateProfile();
     } else {
       setPostDragX(0);
+      setPostDragging(false);
     }
-  }, [postIndex, posts.length, onPostIndexChange, onNavigateProfile]);
+  }, [mediaItems.length, postIndex, onPostIndexChange, onNavigateProfile]);
 
-  const friendButtonText = friendStatus === 'friends' ? 'Friends' : friendStatus === 'requested' ? 'Requested' : friendStatus === 'incoming' ? 'Accept' : 'Add Friend';
-  const friendButtonDisabled = friendStatus === 'friends' || friendStatus === 'requested' || busy;
+  useEffect(() => {
+    if (mediaItems.length <= 1 || postDragging || isClosing) return;
+    const id = window.setInterval(() => {
+      onPostIndexChange((postIndex + 1) % mediaItems.length);
+    }, 2800);
+    return () => window.clearInterval(id);
+  }, [isClosing, mediaItems.length, onPostIndexChange, postDragging, postIndex]);
+
+  const friendButtonText = friendStatus === 'requested' ? 'Requested' : friendStatus === 'incoming' ? 'Accept' : 'Add Friend';
+  const friendButtonDisabled = friendStatus === null || friendStatus === 'friends' || friendStatus === 'requested' || busy;
+  const expandedRotation = dragX / 18;
+  const showFriendOptions = friendStatus === 'friends';
+
+  useEffect(() => {
+    if (isClosing) return;
+    const maybeClose = (target: EventTarget | null) => {
+      if (!(target instanceof Node)) return;
+      if (!modalRef.current?.contains(target)) onClose();
+    };
+    const onPointerDown = (event: PointerEvent) => maybeClose(event.target);
+    const onWheel = (event: WheelEvent) => maybeClose(event.target);
+    const onTouchMove = (event: TouchEvent) => maybeClose(event.target);
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('wheel', onWheel, true);
+    document.addEventListener('touchmove', onTouchMove, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('wheel', onWheel, true);
+      document.removeEventListener('touchmove', onTouchMove, true);
+    };
+  }, [isClosing, onClose]);
+
+  const handleMessageFriend = useCallback(() => {
+    window.location.href = `/inbox/${person.uid}`;
+  }, [person.uid]);
+
+  const handleViewProfile = useCallback(() => {
+    window.location.href = `/profile/${person.uid}`;
+  }, [person.uid]);
   
   return (
-    <div className={styles.expandedModal}>
+    <div
+      ref={modalRef}
+      className={`${styles.expandedModal} ${isClosing ? styles.expandedModalClosing : ''}`}
+      style={{ transform: `translateX(calc(-50% + ${dragX}px)) rotate(${expandedRotation}deg)` }}
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.propertyName !== 'opacity') return;
+        if (isClosing) onCloseComplete();
+      }}
+    >
       <button type="button" className={styles.expandedClose} onClick={onClose} aria-label="Close">×</button>
-      
-      <div className={styles.expandedPhotoSection}>
-        <Avatar src={person.photoURL ?? null} name={person.name} size={200} />
-      </div>
 
       <div className={styles.expandedPostsSection}>
-        {posts.length > 0 ? (
+        <div
+          className={styles.expandedPost}
+          onPointerDown={handlePostPointerDown}
+          onPointerMove={handlePostPointerMove}
+          onPointerUp={handlePostPointerEnd}
+          onPointerCancel={handlePostPointerEnd}
+        >
           <div
-            className={styles.expandedPost}
-            style={{ transform: `translateX(${postDragX}px)` }}
-            onPointerDown={handlePostPointerDown}
-            onPointerMove={handlePostPointerMove}
-            onPointerUp={handlePostPointerEnd}
-            onPointerCancel={handlePostPointerEnd}
+            className={styles.expandedPostTrack}
+            style={{
+              transform: `translateX(calc(${-postIndex * 100}% + ${postDragX}px))`,
+              transition: postDragging ? 'none' : 'transform .26s cubic-bezier(.22, .88, .32, 1)',
+            }}
           >
-            {currentPost?.mediaUrls?.[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={currentPost.mediaPosters?.[0] || currentPost.mediaUrls[0]} alt="User post" className={styles.expandedPostImage} />
-            ) : (
-              <div className={styles.expandedPostEmpty}>No posts</div>
-            )}
-            <div className={styles.expandedPostNavigation}>
-              {posts.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    className={styles.expandedNavButton}
-                    onClick={() => onPostIndexChange(Math.max(0, postIndex - 1))}
-                    disabled={postIndex === 0}
-                    aria-label="Previous post"
-                  >
-                    ‹
-                  </button>
-                  <span className={styles.expandedPostIndicator}>{postIndex + 1} / {posts.length}</span>
-                  <button
-                    type="button"
-                    className={styles.expandedNavButton}
-                    onClick={() => onPostIndexChange(Math.min(posts.length - 1, postIndex + 1))}
-                    disabled={postIndex === posts.length - 1}
-                    aria-label="Next post"
-                  >
-                    ›
-                  </button>
-                </>
-              )}
-            </div>
+            {mediaItems.map((item, index) => {
+              const key = item.kind === 'profile' ? 'profile' : `post-${item.post.id || index}`;
+              const mediaSrc = item.kind === 'post'
+                ? (item.post.mediaPosters?.[0] || item.post.mediaUrls?.[0] || null)
+                : person.photoURL;
+              return (
+                <div key={key} className={styles.expandedPostSlide}>
+                  {mediaSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={mediaSrc} alt={item.kind === 'profile' ? person.name : 'User post'} className={styles.expandedPostImage} />
+                  ) : (
+                    <div className={styles.expandedPostEmptyFallback}>
+                      <Avatar src={null} name={person.name} size={124} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ) : (
-          <div className={styles.expandedPostEmpty}>No posts yet</div>
-        )}
+          {mediaItems.length > 1 ? (
+            <div className={styles.expandedPostDots}>
+              {mediaItems.map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className={`${styles.expandedPostDot} ${index === postIndex ? styles.expandedPostDotActive : ''}`}
+                  onClick={() => onPostIndexChange(index)}
+                  aria-label={`Show media ${index + 1}`}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {posts.length === 0 ? (
+          <div className={styles.expandedPostEmptyOverlay}>No posts yet</div>
+        ) : null}
       </div>
 
       <div className={styles.expandedDetails}>
@@ -1089,15 +1243,39 @@ function ExpandedCardModal({
           >
             <ThumbsDown size={20} />
           </button>
-          <button
-            type="button"
-            className={styles.friendButton}
-            disabled={friendButtonDisabled}
-            onClick={onAddFriend}
-          >
-            <UserPlus size={18} />
-            {friendButtonText}
-          </button>
+          {friendStatus === null ? (
+            <div className={styles.expandedFriendOptionsLoading} aria-hidden="true">
+              <span className={styles.friendOptionDot} />
+              <span className={styles.friendOptionDot} />
+              <span className={styles.friendOptionDot} />
+              <span className={styles.friendOptionDot} />
+            </div>
+          ) : showFriendOptions ? (
+            <div className={styles.expandedFriendOptions}>
+              <button type="button" className={styles.friendOptionButton} onClick={handleMessageFriend} aria-label="Message friend" title="Message">
+                <MessageSquare size={18} />
+              </button>
+              <button type="button" className={styles.friendOptionButton} onClick={handleViewProfile} aria-label="View profile" title="Profile">
+                <Eye size={18} />
+              </button>
+              <button type="button" className={styles.friendOptionButton} onClick={onAddFavourite} aria-label="Add to favourites" title="Favourite">
+                <Star size={18} />
+              </button>
+              <button type="button" className={styles.friendOptionButton} onClick={onUnfriend} aria-label="Remove friend" title="Unfriend">
+                <UserMinus size={18} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.friendButton}
+              disabled={friendButtonDisabled}
+              onClick={onAddFriend}
+            >
+              <UserPlus size={18} />
+              {friendButtonText}
+            </button>
+          )}
           <button
             type="button"
             className={styles.likeButton}
