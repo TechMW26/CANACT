@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref, get } from 'firebase/database';
 import { Avatar } from '@/components/Avatar';
 import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorldMap';
@@ -90,6 +90,7 @@ export function HomeScoreExperience() {
     let stabilizeTimerA = 0;
     let stabilizeTimerB = 0;
     let resizeObserver: ResizeObserver | null = null;
+    let mutationObserver: MutationObserver | null = null;
     const updateLayout = () => {
       if (frame) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => setLayoutVersion((version) => version + 1));
@@ -97,20 +98,31 @@ export function HomeScoreExperience() {
 
     const stageEl = stageRef.current;
     const headerEl = document.querySelector('[data-canact-header]');
+    const spacerEl = document.querySelector('[data-canact-header-spacer]');
+    const greetingEl = greetingRef.current;
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => updateLayout());
       if (stageEl) resizeObserver.observe(stageEl);
       if (headerEl instanceof HTMLElement) resizeObserver.observe(headerEl);
+      if (spacerEl instanceof HTMLElement) resizeObserver.observe(spacerEl);
+      if (greetingEl) resizeObserver.observe(greetingEl);
+    }
+
+    if (headerEl instanceof HTMLElement && typeof MutationObserver !== 'undefined') {
+      mutationObserver = new MutationObserver(() => updateLayout());
+      mutationObserver.observe(headerEl, { attributes: true, attributeFilter: ['style', 'class'] });
     }
 
     // iOS Safari can settle viewport + safe-area metrics after first paint.
     // Force two follow-up recalculations so the score ring starts aligned.
     stabilizeTimerA = window.setTimeout(updateLayout, 80);
     stabilizeTimerB = window.setTimeout(updateLayout, 320);
+    window.setTimeout(updateLayout, 560);
 
     document.fonts?.ready.then(() => updateLayout()).catch(() => {});
 
     updateLayout();
+    window.addEventListener('load', updateLayout);
     window.addEventListener('resize', updateLayout);
     window.addEventListener('orientationchange', updateLayout);
     window.visualViewport?.addEventListener('resize', updateLayout);
@@ -120,6 +132,8 @@ export function HomeScoreExperience() {
       if (stabilizeTimerA) window.clearTimeout(stabilizeTimerA);
       if (stabilizeTimerB) window.clearTimeout(stabilizeTimerB);
       resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+      window.removeEventListener('load', updateLayout);
       window.removeEventListener('resize', updateLayout);
       window.removeEventListener('orientationchange', updateLayout);
       window.visualViewport?.removeEventListener('resize', updateLayout);
@@ -253,7 +267,7 @@ export function HomeScoreExperience() {
     properties.forEach((property) => root.style.removeProperty(property));
   }, [stage]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const circle = circleRef.current;
     const scoreWrap = scoreWrapRef.current;
     const scoreInner = scoreInnerRef.current;
