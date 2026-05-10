@@ -22,7 +22,7 @@
      - svh (small viewport) is stable across mobile chrome expand/retract.
      - fullscreen iOS builds use --canact-viewport-height instead.
      Apply once at the panel level — never stack on multiple ancestors. */
-  --canact-popup-bottom-inset: 0px;
+  --canact-popup-bottom-inset: 1.5em;
   --canact-popup-max-height: 90svh;
   --canact-map-header-fade-start: 55px;
 }

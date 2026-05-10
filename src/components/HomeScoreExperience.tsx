@@ -44,6 +44,10 @@ function easeInOutQuart(value: number) {
   return value < 0.5 ? 8 * value * value * value * value : 1 - ((-2 * value + 2) ** 4) / 2;
 }
 
+function easeInOutCubic(value: number) {
+  return value < 0.5 ? 4 * value * value * value : 1 - ((-2 * value + 2) ** 3) / 2;
+}
+
 function seededUnit(seed: number) {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
   return value - Math.floor(value);
@@ -123,6 +127,11 @@ export function HomeScoreExperience() {
   const [tipEnterKey, setTipEnterKey] = useState(0);
   const [leavingTip, setLeavingTip] = useState<{ id: number; text: string } | null>(null);
   const [isPerfLite, setIsPerfLite] = useState(false);
+  const stageTransitionDurationMs = isPerfLite ? 360 : 680;
+  const stageTransitionStyle = {
+    '--home-stage-transition-duration': `${stageTransitionDurationMs}ms`,
+    '--home-stage-transition-ease': 'cubic-bezier(.33, 0, .2, 1)',
+  } as CSSProperties;
   const stageRef = useRef<HTMLElement | null>(null);
   const tipCardRef = useRef<HTMLDivElement | null>(null);
   const tipPrevRef = useRef<string>('');
@@ -366,7 +375,7 @@ export function HomeScoreExperience() {
     };
 
     const applyProgress = (progress: number) => {
-      const eased = easeInOutQuart(progress);
+      const eased = easeInOutCubic(progress);
       const stageRect = stageRef.current?.getBoundingClientRect();
       const stageHeight = window.innerHeight || stageRect?.height || scoreWrap.parentElement?.getBoundingClientRect().height || 0;
       const viewportWidth = window.innerWidth || 390;
@@ -455,10 +464,10 @@ export function HomeScoreExperience() {
       applyProgress(targetProgress);
     } else {
       const startedAt = performance.now();
-      const duration = isPerfLite ? 260 : 420;
+      const duration = stageTransitionDurationMs;
       const animate = (time: number) => {
         const progress = Math.min((time - startedAt) / duration, 1);
-        const eased = easeInOutQuart(progress);
+        const eased = easeInOutCubic(progress);
         const nextProgress = startProgress + (targetProgress - startProgress) * eased;
         progressRef.current = nextProgress;
         applyProgress(nextProgress);
@@ -470,7 +479,7 @@ export function HomeScoreExperience() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [isPerfLite, layoutVersion, scoreSummary.score, stage, tipIndex]);
+  }, [layoutVersion, scoreSummary.score, stage, stageTransitionDurationMs, tipIndex]);
 
   // Animated sliding counter: animates from previous (or 0 on first mount) to
   // the current score, and toasts when the score changes between renders.
@@ -857,6 +866,7 @@ export function HomeScoreExperience() {
     <section
       ref={stageRef}
       className={`${styles.animationStage} ${stage === 'nearby' ? styles.stageNearby : ''} ${isPerfLite ? styles.perfLite : ''}`}
+      style={stageTransitionStyle}
       aria-label="Canact score"
       data-canact-no-refresh="true"
       onWheel={handleStageWheel}
