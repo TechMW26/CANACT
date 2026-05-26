@@ -93,4 +93,5 @@ export {
   MoreHorizontal,
   ShoppingBag,
   AlignLeft,
+  CloudUpload,
 } from 'lucide-react';

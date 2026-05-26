@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/auth';
 import { ConfirmDialog } from '@/components/Modal';
 import { toast } from '@/components/Toaster';
+import { DeviceBackupSettingsControl } from '@/components/DeviceBackupPrompt';
 import { enableWebPush, pushSupported } from '@/lib/services/push';
 
 export default function SettingsPage() {
@@ -59,6 +60,10 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+      </Card>
+      <Card>
+        <h3 className="font-bold">Storage</h3>
+        <DeviceBackupSettingsControl uid={user.uid} />
       </Card>
       <Card>
         <h3 className="font-bold">Account</h3>
