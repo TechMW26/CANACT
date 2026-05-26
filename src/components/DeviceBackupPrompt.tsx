@@ -51,7 +51,7 @@ export function DeviceBackupPrompt() {
         rememberChoice('dismissed');
         setOpen(false);
       }}
-      title="Cloud backup"
+      title="Media Access"
     >
       <div className="space-y-3">
         <div className="flex items-start gap-3 rounded-2xl bg-brand-light/70 p-3">
@@ -59,20 +59,29 @@ export function DeviceBackupPrompt() {
             <CloudUpload size={19} strokeWidth={2.2} />
           </span>
           <div>
-            <p className="text-sm font-extrabold text-ink">Allow photos and videos to Canact to maintain authenticity of uploads.</p>
-            <p className="mt-1 text-xs leading-5 text-ink/65"></p>
+            <p className="text-sm font-extrabold text-ink">
+              Allow media access.
+            </p>
+            <p className="mt-1 text-xs leading-5 text-ink/65">
+              This is required to post photos and videos in the app.
+            </p>
           </div>
         </div>
+
         {summary.enabled ? (
           <div className="space-y-3">
-            <DeviceBackupStatus summary={summary} />
-            <DeviceBackupPicker uid={user.uid} onQueued={() => setOpen(false)} />
+            <DeviceMediaStatus summary={summary} />
+            <DeviceMediaPicker uid={user.uid} onQueued={() => setOpen(false)} />
           </div>
         ) : (
-          <DeviceBackupPicker uid={user.uid} autoEnable onQueued={() => {
-            rememberChoice('enabled');
-            setOpen(false);
-          }} />
+          <DeviceMediaPicker
+            uid={user.uid}
+            autoEnable
+            onQueued={() => {
+              rememberChoice('enabled');
+              setOpen(false);
+            }}
+          />
         )}
       </div>
     </Modal>
@@ -82,17 +91,17 @@ export function DeviceBackupPrompt() {
 export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
   const summary = useDeviceBackupSummary(uid);
 
-  const turnOnAutomaticBackup = async () => {
+  const turnOnMediaAccess = async () => {
     const native = await enableDeviceBackup(uid);
-    if (native.status === 'error') toast('Automatic backup is on; native iOS sync could not start', 'info');
-    else toast('Automatic backup is on', 'success');
+    if (native.status === 'error') toast('Media access enabled', 'info');
+    else toast('Media access enabled', 'success');
     processDeviceBackupQueue(uid).catch(() => {});
   };
 
-  const turnOffAutomaticBackup = async () => {
+  const turnOffMediaAccess = async () => {
     setDeviceBackupEnabled(uid, false);
     await clearLocalBackupQueue(uid);
-    toast('Automatic backup is off', 'info');
+    toast('Media access disabled', 'info');
   };
 
   return (
@@ -103,15 +112,19 @@ export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-extrabold text-ink">Automatic cloud backup</div>
-            <BackupStatePill summary={summary} />
+            <div className="text-sm font-extrabold text-ink">Media Access for Posting</div>
+            <MediaStatePill summary={summary} />
           </div>
-          <p className="mt-1 text-xs leading-5 text-ink/60">Queue photos and videos once; Canact backs them up automatically while the app is open.</p>
+          <p className="mt-1 text-xs leading-5 text-ink/60">
+            Allow media access to be used when posting in the app.
+          </p>
           <div className="mt-3 space-y-3">
-            <DeviceBackupStatus summary={summary} />
+            <DeviceMediaStatus summary={summary} />
             <div className="flex flex-wrap gap-2">
               {!summary.enabled ? (
-                <Button size="sm" icon={<CloudUpload size={15} strokeWidth={2.3} />} onClick={turnOnAutomaticBackup}>Turn on</Button>
+                <Button size="sm" icon={<CloudUpload size={15} strokeWidth={2.3} />} onClick={turnOnMediaAccess}>
+                  Enable Media Access
+                </Button>
               ) : (
                 <>
                   <Button
@@ -124,11 +137,11 @@ export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
                   >
                     {summary.paused ? 'Resume' : 'Pause'}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={turnOffAutomaticBackup}>Turn off</Button>
+                  <Button size="sm" variant="ghost" onClick={turnOffMediaAccess}>Disable</Button>
                 </>
               )}
             </div>
-            {summary.enabled && <DeviceBackupPicker uid={uid} />}
+            {summary.enabled && <DeviceMediaPicker uid={uid} />}
           </div>
         </div>
       </div>
@@ -163,7 +176,7 @@ export function DeviceBackupWorker({ uid }: { uid: string }) {
   return null;
 }
 
-function DeviceBackupPicker({
+function DeviceMediaPicker({
   uid,
   onQueued,
   autoEnable = false,
@@ -181,15 +194,15 @@ function DeviceBackupPicker({
     try {
       if (autoEnable) {
         const native = await enableDeviceBackup(uid);
-        if (native.status === 'error') toast('Backup is on; native iOS sync could not start', 'info');
+        if (native.status === 'error') toast('Media access enabled', 'info');
       }
       const result = await enqueueBackupFiles(uid, selected);
       if (result.storageUnavailable) {
-        toast('Automatic backup queue is not available on this browser', 'error');
+        toast('Media access is not available on this browser', 'error');
         return;
       }
       if (result.queued) {
-        toast(`Queued ${result.queued} file${result.queued === 1 ? '' : 's'} for backup`, 'success');
+        toast(`Added ${result.queued} file${result.queued === 1 ? '' : 's'} for posting`, 'success');
         onQueued?.();
         processDeviceBackupQueue(uid).catch(() => {});
       } else {
@@ -205,7 +218,7 @@ function DeviceBackupPicker({
     const files = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
     event.currentTarget.value = '';
     onFiles(files).catch(() => {
-      toast('Could not queue backup files', 'error');
+      toast('Could not add files', 'error');
     });
   };
 
@@ -227,21 +240,21 @@ function DeviceBackupPicker({
           disabled={queuing}
           onClick={() => mediaInputRef.current?.click()}
         >
-          Photos & videos
+          Select Photos & Videos
         </Button>
       </div>
     </div>
   );
 }
 
-function DeviceBackupStatus({ summary }: { summary: DeviceBackupSummary }) {
+function DeviceMediaStatus({ summary }: { summary: DeviceBackupSummary }) {
   return (
     <div className="rounded-2xl border border-line bg-surface p-3 text-xs text-ink/65">
       <div className="flex flex-wrap items-center gap-2">
-        <BackupStatePill summary={summary} />
-        <span>{summary.uploaded} backed up</span>
-        <span>{summary.pending + summary.uploading} queued</span>
-        {summary.failed > 0 && <span className="font-bold text-brand">{summary.failed} needs retry</span>}
+        <MediaStatePill summary={summary} />
+        <span>{summary.uploaded} ready</span>
+        <span>{summary.pending + summary.uploading} selected</span>
+        {summary.failed > 0 && <span className="font-bold text-brand">{summary.failed} needs attention</span>}
       </div>
       {summary.working && summary.currentName && (
         <div className="mt-2 space-y-1">
@@ -261,8 +274,8 @@ function DeviceBackupStatus({ summary }: { summary: DeviceBackupSummary }) {
   );
 }
 
-function BackupStatePill({ summary }: { summary: DeviceBackupSummary }) {
-  const label = !summary.enabled ? 'Off' : summary.paused ? 'Paused' : summary.working ? 'Backing up' : 'On';
+function MediaStatePill({ summary }: { summary: DeviceBackupSummary }) {
+  const label = !summary.enabled ? 'Off' : summary.paused ? 'Paused' : summary.working ? 'Processing' : 'Enabled';
   const className = !summary.enabled
     ? 'bg-ink/10 text-ink/60'
     : summary.paused

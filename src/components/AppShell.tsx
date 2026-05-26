@@ -25,7 +25,7 @@ import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
-  Heart, Eye, Settings as SettingsIcon, Sparkles, ShieldAlert,
+  Heart, Eye, Settings as SettingsIcon, Sparkles,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
@@ -51,8 +51,6 @@ const SIDE_LINKS = [
   { href: '/profile',      label: 'My Profile',    Icon: UserIcon },
   { href: '/settings',     label: 'Settings',      Icon: SettingsIcon },
 ];
-
-const ADMIN_LINK = { href: '/admin', label: 'Admin', Icon: ShieldAlert };
 
 const ROUTE_PREFETCH_HREFS = [
   '/',
@@ -98,7 +96,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const profileChrome = routeProfileHero;
   const footerFadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
   const chromeOverContent = profileChrome || footerFadeChrome;
-  const sideLinks = isAdminEmail(user?.email ?? profile?.email) ? [...SIDE_LINKS, ADMIN_LINK] : SIDE_LINKS;
 
   useLayoutEffect(() => {
     document.documentElement.toggleAttribute('data-canact-profile-route', routeProfileHero);
@@ -268,7 +265,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/" />
         </div>
-        {sideLinks.map(({ href, label, Icon }) => {
+        {SIDE_LINKS.map(({ href, label, Icon }) => {
           const active = isNavLinkActive(pathname, href, user.uid);
           // Inbox link gets a live badge that includes both unread
           // messages and pending chat requests so the user can see at
@@ -453,18 +450,8 @@ function titleFor(path: string | null) {
   if (path.startsWith('/search')) return 'Search';
   if (path.startsWith('/underground')) return 'Underground';
   if (path.startsWith('/settings')) return 'Settings';
-  if (path.startsWith('/admin')) return 'Admin';
   if (path.startsWith('/edit-profile')) return 'Edit profile';
   return '';
-}
-
-function isAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  const configured = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || 'avi2001raj@gmail.com')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return configured.includes(email.toLowerCase());
 }
 
 function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; topInset?: string | null }) {

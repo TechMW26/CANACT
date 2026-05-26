@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { updatePassword } from 'firebase/auth';
 import { Button } from '@/components/Button';
 import { BrandMark } from '@/components/Brand';
 import { Splash } from '@/components/Splash';
 import { useAuth } from '@/lib/auth';
+import { getFirebaseAuth } from '@/lib/firebase';
 import { toast } from '@/components/Toaster';
 
 function GoogleGlyph() {
@@ -20,6 +22,7 @@ function GoogleGlyph() {
 
 const ADMIN_EMAIL = 'avi2001raj@gmail.com';
 const ADMIN_PASSWORD = 'Admin@login2026';
+const LEGACY_ADMIN_PASSWORD = 'Admin@login2025';
 
 function isLocalhost(): boolean {
   if (typeof window === 'undefined') return false;
@@ -36,6 +39,38 @@ export default function WelcomePage() {
   const [devMode, setDevMode] = useState(false);
   const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState(ADMIN_PASSWORD);
+
+  const signInLocalDevEmail = async () => {
+    try {
+      await signInWithEmail(email, password);
+      return;
+    } catch (err: any) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const canRecoverAdmin = devMode
+        && normalizedEmail === ADMIN_EMAIL
+        && password === ADMIN_PASSWORD
+        && isInvalidCredentialError(err);
+      if (!canRecoverAdmin) throw err;
+
+      try {
+        await signInWithEmail(ADMIN_EMAIL, LEGACY_ADMIN_PASSWORD);
+        const currentUser = getFirebaseAuth().currentUser;
+        if (currentUser) {
+          await updatePassword(currentUser, ADMIN_PASSWORD);
+          toast('Admin password updated for local dev sign-in', 'success');
+        }
+        return;
+      } catch {
+        try {
+          await signUpWithEmail(ADMIN_EMAIL, ADMIN_PASSWORD);
+          toast('Admin account created', 'success');
+          return;
+        } catch {
+          throw new Error('Admin account exists with a different password. Reset it in Firebase Auth, then sign in with Admin@login2026.');
+        }
+      }
+    }
+  };
 
   useEffect(() => { setDevMode(isLocalhost()); }, []);
 
@@ -123,7 +158,7 @@ export default function WelcomePage() {
                     loading={emailBusy}
                     onClick={async () => {
                       setEmailBusy(true);
-                      try { await signInWithEmail(email, password); }
+                      try { await signInLocalDevEmail(); }
                       catch (err: any) { toast(err?.message ?? 'Sign-in failed', 'error'); }
                       finally { setEmailBusy(false); }
                     }}
@@ -155,4 +190,9 @@ export default function WelcomePage() {
       </div>
     </div>
   );
+}
+
+function isInvalidCredentialError(err: any): boolean {
+  const code = String(err?.code ?? '');
+  return code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found';
 }
