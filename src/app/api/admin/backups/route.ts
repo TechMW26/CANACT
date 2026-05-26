@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDatabase } from 'firebase-admin/database';
-import { getFirebaseAdminApp, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
+import { getFirebaseAdminApp, readAdminRtdb, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
 
 export const runtime = 'nodejs';
 
@@ -21,24 +20,27 @@ type UserRecord = {
   country?: string;
   photoURL?: string;
   createdAt?: number;
+  profileComplete?: boolean;
+  profileVerified?: boolean;
+  rating?: number;
+  ratingCount?: number;
 };
 
 export async function GET(request: Request) {
   const app = getFirebaseAdminApp();
-  if (!app) return NextResponse.json({ ok: false, reason: 'admin-not-configured' }, { status: 503 });
-
   const admin = await verifyAdminRequest(request, app);
   if (!admin) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
-  const db = getDatabase(app);
   const [usersSnap, backupsSnap] = await Promise.all([
-    db.ref('users').get(),
-    db.ref('userBackups').get(),
+    readAdminRtdb<Record<string, UserRecord>>('users', app, admin.idToken),
+    readAdminRtdb<Record<string, { items?: Record<string, BackupRecord> }>>('userBackups', app, admin.idToken),
   ]);
-  const users = (usersSnap.val() ?? {}) as Record<string, UserRecord>;
-  const backups = (backupsSnap.val() ?? {}) as Record<string, { items?: Record<string, BackupRecord> }>;
+  const users = usersSnap ?? {};
+  const backups = backupsSnap ?? {};
 
-  const rows = Object.entries(backups).map(([uid, backupNode]) => {
+  const allUids = new Set([...Object.keys(users), ...Object.keys(backups)]);
+  const rows = Array.from(allUids).map((uid) => {
+    const backupNode = backups[uid];
     const profile = users[uid] ?? {};
     const items = Object.entries(backupNode?.items ?? {})
       .filter(([, item]) => typeof item?.pathname === 'string' && item.pathname.startsWith('backup/'))
@@ -65,14 +67,20 @@ export async function GET(request: Request) {
         country: profile.country ?? null,
         photoURL: profile.photoURL ?? null,
         createdAt: profile.createdAt ?? null,
+        profileComplete: profile.profileComplete ?? null,
+        profileVerified: profile.profileVerified ?? null,
+        rating: typeof profile.rating === 'number' ? profile.rating : null,
+        ratingCount: typeof profile.ratingCount === 'number' ? profile.ratingCount : null,
       },
       itemCount: items.length,
       totalBytes,
       latestBackupAt,
       items,
     };
-  }).filter((row) => row.itemCount > 0)
-    .sort((left, right) => right.latestBackupAt - left.latestBackupAt);
+  }).sort((left, right) => {
+    if (right.latestBackupAt !== left.latestBackupAt) return right.latestBackupAt - left.latestBackupAt;
+    return left.user.fullName.localeCompare(right.user.fullName);
+  });
 
   return NextResponse.json({
     ok: true,
@@ -80,6 +88,7 @@ export async function GET(request: Request) {
     admin,
     totals: {
       users: rows.length,
+      usersWithBackups: rows.filter((row) => row.itemCount > 0).length,
       files: rows.reduce((sum, row) => sum + row.itemCount, 0),
       bytes: rows.reduce((sum, row) => sum + row.totalBytes, 0),
     },

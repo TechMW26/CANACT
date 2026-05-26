@@ -1,7 +1,6 @@
 import { get } from '@vercel/blob';
 import { NextResponse } from 'next/server';
-import { getDatabase } from 'firebase-admin/database';
-import { getFirebaseAdminApp, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
+import { getFirebaseAdminApp, readAdminRtdb, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
 
 export const runtime = 'nodejs';
 
@@ -14,8 +13,6 @@ type Params = {
 
 export async function GET(request: Request, { params }: Params) {
   const app = getFirebaseAdminApp();
-  if (!app) return NextResponse.json({ ok: false, reason: 'admin-not-configured' }, { status: 503 });
-
   const admin = await verifyAdminRequest(request, app);
   if (!admin) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
@@ -25,8 +22,7 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
   }
 
-  const snap = await getDatabase(app).ref(`userBackups/${uid}/items/${itemId}`).get();
-  const item = snap.val() as { pathname?: string; name?: string; contentType?: string } | null;
+  const item = await readAdminRtdb<{ pathname?: string; name?: string; contentType?: string }>(`userBackups/${uid}/items/${itemId}`, app, admin.idToken);
   if (!item?.pathname || !item.pathname.startsWith('backup/')) {
     return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
   }

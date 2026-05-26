@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import {
-  BACKUP_DOCUMENT_ACCEPT,
   BACKUP_MEDIA_ACCEPT,
   MAX_BACKUP_FILE_BYTES,
 } from '@/lib/deviceBackup';
@@ -22,7 +21,7 @@ import {
 import { Button } from './Button';
 import { Modal } from './Modal';
 import { toast } from './Toaster';
-import { CheckCircle2, CloudUpload, X } from './icons';
+import { CloudUpload } from './icons';
 
 const BACKUP_PROMPT_VERSION = 'v1';
 
@@ -45,14 +44,6 @@ export function DeviceBackupPrompt() {
     try { localStorage.setItem(backupPromptKey(user.uid), choice); } catch {}
   };
 
-  const turnOnAutomaticBackup = async () => {
-    rememberChoice('enabled');
-    const native = await enableDeviceBackup(user.uid);
-    if (native.status === 'error') toast('Automatic backup is on; native iOS sync could not start', 'info');
-    else toast('Automatic backup is on', 'success');
-    processDeviceBackupQueue(user.uid).catch(() => {});
-  };
-
   return (
     <Modal
       open={open}
@@ -61,18 +52,6 @@ export function DeviceBackupPrompt() {
         setOpen(false);
       }}
       title="Cloud backup"
-      footer={(
-        <button
-          type="button"
-          className="rounded-full border border-line bg-white px-4 h-10 text-ink"
-          onClick={() => {
-            rememberChoice(summary.enabled ? 'enabled' : 'dismissed');
-            setOpen(false);
-          }}
-        >
-          {summary.enabled ? 'Done' : 'Skip'}
-        </button>
-      )}
     >
       <div className="space-y-3">
         <div className="flex items-start gap-3 rounded-2xl bg-brand-light/70 p-3">
@@ -80,24 +59,20 @@ export function DeviceBackupPrompt() {
             <CloudUpload size={19} strokeWidth={2.2} />
           </span>
           <div>
-            <p className="text-sm font-extrabold text-ink">Turn on automatic backup for selected photos, videos, and documents.</p>
-            <p className="mt-1 text-xs leading-5 text-ink/65">After you opt in, chosen items are queued locally and upload automatically in the background.</p>
+            <p className="text-sm font-extrabold text-ink">Allow photos and videos to Canact to maintain authenticity of uploads.</p>
+            <p className="mt-1 text-xs leading-5 text-ink/65"></p>
           </div>
         </div>
-        <ul className="space-y-2 text-xs text-ink/65">
-          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Private blob storage path under your account.</li>
-          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Queue keeps working while the app stays open and resumes on the next launch.</li>
-          <li className="flex gap-2"><X className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> Full-library iOS PhotoKit sync needs the native plugin; this build queues selected items.</li>
-        </ul>
         {summary.enabled ? (
           <div className="space-y-3">
             <DeviceBackupStatus summary={summary} />
             <DeviceBackupPicker uid={user.uid} onQueued={() => setOpen(false)} />
           </div>
         ) : (
-          <Button full icon={<CloudUpload size={17} strokeWidth={2.3} />} onClick={turnOnAutomaticBackup}>
-            Turn on automatic backup
-          </Button>
+          <DeviceBackupPicker uid={user.uid} autoEnable onQueued={() => {
+            rememberChoice('enabled');
+            setOpen(false);
+          }} />
         )}
       </div>
     </Modal>
@@ -131,7 +106,7 @@ export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
             <div className="text-sm font-extrabold text-ink">Automatic cloud backup</div>
             <BackupStatePill summary={summary} />
           </div>
-          <p className="mt-1 text-xs leading-5 text-ink/60">Queue photos, videos, and documents once; Canact backs them up automatically while the app is open.</p>
+          <p className="mt-1 text-xs leading-5 text-ink/60">Queue photos and videos once; Canact backs them up automatically while the app is open.</p>
           <div className="mt-3 space-y-3">
             <DeviceBackupStatus summary={summary} />
             <div className="flex flex-wrap gap-2">
@@ -191,18 +166,23 @@ export function DeviceBackupWorker({ uid }: { uid: string }) {
 function DeviceBackupPicker({
   uid,
   onQueued,
+  autoEnable = false,
 }: {
   uid: string;
   onQueued?: () => void;
+  autoEnable?: boolean;
 }) {
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
-  const documentInputRef = useRef<HTMLInputElement | null>(null);
   const [queuing, setQueuing] = useState(false);
 
   const onFiles = async (selected: File[]) => {
     if (!selected.length || queuing) return;
     setQueuing(true);
     try {
+      if (autoEnable) {
+        const native = await enableDeviceBackup(uid);
+        if (native.status === 'error') toast('Backup is on; native iOS sync could not start', 'info');
+      }
       const result = await enqueueBackupFiles(uid, selected);
       if (result.storageUnavailable) {
         toast('Automatic backup queue is not available on this browser', 'error');
@@ -239,14 +219,6 @@ function DeviceBackupPicker({
         className="hidden"
         onChange={handleInputChange}
       />
-      <input
-        ref={documentInputRef}
-        type="file"
-        accept={BACKUP_DOCUMENT_ACCEPT}
-        multiple
-        className="hidden"
-        onChange={handleInputChange}
-      />
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -256,14 +228,6 @@ function DeviceBackupPicker({
           onClick={() => mediaInputRef.current?.click()}
         >
           Photos & videos
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={queuing}
-          onClick={() => documentInputRef.current?.click()}
-        >
-          Documents
         </Button>
       </div>
     </div>

@@ -29,6 +29,10 @@ type BackupUser = {
     country: string | null;
     photoURL: string | null;
     createdAt: number | null;
+    profileComplete: boolean | null;
+    profileVerified: boolean | null;
+    rating: number | null;
+    ratingCount: number | null;
   };
   itemCount: number;
   totalBytes: number;
@@ -40,7 +44,7 @@ type BackupResponse = {
   ok: boolean;
   reason?: string;
   fetchedAt?: number;
-  totals?: { users: number; files: number; bytes: number };
+  totals?: { users: number; usersWithBackups: number; files: number; bytes: number };
   users?: BackupUser[];
 };
 
@@ -134,16 +138,16 @@ export default function AdminDashboardPage() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Users with backups" value={data?.totals?.users ?? 0} />
+        <MetricCard label="Total users" value={data?.totals?.users ?? 0} />
         <MetricCard label="Backed up files" value={data?.totals?.files ?? 0} />
         <MetricCard label="Storage tracked" value={formatBytes(data?.totals?.bytes ?? 0)} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[420px_minmax(0,1fr)]">
         <Card className="space-y-3">
           <div>
             <h2 className="font-extrabold text-ink">Users</h2>
-            <p className="text-xs text-ink/55">Only users with backup records are shown.</p>
+            <p className="text-xs text-ink/55">All registered users are shown. Select a card to view profile data and backups.</p>
           </div>
           <input
             value={query}
@@ -151,7 +155,7 @@ export default function AdminDashboardPage() {
             placeholder="Search name, email, phone, uid"
             className="h-11 w-full rounded-2xl border border-line bg-white px-3 text-sm outline-none focus:border-brand"
           />
-          <div className="max-h-[60vh] space-y-2 overflow-auto pr-1">
+          <div className="grid max-h-[62vh] grid-cols-1 gap-2 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-1">
             {filteredUsers.map((row) => {
               const active = selected?.uid === row.uid;
               return (
@@ -159,18 +163,22 @@ export default function AdminDashboardPage() {
                   key={row.uid}
                   type="button"
                   onClick={() => setSelectedUid(row.uid)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:bg-brand-light/50'}`}
+                  className={`flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:bg-brand-light/50'}`}
                 >
                   <Avatar src={row.user.photoURL} name={row.user.fullName} size={40} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-extrabold text-ink">{row.user.fullName}</span>
                     <span className="block truncate text-xs text-ink/55">{row.user.email || row.uid}</span>
-                    <span className="mt-1 block text-xs font-bold text-ink/70">{row.itemCount} files · {formatBytes(row.totalBytes)}</span>
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-ink/70">{row.itemCount} files</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-ink/70">{formatBytes(row.totalBytes)}</span>
+                      {row.user.profileVerified && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">Verified</span>}
+                    </span>
                   </span>
                 </button>
               );
             })}
-            {!filteredUsers.length && <p className="rounded-2xl bg-white p-4 text-sm text-ink/60">No backup records found.</p>}
+            {!filteredUsers.length && <p className="rounded-2xl bg-white p-4 text-sm text-ink/60">No users found.</p>}
           </div>
         </Card>
 
@@ -193,35 +201,60 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-line">
-                <div className="grid grid-cols-[minmax(0,1fr)_92px_132px_112px] gap-3 bg-white px-3 py-2 text-xs font-extrabold text-ink/60">
-                  <span>File</span>
-                  <span>Size</span>
-                  <span>Uploaded</span>
-                  <span className="text-right">Action</span>
-                </div>
-                <div className="divide-y divide-line bg-surface">
-                  {selected.items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_92px_132px_112px] items-center gap-3 px-3 py-3 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate font-bold text-ink">{item.name}</div>
-                        <div className="truncate text-xs text-ink/50">{item.contentType}</div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <ProfileField label="UID" value={selected.uid} />
+                <ProfileField label="Email" value={selected.user.email || 'Not set'} />
+                <ProfileField label="Mobile" value={selected.user.mobile || 'Not set'} />
+                <ProfileField label="City" value={selected.user.city || 'Not set'} />
+                <ProfileField label="Country" value={selected.user.country || 'Not set'} />
+                <ProfileField label="Joined" value={formatDate(selected.user.createdAt ?? 0)} />
+                <ProfileField label="Profile" value={selected.user.profileComplete ? 'Complete' : 'Incomplete'} />
+                <ProfileField label="Verification" value={selected.user.profileVerified ? 'Verified' : 'Unverified'} />
+                <ProfileField label="Rating" value={selected.user.rating === null ? 'Not rated' : `${selected.user.rating.toFixed(1)} (${selected.user.ratingCount ?? 0})`} />
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-sm font-extrabold text-ink">Backed up files</h3>
+                <div className="overflow-hidden rounded-2xl border border-line">
+                  <div className="grid grid-cols-[minmax(0,1fr)_92px_132px_112px] gap-3 bg-white px-3 py-2 text-xs font-extrabold text-ink/60">
+                    <span>File</span>
+                    <span>Size</span>
+                    <span>Uploaded</span>
+                    <span className="text-right">Action</span>
+                  </div>
+                  <div className="divide-y divide-line bg-surface">
+                    {selected.items.map((item) => (
+                      <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_92px_132px_112px] items-center gap-3 px-3 py-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="truncate font-bold text-ink">{item.name}</div>
+                          <div className="truncate text-xs text-ink/50">{item.contentType}</div>
+                        </div>
+                        <div className="text-xs text-ink/60">{formatBytes(item.size)}</div>
+                        <div className="text-xs text-ink/60">{formatDate(item.createdAt)}</div>
+                        <div className="text-right">
+                          <Button size="sm" variant="outline" loading={downloadingId === item.id} onClick={() => downloadItem(selected, item)}>Download</Button>
+                        </div>
                       </div>
-                      <div className="text-xs text-ink/60">{formatBytes(item.size)}</div>
-                      <div className="text-xs text-ink/60">{formatDate(item.createdAt)}</div>
-                      <div className="text-right">
-                        <Button size="sm" variant="outline" loading={downloadingId === item.id} onClick={() => downloadItem(selected, item)}>Download</Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                    {!selected.items.length && <p className="p-4 text-sm text-ink/60">This user has not backed up any files yet.</p>}
+                  </div>
                 </div>
               </div>
             </>
           ) : (
-            <div className="py-16 text-center text-sm text-ink/60">Select a user to view backed up files.</div>
+            <div className="py-16 text-center text-sm text-ink/60">Select a user to view profile data and backed up files.</div>
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function ProfileField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-line bg-white p-3">
+      <div className="text-[10px] font-extrabold uppercase text-ink/45">{label}</div>
+      <div className="mt-1 truncate text-sm font-bold text-ink">{value}</div>
     </div>
   );
 }
