@@ -6,10 +6,19 @@ import {
   BACKUP_DOCUMENT_ACCEPT,
   BACKUP_MEDIA_ACCEPT,
   MAX_BACKUP_FILE_BYTES,
-  backupFileProblem,
-  uploadBackupFile,
-  type BackupUploadProgress,
 } from '@/lib/deviceBackup';
+import {
+  clearLocalBackupQueue,
+  defaultDeviceBackupSummary,
+  enableDeviceBackup,
+  enqueueBackupFiles,
+  getDeviceBackupSummary,
+  processDeviceBackupQueue,
+  setDeviceBackupEnabled,
+  setDeviceBackupPaused,
+  subscribeDeviceBackupUpdates,
+  type DeviceBackupSummary,
+} from '@/lib/deviceBackupQueue';
 import { Button } from './Button';
 import { Modal } from './Modal';
 import { toast } from './Toaster';
@@ -17,30 +26,31 @@ import { CheckCircle2, CloudUpload, X } from './icons';
 
 const BACKUP_PROMPT_VERSION = 'v1';
 
-type UploadState = {
-  total: number;
-  done: number;
-  failed: number;
-  currentName: string;
-  currentPercent: number;
-};
-
 export function DeviceBackupPrompt() {
   const { user } = useAuth();
+  const summary = useDeviceBackupSummary(user?.uid ?? null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     try {
       const key = backupPromptKey(user.uid);
-      if (!localStorage.getItem(key)) setOpen(true);
+      if (!localStorage.getItem(key) && !summary.enabled) setOpen(true);
     } catch {}
-  }, [user?.uid]);
+  }, [summary.enabled, user?.uid]);
 
   if (!user) return null;
 
   const rememberChoice = (choice: 'enabled' | 'dismissed') => {
     try { localStorage.setItem(backupPromptKey(user.uid), choice); } catch {}
+  };
+
+  const turnOnAutomaticBackup = async () => {
+    rememberChoice('enabled');
+    const native = await enableDeviceBackup(user.uid);
+    if (native.status === 'error') toast('Automatic backup is on; native iOS sync could not start', 'info');
+    else toast('Automatic backup is on', 'success');
+    processDeviceBackupQueue(user.uid).catch(() => {});
   };
 
   return (
@@ -52,24 +62,16 @@ export function DeviceBackupPrompt() {
       }}
       title="Cloud backup"
       footer={(
-        <>
-          <button
-            type="button"
-            className="rounded-full border border-line bg-white px-4 h-10 text-ink"
-            onClick={() => {
-              rememberChoice('dismissed');
-              setOpen(false);
-            }}
-          >
-            Skip
-          </button>
-          <DeviceBackupPicker
-            uid={user.uid}
-            label="Choose files"
-            onStarted={() => rememberChoice('enabled')}
-            onFinished={() => setOpen(false)}
-          />
-        </>
+        <button
+          type="button"
+          className="rounded-full border border-line bg-white px-4 h-10 text-ink"
+          onClick={() => {
+            rememberChoice(summary.enabled ? 'enabled' : 'dismissed');
+            setOpen(false);
+          }}
+        >
+          {summary.enabled ? 'Done' : 'Skip'}
+        </button>
       )}
     >
       <div className="space-y-3">
@@ -78,21 +80,46 @@ export function DeviceBackupPrompt() {
             <CloudUpload size={19} strokeWidth={2.2} />
           </span>
           <div>
-            <p className="text-sm font-extrabold text-ink">Back up selected photos, videos, and documents to Canact storage.</p>
-            <p className="mt-1 text-xs leading-5 text-ink/65">On iOS, selected Photos library items upload as soon as the system picker returns them. Photo permission alone will not copy your full library.</p>
+            <p className="text-sm font-extrabold text-ink">Turn on automatic backup for selected photos, videos, and documents.</p>
+            <p className="mt-1 text-xs leading-5 text-ink/65">After you opt in, chosen items are queued locally and upload automatically in the background.</p>
           </div>
         </div>
         <ul className="space-y-2 text-xs text-ink/65">
           <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Private blob storage path under your account.</li>
-          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Supports common images, videos, PDFs, text files, and Office docs.</li>
-          <li className="flex gap-2"><X className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> Device-wide automatic document scraping is not available from the web permission flow.</li>
+          <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> Queue keeps working while the app stays open and resumes on the next launch.</li>
+          <li className="flex gap-2"><X className="mt-0.5 h-4 w-4 shrink-0 text-brand" /> Full-library iOS PhotoKit sync needs the native plugin; this build queues selected items.</li>
         </ul>
+        {summary.enabled ? (
+          <div className="space-y-3">
+            <DeviceBackupStatus summary={summary} />
+            <DeviceBackupPicker uid={user.uid} onQueued={() => setOpen(false)} />
+          </div>
+        ) : (
+          <Button full icon={<CloudUpload size={17} strokeWidth={2.3} />} onClick={turnOnAutomaticBackup}>
+            Turn on automatic backup
+          </Button>
+        )}
       </div>
     </Modal>
   );
 }
 
 export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
+  const summary = useDeviceBackupSummary(uid);
+
+  const turnOnAutomaticBackup = async () => {
+    const native = await enableDeviceBackup(uid);
+    if (native.status === 'error') toast('Automatic backup is on; native iOS sync could not start', 'info');
+    else toast('Automatic backup is on', 'success');
+    processDeviceBackupQueue(uid).catch(() => {});
+  };
+
+  const turnOffAutomaticBackup = async () => {
+    setDeviceBackupEnabled(uid, false);
+    await clearLocalBackupQueue(uid);
+    toast('Automatic backup is off', 'info');
+  };
+
   return (
     <div className="mt-3 rounded-2xl border border-line bg-white p-3">
       <div className="flex items-start gap-3">
@@ -100,10 +127,33 @@ export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
           <CloudUpload size={19} strokeWidth={2.2} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-extrabold text-ink">Cloud backup</div>
-          <p className="mt-1 text-xs leading-5 text-ink/60">Choose photos, videos, and documents to store in your private Canact blob backup.</p>
-          <div className="mt-3">
-            <DeviceBackupPicker uid={uid} label="Choose files to back up" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-extrabold text-ink">Automatic cloud backup</div>
+            <BackupStatePill summary={summary} />
+          </div>
+          <p className="mt-1 text-xs leading-5 text-ink/60">Queue photos, videos, and documents once; Canact backs them up automatically while the app is open.</p>
+          <div className="mt-3 space-y-3">
+            <DeviceBackupStatus summary={summary} />
+            <div className="flex flex-wrap gap-2">
+              {!summary.enabled ? (
+                <Button size="sm" icon={<CloudUpload size={15} strokeWidth={2.3} />} onClick={turnOnAutomaticBackup}>Turn on</Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDeviceBackupPaused(uid, !summary.paused);
+                      if (summary.paused) processDeviceBackupQueue(uid).catch(() => {});
+                    }}
+                  >
+                    {summary.paused ? 'Resume' : 'Pause'}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={turnOffAutomaticBackup}>Turn off</Button>
+                </>
+              )}
+            </div>
+            {summary.enabled && <DeviceBackupPicker uid={uid} />}
           </div>
         </div>
       </div>
@@ -111,64 +161,72 @@ export function DeviceBackupSettingsControl({ uid }: { uid: string }) {
   );
 }
 
+export function DeviceBackupWorker({ uid }: { uid: string }) {
+  useEffect(() => {
+    let cancelled = false;
+    const kick = () => {
+      if (cancelled) return;
+      processDeviceBackupQueue(uid).catch(() => {});
+    };
+    kick();
+    const unsubscribe = subscribeDeviceBackupUpdates(uid, kick);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') kick();
+    };
+    window.addEventListener('online', kick);
+    window.addEventListener('focus', kick);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.removeEventListener('online', kick);
+      window.removeEventListener('focus', kick);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [uid]);
+
+  return null;
+}
+
 function DeviceBackupPicker({
   uid,
-  label,
-  onStarted,
-  onFinished,
+  onQueued,
 }: {
   uid: string;
-  label: string;
-  onStarted?: () => void;
-  onFinished?: () => void;
+  onQueued?: () => void;
 }) {
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const documentInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [state, setState] = useState<UploadState>({ total: 0, done: 0, failed: 0, currentName: '', currentPercent: 0 });
+  const [queuing, setQueuing] = useState(false);
 
   const onFiles = async (selected: File[]) => {
-    if (!selected.length || uploading) return;
-    const files = selected.filter((file) => !backupFileProblem(file));
-    const skipped = selected.length - files.length;
-    if (!files.length) {
-      toast(skipped ? `No supported files under ${MAX_BACKUP_FILE_BYTES / 1024 / 1024} MB` : 'No files selected', 'error');
-      return;
-    }
-
-    onStarted?.();
-    setUploading(true);
-    setState({ total: files.length, done: 0, failed: 0, currentName: files[0]?.name ?? '', currentPercent: 0 });
-
-    let done = 0;
-    let failed = 0;
-    for (const file of files) {
-      setState((current) => ({ ...current, currentName: file.name || 'file', currentPercent: 0 }));
-      try {
-        await uploadBackupFile(file, {
-          uid,
-          onProgress: (progress: BackupUploadProgress) => {
-            setState((current) => ({ ...current, currentPercent: Math.round(progress.percentage || 0) }));
-          },
-        });
-        done += 1;
-      } catch {
-        failed += 1;
+    if (!selected.length || queuing) return;
+    setQueuing(true);
+    try {
+      const result = await enqueueBackupFiles(uid, selected);
+      if (result.storageUnavailable) {
+        toast('Automatic backup queue is not available on this browser', 'error');
+        return;
       }
-      setState((current) => ({ ...current, done, failed }));
+      if (result.queued) {
+        toast(`Queued ${result.queued} file${result.queued === 1 ? '' : 's'} for backup`, 'success');
+        onQueued?.();
+        processDeviceBackupQueue(uid).catch(() => {});
+      } else {
+        toast(result.skipped ? `No supported files under ${MAX_BACKUP_FILE_BYTES / 1024 / 1024} MB` : 'No files selected', 'error');
+      }
+      if (result.skipped) toast(`Skipped ${result.skipped} unsupported or oversized file${result.skipped === 1 ? '' : 's'}`, 'info');
+    } finally {
+      setQueuing(false);
     }
-
-    setUploading(false);
-    if (failed) toast(`Backed up ${done} file${done === 1 ? '' : 's'}; ${failed} failed`, done ? 'info' : 'error');
-    else toast(`Backed up ${done} file${done === 1 ? '' : 's'}`, 'success');
-    if (skipped) toast(`Skipped ${skipped} unsupported or oversized file${skipped === 1 ? '' : 's'}`, 'info');
-    onFinished?.();
   };
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
     event.currentTarget.value = '';
-    onFiles(files).catch(() => toast('Backup failed', 'error'));
+    onFiles(files).catch(() => {
+      toast('Could not queue backup files', 'error');
+    });
   };
 
   return (
@@ -192,35 +250,101 @@ function DeviceBackupPicker({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
-          icon={!uploading ? <CloudUpload size={17} strokeWidth={2.3} /> : undefined}
-          loading={uploading}
-          disabled={uploading}
+          icon={!queuing ? <CloudUpload size={17} strokeWidth={2.3} /> : undefined}
+          loading={queuing}
+          disabled={queuing}
           onClick={() => mediaInputRef.current?.click()}
         >
-          {uploading ? `${state.done}/${state.total}` : 'Photos & videos'}
+          Photos & videos
         </Button>
         <Button
           type="button"
           variant="outline"
-          disabled={uploading}
+          disabled={queuing}
           onClick={() => documentInputRef.current?.click()}
         >
-          {label}
+          Documents
         </Button>
       </div>
-      {uploading && (
-        <div className="min-w-[220px] space-y-1 text-xs text-ink/60">
+    </div>
+  );
+}
+
+function DeviceBackupStatus({ summary }: { summary: DeviceBackupSummary }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-3 text-xs text-ink/65">
+      <div className="flex flex-wrap items-center gap-2">
+        <BackupStatePill summary={summary} />
+        <span>{summary.uploaded} backed up</span>
+        <span>{summary.pending + summary.uploading} queued</span>
+        {summary.failed > 0 && <span className="font-bold text-brand">{summary.failed} needs retry</span>}
+      </div>
+      {summary.working && summary.currentName && (
+        <div className="mt-2 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <span className="max-w-[160px] truncate">{state.currentName}</span>
-            <span>{state.currentPercent}%</span>
+            <span className="max-w-[180px] truncate">{summary.currentName}</span>
+            <span>{summary.currentPercent}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-ink/10">
-            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.max(3, state.currentPercent)}%` }} />
+            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.max(3, summary.currentPercent)}%` }} />
           </div>
         </div>
       )}
+      {summary.lastError && <p className="mt-2 text-brand">{summary.lastError}</p>}
+      {summary.nativeMessage && <p className="mt-2">{summary.nativeMessage}</p>}
+      {summary.lastRunAt && <p className="mt-2">Last activity {formatLastRun(summary.lastRunAt)}</p>}
     </div>
   );
+}
+
+function BackupStatePill({ summary }: { summary: DeviceBackupSummary }) {
+  const label = !summary.enabled ? 'Off' : summary.paused ? 'Paused' : summary.working ? 'Backing up' : 'On';
+  const className = !summary.enabled
+    ? 'bg-ink/10 text-ink/60'
+    : summary.paused
+      ? 'bg-amber-100 text-amber-800'
+      : 'bg-emerald-100 text-emerald-800';
+  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${className}`}>{label}</span>;
+}
+
+function useDeviceBackupSummary(uid: string | null): DeviceBackupSummary {
+  const [summary, setSummary] = useState<DeviceBackupSummary>(() => defaultDeviceBackupSummary());
+
+  useEffect(() => {
+    if (!uid) {
+      setSummary(defaultDeviceBackupSummary());
+      return;
+    }
+    let active = true;
+    const refresh = () => {
+      getDeviceBackupSummary(uid).then((next) => {
+        if (active) setSummary(next);
+      }).catch(() => {
+        if (active) setSummary(defaultDeviceBackupSummary());
+      });
+    };
+    refresh();
+    const unsubscribe = subscribeDeviceBackupUpdates(uid, refresh);
+    const timer = window.setInterval(refresh, 8_000);
+    return () => {
+      active = false;
+      unsubscribe();
+      window.clearInterval(timer);
+    };
+  }, [uid]);
+
+  return summary;
+}
+
+function formatLastRun(timestamp: number): string {
+  const diffMs = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function backupPromptKey(uid: string): string {

@@ -19,7 +19,7 @@ function GoogleGlyph() {
 }
 
 const ADMIN_EMAIL = 'avi2001raj@gmail.com';
-const ADMIN_PASSWORD = 'Admin@login2025';
+const ADMIN_PASSWORD = 'Admin@login2026';
 
 function isLocalhost(): boolean {
   if (typeof window === 'undefined') return false;
