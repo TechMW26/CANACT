@@ -150,8 +150,8 @@ export default function AdminDashboardPage() {
   return (
     <main className="relative left-1/2 min-h-[var(--canact-viewport-height)] w-screen -translate-x-1/2 bg-[#F7F4EF] text-ink">
       <div className="min-h-[var(--canact-viewport-height)] w-full">
-        <aside className="border-b border-[#E8DDD4] bg-[#201A17] text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:h-[var(--canact-viewport-height)] lg:w-[280px] lg:border-b-0 lg:border-r">
-          <div className="flex h-full flex-col gap-5 p-4 sm:p-5">
+        <aside className="fixed inset-y-0 left-0 z-30 flex h-[var(--canact-viewport-height)] w-[240px] flex-col border-r border-[#E8DDD4] bg-[#201A17] text-white lg:w-[280px]">
+          <div className="flex h-full flex-col gap-5 overflow-y-auto p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <Brand size={34} href="/admin" />
               <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white/70">CRM</span>
@@ -189,8 +189,8 @@ export default function AdminDashboardPage() {
           </div>
         </aside>
 
-        <section className="min-w-0 lg:ml-[280px] lg:pt-[113px]">
-          <header className="sticky top-0 z-10 border-b border-[#E8DDD4] bg-[#F7F4EF]/95 px-4 py-4 backdrop-blur sm:px-6 lg:fixed lg:left-[280px] lg:right-0 lg:top-0 lg:z-20 lg:px-8">
+        <section className="ml-[240px] min-w-0 pt-[120px] lg:ml-[280px] lg:pt-[124px]">
+          <header className="fixed left-[240px] right-0 top-0 z-20 border-b border-[#E8DDD4] bg-[#F7F4EF]/95 px-4 py-4 backdrop-blur sm:px-6 lg:left-[280px] lg:px-8">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <div className="text-xs font-extrabold uppercase tracking-wide text-brand">Canact admin</div>

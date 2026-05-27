@@ -40,6 +40,7 @@ const DEFAULT_CENTER: Point = { lat: 20, lng: 0 };
 const MAP_TILE_CACHE = 'canact-map-tiles-v1';
 const MAX_PREFETCH_TILE_URLS = 240;
 const MAP_PREFETCH_IDLE_TIMEOUT_MS = 1400;
+const ENABLE_SATELLITE_LAYER = false;
 const prefetchedTileUrls = new Set<string>();
 
 export function FriendsWorldMap({
@@ -119,7 +120,7 @@ export function FriendsWorldMap({
   }), [mapSize.width, mapSize.height, tileScale]);
   const satelliteOpacity = smoothStep(4.25, 5.25, zoom);
   const lightLayerOpacity = Math.max(0.14, 1 - satelliteOpacity);
-  const renderSatelliteLayer = !liteMode && satelliteOpacity > 0.02;
+  const renderSatelliteLayer = ENABLE_SATELLITE_LAYER && !liteMode && satelliteOpacity > 0.02;
   const renderLightLayer = liteMode || satelliteOpacity < 0.98 || lightLayerOpacity > 0.18;
   const activeTileKinds = useMemo<MapTileKind[]>(() => {
     const kinds: MapTileKind[] = [];
@@ -745,7 +746,7 @@ function mapLocationLabel(friend: FriendMapPerson) {
 
 function tileUrl(kind: MapTileKind, z: number, x: number, y: number) {
   if (kind === 'satellite') return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-  return `https://a.basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`;
+  return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 }
 
 function osmTileUrl(z: number, x: number, y: number) {

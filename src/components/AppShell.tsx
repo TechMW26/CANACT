@@ -34,7 +34,7 @@ const TABS: Tab[] = [
   { href: '/',            label: 'Home',  Icon: Home },
   { href: '/feed',        label: 'Feed',  Icon: Compass },
   { href: '/create',      label: '',      Icon: Plus, isFab: true },
-  { href: '/leaderboard', label: 'Top',   Icon: Trophy },
+  { href: '/help',        label: 'Help',  Icon: HeartHandshake },
   { href: '/profile',     label: 'Me',    Icon: UserIcon },
 ];
 
@@ -497,8 +497,8 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
               </span>
             )}
           </Link>
-          <Link href="/help" aria-label="Help" prefetch onClick={() => haptic('subtle')} style={{ color: '#dc2626' }} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white hover:bg-red-50 hover:text-red-700'}`}>
-            <HeartHandshake size={19} strokeWidth={2.3} />
+          <Link href="/leaderboard" aria-label="Leaderboard" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
+            <Trophy size={19} strokeWidth={2.3} />
           </Link>
         </div>
       </div>

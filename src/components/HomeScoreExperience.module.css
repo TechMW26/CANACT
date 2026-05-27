@@ -770,23 +770,23 @@
 
 .nearbyPanel::before {
   top: var(--canact-map-header-fade-start, 55px);
-  height: min(calc(var(--canact-vh) * 29.75), 250px);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 24%, rgba(255, 255, 255, .9) 38%, rgba(255, 255, 255, .48) 61%, rgba(255, 255, 255, 0) 100%);
+  height: min(calc(var(--canact-vh) * 18), 150px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .78) 0%, rgba(255, 255, 255, .42) 52%, rgba(255, 255, 255, 0) 100%);
 }
 
 .nearbyPanel::after {
   bottom: 0;
-  height: min(calc(var(--canact-vh) * 34), 280px);
-  background: linear-gradient(0deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, .92) 24%, rgba(255, 255, 255, .52) 62%, rgba(255, 255, 255, 0) 100%);
+  height: min(calc(var(--canact-vh) * 17), 140px);
+  background: linear-gradient(0deg, rgba(255, 255, 255, .68) 0%, rgba(255, 255, 255, .34) 56%, rgba(255, 255, 255, 0) 100%);
 }
 
 .nearbyPanelActive::before {
-  opacity: 1;
+  opacity: .55;
   transition-delay: .18s;
 }
 
 .nearbyPanelActive::after {
-  opacity: 1;
+  opacity: .45;
   transition-delay: .26s;
 }
 

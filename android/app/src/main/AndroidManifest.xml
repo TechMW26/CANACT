@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        Photo & video gallery access used by the automated device-backup
+        worker (CanactGalleryPlugin). Required by Google Play's Photo &
+        Video Permissions Policy (Aug 2024) when the app needs broad
+        access. The in-app DeviceBackupPrompt modal renders the
+        prominent disclosure screen before requesting these at runtime.
+        - Android 13+ (API 33+): READ_MEDIA_IMAGES, READ_MEDIA_VIDEO
+        - Android 14+ (API 34+): READ_MEDIA_VISUAL_USER_SELECTED so we can
+          still operate when the user grants partial access.
+        - Android <= 12: READ_EXTERNAL_STORAGE (capped via maxSdkVersion)
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

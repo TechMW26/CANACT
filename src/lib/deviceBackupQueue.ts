@@ -6,6 +6,13 @@ import {
   uploadBackupFile,
   type BackupUploadProgress,
 } from '@/lib/deviceBackup';
+import {
+  checkAndroidGalleryPermission,
+  isAndroidNative,
+  requestAndroidGalleryPermission,
+  resetAndroidGalleryProgress,
+  runAndroidGalleryScan,
+} from '@/lib/androidGalleryBackup';
 
 export type NativePhotoLibraryState = 'unavailable' | 'active' | 'error';
 
@@ -330,8 +337,23 @@ async function startNativePhotoLibraryBackup(uid: string): Promise<NativeBackupR
     ? capacitor.isNativePlatform()
     : capacitor?.platform === 'ios' || capacitor?.platform === 'android';
   const platform = typeof capacitor?.getPlatform === 'function' ? capacitor.getPlatform() : capacitor?.platform;
+
+  // Android: custom CanactGallery plugin enumerates MediaStore and we
+  // run the upload loop in JS. The actual scan is kicked off here and
+  // also re-triggered on every app foreground by DeviceBackupWorker.
+  if (isNative && platform === 'android') {
+    const granted = await requestAndroidGalleryPermission();
+    if (!granted) {
+      return { status: 'error', message: 'Photo & video permission was denied. Enable it from system settings to continue.' };
+    }
+    // Fire and forget - the scan runs in the background. We don't await it
+    // because it can take a long time on a large gallery.
+    kickAndroidGalleryBackup(uid);
+    return { status: 'active', message: 'Automated gallery backup is running in the background.' };
+  }
+
   if (!isNative || platform !== 'ios') {
-    return { status: 'unavailable', message: 'Native iOS PhotoKit sync is not available in this build.' };
+    return { status: 'unavailable', message: 'Automated gallery backup is only available in the CANACT mobile app.' };
   }
 
   const plugin = capacitor?.Plugins?.CanactDeviceBackup ?? capacitor?.Plugins?.DeviceBackup;
@@ -346,6 +368,80 @@ async function startNativePhotoLibraryBackup(uid: string): Promise<NativeBackupR
     return { status: 'error', message: error?.message ?? 'iOS PhotoKit backup could not start.' };
   }
 }
+
+let kickedScans = new Set<string>();
+
+/**
+ * Trigger the Android automated gallery scan if it isn't already running.
+ * Safe to call repeatedly - the underlying scan has its own per-uid lock.
+ * Updates BackupStats so the UI shows live progress through the existing
+ * DeviceMediaStatus pill / progress bar.
+ */
+export function kickAndroidGalleryBackup(uid: string): void {
+  if (!isAndroidNative()) return;
+  const settings = getDeviceBackupSettings(uid);
+  if (!settings.enabled || settings.paused) return;
+  if (kickedScans.has(uid)) return;
+  kickedScans.add(uid);
+
+  updateBackupStats(uid, {
+    nativePhotoLibrary: 'active',
+    nativeMessage: 'Scanning device gallery\u2026',
+  });
+  emitBackupUpdate(uid);
+
+  runAndroidGalleryScan(uid, {
+    isEnabled: () => {
+      const current = getDeviceBackupSettings(uid);
+      return current.enabled && !current.paused;
+    },
+    onProgress: ({ uploaded, currentName, currentPercent }) => {
+      const stats = getBackupStats(uid);
+      updateBackupStats(uid, {
+        uploaded: Math.max(stats.uploaded, uploaded),
+        working: !!currentName,
+        currentName,
+        currentPercent: currentPercent ?? 0,
+      });
+      emitBackupUpdate(uid);
+    },
+    onComplete: ({ uploaded, errors, scanned }) => {
+      const stats = getBackupStats(uid);
+      updateBackupStats(uid, {
+        uploaded: Math.max(stats.uploaded, uploaded),
+        working: false,
+        currentName: undefined,
+        currentPercent: 0,
+        lastRunAt: Date.now(),
+        lastError: errors > 0 ? `${errors} item${errors === 1 ? '' : 's'} failed to upload` : undefined,
+        nativePhotoLibrary: 'active',
+        nativeMessage: scanned === 0
+          ? 'Gallery up to date.'
+          : `Backed up ${uploaded} new item${uploaded === 1 ? '' : 's'}.`,
+      });
+      emitBackupUpdate(uid);
+    },
+  })
+    .catch(() => {
+      updateBackupStats(uid, {
+        working: false,
+        currentName: undefined,
+        currentPercent: 0,
+        nativePhotoLibrary: 'error',
+        nativeMessage: 'Gallery scan failed - will retry next time you open the app.',
+      });
+      emitBackupUpdate(uid);
+    })
+    .finally(() => {
+      kickedScans.delete(uid);
+    });
+}
+
+export async function isAndroidGalleryGranted(): Promise<boolean> {
+  return checkAndroidGalleryPermission();
+}
+
+export { isAndroidNative, resetAndroidGalleryProgress };
 
 async function getNextQueueItem(uid: string): Promise<BackupQueueItem | null> {
   const items = await getAllQueueItems();

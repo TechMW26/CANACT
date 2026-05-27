@@ -104,7 +104,14 @@ export function HomeScoreExperience() {
   const [dragX, setDragX] = useState(0);
   const [liveProfile, setLiveProfile] = useState<UserProfile | null>(null);
   const [ratedUidsWithCooldown, setRatedUidsWithCooldown] = useState<Map<string, number>>(() => new Map());
-  const dragRef = useRef<{ startX: number; startY: number; active: boolean; isDrag: boolean } | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    active: boolean;
+    isDrag: boolean;
+    canOpen: boolean;
+    fromInteractive: boolean;
+  } | null>(null);
   const stageGestureRef = useRef<{ startX: number; startY: number } | null>(null);
   const progressRef = useRef(0);
   const scoreProfile = liveProfile ?? profile;
@@ -603,13 +610,37 @@ export function HomeScoreExperience() {
 
   const handleCardPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!activeCardPerson) return;
+    const target = event.target as HTMLElement | null;
+    const fromInteractive = !!target?.closest('button, a, input, textarea, select, [data-no-card-open="true"]');
+    if (fromInteractive) {
+      dragRef.current = {
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        isDrag: false,
+        canOpen: false,
+        fromInteractive: true,
+      };
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    // Keep the bottom controls strip tap-safe: opening the expanded card is
+    // allowed only from the main body area, not from the lower actions zone.
+    const withinOpenZone = (event.clientY - rect.top) <= Math.max(0, rect.height - 74);
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { startX: event.clientX, startY: event.clientY, active: true, isDrag: false };
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      active: true,
+      isDrag: false,
+      canOpen: withinOpenZone,
+      fromInteractive: false,
+    };
   }, [activeCardPerson]);
 
   const handleCardPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    if (!drag?.active) return;
+    if (!drag || drag.fromInteractive || !drag.active) return;
     const deltaX = event.clientX - drag.startX;
     const deltaY = Math.abs(event.clientY - drag.startY);
     
@@ -625,7 +656,7 @@ export function HomeScoreExperience() {
   const handleCardPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (!drag?.active || !activeCardPerson) {
+    if (!drag || drag.fromInteractive || !drag.active || !activeCardPerson) {
       setDragX(0);
       return;
     }
@@ -641,7 +672,7 @@ export function HomeScoreExperience() {
         }, 110);
         return;
       }
-    } else if (expandedCardUid === null && !expandedCardClosing) {
+    } else if (drag.canOpen && expandedCardUid === null && !expandedCardClosing) {
       handleExpandCard(activeCardPerson);
     }
     setDragX(0);
@@ -1147,12 +1178,32 @@ function NearbyDeck({
             <h3>{person.name}</h3>
             <p>{formatDistance(person.distanceMeters)} away{person.city ? ` · ${person.city}` : ''}</p>
           </div>
-          <div className={styles.cardActions}>
-            <button type="button" className={styles.dislikeButton} disabled={ratingUid === person.uid} onClick={() => onDislike(person)} aria-label="Dislike">
+          <div className={styles.cardActions} data-no-card-open="true">
+            <button
+              type="button"
+              className={styles.dislikeButton}
+              disabled={ratingUid === person.uid}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDislike(person);
+              }}
+              aria-label="Dislike"
+            >
               <ThumbsDown size={20} />
             </button>
             <span>{Math.max(total, 1)} cards</span>
-            <button type="button" className={styles.likeButton} disabled={ratingUid === person.uid} onClick={() => onLike(person)} aria-label="Like">
+            <button
+              type="button"
+              className={styles.likeButton}
+              disabled={ratingUid === person.uid}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onLike(person);
+              }}
+              aria-label="Like"
+            >
               <ThumbsUp size={20} />
             </button>
           </div>

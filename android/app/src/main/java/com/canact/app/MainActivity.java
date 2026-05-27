@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         // bridge picks them up during initial plugin discovery.
         registerPlugin(AudioRouterPlugin.class);
         registerPlugin(CallPermissionsPlugin.class);
+        registerPlugin(CanactGalleryPlugin.class);
         super.onCreate(savedInstanceState);
         // Pre-create both notification channels at first launch so:
         //   * The FCM SDK has a real channel to attach auto-displayed
