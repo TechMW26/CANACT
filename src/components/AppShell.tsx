@@ -17,7 +17,6 @@ import { IncomingCallRinger } from './IncomingCallRinger';
 import { ScrollRestoration } from './ScrollRestoration';
 import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
-import { DeviceBackupPrompt, DeviceBackupWorker } from './DeviceBackupPrompt';
 import { HelpAlertManager } from './HelpAlertManager';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
@@ -315,8 +314,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <IncomingCallRinger />
         <HelpAlertManager />
         <NativePermissionsBootstrapper />
-        <DeviceBackupPrompt />
-        <DeviceBackupWorker uid={user.uid} />
         <NativeCallDeepLinkRouter />
       </main>
       </div>{/* /canact-app-content */}
