@@ -559,7 +559,7 @@ function UserBackupCard({ row, active, onClick }: { row: BackupUser; active: boo
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:border-brand/40 hover:bg-[#FFF8F8]'}`}
+      className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:border-brand/40 hover:bg-[#FAF8F2]'}`}
     >
       <div className="flex items-start gap-3">
         <Avatar src={row.user.photoURL} name={row.user.fullName} size={42} />

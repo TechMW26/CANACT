@@ -69,7 +69,7 @@ export default function InboxPage() {
         })}
       </div>
 
-      <div className="rounded-[28px] bg-white/92 p-2 ring-1 ring-[#F1D7DC]">
+      <div className="rounded-[28px] bg-white/92 p-2 ring-1 ring-[#E4E7E2]">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <MessageSquare size={28} className="text-brand" />

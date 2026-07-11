@@ -175,8 +175,8 @@ export default function FeedPage() {
   };
 
   return (
-    <SkeletonTheme baseColor="#FBE7EB" highlightColor="#FFF4F6">
-    <div className="pt-4 pb-2 md:pb-4">
+    <SkeletonTheme baseColor="#E6EEE9" highlightColor="#F3F1EB">
+    <div className="canact-figma-feed pt-3 pb-4 md:pb-6">
 
       <section className="canact-stories-strip flex items-center gap-2 pb-2">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
@@ -187,14 +187,14 @@ export default function FeedPage() {
                 tile shows the same accent / grey ring rules as friends'
                 stories so the user can tell at a glance whether anything
                 fresh is sitting in their archive. */}
-            <button type="button" onClick={openOwnStory} className="flex w-[68px] shrink-0 flex-col items-center gap-1">
+            <button type="button" onClick={openOwnStory} className="flex w-[82px] shrink-0 flex-col items-center gap-2">
               <StoryRing
                 state={myStoryGroup ? 'unwatched' : 'none'}
                 src={profile?.photoURL ?? null}
                 fallback={(profile?.fullName?.[0] ?? '?').toUpperCase()}
                 showPlus={!myStoryGroup}
               />
-              <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">Your Story</span>
+              <span className="text-xs font-semibold text-ink/65 truncate w-full text-center">Add Yours</span>
             </button>
 
             {!loaded.stories && stories.length === 0 ? (
@@ -211,14 +211,14 @@ export default function FeedPage() {
                   key={group.uid}
                   type="button"
                   onClick={() => setViewerIndex(orderedStories.findIndex((item) => item.id === group.items[0].id))}
-                  className="flex w-[68px] shrink-0 flex-col items-center gap-1"
+                  className="flex w-[82px] shrink-0 flex-col items-center gap-2"
                 >
                   <StoryRing
                     state={allWatched ? 'watched' : 'unwatched'}
                     src={group.authorPhoto ?? null}
                     fallback={(group.authorName?.[0] ?? '?').toUpperCase()}
                   />
-                  <span className="text-[10px] font-semibold text-ink/70 truncate w-full text-center">{group.authorName?.split(' ')[0] ?? ''}</span>
+                  <span className="text-xs font-semibold text-ink truncate w-full text-center">{group.authorName?.split(' ')[0] ?? ''}</span>
                 </button>
               );
             })}
@@ -229,7 +229,7 @@ export default function FeedPage() {
           type="button"
           onClick={() => setFilterOpen(true)}
           aria-label="Filter feed"
-          className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-brand border border-line"
+          className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-brand border border-line"
         >
           <SlidersHorizontal size={18} />
           {filter !== 'all' && (
@@ -246,9 +246,9 @@ export default function FeedPage() {
         <Link
           href="/reels"
           prefetch
-          className="mt-1 mb-3 flex items-center gap-3 rounded-2xl border border-[#FFE4E6] bg-gradient-to-r from-[#FFF1F2] to-white px-3 py-2.5 active:scale-[0.99] transition"
+          className="mt-1 mb-3 flex items-center gap-3 rounded-2xl border border-[#E4E7E2] bg-gradient-to-r from-[#F0F5F1] to-white px-3 py-2.5 active:scale-[0.99] transition"
         >
-          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FF6B7A] text-white">
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2E8068] text-white">
             <Play size={20} fill="currentColor" />
           </span>
           <div className="min-w-0 flex-1">
@@ -271,17 +271,16 @@ export default function FeedPage() {
             <Skeleton height={224} borderRadius={24} />
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[30px] border border-dashed border-[#E8C8CE] bg-white/70 px-6 py-12 text-center text-muted">
+          <div className="rounded-[30px] border border-dashed border-[#CADBD3] bg-white/70 px-6 py-12 text-center text-muted">
             Nothing here yet. Be the first to post around you.
           </div>
         ) : null}
 
         {/* Reference-grid rhythm: first card full width, then paired half cards. */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-7">
           {items.map((it, index) => {
-              const isFull = index === 0;
-              const span = isFull ? 'col-span-2' : 'col-span-1';
-              const height = isFull ? 'h-72' : 'h-56';
+              const span = 'col-span-1';
+              const height = 'h-[286px]';
               const cv = '[content-visibility:auto] [contain-intrinsic-size:auto_360px]';
               if (it.kind === 'poll') {
                 return (
@@ -445,7 +444,7 @@ function MediaOverlayTile({
           open();
         }
       }}
-      className="relative overflow-hidden rounded-3xl border border-[#FFE4E6] bg-white active:scale-[0.99] transition cursor-pointer"
+      className="relative overflow-hidden rounded-3xl border border-[#E4E7E2] bg-white active:scale-[0.99] transition cursor-pointer"
     >
       <div className={`relative w-full ${heightClass} overflow-hidden bg-[#0E0E10]`}>
         <div className="absolute inset-0">{children}</div>
@@ -454,7 +453,7 @@ function MediaOverlayTile({
         <div className="absolute left-3 top-3 right-3 flex items-start justify-between gap-2">
           <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
             <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur pl-1 pr-3 py-1 max-w-[60vw]">
-              <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-2 ring-[#FF6B7A]">
+              <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-2 ring-[#2E8068]">
                 <Avatar src={authorPhoto} name={authorName} size={24} />
               </span>
               <span className="text-[11px] font-medium text-neutral-800 truncate">{authorName}</span>
@@ -499,9 +498,9 @@ function MediaOverlayTile({
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }}
               aria-label="Like"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition"
             >
-              <Heart size={15} fill={liked ? '#FF6B7A' : 'none'} />
+              <Heart size={15} fill={liked ? '#2E8068' : 'none'} />
             </button>
             <button
               type="button"
@@ -536,38 +535,36 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
   const coverPoster = post.mediaPosters?.[0] || undefined;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
-    <MediaOverlayTile
-      href={`/post/${post.id}`}
-      heightClass={heightClass}
-      authorPhoto={post.authorPhoto}
-      authorName={post.authorName}
-      authorUid={post.uid}
-      caption={post.text}
-      liked={liked}
-      likeCount={totalReactions}
-      commentCount={post.commentCount ?? 0}
-      onOpen={onOpen}
-      onLike={() => reactWha(post.id, myUid, 'love')}
-      onShare={() => onShare({ kind: 'post', postId: post.id })}
-      isOwner={post.uid === myUid}
-      onDelete={async () => { await deletePost(post.id, myUid); }}
-      badge={isVideo ? (
-        <span className="inline-flex h-6 items-center gap-1 rounded-full bg-black/60 px-2 text-[10px] font-bold text-white backdrop-blur">
-          <Play size={10} fill="currentColor" /> Video
+    <article className="overflow-hidden rounded-[34px] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
+      <button type="button" onClick={onOpen} className={`relative block w-full ${heightClass} overflow-hidden bg-[#e8e4d8] text-left`}>
+        {cover && isVideo ? (
+          <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
+        ) : cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#dcece5] via-[#f0eee5] to-white p-8 text-center">
+            <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
+          </div>
+        )}
+        <span className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white/90 py-1.5 pl-1.5 pr-3 backdrop-blur">
+          <Avatar src={post.authorPhoto} name={post.authorName} size={28} />
+          <span className="max-w-[180px] truncate text-xs font-bold text-ink">{post.authorName}</span>
         </span>
-      ) : undefined}
-    >
-      {cover && isVideo ? (
-        <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
-      ) : cover ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
-          <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{post.text || "What's Happening"}</span>
+        {post.uid === myUid ? <span className="absolute right-4 top-4" onClick={(event) => event.stopPropagation()}><PostMenu isOwner onDelete={async () => { await deletePost(post.id, myUid); }} /></span> : null}
+      </button>
+      <div className="px-7 pb-7 pt-6">
+        <button type="button" onClick={onOpen} className="block w-full text-left">
+          <h2 className="whitespace-pre-wrap text-[21px] font-extrabold leading-[1.2] tracking-[-0.025em] text-black">{post.text || "What's Happening"}</h2>
+        </button>
+        <div className="mt-5 flex items-center gap-2.5">
+          <button type="button" aria-label="Love" onClick={() => reactWha(post.id, myUid, 'love')} className={`inline-flex h-10 w-11 items-center justify-center rounded-full ${liked ? 'bg-brand text-white' : 'bg-[#faf8f2] text-black'}`}><Heart size={17} fill={liked ? 'currentColor' : 'none'} /></button>
+          <button type="button" aria-label="Comments" onClick={onOpen} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><MessageCircle size={17} /></button>
+          <button type="button" aria-label="Share" onClick={() => onShare({ kind: 'post', postId: post.id })} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><Share2 size={17} /></button>
+          <span className="ml-1 text-sm font-semibold text-[#6b6f76]">+{totalReactions + (post.commentCount ?? 0)}</span>
         </div>
-      )}
-    </MediaOverlayTile>
+      </div>
+    </article>
   );
 }
 
@@ -596,7 +593,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
         try { await deletePoll(poll.id, myUid); toast('Poll deleted', 'success'); }
         catch (error: any) { toast(error?.message ?? 'Could not delete poll', 'error'); }
       } : undefined}
-      badge={<span className="inline-flex h-6 items-center rounded-full bg-[#FF6B7A] px-2 text-[10px] font-bold text-white">Poll</span>}
+      badge={<span className="inline-flex h-6 items-center rounded-full bg-[#2E8068] px-2 text-[10px] font-bold text-white">Poll</span>}
       statText={`${total} votes · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`}
       bottomContent={(
         <div>
@@ -611,7 +608,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
                   type="button"
                   disabled={locked}
                   onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!locked) votePoll(poll.id, myUid, option.id); }}
-                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur disabled:opacity-75 ${selected ? 'bg-[#FF6B7A] text-white' : 'bg-white/90 text-neutral-800'}`}
+                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur disabled:opacity-75 ${selected ? 'bg-[#2E8068] text-white' : 'bg-white/90 text-neutral-800'}`}
                 >
                   {option.text} · {pct}%
                 </button>
@@ -626,7 +623,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
           <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(); }} aria-label="Open poll" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
             <MessageCircle size={15} />
           </button>
-          <button type="button" disabled={!options[0] || locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && !locked && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
+          <button type="button" disabled={!options[0] || locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && !locked && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition disabled:opacity-60">
             <ThumbsUp size={15} />
           </button>
           <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
@@ -639,8 +636,8 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
         // eslint-disable-next-line @next/next/no-img-element
         <img src={poll.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
-          <span className="line-clamp-5 text-lg font-black leading-tight text-[#FF6B7A]/80">{poll.question}</span>
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#F0F5F1] via-[#E4E7E2] to-white p-5 text-center">
+          <span className="line-clamp-5 text-lg font-black leading-tight text-[#2E8068]/80">{poll.question}</span>
         </div>
       )}
     </MediaOverlayTile>
@@ -705,7 +702,7 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
       )}
       actions={(
         <div onClick={(event) => event.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
-          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('like'); }} aria-label="Up vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#FF6B7A] active:scale-95 transition disabled:opacity-60">
+          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('like'); }} aria-label="Up vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition disabled:opacity-60">
             <ThumbsUp size={15} />
           </button>
           <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('dislike'); }} aria-label="Down vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition disabled:opacity-60">
@@ -721,8 +718,8 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
         // eslint-disable-next-line @next/next/no-img-element
         <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFF1F2] via-[#FFE4E6] to-white p-5 text-center">
-          <span className="text-lg font-black leading-tight text-[#FF6B7A]/80">Rate Me</span>
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#F0F5F1] via-[#E4E7E2] to-white p-5 text-center">
+          <span className="text-lg font-black leading-tight text-[#2E8068]/80">Rate Me</span>
         </div>
       )}
     </MediaOverlayTile>
@@ -748,7 +745,7 @@ function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid
       isOwner={reel.uid === myUid}
       onDelete={async () => { await deleteReel(reel.id, myUid); }}
       badge={(
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B7A] text-white px-2 h-6 text-[10px] font-bold">
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#2E8068] text-white px-2 h-6 text-[10px] font-bold">
           <Play size={10} fill="currentColor" /> Reel
         </span>
       )}
@@ -780,12 +777,12 @@ function StoryRing({
       ? 'canact-glow-border p-[2px]'
       : state === 'watched'
         ? 'bg-[#E5E0E1] p-[2px]'
-        : 'p-0';
+        : 'border-2 border-dashed border-[#1a3d2b] p-[2px]';
   return (
     <div className="relative">
-      <div className={`rounded-[18px] ${ringClass}`}>
-        <div className={state === 'none' ? 'rounded-[18px] bg-white p-[2px]' : 'rounded-[16px] bg-white p-[2px]'}>
-          <div className={`h-16 w-14 overflow-hidden ${state === 'none' ? 'rounded-[16px]' : 'rounded-[14px]'} bg-brand-light/40`}>
+      <div className={`rounded-full ${ringClass}`}>
+        <div className="rounded-full bg-white p-[2px]">
+          <div className="h-[70px] w-[70px] overflow-hidden rounded-full bg-brand-light/40">
             {src ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={src} alt="" className="h-full w-full object-cover" />

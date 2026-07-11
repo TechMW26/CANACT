@@ -25,6 +25,7 @@ export {
   ChevronDown,
   ArrowLeft,
   ArrowRight,
+  ArrowDown,
   Eye,
   EyeOff,
   Camera,
@@ -41,6 +42,7 @@ export {
   Sparkles,
   AlertTriangle,
   ShieldAlert,
+  ShieldCheck,
   CircleHelp,
   BarChart3,
   Pencil,
@@ -94,4 +96,6 @@ export {
   ShoppingBag,
   AlignLeft,
   CloudUpload,
+  Grid3X3,
+  Activity,
 } from 'lucide-react';

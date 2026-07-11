@@ -122,9 +122,9 @@ export default function SearchPage() {
   const rightCol = visibleRows.filter((_, index) => index % 2 === 1);
 
   return (
-    <div className="relative left-1/2 min-h-[var(--canact-viewport-height)] w-screen -translate-x-1/2 bg-[#FFF8F8] lg:left-auto lg:w-full lg:translate-x-0">
-      <div className="bg-[#FFF8F8]">
-        <div className="relative z-10 bg-[#FFF8F8] px-4 pb-3 pt-4">
+    <div className="relative left-1/2 min-h-[var(--canact-viewport-height)] w-screen -translate-x-1/2 bg-[#FAF8F2] lg:left-auto lg:w-full lg:translate-x-0">
+      <div className="bg-[#FAF8F2]">
+        <div className="relative z-10 bg-[#FAF8F2] px-4 pb-3 pt-4">
           <div className="flex items-center gap-2">
             <div className="flex flex-1 items-center gap-2 rounded-2xl bg-[#F5F5F5] px-3 py-2.5">
               <Search size={14} className="shrink-0 text-neutral-400" />

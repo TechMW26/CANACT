@@ -1,4 +1,5 @@
 import './globals.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/lib/auth';
 import { Toaster } from '@/components/Toaster';
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = {
   width: 'device-width', initialScale: 1, maximumScale: 1, minimumScale: 1, userScalable: false, viewportFit: 'cover',
-  themeColor: '#FFF8F8',
+  themeColor: '#FAF8F2',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,6 @@
 import { onValue, push, ref, set, update, get, remove, query, orderByChild, runTransaction } from 'firebase/database';
 import { db } from '../firebase';
-import { HelpRequest, HelpStatus } from '../types';
+import { HelpRequest, HelpStatus, HelpType } from '../types';
 import { pushNotification } from './notifications';
 import { sendPush, notifyHelpVicinity } from './sendPush';
 import { startOrGetThread, threadIdFor, sendChatMessage } from './chat';
@@ -19,8 +19,14 @@ function stripUndefined<T>(value: T): T {
   return value;
 }
 
-async function bumpStat(uid: string, key: 'offered' | 'confirmed' | 'resolved' | 'asked' | 'taken', delta = 1) {
+async function bumpStat(uid: string, key: string, delta = 1) {
   await runTransaction(ref(db, `users/${uid}/helpStats/${key}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
+}
+
+/** Bump a per-type resolved/confirmed stat based on help type. */
+async function bumpTypedStat(uid: string, kind: 'resolved' | 'confirmed', helpType: HelpType, delta = 1) {
+  const key = `${helpType}${kind.charAt(0).toUpperCase() + kind.slice(1)}` as string;
+  await bumpStat(uid, key, delta);
 }
 
 export async function createHelp(input: Omit<HelpRequest, 'id' | 'createdAt' | 'status'>) {
@@ -119,6 +125,7 @@ export async function confirmHelper(
   await update(ref(db, `help/${id}/confirmedHelpers/${helperUid}`), { at: Date.now() });
   await update(ref(db, `help/${id}`), { status: 'inProcess' });
   await bumpStat(helperUid, 'confirmed', 1);
+  await bumpTypedStat(helperUid, 'confirmed', help.type, 1);
 
   if (help.channel === 'chat') {
     const thread = await startOrGetThread(
@@ -148,29 +155,70 @@ export async function confirmHelper(
 }
 
 export async function unconfirmHelper(id: string, helperUid: string) {
+  const help = (await get(ref(db, `help/${id}`))).val() as HelpRequest;
   await remove(ref(db, `help/${id}/confirmedHelpers/${helperUid}`));
   await bumpStat(helperUid, 'confirmed', -1);
+  if (help?.type) await bumpTypedStat(helperUid, 'confirmed', help.type, -1);
   const conf = (await get(ref(db, `help/${id}/confirmedHelpers`))).val();
   if (!conf || Object.keys(conf).length === 0) await update(ref(db, `help/${id}`), { status: 'open' });
 }
 
 export async function setHelpStatus(id: string, status: HelpStatus) { await update(ref(db, `help/${id}`), { status }); }
 
-export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tried') {
+export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tried-good' | 'tried-bad') {
   const help = (await get(ref(db, `help/${id}`))).val() as HelpRequest;
   await update(ref(db, `help/${id}`), { status: 'closed', closedAt: Date.now(), closeOutcome: outcome });
   await bumpStat(help.uid, 'taken', 1);
-  if (outcome === 'no') return;
-  const delta = outcome === 'yes' ? 0.05 : 0.02;
+
   const targets = Object.keys(help.confirmedHelpers ?? help.acceptedBy ?? {});
+
+  if (outcome === 'no') return;
+
+  if (outcome === 'tried-good') {
+    // Helper tried with genuine intent → +10 flat, no rating change
+    for (const helperUid of targets) {
+      await bumpStat(helperUid, 'triedGood', 1);
+      await pushNotification(helperUid, {
+        kind: 'help',
+        title: 'Your help effort was appreciated',
+        body: 'The seeker confirmed you tried with good intent. +10 CANACT score.',
+        data: { helpId: id },
+      });
+    }
+    return;
+  }
+
+  if (outcome === 'tried-bad') {
+    // Helper tried with bad intent → −100 flat
+    for (const helperUid of targets) {
+      await bumpStat(helperUid, 'triedBad', 1);
+      await pushNotification(helperUid, {
+        kind: 'help',
+        title: 'Negative outcome from a Help',
+        body: 'The seeker reported bad intent. −100 CANACT score.',
+        data: { helpId: id },
+      });
+    }
+    return;
+  }
+
+  // outcome === 'yes' — fully resolved
+  const delta = 0.05;
   for (const helperUid of targets) {
     await runTransaction(ref(db, `users/${helperUid}`), (u: any) => {
       if (!u) return u;
       u.rating = Math.min(5, (u.rating ?? 0) + delta);
       return u;
     });
-    if (outcome === 'yes') await bumpStat(helperUid, 'resolved', 1);
-    await pushNotification(helperUid, { kind: 'help', title: `+${delta.toFixed(2)} rating from a Help`, body: help.text.slice(0, 80), data: { helpId: id } });
+    await bumpStat(helperUid, 'resolved', 1);
+    await bumpStat(helperUid, 'yesOutcomes', 1);
+    if (help.type) await bumpTypedStat(helperUid, 'resolved', help.type, 1);
+    await pushNotification(helperUid, {
+      kind: 'help',
+      title: `+${delta.toFixed(2)} rating from a Help`,
+      body: help.text.slice(0, 80),
+      data: { helpId: id },
+    });
   }
 }
 

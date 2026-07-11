@@ -6,12 +6,12 @@ import type { StoryOverlay } from '@/lib/types';
 import { FilterStrip } from './FilterStrip';
 import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
 
-const COLORS = ['#FFFFFF', '#0A0A0A', '#C8102E', '#FFD43B', '#22C55E', '#3B82F6', '#A855F7'];
+const COLORS = ['#FFFFFF', '#0A0A0A', '#1F6B55', '#FFD43B', '#22C55E', '#3B82F6', '#A855F7'];
 const BG_OPTIONS: Array<{ id: string; bg?: string; label: string }> = [
   { id: 'none', label: 'None' },
   { id: 'pill', bg: 'rgba(0,0,0,0.55)', label: 'Pill' },
   { id: 'white', bg: 'rgba(255,255,255,0.85)', label: 'Light' },
-  { id: 'brand', bg: '#C8102E', label: 'Brand' },
+  { id: 'brand', bg: '#1F6B55', label: 'Brand' },
 ];
 
 export function StoryEditor({

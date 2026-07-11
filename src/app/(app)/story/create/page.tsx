@@ -12,9 +12,11 @@ import { upsertStory } from '@/lib/services/stories';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 import { filterCss, type MediaFilterId } from '@/lib/mediaFilters';
+import { useGeo } from '@/lib/useGeo';
 
 export default function StoryCreatePage() {
   const { user, profile } = useAuth();
+  const { coords } = useGeo();
   const router = useRouter();
   const [shot, setShot] = useState<string | null>(null);
   const [videoCaption, setVideoCaption] = useState('');
@@ -98,6 +100,8 @@ export default function StoryCreatePage() {
                 authorPhoto: profile.photoURL,
                 mediaUrl: hostedUrl,
                 caption: videoCaption.trim() || undefined,
+                lat: coords?.lat,
+                lng: coords?.lng,
                 filter: videoFilter === 'none' ? undefined : videoFilter,
                 overlays: [],
               });
@@ -129,6 +133,8 @@ export default function StoryCreatePage() {
             authorPhoto: profile.photoURL,
             mediaUrl: hostedUrl,
             caption,
+            lat: coords?.lat,
+            lng: coords?.lng,
             filter: filter && filter !== 'none' ? filter : undefined,
             overlays,
           });

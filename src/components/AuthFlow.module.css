@@ -1,0 +1,342 @@
+.page {
+  min-height: var(--canact-viewport-height);
+  background: #faf8f2;
+  color: #112822;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.welcomePage {
+  min-height: var(--canact-viewport-height);
+  display: flex;
+  flex-direction: column;
+  background: #faf8f2;
+}
+
+.welcomeArt {
+  height: min(48vh, 450px);
+  min-height: 360px;
+  flex: none;
+  overflow: hidden;
+  position: relative;
+}
+
+.welcomeArt img {
+  position: absolute;
+  inset: 0 auto auto 50%;
+  width: min(100vw, 560px);
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.welcomeContent {
+  width: min(100%, 480px);
+  margin: -22px auto 0;
+  padding: 12px 42px calc(30px + env(safe-area-inset-bottom));
+  position: relative;
+  text-align: center;
+  background: linear-gradient(180deg, transparent 0, #faf8f2 24px);
+}
+
+.title {
+  margin: 20px 0 8px;
+  font-size: clamp(2.15rem, 9vw, 3.1rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  font-weight: 750;
+}
+
+.subtitle {
+  margin: 0 auto;
+  max-width: 390px;
+  color: rgb(17 40 34 / 50%);
+  font-size: clamp(1rem, 4.4vw, 1.25rem);
+  line-height: 1.45;
+}
+
+.progressWrap {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  margin-top: 50px;
+  color: #287156;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.progress {
+  display: flex;
+  gap: 6px;
+}
+
+.progress span {
+  width: 30px;
+  height: 5px;
+  border-radius: 999px;
+  background: #d9d9d9;
+}
+
+.progress span.active { background: #13664a; }
+.progressLabel b { margin: 0 7px; font-weight: 400; }
+
+.primaryButton {
+  width: 100%;
+  min-height: 78px;
+  margin-top: 30px;
+  padding: 7px 8px 7px 72px;
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  align-items: center;
+  color: white;
+  background: linear-gradient(100deg, #2e8068 0%, #123f34 100%);
+  font-size: 1.35rem;
+  font-weight: 750;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.primaryButton:active { transform: scale(.985); }
+.primaryButton:disabled { opacity: .55; pointer-events: none; }
+
+.primaryIcon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 13%);
+}
+
+.primaryIcon svg { width: 30px; height: 30px; }
+
+.textLink {
+  margin-top: 28px;
+  color: rgb(17 40 34 / 54%);
+  font-size: 1rem;
+}
+.textLink strong { color: #075c3f; }
+
+.backButton {
+  position: fixed;
+  z-index: 30;
+  top: max(24px, env(safe-area-inset-top));
+  left: max(20px, calc((100vw - 480px) / 2 + 20px));
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: white;
+  color: #112822;
+  border: 1px solid rgb(17 40 34 / 7%);
+}
+
+.loginPage {
+  min-height: var(--canact-viewport-height);
+  padding: max(20px, env(safe-area-inset-top)) 26px calc(26px + env(safe-area-inset-bottom));
+}
+
+.brandFull {
+  width: 210px;
+  height: 230px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.loginCard {
+  width: min(100%, 430px);
+  margin: -24px auto 0;
+  padding: 32px 28px 28px;
+  border: 1px solid rgb(17 40 34 / 7%);
+  border-radius: 30px;
+  background: rgb(255 255 255 / 94%);
+  text-align: center;
+}
+
+.loginCard .title { margin-top: 0; }
+.loginCard .subtitle { margin-bottom: 26px; }
+
+.field {
+  min-height: 76px;
+  margin-top: 16px;
+  padding: 12px 18px;
+  border: 1px solid #e5e7e6;
+  border-radius: 19px;
+  background: white;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  text-align: left;
+}
+
+.field svg { width: 23px; height: 23px; }
+.fieldText { min-width: 0; display: grid; gap: 3px; }
+.fieldText span { font-size: .79rem; font-weight: 650; }
+.field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #112822;
+  font-size: 1rem;
+}
+.field input::placeholder { color: rgb(17 40 34 / 42%); }
+
+.passwordToggle { color: rgb(17 40 34 / 54%); }
+.passwordToggle svg { width: 20px; height: 20px; }
+
+.loginOptions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 4px 0;
+  color: rgb(17 40 34 / 60%);
+  font-size: .78rem;
+}
+.loginOptions label { display: flex; gap: 7px; align-items: center; }
+.loginOptions button { color: #075c3f; }
+
+.separator {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 16px;
+  color: rgb(17 40 34 / 42%);
+  font-size: .8rem;
+}
+.separator::before, .separator::after { content: ''; flex: 1; height: 1px; background: #e2e2de; }
+
+.googleButton {
+  width: 64px;
+  height: 64px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #e3e5e1;
+  border-radius: 50%;
+  background: #faf8f2;
+}
+
+.error { margin: 12px 0 0; color: #9d3131; font-size: .82rem; }
+
+.devPanel {
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px dashed #b9c8c1;
+  border-radius: 16px;
+  text-align: left;
+}
+.devPanel p { margin: 0 0 10px; color: #287156; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.devPanel .field { min-height: 58px; margin-top: 8px; }
+.devActions { display: flex; gap: 8px; margin-top: 10px; }
+.devActions button { flex: 1; height: 42px; border-radius: 999px; background: #245f4e; color: white; font-weight: 700; }
+
+.registerPage {
+  width: min(100%, 560px);
+  min-height: var(--canact-viewport-height);
+  margin: 0 auto;
+  padding: max(18px, env(safe-area-inset-top)) 38px calc(118px + env(safe-area-inset-bottom));
+  background: #faf8f2;
+  text-align: center;
+  position: relative;
+}
+
+.registerBrand { width: 150px; height: 170px; margin: -10px auto 0; object-fit: contain; }
+.eyebrow { margin: -12px 0 18px; color: #287156; font-weight: 650; }
+.registerPage .progressWrap { margin-top: 0; gap: 13px; }
+.registerBody { margin-top: 32px; }
+.registerBody .title { font-size: clamp(2rem, 8vw, 2.65rem); margin-top: 0; }
+.registerBody .subtitle { font-size: 1rem; }
+.registerFields { display: grid; gap: 16px; margin-top: 30px; }
+.registerFields .field { margin: 0; }
+
+.phoneWrap { margin-top: 0; text-align: left; }
+.phoneWrap > label > span:first-child { display: none; }
+.phoneWrap > label > div { height: 76px; border-color: #e5e7e6; border-radius: 19px; }
+
+.choiceList { display: grid; gap: 14px; margin-top: 30px; }
+.choice {
+  min-height: 88px;
+  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: 58px 1fr 32px;
+  gap: 16px;
+  align-items: center;
+  border: 1px solid #e4e5df;
+  border-radius: 22px;
+  background: white;
+  text-align: left;
+  font-size: 1.14rem;
+  font-weight: 700;
+}
+.choice.selected { border: 2px solid #247159; background: #f6fcf8; }
+.choiceIcon { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: #dcece5; }
+.choiceCheck { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #13664a; color: white; }
+.choiceCheck svg { width: 16px; }
+
+.birthdayCard, .selfieCard, .locationCard {
+  margin-top: 30px;
+  padding: 26px;
+  border: 1px solid rgb(17 40 34 / 7%);
+  border-radius: 26px;
+  background: white;
+}
+.birthdayCard > svg { width: 58px; height: 58px; color: #287156; margin: 0 auto 18px; }
+.birthdayCard input { width: 100%; padding: 16px; border: 0; border-radius: 15px; background: #f3f1eb; color: #112822; font-size: 1.1rem; }
+.privacyNote { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 18px 0 0; color: rgb(17 40 34 / 52%); font-size: .78rem; }
+.privacyNote svg { width: 16px; height: 16px; }
+
+.selfiePreview {
+  width: 215px;
+  height: 215px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 4px dashed #2e7660;
+  border-radius: 50%;
+  background: #e8f3ed;
+  display: grid;
+  place-items: center;
+}
+.selfiePreview img { width: 100%; height: 100%; object-fit: cover; }
+.selfiePreview svg { width: 66px; height: 66px; color: #2e7660; }
+.captureButton { margin-top: 18px; padding: 12px 20px; border-radius: 999px; background: #e2eee8; color: #175e48; font-weight: 750; }
+.trustRow { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 18px; color: #35715e; font-size: .75rem; }
+.trustRow span { display: inline-flex; align-items: center; gap: 4px; }
+.trustRow svg { width: 15px; height: 15px; }
+
+.locationCard { display: grid; gap: 16px; text-align: left; }
+.locationCard label > span:first-child { color: #112822; }
+.locationCard input, .locationCard button { border-color: #e5e7e6; }
+
+.registerFooter {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: 0;
+  width: min(100%, 560px);
+  transform: translateX(-50%);
+  padding: 16px 38px calc(22px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent, #faf8f2 20%);
+}
+.registerFooter .primaryButton { min-height: 70px; margin-top: 0; }
+
+@media (max-height: 760px) {
+  .welcomeArt { height: 46vh; min-height: 300px; }
+  .welcomeContent { margin-top: -10px; }
+  .progressWrap { margin-top: 30px; }
+  .primaryButton { min-height: 68px; }
+  .primaryIcon { width: 54px; height: 54px; }
+  .loginPage { padding-top: 8px; }
+  .brandFull { height: 180px; }
+  .loginCard { margin-top: -18px; padding-top: 24px; }
+  .registerBrand { height: 132px; }
+  .registerBody { margin-top: 22px; }
+  .selfiePreview { width: 165px; height: 165px; }
+}
+
+@media (min-width: 700px) {
+  .loginPage, .page { border-radius: 28px; }
+}

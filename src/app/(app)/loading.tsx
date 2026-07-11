@@ -9,10 +9,10 @@ export default function AppRouteLoading() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2 h-48 rounded-[24px] border border-[#F1D7DC] bg-[#FFF4F6]" />
-        <div className="h-36 rounded-[22px] border border-[#F1D7DC] bg-[#FFF4F6]" />
-        <div className="h-36 rounded-[22px] border border-[#F1D7DC] bg-[#FFF4F6]" />
-        <div className="col-span-2 h-24 rounded-[22px] border border-[#F1D7DC] bg-white" />
+        <div className="col-span-2 h-48 rounded-[24px] border border-[#E4E7E2] bg-[#F3F1EB]" />
+        <div className="h-36 rounded-[22px] border border-[#E4E7E2] bg-[#F3F1EB]" />
+        <div className="h-36 rounded-[22px] border border-[#E4E7E2] bg-[#F3F1EB]" />
+        <div className="col-span-2 h-24 rounded-[22px] border border-[#E4E7E2] bg-white" />
       </div>
     </div>
   );

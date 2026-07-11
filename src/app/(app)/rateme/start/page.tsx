@@ -56,7 +56,7 @@ export default function RateMeStartPage() {
         </div>
       </header>
 
-      <div className="overflow-hidden rounded-[30px] bg-white/92 ring-1 ring-[#F1D7DC]">
+      <div className="overflow-hidden rounded-[30px] bg-white/92 ring-1 ring-[#E4E7E2]">
         {photo ? (
           isVideoUrl(photo) ? (
             <VideoPreview src={photo} className="h-80 w-full" fit="contain" />

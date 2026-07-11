@@ -82,7 +82,7 @@ export default function NativeAuthPage() {
   }, []);
 
   return (
-    <main className="min-h-[var(--canact-viewport-height)] flex items-center justify-center px-6 bg-[#FFF8F8] text-[#0A0A0A]">
+    <main className="min-h-[var(--canact-viewport-height)] flex items-center justify-center px-6 bg-[#FAF8F2] text-[#0A0A0A]">
       <div className="text-center max-w-sm">
         <div className="mx-auto mb-4 h-10 w-10 rounded-full border-2 border-[#FF4D4F] border-t-transparent animate-spin" aria-hidden />
         <h1 className="text-lg font-semibold mb-2">

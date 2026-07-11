@@ -15,7 +15,7 @@ export function Button({ variant = 'primary', size = 'md', loading, icon, full, 
     outline: 'border border-brand text-brand bg-white hover:bg-brand-light',
     ghost: 'text-brand hover:bg-brand-light',
     danger: 'bg-brand-dark text-white hover:bg-brand',
-    subtle: 'bg-brand-light text-brand hover:bg-[#FFC4CC]',
+    subtle: 'bg-brand-light text-brand hover:bg-[#C9E0D5]',
   };
   return (
     <button className={clsx(base, sizes[size], variants[variant], full && 'w-full', className)} disabled={disabled || loading} {...rest}>

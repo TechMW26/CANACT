@@ -10,6 +10,11 @@ const FIREBASE_AUTH_HOST = 'canact-94ad6.firebaseapp.com';
 const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || String(Date.now());
 
 const nextConfig = {
+  outputFileTracingRoot: __dirname,
+  // Keep `next dev` and `next build` outputs isolated. Sharing `.next` lets a
+  // production build invalidate a running dev server's CSS/JS manifests,
+  // which leaves pages unstyled until the server is restarted.
+  distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,

@@ -12,7 +12,7 @@
   --canact-profile-top-ink: 10 10 10;
   --canact-profile-bottom-ink: 10 10 10;
   --canact-footer-safe-padding: 0.5em;
-  --canact-bottom-nav-height: calc(4rem + var(--canact-footer-safe-padding));
+  --canact-bottom-nav-height: calc(6rem + var(--canact-footer-safe-padding));
   --canact-floating-bottom-clearance: calc(var(--canact-bottom-nav-height) + 12px);
   --canact-profile-top-light-opacity: 1;
   --canact-profile-top-dark-opacity: 0;
@@ -37,7 +37,7 @@
 @media (max-width: 340px), (max-height: 620px) {
   :root { --canact-ui-scale: 0.88; }
 }
-html, body { background: #FFFFFF; color: #0A0A0A; }
+html, body { background: #FAF8F2; color: #112822; }
 html, body { min-height: var(--canact-viewport-height); }
 body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: var(--canact-viewport-height); }
 
@@ -149,8 +149,8 @@ input[type="time"]::-webkit-date-and-time-value {
   min-height: 1.25rem;
 }
 
-/* utility focus ring in brand red */
-.focus-ring:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
+/* utility focus ring in the Canact green */
+.focus-ring:focus-visible { outline: 2px solid #1F6B55; outline-offset: 2px; }
 
 /* ---------- Page entrance: slide-in from the right + fade.
    Fires on every route change via <PageTransition key={pathname}>.
@@ -176,6 +176,134 @@ input[type="time"]::-webkit-date-and-time-value {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Figma v2 shared mobile chrome. */
+.canact-figma-header {
+  background: rgb(250 248 242 / 72%);
+  -webkit-backdrop-filter: blur(18px) saturate(110%);
+  backdrop-filter: blur(18px) saturate(110%);
+  border-bottom: 1px solid rgb(255 255 255 / 35%);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 2%), 0 4px 16px rgb(0 0 0 / 3%);
+  /* Fade mask: fully opaque at top → transparent at bottom so content softly passes under */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
+}
+
+.canact-figma-header .canact-distance-pill {
+  height: 38px;
+  border: 0;
+  background: rgb(170 179 139 / 10%);
+  color: #242424;
+  font-size: 14px;
+  font-weight: 750;
+  padding-inline: 14px;
+}
+
+.canact-figma-bottom-nav {
+  left: max(20px, calc((100vw - 480px) / 2 + 20px));
+  right: max(114px, calc((100vw - 480px) / 2 + 114px));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  height: 72px;
+  border-radius: 9999px;
+  background: rgb(250 248 242 / 52%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgb(255 255 255 / 68%);
+  box-shadow: 0 14px 36px rgb(31 56 47 / 12%), inset 0 0 0 1px rgb(255 255 255 / 45%);
+}
+
+.canact-bottom-dock-items { padding: 8px; }
+
+.canact-figma-bottom-nav .canact-bottom-tab {
+  width: clamp(42px, 13.5vw, 64px);
+  height: 56px;
+  border-radius: 9999px;
+}
+
+.canact-figma-bottom-nav .canact-bottom-tab-active {
+  background: rgb(31 107 85 / 18%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 55%),
+    inset 0 -2px 6px rgb(31 107 85 / 12%),
+    0 4px 16px rgb(31 56 47 / 18%),
+    0 1px 0 rgb(255 255 255 / 30%);
+  border: 1px solid rgb(255 255 255 / 50%);
+}
+
+.canact-create-nav-button {
+  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 74%);
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgb(31 107 85 / 72%);
+  color: #fff;
+  box-shadow: 0 13px 34px rgb(25 73 57 / 17%), inset 0 0 0 1px rgb(31 107 85 / 6%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  transition: transform 320ms cubic-bezier(.22,.85,.3,1), background-color 180ms ease, box-shadow 180ms ease;
+}
+.canact-create-button-glass { border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 52%); }
+
+.canact-create-nav-button:active { transform: scale(.95); }
+.canact-create-nav-button-open {
+  transform: rotate(135deg);
+  background: rgb(21 63 52 / 82%);
+  box-shadow: 0 14px 38px rgb(16 54 42 / 28%);
+}
+
+.canact-radial-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  visibility: hidden;
+  pointer-events: none;
+}
+.canact-radial-menu-open { visibility: visible; pointer-events: auto; }
+.canact-radial-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; background: rgb(18 40 33 / 0%); opacity: 0; backdrop-filter: blur(0); -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); transition: opacity 220ms ease, backdrop-filter 260ms ease; }
+.canact-radial-menu-open .canact-radial-dismiss { opacity: 1; backdrop-filter: blur(6px); }
+.canact-radial-halo {
+  position: absolute;
+  right: max(-72px, calc((100vw - 480px) / 2 - 72px));
+  bottom: calc(-64px + env(safe-area-inset-bottom));
+  width: 300px;
+  height: 300px;
+  border: 1px solid rgb(255 255 255 / 62%);
+  border-radius: 50%;
+  box-shadow: 0 -18px 60px rgb(21 68 53 / 10%);
+  opacity: 0;
+  transform: scale(.72);
+  transform-origin: 68% 72%;
+  transition: opacity 240ms ease, transform 420ms cubic-bezier(.22,.9,.25,1.08);
+}
+.canact-radial-menu-open .canact-radial-halo { opacity: 1; transform: scale(1); }
+.canact-radial-item {
+  position: fixed;
+  display: flex;
+  width: 54px;
+  height: 54px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.7);
+  transition: left 420ms cubic-bezier(.22,.85,.3,1), top 420ms cubic-bezier(.22,.85,.3,1), opacity 200ms ease, transform 320ms cubic-bezier(.2,.9,.25,1.12);
+  pointer-events: auto;
+  z-index: 45;
+}
+.canact-radial-menu-open .canact-radial-item {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.canact-radial-item span { position: relative; display: grid; width: 54px; height: 54px; place-items: center; border: 1.5px solid rgb(255 255 255 / 78%); border-radius: 50%; color: #1f6b55; background: rgb(255 255 255 / 88%); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 10px 28px rgb(25 63 51 / 18%), inset 0 0 0 1px rgb(255 255 255 / 60%); }
+.canact-radial-item strong { padding: 5px 10px; border: 1px solid rgb(255 255 255 / 60%); border-radius: 999px; background: rgb(250 248 242 / 88%); box-shadow: 0 4px 14px rgb(25 63 51 / 12%), inset 0 0 0 1px rgb(255 255 255 / 50%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); white-space: nowrap; font-size: 10px; font-weight: 850; line-height: 1; color: #173f34; }
+.canact-radial-item-help span { color: #fff; border-color: rgb(255 255 255 / 82%); background: rgb(220 60 50 / 85%); box-shadow: 0 10px 28px rgb(180 50 40 / 28%), inset 0 0 0 1px rgb(255 255 255 / 45%); }
+.canact-radial-item-help strong { color: #c43832; background: rgb(255 240 238 / 88%); border-color: rgb(255 180 175 / 60%); }
 
 /* Right-edge fade mask for the stories scroller so cards fade into the
    filter button instead of cutting off hard. */
@@ -312,7 +440,8 @@ body.canact-story-open {
    view (and the sticky filters strip below it fades). Reverses on any
    upward scroll (or when near top). */
 [data-canact-header] {
-  transition: transform 200ms ease, opacity 200ms ease;
+  transform: translate3d(0, 0, 0);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease;
   will-change: transform, opacity;
 }
 
@@ -468,6 +597,7 @@ html[data-canact-home-score="true"] [data-canact-bottom-nav]::after {
     rgb(255 255 255 / 0.48) 61%,
     rgb(255 255 255 / 0) 100%
   );
+  transition: opacity 180ms ease, height 180ms ease;
 }
 
 .canact-map-surface::after {
@@ -583,22 +713,14 @@ html[data-canact-map-fade="true"] [data-canact-header] * {
   100% { opacity: 1; }
 }
 
-[data-header-hidden="true"] [data-canact-header] {
-  transform: translateY(-110%);
-  opacity: 0;
-  pointer-events: none;
-}
+/* Header is always visible — glass-morphed with fade-from-transparent mask. */
 
-/* Status-bar cap removed — header simply fades out in place. */
+/* Status-bar cap removed. */
 .canact-statusbar-cap { display: none; }
 
 .canact-stories-strip,
 .canact-filters-wrap {
   transition: opacity 200ms ease;
-}
-[data-header-hidden="true"] .canact-filters-wrap {
-  opacity: 0;
-  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

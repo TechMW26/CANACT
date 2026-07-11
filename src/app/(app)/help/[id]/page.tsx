@@ -97,7 +97,7 @@ export default function HelpDetailPage() {
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${h.status === 'open' ? 'bg-amber-50 text-amber-700' : h.status === 'inProcess' ? 'bg-emerald-50 text-emerald-700' : 'bg-ink/10 text-ink'}`}>
             {h.status === 'open' && 'Open · waiting for helpers'}
             {h.status === 'inProcess' && 'In progress'}
-            {h.status === 'closed' && (h.closeOutcome === 'yes' ? 'Resolved ✓' : h.closeOutcome === 'tried' ? 'Helpers tried' : 'Closed')}
+            {h.status === 'closed' && (h.closeOutcome === 'yes' ? 'Resolved ✓' : h.closeOutcome === 'tried-good' ? 'Helpers tried (good intent)' : h.closeOutcome === 'tried-bad' ? 'Helpers tried (bad intent)' : h.closeOutcome === 'tried' ? 'Helpers tried' : 'Closed')}
           </span>
         </div>
 
@@ -121,7 +121,8 @@ export default function HelpDetailPage() {
           {mine && h.status !== 'closed' && (
             <>
               <Button onClick={() => requesterCloseHelp(h.id, 'yes')}>Resolved — Yes</Button>
-              <Button variant="subtle" onClick={() => requesterCloseHelp(h.id, 'tried')}>Helpers tried</Button>
+              <Button variant="subtle" onClick={() => requesterCloseHelp(h.id, 'tried-good')}>Tried (good intent)</Button>
+              <Button variant="subtle" className="!text-red-600" onClick={() => requesterCloseHelp(h.id, 'tried-bad')}>Tried (bad intent)</Button>
               <Button variant="outline" onClick={() => requesterCloseHelp(h.id, 'no').then(() => router.replace('/help'))}>Not resolved</Button>
             </>
           )}

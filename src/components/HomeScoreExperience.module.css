@@ -1,10 +1,10 @@
 .animationStage {
-  --home-cherry: #DC143C;
-  --home-cherry-dark: #A0102C;
-  --home-bg: #FFF8F8;
-  --home-text: #1A1A1A;
+  --home-cherry: #1F6B55;
+  --home-cherry-dark: #124638;
+  --home-bg: #FAF8F2;
+  --home-text: #112822;
   --home-text-dim: rgba(30, 30, 30, .4);
-  --home-border: rgba(220, 20, 60, .12);
+  --home-border: rgba(31, 107, 85, .12);
   --home-footer-clearance: var(--canact-floating-bottom-clearance);
   --home-stage-transition-duration: 680ms;
   --home-stage-transition-ease: cubic-bezier(.33, 0, .2, 1);
@@ -15,7 +15,7 @@
   min-height: 0;
   overflow: hidden;
   transform: translateX(-50%);
-  background: #FFFFFF;
+  background: #FAF8F2;
   color: var(--home-text);
   isolation: isolate;
   touch-action: none;
@@ -49,7 +49,7 @@
 }
 
 .stageNearby {
-  background: #FFFFFF;
+  background: #FAF8F2;
   height: var(--canact-viewport-height);
 }
 
@@ -198,7 +198,7 @@
   appearance: none;
   width: auto;
   max-width: min(calc(100vw - 72px), 360px);
-  border: 1px solid rgba(220, 20, 60, .18);
+  border: 1px solid rgba(31, 107, 85, .18);
   border-radius: 999px;
   background: rgba(255, 255, 255, .95);
   color: rgba(36, 36, 36, .78);
@@ -212,7 +212,7 @@
 
 .greetingCta:hover,
 .greetingCta:focus-visible {
-  border-color: rgba(220, 20, 60, .4);
+  border-color: rgba(31, 107, 85, .4);
   color: rgba(35, 35, 35, .95);
   background: rgba(255, 255, 255, 1);
   transform: translateY(-1px);
@@ -231,13 +231,13 @@
   height: 6px;
   border-radius: 999px;
   border: 0;
-  background: rgba(220, 20, 60, .24);
+  background: rgba(31, 107, 85, .24);
   padding: 0;
 }
 
 .greetingCtaDotActive {
   width: 14px;
-  background: rgba(220, 20, 60, .76);
+  background: rgba(31, 107, 85, .76);
 }
 
 .tipCard {
@@ -249,7 +249,7 @@
   max-width: min(calc(100vw - 24px), 500px);
   padding: 11px 16px;
   min-height: 58px;
-  border: 1px solid rgba(220, 20, 60, .14);
+  border: 1px solid rgba(31, 107, 85, .14);
   border-radius: 18px;
   background: rgba(255, 255, 255, .96);
   color: rgba(17, 17, 17, .68);
@@ -593,7 +593,7 @@
   border-radius: inherit;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 255, 255, .92)) padding-box,
-    linear-gradient(90deg, rgba(220, 20, 60, .46), rgba(255, 79, 115, .28), rgba(181, 15, 49, .42)) border-box;
+    linear-gradient(90deg, rgba(31, 107, 85, .46), rgba(255, 79, 115, .28), rgba(181, 15, 49, .42)) border-box;
   opacity: var(--score-pill-opacity);
   pointer-events: none;
   transform: scale(var(--score-pill-scale));
@@ -621,7 +621,7 @@
   inset: -40px;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(circle, rgba(220, 20, 60, .16) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(31, 107, 85, .16) 0%, transparent 70%);
   animation: homeScorePulse 2s ease-in-out infinite;
   pointer-events: none;
   will-change: opacity;
@@ -993,7 +993,7 @@
 }
 
 .cardSignal[data-kind="dislike"] {
-  color: #DC143C;
+  color: #1F6B55;
   left: 16px;
   right: auto;
   transform: rotate(-8deg);
@@ -1060,7 +1060,7 @@
 }
 
 .dislikeButton {
-  background: linear-gradient(135deg, #8E122B, #DC143C);
+  background: linear-gradient(135deg, #8E122B, #1F6B55);
 }
 
 .likeButton:active,
@@ -1639,7 +1639,7 @@
   color: rgba(17, 17, 17, .42);
   font-size: 13px;
   font-weight: 700;
-  background: radial-gradient(circle at 50% 36%, rgba(220, 20, 60, .08), transparent 36%), #FFF8F8;
+  background: radial-gradient(circle at 50% 36%, rgba(31, 107, 85, .08), transparent 36%), #FAF8F2;
 }
 
 .expandedPostEmptyImage,
@@ -1658,7 +1658,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 32%, rgba(220, 20, 60, .12), rgba(59, 130, 246, .10) 54%, rgba(255, 255, 255, .78));
+  background: radial-gradient(circle at 50% 32%, rgba(31, 107, 85, .12), rgba(59, 130, 246, .10) 54%, rgba(255, 255, 255, .78));
 }
 
 .expandedPostEmptyOverlay {
@@ -1727,8 +1727,8 @@
   justify-content: center;
   border: 0;
   border-radius: 999px;
-  background: rgba(220, 20, 60, .1);
-  color: #DC143C;
+  background: rgba(31, 107, 85, .1);
+  color: #1F6B55;
   font-size: 20px;
   font-weight: 900;
   cursor: pointer;
@@ -1797,7 +1797,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #DC143C;
+  color: #1F6B55;
   font-size: 13px;
   font-weight: 800;
 }
@@ -1837,7 +1837,7 @@
   justify-content: center;
   gap: 4px;
   padding: 10px 8px;
-  border: 1px solid rgba(220, 20, 60, .2);
+  border: 1px solid rgba(31, 107, 85, .2);
   border-radius: 12px;
   background: #FFFFFF;
   color: #111;
@@ -1858,9 +1858,9 @@
 }
 
 .expandedAttrButton.expandedAttrSelected {
-  background: linear-gradient(135deg, rgba(220, 20, 60, .12), rgba(220, 20, 60, .08));
-  border-color: #DC143C;
-  color: #DC143C;
+  background: linear-gradient(135deg, rgba(31, 107, 85, .12), rgba(31, 107, 85, .08));
+  border-color: #1F6B55;
+  color: #1F6B55;
 }
 
 .expandedAttrName {

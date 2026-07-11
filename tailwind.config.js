@@ -4,14 +4,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        candy: '#FFF8F8',
+        candy: '#FAF8F2',
         surface: '#FFFFFF',
-        ink: '#0A0A0A',
-        muted: '#5C5C5C',
-        subtle: '#9A9A9A',
-        line: '#F0DCDC',
-        brand: { DEFAULT: '#C8102E', dark: '#A00B23', light: '#FFD8DD' },
-        red2: '#C8102E',
+        ink: '#112822',
+        muted: '#68736F',
+        subtle: '#98A09D',
+        line: '#E4E7E2',
+        brand: { DEFAULT: '#1F6B55', dark: '#124638', light: '#DDEDE5' },
+        red2: '#B64444',
         orange2: '#E78B22',
         yellow2: '#E5C400',
         underground: '#1A1A1A',

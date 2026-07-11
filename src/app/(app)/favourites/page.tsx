@@ -1,18 +1,26 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { FriendsWorldMap, type FriendMapPerson } from '@/components/FriendsWorldMap';
+import type { FriendMapPerson } from '@/components/FriendsWorldMap';
+import { ExploreMap, type ExploreActivity } from '@/components/ExploreMap';
 import { acceptFollow, blockUser, listenFavourites, listenFollowRequests, rejectFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest, declineFriendRequest, listenFriends, listenIncomingRequests, unfriend,
 } from '@/lib/services/friends';
 import type { FriendEdge, UserProfile } from '@/lib/types';
-import { AlignLeft, MapPin, Star } from '@/components/icons';
+import { AlignLeft, Filter, MapPin, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
+import { useGeo } from '@/lib/useGeo';
+import { setLikeDislike } from '@/lib/services/votes';
+import { toast } from '@/components/Toaster';
+import { listenWhaFeed } from '@/lib/services/wha';
+import { listenActiveStories } from '@/lib/services/stories';
+import type { StoryItem, WhaPost } from '@/lib/types';
+import styles from './ExplorePage.module.css';
 
 type Tab = 'friends' | 'favourites' | 'requests';
 type PeopleView = 'map' | 'list';
@@ -24,8 +32,12 @@ type FavouriteRequest = { fromUid: string; fromName: string; createdAt: number; 
 
 export default function FavouritesPage() {
   const { user, profile } = useAuth();
+  const { coords: liveCoords, error: locationError } = useGeo();
   const [tab, setTab] = useState<Tab>('friends');
   const [peopleView, setPeopleView] = useState<PeopleView>('map');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [posts, setPosts] = useState<WhaPost[]>([]);
+  const [stories, setStories] = useState<StoryItem[]>([]);
   const [friends, setFriends] = useState<FriendEdge[]>([]);
   const [friendReqs, setFriendReqs] = useState<FriendEdge[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendProfile | null>>({});
@@ -40,6 +52,12 @@ export default function FavouritesPage() {
 
   useEffect(() => { if (user) return listenFriends(user.uid, setFriends); }, [user?.uid]);
   useEffect(() => { if (user) return listenIncomingRequests(user.uid, setFriendReqs); }, [user?.uid]);
+  useEffect(() => listenWhaFeed(setPosts), []);
+  useEffect(() => listenActiveStories(setStories), []);
+  useEffect(() => {
+    document.documentElement.setAttribute('data-canact-fullscreen-page', 'true');
+    return () => document.documentElement.removeAttribute('data-canact-fullscreen-page');
+  }, []);
 
   const friendIds = useMemo(() => friends.map((friend) => friend.uid).sort().join('|'), [friends]);
   useEffect(() => {
@@ -117,25 +135,68 @@ export default function FavouritesPage() {
   }).sort((a, b) => a.name.localeCompare(b.name)), [favs, cityLocations]);
 
   const visiblePeople = tab === 'favourites' ? favouritePeople : friendPeople;
-  const currentLocation = useMemo(() => resolveProfileLocation(profile as FriendProfile | null, cityLocations), [profile, cityLocations]);
+  const storedLocation = useMemo(() => resolveProfileLocation(profile as FriendProfile | null, cityLocations), [profile, cityLocations]);
+  const currentLocation = liveCoords ?? storedLocation;
   const totalRequests = friendReqs.length + favReqs.length;
-  const mapMode = tab !== 'requests' && peopleView === 'map';
-  useLockPageScroll(mapMode);
-  useEffect(() => {
-    const root = document.documentElement;
-    root.toggleAttribute('data-canact-map-fade', mapMode);
-    root.toggleAttribute('data-canact-friends-map-fade', mapMode);
-    root.toggleAttribute('data-canact-fullscreen-page', mapMode);
-    return () => {
-      root.removeAttribute('data-canact-map-fade');
-      root.removeAttribute('data-canact-friends-map-fade');
-      root.removeAttribute('data-canact-fullscreen-page');
-    };
-  }, [mapMode]);
-
+  const mapActivities = useMemo<ExploreActivity[]>(() => {
+    const now = Date.now();
+    const locatedPeople = [...friendPeople, ...favouritePeople].filter(hasLocation);
+    const personByUid = new Map(locatedPeople.map((person) => [person.uid, person]));
+    const peopleActivity: ExploreActivity[] = locatedPeople.map((person) => ({
+      id: `person-${person.uid}`,
+      kind: 'person',
+      lat: person.lat!,
+      lng: person.lng!,
+      weight: 1 + Math.min(1.2, Math.max(0, (person.rating ?? 0) / 1000)),
+      href: `/profile/${encodeURIComponent(person.uid)}`,
+    }));
+    const postActivity: ExploreActivity[] = posts.flatMap((post) => {
+      if (typeof post.lat !== 'number' || typeof post.lng !== 'number') return [];
+      const reactionCount = Object.values(post.reactions ?? {}).reduce((sum, value) => sum + (value ?? 0), 0);
+      const freshness = Math.max(.25, 1 - (now - post.createdAt) / (24 * 3600 * 1000));
+      return [{ id: `post-${post.id}`, kind: 'post' as const, lat: post.lat, lng: post.lng, weight: .9 + freshness + Math.min(1, reactionCount / 12), href: `/post/${post.id}` }];
+    });
+    const seenStoryAuthors = new Set<string>();
+    const storyActivity: ExploreActivity[] = stories.flatMap((story) => {
+      if (seenStoryAuthors.has(story.uid)) return [];
+      const person = personByUid.get(story.uid);
+      const lat = typeof story.lat === 'number' ? story.lat : person?.lat;
+      const lng = typeof story.lng === 'number' ? story.lng : person?.lng;
+      if (typeof lat !== 'number' || typeof lng !== 'number') return [];
+      seenStoryAuthors.add(story.uid);
+      return [{ id: `story-${story.id}`, kind: 'story' as const, lat, lng, weight: 1.25, href: '/feed' }];
+    });
+    return [...peopleActivity, ...postActivity, ...storyActivity];
+  }, [friendPeople, favouritePeople, posts, stories]);
   if (!user) return null;
+
+  // Map view renders outside the transformed container so position:fixed works correctly.
+  if (tab !== 'requests' && peopleView === 'map') {
+    return (
+      <ExploreMapSurface
+        firstName={profile?.firstName || profile?.fullName?.split(' ')[0] || 'there'}
+        people={visiblePeople}
+        currentLocation={currentLocation}
+        activities={mapActivities}
+        locationUnavailable={!!locationError && !currentLocation}
+        tab={tab}
+        filtersOpen={filtersOpen}
+        onToggleFilters={() => setFiltersOpen((value) => !value)}
+        friendCount={friends.length}
+        favouriteCount={favs.length}
+        requestCount={totalRequests}
+        onTabChange={setTab}
+        onSeeAll={() => setPeopleView('list')}
+        onVote={async (person, kind) => {
+          try { await setLikeDislike(person.uid, user.uid, kind); toast(kind === 'like' ? 'Liked' : 'Disliked', 'success'); }
+          catch (error: any) { toast(error?.message ?? 'Could not rate this person', 'error'); }
+        }}
+      />
+    );
+  }
+
   return (
-    <div className={mapMode ? 'canact-map-surface fixed left-0 right-0 top-0 h-[var(--canact-viewport-height)] min-h-[var(--canact-viewport-height)] w-screen overflow-hidden bg-[#FFF8F8]' : 'relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 overflow-hidden bg-[#FFF8F8] lg:min-h-[calc(var(--canact-viewport-height)-3rem)]'}>
+    <div className="relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 bg-[#FAF8F2] px-5 pb-20 pt-5 lg:min-h-[calc(var(--canact-viewport-height)-3rem)] lg:px-8 overflow-hidden">
       {tab === 'requests' ? (
         <RequestsSurface
           friendReqs={friendReqs}
@@ -153,14 +214,6 @@ export default function FavouritesPage() {
           onAcceptFavourite={(request) => acceptFollow(user.uid, request.fromUid)}
           onRejectFavourite={(request) => rejectFollow(user.uid, request.fromUid)}
         />
-      ) : peopleView === 'map' ? (
-        <FriendsWorldMap
-          friends={visiblePeople}
-          currentLocation={currentLocation}
-          className="absolute inset-0 h-full min-h-full w-screen"
-          emptyTitle={`No ${tab} locations yet`}
-          emptyBody={`${tab === 'friends' ? 'Friends' : 'Favourites'} appear here from live location first, then selected city.`}
-        />
       ) : (
         <PeopleListSurface
           people={visiblePeople}
@@ -170,13 +223,135 @@ export default function FavouritesPage() {
         />
       )}
 
-      <div className={`pointer-events-none absolute inset-x-0 top-0 z-50 px-3 lg:px-6 lg:pt-6 ${mapMode ? 'pt-[calc(env(safe-area-inset-top,0px)+88px)]' : 'pt-3'}`}>
-        <RelationshipToggle tab={tab} onTabChange={setTab} friendCount={friends.length} favouriteCount={favs.length} requestCount={totalRequests} />
-        {tab !== 'requests' ? (
-          <MapToolbar tab={tab} people={visiblePeople} view={peopleView} onViewChange={setPeopleView} />
-        ) : null}
-      </div>
+      {peopleView === 'list' && tab !== 'requests' ? <div className="mx-auto mt-4 w-full max-w-[540px]"><MapToolbar tab={tab} people={visiblePeople} view={peopleView} onViewChange={setPeopleView} /></div> : null}
     </div>
+  );
+}
+
+function ExploreMapSurface({
+  firstName,
+  people,
+  currentLocation,
+  activities,
+  locationUnavailable,
+  tab,
+  filtersOpen,
+  onToggleFilters,
+  friendCount,
+  favouriteCount,
+  requestCount,
+  onTabChange,
+  onSeeAll,
+  onVote,
+}: {
+  firstName: string;
+  people: PeoplePerson[];
+  currentLocation: { lat: number; lng: number } | null;
+  activities: ExploreActivity[];
+  locationUnavailable: boolean;
+  tab: Exclude<Tab, 'requests'>;
+  filtersOpen: boolean;
+  onToggleFilters: () => void;
+  friendCount: number;
+  favouriteCount: number;
+  requestCount: number;
+  onTabChange: (tab: Tab) => void;
+  onSeeAll: () => void;
+  onVote: (person: PeoplePerson, kind: 'like' | 'dislike') => Promise<void> | void;
+}) {
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStart = useRef<number | null>(null);
+
+  const onHandlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    dragStart.current = event.clientY;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onHandlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStart.current === null) return;
+    const raw = event.clientY - dragStart.current;
+    setDragOffset(sheetExpanded ? Math.max(0, raw) : Math.min(0, raw));
+  };
+  const onHandlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStart.current === null) return;
+    const delta = event.clientY - dragStart.current;
+    if (delta < -42) setSheetExpanded(true);
+    if (delta > 42) setSheetExpanded(false);
+    dragStart.current = null;
+    setDragOffset(0);
+  };
+  const sheetStyle = { '--canact-sheet-drag': `${dragOffset}px` } as CSSProperties;
+
+  return (
+    <section className={styles.exploreScreen} aria-label="Explore nearby activity">
+      <ExploreMap
+        people={people}
+        currentLocation={currentLocation}
+        activities={activities}
+      />
+      <div className={styles.mapTopFade} aria-hidden="true" />
+      <div className={`${styles.mapBottomFade} ${sheetExpanded ? styles.mapBottomFadeExpanded : ''}`} aria-hidden="true" />
+
+      <button
+        type="button"
+        className={styles.mapHeading}
+      >
+        <small>Hey {firstName} <span aria-hidden="true">👋</span></small>
+        <span>Explore <strong>Canact</strong><br />near you</span>
+      </button>
+
+      <div className={styles.legend} aria-label="Map legend">
+        <span><i className={styles.heatDot} /> Activity</span>
+        <span><i className={styles.postDot} /> Posts</span>
+        <span><i className={styles.storyDot} /> Stories</span>
+      </div>
+
+      {locationUnavailable ? <div className={styles.locationNotice}>Enable location to center the map around you.</div> : null}
+
+      <aside
+        className={`${styles.peopleSheet} ${sheetExpanded ? styles.peopleSheetExpanded : ''}`}
+        style={sheetStyle}
+        aria-label="People nearby"
+      >
+        <div
+          className={styles.sheetGrabArea}
+          onPointerDown={onHandlePointerDown}
+          onPointerMove={onHandlePointerMove}
+          onPointerUp={onHandlePointerEnd}
+          onPointerCancel={onHandlePointerEnd}
+          onDoubleClick={() => setSheetExpanded((value) => !value)}
+        >
+          <span className={styles.sheetHandle} aria-hidden="true" />
+          <div className={styles.sheetTitleRow}>
+            <button type="button" onClick={() => setSheetExpanded((value) => !value)} className={styles.sheetTitle} aria-expanded={sheetExpanded}>
+              <Users size={21} /> <strong>People Nearby</strong><span>{people.length}</span>
+            </button>
+            <div className={styles.sheetActions}>
+              <button type="button" onClick={onToggleFilters} aria-label="Filter nearby people" aria-expanded={filtersOpen}><Filter size={17} /></button>
+              <button type="button" onClick={onSeeAll}>See all</button>
+            </div>
+          </div>
+          {!sheetExpanded ? <p className={styles.swipeHint}>Swipe up to explore nearby people</p> : null}
+        </div>
+
+        <div className={styles.sheetBody}>
+          {filtersOpen ? (
+            <div className={styles.filtersPanel}>
+              <div className={styles.filterLegend}>
+                <span><i className={styles.heatDot} /> High activity</span>
+                <span><Star size={15} className="text-[#f2b72e]" /> Favourites</span>
+              </div>
+              <RelationshipToggle tab={tab} onTabChange={onTabChange} friendCount={friendCount} favouriteCount={favouriteCount} requestCount={requestCount} />
+            </div>
+          ) : null}
+          {people.length ? (
+            <NearbyPeopleDeck people={people} onVote={onVote} />
+          ) : (
+            <div className={styles.emptyPeople}>People will appear here when their location is available.</div>
+          )}
+        </div>
+      </aside>
+    </section>
   );
 }
 
@@ -194,7 +369,7 @@ function RelationshipToggle({
   requestCount: number;
 }) {
   return (
-    <div className="pointer-events-auto mx-auto w-[min(calc(100vw-24px),540px)] overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white/95 p-1 shadow-sm backdrop-blur">
+    <div className="pointer-events-auto mx-auto w-[min(calc(100vw-24px),540px)] overflow-hidden rounded-[28px] border border-[#E4E7E2] bg-white/95 p-1 shadow-sm backdrop-blur">
       <div className="grid grid-cols-3 gap-1">
         <PillTab active={tab === 'friends'} onClick={() => onTabChange('friends')} label="Friends" badge={friendCount} />
         <PillTab active={tab === 'favourites'} onClick={() => onTabChange('favourites')} label="Favourites" badge={favouriteCount} />
@@ -238,10 +413,50 @@ function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: Peo
   );
 }
 
+function NearbyPeopleDeck({ people, onVote }: { people: PeoplePerson[]; onVote: (person: PeoplePerson, kind: 'like' | 'dislike') => Promise<void> | void }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => { if (activeIndex >= people.length) setActiveIndex(0); }, [activeIndex, people.length]);
+  return (
+    <div className="relative -mx-5 h-[420px] overflow-hidden">
+      {people.map((person, index) => {
+        const offset = index - activeIndex;
+        const distance = Math.abs(offset);
+        if (distance > 2) return null;
+        const direction = offset < 0 ? -1 : 1;
+        const x = distance === 0 ? 0 : direction * (distance === 1 ? 170 : 280);
+        const scale = distance === 0 ? 1 : distance === 1 ? .88 : .74;
+        const y = distance === 0 ? 0 : distance === 1 ? 24 : 42;
+        return (
+          <article
+            key={person.uid}
+            className="absolute left-1/2 top-0 w-[268px] overflow-hidden rounded-[28px] bg-white ring-1 ring-[#e1ddd3] transition-[transform,opacity,filter] duration-500 ease-[cubic-bezier(.22,.85,.3,1)]"
+            style={{ transform: `translateX(calc(-50% + ${x}px)) translateY(${y}px) scale(${scale})`, zIndex: 20 - distance, opacity: distance === 2 ? .35 : distance === 1 ? .68 : 1, filter: distance ? `blur(${distance}px)` : 'none' }}
+          >
+            <button type="button" onClick={() => distance ? setActiveIndex(index) : undefined} className="relative block h-[228px] w-full overflow-hidden bg-[#273937]">
+              {person.photoURL ? <img src={person.photoURL} alt={person.name} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center"><Avatar src={null} name={person.name} size={104} /></span>}
+              {distance ? <span className="absolute inset-0 bg-[#173f34]/12" /> : null}
+              {!distance ? <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/55 px-4 py-1.5 text-[10px] font-bold text-white">Reliable</span> : null}
+            </button>
+            <div className="px-6 pb-5 pt-4">
+              <Link href={`/profile/${person.uid}`} className="block truncate text-[17px] font-semibold text-[#436424]">{person.name}</Link>
+              <p className="mt-1 text-[15px] font-bold text-[#8a654d]">{Math.round(person.rating || 0)}</p>
+              <div className="mt-4 flex items-center justify-between border-t border-[#e8e2d8] pt-4">
+                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'like')} aria-label={`Like ${person.name}`} className="grid h-10 w-14 place-items-center rounded-xl bg-[#6d8a72] text-white disabled:opacity-35"><ThumbsUp size={18} /></button>
+                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'dislike')} aria-label={`Dislike ${person.name}`} className="grid h-10 w-14 place-items-center rounded-xl bg-[#ecebea] text-[#58615d] disabled:opacity-35"><ThumbsDown size={18} /></button>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+      {people.length > 1 ? <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-1.5">{people.slice(0, 8).map((person, index) => <button key={person.uid} type="button" aria-label={`Show ${person.name}`} onClick={() => setActiveIndex(index)} className={`h-1.5 rounded-full transition-all ${index === activeIndex ? 'w-6 bg-brand' : 'w-1.5 bg-brand/20'}`} />)}</div> : null}
+    </div>
+  );
+}
+
 function PeopleListSurface({ people, tab, onUnfriend, onBlock }: { people: PeoplePerson[]; tab: Exclude<Tab, 'requests'>; onUnfriend: (person: PeoplePerson) => Promise<void> | void; onBlock: (person: PeoplePerson) => Promise<void> | void }) {
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[#FFF8F8] px-3 pb-6 pt-[132px] lg:px-6 lg:pt-[156px]">
-      <div className="mx-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-sm">
+    <div className="bg-[#FAF8F2] pt-4">
+      <div className="mx-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-[#E4E7E2] bg-white p-2 shadow-sm">
         <PeopleList people={people} tab={tab} onUnfriend={onUnfriend} onBlock={onBlock} />
       </div>
     </div>
@@ -307,10 +522,10 @@ function RequestsSurface({
 }) {
   const empty = friendReqs.length === 0 && favReqs.length === 0;
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[#FFF8F8] px-3 pb-6 pt-[74px] lg:px-6 lg:pt-[102px]">
+    <div className="bg-[#FAF8F2] pt-4">
       <div className="mx-auto w-full max-w-xl space-y-3">
         {empty ? (
-          <div className="rounded-[28px] border border-[#F1D7DC] bg-white px-4 py-8 text-center shadow-sm">
+          <div className="rounded-[28px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
             <div className="text-sm font-extrabold text-ink">No pending requests</div>
             <div className="mt-1 text-xs font-semibold text-ink/50">Friend and favourite requests will appear here.</div>
           </div>
@@ -357,7 +572,7 @@ function RequestsSurface({
 
 function RequestSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-sm">
+    <section className="overflow-hidden rounded-[28px] border border-[#E4E7E2] bg-white p-2 shadow-sm">
       <h3 className="px-2 py-2 text-[11px] font-extrabold uppercase tracking-wide text-ink/45">{title}</h3>
       <ul className="divide-y divide-line">{children}</ul>
     </section>

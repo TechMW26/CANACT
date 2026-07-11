@@ -13,12 +13,12 @@ type Item = {
 };
 
 const ITEMS: Item[] = [
-  { href: '/story/create', title: 'Story',           desc: 'Camera-first, edit with text. 24h.',     Icon: Sparkles,  accent: 'from-[#FFE3E7] to-[#FFD8DD]' },
-  { href: '/post/create',  title: "What's Happening", desc: 'Photos / carousel. Auto-disappears 24h.', Icon: Camera,    accent: 'from-[#FFEDF0] to-[#FFD8DD]' },
-  { href: '/reel/create',  title: 'Reel',             desc: 'Short vertical clip. Coming soon.',      Icon: Film,      accent: 'from-[#FFF1F3] to-[#FFE3E7]' },
-  { href: '/rateme/start', title: 'Rate Me',          desc: 'Front-camera selfie. Live for hours.',   Icon: Eye,       accent: 'from-[#FFEDF0] to-[#FFD8DD]' },
-  { href: '/poll/create',  title: 'Poll · Ask',       desc: 'Quick read from your area.',             Icon: BarChart3, accent: 'from-[#FFF1F3] to-[#FFE3E7]' },
-  { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: HeartHandshake,  accent: 'from-[#FFF8F8] to-[#FFE3E7]' },
+  { href: '/story/create', title: 'Story',           desc: 'Camera-first, edit with text. 24h.',     Icon: Sparkles,  accent: 'from-[#E8F2ED] to-[#DDEDE5]' },
+  { href: '/post/create',  title: "What's Happening", desc: 'Photos / carousel. Auto-disappears 24h.', Icon: Camera,    accent: 'from-[#F0F5F1] to-[#DDEDE5]' },
+  { href: '/reel/create',  title: 'Reel',             desc: 'Short vertical clip. Coming soon.',      Icon: Film,      accent: 'from-[#FFF1F3] to-[#E8F2ED]' },
+  { href: '/rateme/start', title: 'Rate Me',          desc: 'Front-camera selfie. Live for hours.',   Icon: Eye,       accent: 'from-[#F0F5F1] to-[#DDEDE5]' },
+  { href: '/poll/create',  title: 'Poll · Ask',       desc: 'Quick read from your area.',             Icon: BarChart3, accent: 'from-[#FFF1F3] to-[#E8F2ED]' },
+  { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: HeartHandshake,  accent: 'from-[#FAF8F2] to-[#E8F2ED]' },
 ];
 
 export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -30,7 +30,7 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
             key={href}
             href={href}
             onClick={onClose}
-            className={`group flex items-center gap-3 rounded-2xl bg-gradient-to-br ${accent} p-3 ring-1 ring-[#F1D7DC]`}
+            className={`group flex items-center gap-3 rounded-2xl bg-gradient-to-br ${accent} p-3 ring-1 ring-[#E4E7E2]`}
           >
             <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white text-brand">
               <Icon size={22} strokeWidth={2} />

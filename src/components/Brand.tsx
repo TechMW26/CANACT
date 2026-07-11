@@ -4,7 +4,6 @@ import clsx from 'clsx';
 
 export function Brand({
   size = 28,
-  showText = true,
   href,
   className,
 }: {
@@ -15,15 +14,32 @@ export function Brand({
 }) {
   const inner = (
     <span className={clsx('inline-flex items-center gap-2', className)}>
-      <Image src="/logo.png" alt="Canact" width={size} height={size} priority className="object-contain" />
-      {showText && <span className="font-extrabold tracking-tight text-brand" style={{ fontSize: Math.round(size * 0.78) }}>Canact</span>}
+      <CanactIcon size={size} />
     </span>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 export function BrandMark({ size = 96, className }: { size?: number; className?: string }) {
+  return <CanactIcon size={size} className={className} />;
+}
+
+function CanactIcon({ size, className }: { size: number; className?: string }) {
   return (
-    <Image src="/logo.png" alt="Canact" width={size} height={size} priority className={clsx('object-contain', className)} />
+    <span
+      className={clsx('relative inline-block shrink-0', className)}
+      style={{ width: size * 1.8, height: size }}
+      aria-label="Canact"
+      role="img"
+    >
+      <Image
+        src="/Canact-logo.png"
+        alt="Canact"
+        fill
+        priority
+        className="object-contain object-center"
+        sizes={`${Math.round(size * 1.8)}px`}
+      />
+    </span>
   );
 }

@@ -42,7 +42,7 @@ export default function SettingsPage() {
         <h3 className="font-bold">Notifications</h3>
         <label className="mt-3 flex items-center justify-between">
           <span>Sound for help &amp; reactions</span>
-          <input type="checkbox" className="h-5 w-5 accent-[#C8102E]" checked={!!profile.notificationSound} onChange={(e) => updateMyProfile({ notificationSound: e.target.checked })} />
+          <input type="checkbox" className="h-5 w-5 accent-[#1F6B55]" checked={!!profile.notificationSound} onChange={(e) => updateMyProfile({ notificationSound: e.target.checked })} />
         </label>
         <div className="mt-4 border-t border-line pt-3">
           <div className="text-sm font-extrabold text-ink">Push notifications</div>

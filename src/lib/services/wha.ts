@@ -2,6 +2,11 @@ import { onValue, push, ref, remove, runTransaction, set, update, get, query, or
 import { db } from '../firebase';
 import { WhaPost } from '../types';
 
+/** Bump the post author's contentLikes or contentDislikes (T4). */
+async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
+  await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
+}
+
 export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'expiresAt' | 'reactions'>) {
   const node = push(ref(db, 'wha'));
   const post: WhaPost = {
@@ -63,6 +68,11 @@ export function listenPost(id: string, cb: (p: WhaPost | null) => void) {
 export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love' | 'wow' | 'sad' | 'angry') {
   const voterRef = ref(db, `wha/${postId}/reactionVoters/${uid}`);
   const cur = (await get(voterRef)).val() as string | null;
+
+  // Fetch author uid for content score bump
+  const postSnap = await get(ref(db, `wha/${postId}`));
+  const authorUid = (postSnap.val() as WhaPost | null)?.uid;
+
   await runTransaction(ref(db, `wha/${postId}/reactions`), (cur2: any) => {
     cur2 = cur2 ?? { cool: 0, love: 0, wow: 0, sad: 0, angry: 0 };
     if (cur && cur in cur2) cur2[cur] = Math.max(0, (cur2[cur] ?? 0) - 1);
@@ -70,12 +80,45 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
     return cur2;
   });
   if (cur === kind) await remove(voterRef); else await set(voterRef, kind);
+
+  // T4: Wire reaction to author's content score
+  if (authorUid && authorUid !== uid) {
+    const positiveKinds = ['cool', 'love', 'wow'];
+    if (cur && cur !== kind) {
+      // User changed reaction — remove old, add new
+      const wasPositive = positiveKinds.includes(cur);
+      const isPositive = positiveKinds.includes(kind);
+      if (wasPositive) await bumpAuthorContent(authorUid, 'contentLikes', -1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
+      if (isPositive) await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
+    } else if (cur === kind) {
+      // Toggling off (removing reaction)
+      const wasPositive = positiveKinds.includes(kind);
+      if (wasPositive) await bumpAuthorContent(authorUid, 'contentLikes', -1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
+    } else {
+      // New reaction
+      const isPositive = positiveKinds.includes(kind);
+      if (isPositive) await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
+    }
+  }
 }
 
 export async function addComment(postId: string, uid: string, name: string, text: string) {
   const node = push(ref(db, `whaComments/${postId}`));
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
+
+  // T4: Comment counts as a like-equivalent for the post author
+  try {
+    const postSnap = await get(ref(db, `wha/${postId}`));
+    const authorUid = (postSnap.val() as WhaPost | null)?.uid;
+    if (authorUid && authorUid !== uid) {
+      await bumpAuthorContent(authorUid, 'contentLikes', 1);
+    }
+  } catch { /* non-fatal */ }
 }
 export function listenComments(postId: string, cb: (items: any[]) => void) {
   return onValue(ref(db, `whaComments/${postId}`), (snap) => {

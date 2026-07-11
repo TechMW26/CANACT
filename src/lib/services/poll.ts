@@ -1,7 +1,29 @@
 import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limitToLast, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
-import { uid as rid } from '../utils';
+import { uid as rid, dayKey } from '../utils';
+
+/** Bump the poll author's contentLikes or contentDislikes (T4). */
+async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
+  await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
+}
+
+/** Bump the voter's engagement score (+0.50 per interaction, capped +10/day). */
+async function bumpVoterEngagement(voterUid: string) {
+  await runTransaction(ref(db, `users/${voterUid}`), (u: any) => {
+    if (!u) return u;
+    const today = dayKey();
+    if (u.contentEngagementDayKey !== today) {
+      u.contentEngagementDayKey = today;
+      u.contentEngagementDayCount = 1;
+    } else {
+      const count = (u.contentEngagementDayCount ?? 0) + 1;
+      u.contentEngagementDayCount = Math.min(count, 20); // 20 × 0.5 = +10/day max
+    }
+    u.contentEngagementScore = (u.contentEngagementScore ?? 0) + 0.5;
+    return u;
+  });
+}
 
 function normalizeOptions(raw: any): PollOption[] {
   if (Array.isArray(raw)) return raw.filter(Boolean);
@@ -77,11 +99,29 @@ export async function votePoll(pollId: string, uid: string, optionId: string) {
     return poll;
   });
   if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
+
+  // T4: Vote counts as a like-equivalent for the poll author
+  try {
+    const pollSnap = await get(ref(db, `polls/${pollId}`));
+    const authorUid = (pollSnap.val() as Poll | null)?.uid;
+    if (authorUid && authorUid !== uid) {
+      await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      await bumpVoterEngagement(uid);
+    }
+  } catch { /* non-fatal */ }
 }
 
 export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dislike') {
   const voterRef = ref(db, `polls/${pollId}/reactionVoters/${uid}`);
   const prev = (await get(voterRef)).val() as 'like' | 'dislike' | null;
+
+  // Fetch author uid for content score bump
+  let authorUid: string | undefined;
+  try {
+    const pollSnap = await get(ref(db, `polls/${pollId}`));
+    authorUid = (pollSnap.val() as Poll | null)?.uid;
+  } catch { /* non-fatal */ }
+
   await runTransaction(ref(db, `polls/${pollId}`), (p: Poll | null) => {
     if (!p) return p;
     p.likes = p.likes ?? 0; p.dislikes = p.dislikes ?? 0;
@@ -94,12 +134,44 @@ export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dis
     return p;
   });
   await set(voterRef, prev === kind ? null : kind);
+
+  // T4: Wire reaction to author's content score
+  if (authorUid && authorUid !== uid) {
+    if (prev && prev !== kind) {
+      // Changed reaction
+      if (prev === 'like') await bumpAuthorContent(authorUid, 'contentLikes', -1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
+      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
+    } else if (prev === kind) {
+      // Toggling off
+      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', -1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
+    } else {
+      // New reaction
+      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
+    }
+  }
+
+  // T4: Voter engagement reward
+  if (uid !== authorUid) await bumpVoterEngagement(uid);
 }
 
 export async function commentPoll(pollId: string, uid: string, name: string, text: string) {
   const n = push(ref(db, `pollComments/${pollId}`));
   await set(n, { id: n.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `polls/${pollId}/commentCount`), (c: number) => (c ?? 0) + 1);
+
+  // T4: Comment counts as like-equivalent for poll author + voter engagement
+  try {
+    const pollSnap = await get(ref(db, `polls/${pollId}`));
+    const authorUid = (pollSnap.val() as Poll | null)?.uid;
+    if (authorUid && authorUid !== uid) {
+      await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      await bumpVoterEngagement(uid);
+    }
+  } catch { /* non-fatal */ }
 }
 export function listenPollComments(pollId: string, cb: (items: any[]) => void) {
   return onValue(ref(db, `pollComments/${pollId}`), (snap) => {

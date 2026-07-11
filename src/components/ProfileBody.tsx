@@ -109,7 +109,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   if (!u) {
     return (
       <div className="space-y-4">
-        <Card className="overflow-hidden border border-[#F1D7DC]">
+        <Card className="overflow-hidden border border-[#E4E7E2]">
           <div className="flex items-start gap-4">
             <div className="h-24 w-24 shrink-0 animate-pulse rounded-3xl bg-brand-light" />
             <div className="flex-1 space-y-3">
@@ -575,121 +575,43 @@ function CanactPagesProfileUI({
   const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
 
   return (
-    <div className="fixed inset-0 z-[25] overflow-y-auto bg-black">
-      <div className="relative min-h-[var(--canact-viewport-height)] overflow-hidden bg-black">
-        {heroSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={heroSrc} alt={displayName} className="absolute inset-0 h-full w-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,107,122,0.55),transparent_32%),linear-gradient(145deg,#1c1c1f,#050505)]" />
-        )}
-
-        <div
-          className="absolute inset-0 transition-opacity duration-500"
-          style={{
-            background: 'linear-gradient(180deg, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.30) 0%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.20) 20%, rgb(var(--canact-profile-top-rgb, 255 255 255) / 0.08) 42%, rgb(0 0 0 / 0.10) 55%, rgb(0 0 0 / 0.56) 78%, rgb(0 0 0 / 0.94) 100%)',
-          }}
-        />
-
-        {!isSelf ? (
-          <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} />
-        ) : null}
-
-        <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-[calc(var(--canact-floating-bottom-clearance)_+_24px)]">
-          <div className="mb-3">
-            <div className="w-fit rounded-full p-[2.5px]" style={{ background: 'linear-gradient(135deg, #FF6B7A, #FFB3B8)' }}>
-              <div className="h-[46px] w-[46px] overflow-hidden rounded-full ring-[2px] ring-black/30">
-                <Avatar src={userProfile.photoURL} name={displayName} size={46} />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h1 className="text-[42px] font-extrabold leading-none text-white" style={{ letterSpacing: -1.5 }}>
-              {nameLines.map((line) => <span key={line} className="block break-words">{line}</span>)}
-            </h1>
-            <p className="mt-2 text-xs text-white/75">
-              iAm @{profileSlug(userProfile)} &nbsp;·&nbsp; {role}{age ? ` · ${age}` : ''}{isVerified ? ' · Verified' : ''}
-            </p>
-            {userProfile.bio ? (
-              <p className="mt-3 line-clamp-2 max-w-[88vw] whitespace-pre-wrap text-xs leading-5 text-white/65">{userProfile.bio}</p>
-            ) : null}
-          </div>
-
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex items-center">
-              <BrandDot color="#e11a1a" letter="C" />
-              <div className="-ml-2"><BrandDot color="#0b3d91" letter="A" /></div>
-              <div className="-ml-2"><BrandDot color="#1a4f8c" letter="N" /></div>
-            </div>
-            <div>
-              <div className="text-sm font-bold leading-none text-white">{supportersCount.toLocaleString()}</div>
-              <div className="text-[10px] text-white/45">Supporters</div>
-            </div>
-
-            <div className="ml-auto flex gap-2">
-              {isSelf ? (
-                <Link href="/edit-profile" prefetch className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
-                  {supportLabel}
-                </Link>
-              ) : (
-                <button type="button" onClick={onSupport} className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
-                  {supportLabel}
-                </button>
-              )}
-              <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
-                {isSelf ? 'Settings' : 'Chat'}
-              </Link>
-            </div>
-          </div>
-
-          <div className="mb-4 flex items-center gap-8 border-b border-white/15 pb-3">
-            {([
-              { id: 'posts', Icon: ShoppingBag },
-              { id: 'reels', Icon: Video },
-              { id: 'polls', Icon: AlignLeft },
-            ] as const).map(({ id, Icon }) => {
-              const active = activeTab === id;
-              return (
-                <button key={id} type="button" onClick={() => setTab(id)} className="relative flex items-center justify-center">
-                  <Icon
-                    size={18}
-                    strokeWidth={active ? 2.2 : 1.6}
-                    style={{ color: active ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'color 0.2s' }}
-                  />
-                  {active ? <span className="absolute -bottom-3 left-0 right-0 h-[2px] rounded-full bg-white" /> : null}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {thumbs.length ? thumbs.map((thumb) => (
-              <Link
-                key={thumb.id}
-                href={thumb.href}
-                prefetch
-                className="h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl border border-white/20 bg-white/10 active:scale-95 transition"
-              >
-                {thumb.src ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumb.src} alt={thumb.label} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                ) : thumb.video ? (
-                  <video src={thumb.video} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-white/10 p-2 text-center text-[10px] font-semibold leading-tight text-white/75">
-                    <span className="line-clamp-4">{thumb.label}</span>
-                  </div>
-                )}
-              </Link>
-            )) : (
-              <div className="flex h-[76px] min-w-[180px] items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 text-center text-xs font-semibold text-white/60">
-                No content yet
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="-mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
+      <div className="relative h-[190px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
+        {heroSrc ? <img src={heroSrc} alt="" className="h-full w-full object-cover opacity-55 mix-blend-luminosity" /> : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
+        {!isSelf ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} /> : null}
       </div>
+
+      <section className="relative px-5 pb-5 text-center">
+        <div className="mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] border-[#faf8f2] bg-white">
+          <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+        </div>
+        <h1 className="mt-3 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
+        <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
+        {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
+
+        <div className="mt-6 grid grid-cols-3 rounded-[24px] bg-white px-3 py-5">
+          <div className="border-r border-line"><strong className="block text-xl text-ink">{Math.round(userProfile.rating || 0)}</strong><span className="text-xs text-muted">Score</span></div>
+          <div className="border-r border-line"><strong className="block text-xl text-ink">{supportersCount}</strong><span className="text-xs text-muted">Connections</span></div>
+          <div><strong className="block text-xl text-ink">{posts.length + reels.length + polls.length}</strong><span className="text-xs text-muted">Good acts</span></div>
+        </div>
+
+        <div className="mt-4 flex gap-3">
+          {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className="h-12 flex-1 rounded-full bg-brand font-bold text-white">{supportLabel}</button>}
+          <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">{isSelf ? 'Settings' : 'Message'}</Link>
+        </div>
+
+        <div className="mt-8 flex items-center justify-center gap-12 border-b border-line pb-3">
+          {([{ id: 'posts', Icon: ShoppingBag }, { id: 'reels', Icon: Video }, { id: 'polls', Icon: AlignLeft }] as const).map(({ id, Icon }) => {
+            const active = activeTab === id;
+            return <button key={id} type="button" onClick={() => setTab(id)} className={`relative grid h-10 w-10 place-items-center ${active ? 'text-brand' : 'text-ink/30'}`}><Icon size={21} strokeWidth={active ? 2.4 : 1.7} />{active ? <span className="absolute -bottom-3 h-[3px] w-8 rounded-full bg-brand" /> : null}</button>;
+          })}
+        </div>
+
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          {thumbs.length ? thumbs.map((thumb) => <Link key={thumb.id} href={thumb.href} prefetch className="aspect-square overflow-hidden rounded-[18px] bg-[#e7e1d1]">{thumb.src ? <img src={thumb.src} alt={thumb.label} loading="lazy" className="h-full w-full object-cover" /> : thumb.video ? <video src={thumb.video} muted playsInline className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-2 text-center text-xs font-bold text-brand">{thumb.label}</span>}</Link>) : <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">No content yet</div>}
+        </div>
+      </section>
     </div>
   );
 }
@@ -1029,7 +951,7 @@ function ProfileRateMeCard({ sess, myUid }: { sess: RateMeSession; myUid: string
       ? `${Math.ceil(remaining / 3_600_000)}h left`
       : `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
   return (
-    <article className="relative overflow-hidden rounded-[24px] border border-[#F1D7DC] bg-white">
+    <article className="relative overflow-hidden rounded-[24px] border border-[#E4E7E2] bg-white">
       {isOwner ? (
         <div className="absolute right-3 top-3 z-10">
           <PostMenu isOwner onDelete={async () => { await deleteRateMeSession(sess.id, sess.uid); }} />

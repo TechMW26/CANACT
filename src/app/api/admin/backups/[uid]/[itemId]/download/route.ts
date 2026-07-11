@@ -5,17 +5,18 @@ import { getFirebaseAdminApp, readAdminRtdb, verifyAdminRequest } from '@/lib/se
 export const runtime = 'nodejs';
 
 type Params = {
-  params: {
+  params: Promise<{
     uid: string;
     itemId: string;
-  };
+  }>;
 };
 
-export async function GET(request: Request, { params }: Params) {
+export async function GET(request: Request, context: Params) {
   const app = getFirebaseAdminApp();
   const admin = await verifyAdminRequest(request, app);
   if (!admin) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
+  const params = await context.params;
   const uid = decodeURIComponent(params.uid || '');
   const itemId = decodeURIComponent(params.itemId || '');
   if (!uid || !itemId || /[.#$/[\]]/.test(uid) || /[.#$/[\]]/.test(itemId)) {

@@ -398,7 +398,7 @@ function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: Mar
         onClick={requestClose}
       />
       <div
-        className="fixed bottom-[calc(var(--canact-floating-bottom-clearance)+1em)] left-3 right-3 z-[36] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#F1D7DC] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-[calc(1.25rem+1em)]"
+        className="fixed bottom-[calc(var(--canact-floating-bottom-clearance)+1em)] left-3 right-3 z-[36] mx-auto max-w-sm overflow-hidden rounded-[28px] border border-[#E4E7E2] bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.18)] lg:bottom-[calc(1.25rem+1em)]"
         style={{
           opacity: overlayVisible ? 1 : 0,
           transform: overlayVisible ? 'translateY(0) scale(1)' : 'translateY(20px) scale(.96)',

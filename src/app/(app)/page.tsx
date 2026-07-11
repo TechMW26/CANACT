@@ -1,5 +1,5 @@
-import { HomeScoreExperience } from '@/components/HomeScoreExperience';
+import { CanactHome } from '@/components/CanactHome';
 
 export default function Home() {
-  return <HomeScoreExperience />;
+  return <CanactHome />;
 }

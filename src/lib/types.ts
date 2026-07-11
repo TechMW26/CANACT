@@ -61,13 +61,30 @@ export interface UserProfile {
   /** Aggregate help statistics shown on profile + help cards. */
   helpStats?: {
     offered?: number;   // offers extended by this user
-    confirmed?: number; // offers asker confirmed
-    resolved?: number;  // helps closed as resolved that this user worked on
-    failed?: number;    // help offers that failed/didn't help
+    confirmed?: number; // offers asker confirmed (total, all types)
+    resolved?: number;  // helps closed as resolved that this user worked on (total)
     noShow?: number;    // offers where user didn't show up
     asked?: number;     // help requests posted by this user
     taken?: number;     // their help requests that closed (any outcome)
+    /** Per-type resolved counts for help-type multiplier (Red 1.5×, Orange 1.2×, Yellow 1.0×). */
+    redResolved?: number;
+    orangeResolved?: number;
+    yellowResolved?: number;
+    redConfirmed?: number;
+    orangeConfirmed?: number;
+    yellowConfirmed?: number;
+    /** Help-seeker outcome judgments. */
+    triedGood?: number;  // helper tried, genuine effort → +10 flat each
+    triedBad?: number;   // helper tried, bad intent → −100 flat each
+    yesOutcomes?: number; // seeker said "yes" — for confidence scaling of +45
   };
+  /** Accumulated content reaction score from post/poll likes & dislikes (T4). */
+  contentLikes?: number;
+  contentDislikes?: number;
+  /** Accumulated voter engagement score (+0.50 per poll interaction, capped +10/day). */
+  contentEngagementScore?: number;
+  contentEngagementDayKey?: string;
+  contentEngagementDayCount?: number;
   gender?: 'female' | 'male' | 'nonbinary' | 'other';
   createdAt: number;
 }
@@ -163,6 +180,9 @@ export interface StoryItem {
   authorPhoto?: string;
   mediaUrl: string;
   caption?: string;
+  /** Location at publish time, used for map-bound story discovery. */
+  lat?: number;
+  lng?: number;
   /** CSS filter id from MEDIA_FILTERS (e.g. 'vivid', 'mono'). */
   filter?: string;
   overlays?: StoryOverlay[];
@@ -198,7 +218,7 @@ export interface HelpRequest {
   /** Bilateral ratings keyed by `${fromUid}__${toUid}`. */
   ratings?: Record<string, { fromUid: string; toUid: string; stars: number; note?: string; at: number }>;
   closedAt?: number;
-  closeOutcome?: 'yes' | 'no' | 'tried';
+  closeOutcome?: 'yes' | 'no' | 'tried' | 'tried-good' | 'tried-bad';
 }
 
 export interface ChatMessage {

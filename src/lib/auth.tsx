@@ -163,7 +163,7 @@ function profileBackfillFromAuth(u: SessionUser, profile: UserProfile | null): P
 async function routeAfterSignIn(u: FbUser) {
   await seedProfileIfMissing(u);
   const snap = await get(ref(db, `users/${u.uid}/profileComplete`));
-  return snap.val() === false ? '/profile' : '/';
+  return snap.val() === false ? '/onboard' : '/';
 }
 
 /** Fire-and-forget seed. Errors are logged but never thrown so they cannot

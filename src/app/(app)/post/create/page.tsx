@@ -103,7 +103,7 @@ export default function PostCreatePage() {
         </div>
       </header>
 
-      <div className="rounded-[30px] bg-white/92 p-4 ring-1 ring-[#F1D7DC]">
+      <div className="rounded-[30px] bg-white/92 p-4 ring-1 ring-[#E4E7E2]">
         <div className="flex items-center gap-3">
           <Avatar src={profile.photoURL ?? null} name={profile.fullName} />
           <div className="min-w-0 flex-1">

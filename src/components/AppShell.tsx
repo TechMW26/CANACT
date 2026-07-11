@@ -4,11 +4,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
-import { Avatar } from './Avatar';
 import { Brand } from './Brand';
 import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
+import { RadialCreateMenu } from './RadialCreateMenu';
 import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
 import { ShareToChatSheet } from './ShareToChatSheet';
 import { VicinityTracker } from './VicinityTracker';
@@ -22,19 +22,19 @@ import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
+import LiquidGlass from 'liquid-glass-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
-  Heart, Eye, Settings as SettingsIcon, Sparkles,
+  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
 
 const TABS: Tab[] = [
-  { href: '/',            label: 'Home',  Icon: Home },
-  { href: '/feed',        label: 'Feed',  Icon: Compass },
-  { href: '/create',      label: '',      Icon: Plus, isFab: true },
-  { href: '/help',        label: 'Help',  Icon: HeartHandshake },
-  { href: '/profile',     label: 'Me',    Icon: UserIcon },
+  { href: '/',            label: 'Home',      Icon: Home },
+  { href: '/favourites',  label: 'Nearby',    Icon: MapPin },
+  { href: '/feed',        label: 'Community', Icon: Grid3X3 },
+  { href: '/leaderboard', label: 'Leaderboard', Icon: Activity },
 ];
 
 const SIDE_LINKS = [
@@ -69,6 +69,8 @@ const ROUTE_PREFETCH_HREFS = [
   '/help/create',
 ];
 
+const LIQUID_GLASS_FILL_STYLE = { position: 'absolute', top: '50%', left: '50%', width: '100%', height: '100%' } as const;
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <DistanceProvider>
@@ -82,6 +84,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [plusOpen, setPlusOpen] = useState(false);
+  const [radialCreateOpen, setRadialCreateOpen] = useState(false);
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
@@ -89,7 +92,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const prefetchedRoutesRef = useRef(new Set<string>());
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
-  const routeProfileHero = !!pathname && (pathname === '/profile' || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings')));
+  const routeProfileHero = false;
   const routeFadeChrome = !!pathname && pathname === '/favourites';
   const routeFeed = pathname === '/feed';
   const profileChrome = routeProfileHero;
@@ -110,7 +113,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
   }, []);
 
-  useEffect(() => { setPageBlendChrome(false); }, [pathname]);
+  useEffect(() => { setPageBlendChrome(false); setRadialCreateOpen(false); }, [pathname]);
 
   const prefetchRoute = useCallback((href: string) => {
     if (href === '/create' || prefetchedRoutesRef.current.has(href)) return;
@@ -141,7 +144,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) { router.replace('/welcome'); return; }
-  }, [user, loading, router]);
+    if (profile?.profileComplete === false) router.replace('/onboard');
+  }, [user, profile?.profileComplete, loading, router]);
 
   useEffect(() => {
     if (pathname !== '/create') return;
@@ -184,7 +188,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // first navigation after a cold start.
   const restoredRouteRef = useRef(true);
 
-  if (loading || !user) {
+  if (loading || !user || profile?.profileComplete === false) {
     // Mount the ringer + deep-link router OUTSIDE the splash return so a
     // call answered from the lockscreen notification doesn't have to wait
     // for the WebView to finish loading the full app + profile data
@@ -192,7 +196,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     // ringer can subscribe to incomingCalls and pick up the pre-decision.
     return (
       <>
-        <Splash message={loading ? 'Loading…' : user ? 'Getting your profile…' : 'Loading…'} />
+        <Splash message={loading ? 'Loading…' : profile?.profileComplete === false ? 'Finishing your registration…' : user ? 'Getting your profile…' : 'Loading…'} />
         <NativeCallDeepLinkRouter />
         {user ? <IncomingCallRinger /> : null}
       </>
@@ -238,7 +242,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)] pb-[calc(var(--canact-bottom-nav-height)_+_16px)] lg:pb-6">
-      <ScrollDirectionWatcher />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
           every page (feed, profile, leaderboard, etc.) gets the gesture
@@ -300,16 +303,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />
+        {!pageBlendChrome && <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />}
         {/* Spacer mirroring the fixed top bar so page content starts below it.
-          Top bar = safe-area-inset-top + 56px (h-14 row). */}
-        <div
-          data-canact-header-spacer
-          aria-hidden
-          className="lg:hidden"
-          style={{ height: pageBlendChrome ? '0px' : mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 56px)` : '56px' }}
-        />
-        <div className={`canact-col ${routeFeed ? 'pb-0' : 'pb-20'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}><PageTransition>{children}</PageTransition></div>
+          Top bar = safe-area-inset-top + 70px. When pageBlendChrome is active
+          the header is completely removed so no spacer is needed. */}
+        {!pageBlendChrome && (
+          <div
+            data-canact-header-spacer
+            aria-hidden
+            className="lg:hidden"
+            style={{ height: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 70px)` : '70px' }}
+          />
+        )}
+        <div className={`canact-col ${routeFeed ? 'pb-0' : 'pb-6'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
@@ -318,59 +324,49 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </main>
       </div>{/* /canact-app-content */}
 
-        {/* Mobile bottom nav is profile-blended on profile routes, white/faded
-          over map surfaces, and standard white elsewhere. */}
+        {/* Mobile bottom nav */}
       <nav
         data-canact-bottom-nav
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-40 border-0 ${profileChrome ? 'canact-profile-footer-chrome pt-8' : footerFadeChrome ? 'canact-fade-footer-chrome bg-white' : 'bg-white'}`}
-        style={{ paddingBottom: 'var(--canact-footer-safe-padding)' }}
+        className="canact-figma-bottom-nav lg:hidden fixed z-40"
       >
-        <div className="relative z-10 flex h-16 items-center justify-around px-2">
+        <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-between">
           {TABS.map(({ href, label, Icon, isFab }) => {
             const active = isNavLinkActive(pathname, href, user.uid);
-            const isProfile = href === '/profile';
             const onTap = () => {
               if (isFab) { haptic('strong'); setPlusOpen(true); return; }
               if (!active) haptic('selection');
             };
-            const inner = (
-              <>
-                {isProfile ? (
-                  <span className={`inline-flex rounded-full ${active ? 'ring-2 ring-white/80' : ''}`}>
-                    <Avatar src={profile?.photoURL ?? null} name={profile?.fullName} size={24} />
-                  </span>
-                ) : (
-                  <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
-                )}
-                <span
-                  className={`overflow-hidden whitespace-nowrap text-sm font-extrabold transition-[max-width,margin,opacity] duration-300 ease-out ${
-                    active ? 'ml-2 max-w-[80px] opacity-100' : 'ml-0 max-w-0 opacity-0'
-                  }`}
-                >
-                  {label || (isProfile ? 'Me' : isFab ? 'Add' : '')}
-                </span>
-              </>
-            );
-            const cls = `canact-bottom-tab group relative flex h-12 items-center justify-center rounded-full px-3 transition-[background-color,padding,color,box-shadow] duration-300 ease-out ${
+            const cls = `canact-bottom-tab group relative flex h-16 w-16 items-center justify-center rounded-[22px] transition-colors duration-300 ${
               active
-                ? 'canact-bottom-tab-active bg-brand text-white pl-3 pr-4'
-                : 'canact-bottom-tab-inactive text-ink/65 hover:text-ink'
+                ? 'canact-bottom-tab-active bg-[#e7e1d1] text-[#1a4f3f]'
+                : 'canact-bottom-tab-inactive text-[#707981] hover:text-ink'
             }`;
             if (isFab) {
               return (
                 <button key={href} type="button" onClick={onTap} aria-label="Create" className={cls}>
-                  {inner}
+                  <Icon size={25} strokeWidth={active ? 2.3 : 1.8} />
                 </button>
               );
             }
             return (
-              <Link key={href} href={href} aria-label={label || href} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={() => prefetchRoute(href)} onFocus={() => prefetchRoute(href)} onClick={onTap} className={cls}>
-                {inner}
+              <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={() => prefetchRoute(href)} onFocus={() => prefetchRoute(href)} onClick={onTap} className={cls}>
+                <Icon size={25} strokeWidth={active ? 2.3 : 1.8} />
               </Link>
             );
           })}
         </div>
       </nav>
+      <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} />
+      <button
+        type="button"
+        aria-label={radialCreateOpen ? 'Close create menu' : 'Open create menu'}
+        aria-expanded={radialCreateOpen}
+        aria-controls="canact-radial-create-menu"
+        onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
+        className={`canact-create-nav-button fixed z-50 lg:hidden ${radialCreateOpen ? 'canact-create-nav-button-open' : ''}`}
+      >
+        <Plus size={29} strokeWidth={2.3} />
+      </button>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
     </div>
@@ -471,31 +467,28 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
     return () => { off1?.(); off2?.(); };
   }, [user?.uid]);
 
-  const headerChromeClass = profileChrome ? 'canact-profile-header-chrome pb-8' : fadeChrome ? 'canact-fade-header-chrome bg-white' : 'bg-white';
+  const headerChromeClass = profileChrome ? 'canact-profile-header-chrome' : fadeChrome ? 'canact-fade-header-chrome' : '';
 
   return (
     <header
       data-canact-header
-      className={`fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${headerChromeClass}`}
+      className={`canact-figma-header fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${headerChromeClass}`}
       style={{ paddingTop: topInset ?? undefined }}
     >
-      <div className={`relative z-10 flex h-14 items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
-        <Brand size={26} href="/" />
-        <div className="ml-auto inline-flex items-center gap-2">
+      <div className={`relative z-10 flex h-[70px] items-center gap-2 px-6 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+        <Brand size={38} href="/" />
+        <div className="ml-auto inline-flex items-center gap-4">
           <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
-          <Link href="/search" aria-label="Search" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
-            <Search size={18} strokeWidth={2.2} />
-          </Link>
-          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
-            <Heart size={18} strokeWidth={2.2} />
+          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+            <Heart size={25} strokeWidth={2.2} />
             {pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
                 {pendingCount > 9 ? '9+' : pendingCount}
               </span>
             )}
           </Link>
-          <Link href="/leaderboard" aria-label="Leaderboard" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'border border-[#D9DDE5] bg-white text-ink/70 hover:bg-brand-light hover:text-brand'}`}>
-            <Trophy size={19} strokeWidth={2.3} />
+          <Link href="/profile" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+            <SettingsIcon size={25} strokeWidth={2.2} />
           </Link>
         </div>
       </div>
@@ -569,42 +562,4 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
       )}
     </div>
   );
-}
-
-/** Watches window scroll and toggles `data-header-hidden` on the shell so
- *  CSS can slide the unified header up and the stories strip into its place. */
-function ScrollDirectionWatcher() {
-  useEffect(() => {
-    const shell = document.getElementById('canact-app-shell');
-    if (!shell) return;
-    let lastY = window.scrollY;
-    let ticking = false;
-    const TOP_GUARD = 8;      // always show when this close to top
-    const DELTA = 2;          // ignore only sub-pixel jitter — even ~4px scroll hides
-
-    const update = () => {
-      const y = window.scrollY;
-      const dy = y - lastY;
-      if (y < TOP_GUARD) {
-        shell.setAttribute('data-header-hidden', 'false');
-      } else if (dy > DELTA) {
-        // any downward scroll past tiny jitter — hide immediately
-        shell.setAttribute('data-header-hidden', 'true');
-      } else if (dy < -DELTA) {
-        // upward scroll — show again
-        shell.setAttribute('data-header-hidden', 'false');
-      }
-      lastY = y;
-      ticking = false;
-    };
-    const onScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(update);
-        ticking = true;
-      }
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  return null;
 }

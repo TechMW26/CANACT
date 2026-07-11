@@ -18,62 +18,129 @@ export function calculateCanactScore(profile?: UserProfile | null): CanactScoreS
 
   let adjustment = 0;
 
-  // === PROFILE RATING (most critical) ===
-  // Likes/dislikes from proximity encounters - direct trust signal
+  // ===================================================================
+  // T1 — PROXIMITY ENCOUNTER RATING (strongest signal: +55 / −120)
+  // ===================================================================
   const likes = nonNegative(profile.likesCount);
   const dislikes = nonNegative(profile.dislikesCount);
   const sentimentTotal = likes + dislikes;
   if (sentimentTotal > 0) {
     const sentiment = (likes - dislikes) / sentimentTotal;
-    // Asymmetric: very harsh on dislikes, moderate gain on likes
     const confidence = confidenceFromCount(sentimentTotal, 20);
-    const base = sentiment >= 0 
-      ? sentiment * 55  // Gains: max +55 for perfect
-      : sentiment * 120; // Penalties: min -120 for all dislikes
-    adjustment += Math.max(-120, base) * confidence;
+    const base = sentiment >= 0
+      ? sentiment * 55   // max +55 for perfect
+      : sentiment * 120; // max −120 for all-dislike
+    adjustment += Math.max(-120, Math.min(55, base)) * confidence;
   }
 
-  // === ATTRIBUTE BIAS (character assessment) ===
+  // ===================================================================
+  // T2 — ATTRIBUTE VOTES (character labels: +65 / −140)
+  // ===================================================================
   const positiveAttrs = POSITIVE_ATTRS.reduce((sum, key) => sum + nonNegative(profile.attrs?.[key]), 0);
   const negativeAttrs = NEGATIVE_ATTRS.reduce((sum, key) => sum + nonNegative(profile.attrs?.[key]), 0);
   const attrTotal = positiveAttrs + negativeAttrs;
   if (attrTotal > 0) {
     const bias = (positiveAttrs - negativeAttrs) / attrTotal;
     const confidence = confidenceFromCount(attrTotal, 16);
-    // Asymmetric: heavy penalty for negative bias
     const base = bias >= 0
-      ? bias * 65   // Gains: max +65
-      : bias * 140; // Penalties: min -140
-    adjustment += Math.max(-140, base) * confidence;
+      ? bias * 65   // max +65
+      : bias * 140; // max −140
+    adjustment += Math.max(-140, Math.min(65, base)) * confidence;
   }
 
-  // === HELP REPUTATION (actions matter) ===
+  // ===================================================================
+  // T3 — HELP ACTIONS (real-world reliability)
+  // ===================================================================
   const helpStats = profile.helpStats;
   if (helpStats) {
-    const resolved = nonNegative(helpStats.resolved);
-    const confirmed = nonNegative(helpStats.confirmed);
-    const offered = nonNegative(helpStats.offered);
-    const failed = nonNegative(helpStats.failed);
     const noShow = nonNegative(helpStats.noShow);
 
-    // Positive signals
-    let helpGain = 0;
-    if (resolved > 0) helpGain += Math.min(45, Math.log1p(resolved) * 18); // +45 max for resolved
-    if (confirmed > 0) helpGain += Math.min(30, Math.log1p(confirmed) * 12); // +30 max for confirmed
+    // --- Positive: Resolved (per-type with multiplier) ---
+    const redR = nonNegative(helpStats.redResolved);
+    const orangeR = nonNegative(helpStats.orangeResolved);
+    const yellowR = nonNegative(helpStats.yellowResolved);
+    const totalResolved = redR + orangeR + yellowR;
 
-    // Negative signals (severe penalties)
-    let helpLoss = 0;
-    if (failed > 0) helpLoss -= Math.min(80, Math.log1p(failed) * 32); // -80 max for failed
-    if (noShow > 0) helpLoss -= Math.min(100, Math.log1p(noShow) * 40); // -100 max for no-shows
+    let resolvedScore = 0;
+    if (totalResolved > 0) {
+      // Base resolved score (log-scaled, capped at 45)
+      const baseResolved = Math.min(45, Math.log1p(totalResolved) * 18);
+      // Weighted average multiplier from type distribution
+      const rMul = totalResolved > 0
+        ? (1.5 * redR + 1.2 * orangeR + 1.0 * yellowR) / totalResolved
+        : 1.0;
+      resolvedScore = baseResolved * rMul;
+    }
 
-    adjustment += helpGain + helpLoss;
+    // --- Positive: Confirmed (per-type with multiplier) ---
+    const redC = nonNegative(helpStats.redConfirmed);
+    const orangeC = nonNegative(helpStats.orangeConfirmed);
+    const yellowC = nonNegative(helpStats.yellowConfirmed);
+    const totalConfirmed = redC + orangeC + yellowC;
+
+    let confirmedScore = 0;
+    if (totalConfirmed > 0) {
+      const baseConfirmed = Math.min(30, Math.log1p(totalConfirmed) * 12);
+      const cMul = totalConfirmed > 0
+        ? (1.5 * redC + 1.2 * orangeC + 1.0 * yellowC) / totalConfirmed
+        : 1.0;
+      confirmedScore = baseConfirmed * cMul;
+    }
+
+    // --- Outcome: Yes (confidence-scaled, per "yes" judgment) ---
+    let yesScore = 0;
+    const yesCount = nonNegative(helpStats.yesOutcomes);
+    if (yesCount > 0) {
+      yesScore = Math.min(45, 45 * confidenceFromCount(yesCount, 10));
+    }
+
+    // --- Outcome: Tried (good intent) → +10 flat each ---
+    const triedGood = nonNegative(helpStats.triedGood);
+    const triedGoodScore = triedGood * 10;
+
+    // --- Outcome: Tried (bad intent) → −100 flat each ---
+    const triedBad = nonNegative(helpStats.triedBad);
+    const triedBadScore = triedBad * -100;
+
+    // --- Negative: No-Show (log-scaled penalty) ---
+    let noShowScore = 0;
+    if (noShow > 0) {
+      noShowScore = -Math.min(100, Math.log1p(noShow) * 40);
+    }
+
+    adjustment += resolvedScore + confirmedScore + yesScore + triedGoodScore + triedBadScore + noShowScore;
   }
 
-  // === CARDS (minor positive factor) ===
-  const cardsTotal = CARD_KEYS.reduce((sum, key) => sum + nonNegative(profile.cardsReceived?.[key]), 0);
-  if (cardsTotal > 0) adjustment += Math.min(25, Math.log1p(cardsTotal) * 10); // Minor: max +25
+  // ===================================================================
+  // T4 — CONTENT REACTIONS (post/poll likes & dislikes: +40 / −60)
+  // ===================================================================
+  const contentLikes = nonNegative(profile.contentLikes);
+  const contentDislikes = nonNegative(profile.contentDislikes);
+  const contentTotal = contentLikes + contentDislikes;
+  if (contentTotal > 0) {
+    const contentSentiment = (contentLikes - contentDislikes) / contentTotal;
+    const contentConfidence = confidenceFromCount(contentTotal, 30);
+    const base = contentSentiment >= 0
+      ? contentSentiment * 40   // max +40
+      : contentSentiment * 60;  // max −60
+    adjustment += Math.max(-60, Math.min(40, base)) * contentConfidence;
+  }
 
-  // === VERIFICATION (small bonus) ===
+  // --- Voter engagement (+0.50 per poll interaction, no daily cap in total) ---
+  const engagementScore = nonNegative(profile.contentEngagementScore);
+  if (engagementScore > 0) {
+    adjustment += Math.min(10, engagementScore);
+  }
+
+  // ===================================================================
+  // T5 — CARDS (positive-only: max +25)
+  // ===================================================================
+  const cardsTotal = CARD_KEYS.reduce((sum, key) => sum + nonNegative(profile.cardsReceived?.[key]), 0);
+  if (cardsTotal > 0) adjustment += Math.min(25, Math.log1p(cardsTotal) * 10);
+
+  // ===================================================================
+  // T5 — VERIFICATION & BADGES
+  // ===================================================================
   if (profile.profileVerified) adjustment += 15;
   const nonVerificationBadges = (profile.badges ?? []).filter((badge) => badge.toLowerCase() !== 'verified').length;
   if (nonVerificationBadges > 0) adjustment += Math.min(10, nonVerificationBadges * 2);
