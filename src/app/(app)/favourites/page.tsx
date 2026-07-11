@@ -415,15 +415,49 @@ function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: Peo
 
 function NearbyPeopleDeck({ people, onVote }: { people: PeoplePerson[]; onVote: (person: PeoplePerson, kind: 'like' | 'dislike') => Promise<void> | void }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [dragDelta, setDragDelta] = useState(0);
+  const dragStart = useRef<{ x: number; baseIndex: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => { if (activeIndex >= people.length) setActiveIndex(0); }, [activeIndex, people.length]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    dragStart.current = { x: e.clientX, baseIndex: activeIndex };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    setDragDelta(e.clientX - dragStart.current.x);
+  };
+  const onPointerUp = () => {
+    if (!dragStart.current) return;
+    const threshold = 60;
+    if (dragDelta < -threshold && activeIndex < people.length - 1) {
+      setActiveIndex((i) => i + 1);
+    } else if (dragDelta > threshold && activeIndex > 0) {
+      setActiveIndex((i) => i - 1);
+    }
+    dragStart.current = null;
+    setDragDelta(0);
+  };
+
   return (
-    <div className="relative -mx-5 h-[420px] overflow-hidden">
+    <div
+      ref={containerRef}
+      className="relative -mx-5 h-[420px] overflow-hidden touch-pan-y"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
       {people.map((person, index) => {
         const offset = index - activeIndex;
         const distance = Math.abs(offset);
         if (distance > 2) return null;
         const direction = offset < 0 ? -1 : 1;
-        const x = distance === 0 ? 0 : direction * (distance === 1 ? 170 : 280);
+        const dragShift = distance === 0 ? dragDelta * 0.4 : 0;
+        const x = distance === 0 ? dragShift : direction * (distance === 1 ? 170 : 280);
         const scale = distance === 0 ? 1 : distance === 1 ? .88 : .74;
         const y = distance === 0 ? 0 : distance === 1 ? 24 : 42;
         return (

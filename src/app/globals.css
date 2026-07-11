@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Liquid Glass fill helper — positions the glass canvas behind children */
+@layer components {
+  .lg-glass {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .lg-glass > canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
 :root {
   color-scheme: light;
   --canact-vh: 1vh;
@@ -177,16 +193,12 @@ input[type="time"]::-webkit-date-and-time-value {
   margin-right: auto;
 }
 
-/* Figma v2 shared mobile chrome. */
+/* Figma v2 shared mobile chrome — CSS backdrop-filter glass */
 .canact-figma-header {
   background: rgb(250 248 242 / 72%);
   -webkit-backdrop-filter: blur(18px) saturate(110%);
   backdrop-filter: blur(18px) saturate(110%);
-  border-bottom: 1px solid rgb(255 255 255 / 35%);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 2%), 0 4px 16px rgb(0 0 0 / 3%);
-  /* Fade mask: fully opaque at top → transparent at bottom so content softly passes under */
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, #000 68%, transparent 100%);
+  border: 0;
 }
 
 .canact-figma-header .canact-distance-pill {
@@ -300,8 +312,8 @@ input[type="time"]::-webkit-date-and-time-value {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
-.canact-radial-item span { position: relative; display: grid; width: 54px; height: 54px; place-items: center; border: 1.5px solid rgb(255 255 255 / 78%); border-radius: 50%; color: #1f6b55; background: rgb(255 255 255 / 88%); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 10px 28px rgb(25 63 51 / 18%), inset 0 0 0 1px rgb(255 255 255 / 60%); }
-.canact-radial-item strong { padding: 5px 10px; border: 1px solid rgb(255 255 255 / 60%); border-radius: 999px; background: rgb(250 248 242 / 88%); box-shadow: 0 4px 14px rgb(25 63 51 / 12%), inset 0 0 0 1px rgb(255 255 255 / 50%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); white-space: nowrap; font-size: 10px; font-weight: 850; line-height: 1; color: #173f34; }
+.canact-radial-item span { position: relative; display: grid; width: 54px; height: 54px; place-items: center; border: 1.5px solid rgb(255 255 255 / 78%); border-radius: 50%; color: #1f6b55; background: rgb(255 255 255 / 88%); box-shadow: 0 10px 28px rgb(25 63 51 / 18%), inset 0 0 0 1px rgb(255 255 255 / 60%); }
+.canact-radial-item strong { padding: 5px 10px; border: 1px solid rgb(255 255 255 / 60%); border-radius: 999px; background: rgb(250 248 242 / 88%); box-shadow: 0 4px 14px rgb(25 63 51 / 12%), inset 0 0 0 1px rgb(255 255 255 / 50%); white-space: nowrap; font-size: 10px; font-weight: 850; line-height: 1; color: #173f34; }
 .canact-radial-item-help span { color: #fff; border-color: rgb(255 255 255 / 82%); background: rgb(220 60 50 / 85%); box-shadow: 0 10px 28px rgb(180 50 40 / 28%), inset 0 0 0 1px rgb(255 255 255 / 45%); }
 .canact-radial-item-help strong { color: #c43832; background: rgb(255 240 238 / 88%); border-color: rgb(255 180 175 / 60%); }
 

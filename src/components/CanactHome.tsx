@@ -26,8 +26,6 @@ export function CanactHome() {
     '--home-progress': progress,
     '--greeting-opacity': 1 - progress,
     '--greeting-y': `${-42 * progress}px`,
-    '--aura-y': `${110 * progress}px`,
-    '--aura-alpha': progress * .18,
     '--shape-width': `${270 - (120 * progress)}px`,
     '--shape-height': `${270 - (226 * progress)}px`,
     '--shape-radius': `${135 - (113 * progress)}px`,
@@ -37,7 +35,6 @@ export function CanactHome() {
     '--score-opacity': Math.max(0, 1 - (progress * 1.7)),
     '--score-scale': 1 - (progress * .35),
     '--pill-opacity': Math.max(0, Math.min(1, (progress - .72) * 3.6)),
-    '--hint-opacity': Math.max(0, 1 - (progress * 2)),
   } as React.CSSProperties;
 
   return (
@@ -56,7 +53,6 @@ export function CanactHome() {
         </div>
 
         <div className={`${styles.scoreDock} canact-header-aware-sticky`}>
-          <div className={styles.aura} />
           <div className={styles.scoreShape}>
             <svg className={styles.scoreRing} viewBox="0 0 280 280" aria-hidden="true">
               <circle cx="140" cy="140" r="126" pathLength="100" />

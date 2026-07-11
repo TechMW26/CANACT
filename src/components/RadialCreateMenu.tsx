@@ -79,7 +79,6 @@ export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: ()
   return (
     <div id="canact-radial-create-menu" className={`canact-radial-menu lg:hidden ${open ? 'canact-radial-menu-open' : ''}`} aria-hidden={!open}>
       <button type="button" className="canact-radial-dismiss" onClick={onClose} aria-label="Close create menu" tabIndex={open ? 0 : -1} />
-      <div className="canact-radial-halo" aria-hidden="true" />
       {itemPositions.map((item, index) => {
         const { href, label, Icon, className, final } = item;
         return (

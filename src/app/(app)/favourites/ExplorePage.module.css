@@ -21,10 +21,10 @@
   background: linear-gradient(180deg, #faf8f2 0%, rgb(250 248 242 / .88) 32%, rgb(250 248 242 / .38) 70%, transparent 100%);
 }
 .mapBottomFade {
-  bottom: calc(25dvh - 1px);
+  bottom: calc(clamp(180px, 28dvh, 260px) - 1px);
   background: linear-gradient(0deg, #faf8f2 0%, rgb(250 248 242 / .78) 35%, rgb(250 248 242 / .26) 72%, transparent 100%);
 }
-.mapBottomFadeExpanded { bottom: calc(min(72dvh, 660px) - 1px); }
+.mapBottomFadeExpanded { bottom: calc(min(82dvh, 700px) - 1px); }
 
 .mapHeading {
   position: fixed;
@@ -70,7 +70,7 @@
   position: fixed;
   z-index: 18;
   left: 50%;
-  bottom: calc(25dvh + 24px);
+  bottom: calc(clamp(180px, 28dvh, 260px) + 24px);
   width: min(calc(100vw - 36px), 380px);
   transform: translateX(-50%);
   border-radius: 14px;
@@ -90,7 +90,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  height: min(72dvh, 660px);
+  height: min(82dvh, 700px);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 72%);
   border-bottom: 0;
@@ -98,11 +98,11 @@
   background: rgb(250 248 242 / 95%);
   box-shadow: 0 -12px 42px rgb(17 48 38 / 18%);
   backdrop-filter: blur(24px) saturate(1.08);
-  --collapsed-peek: 25dvh;
+  --collapsed-peek: clamp(180px, 28dvh, 260px);
   transform: translateY(calc(100% - var(--collapsed-peek) + var(--canact-sheet-drag)));
   transition: transform 400ms cubic-bezier(.22,.85,.3,1);
   touch-action: none;
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
 }
 .peopleSheetExpanded { transform: translateY(var(--canact-sheet-drag)); }
 .sheetGrabArea { height: 102px; padding: 9px 20px 10px; cursor: grab; user-select: none; touch-action: none; }
@@ -127,10 +127,10 @@
   .mapTopFade, .mapBottomFade { left: 240px; }
   .mapHeading { top: 28px; left: 276px; }
   .legend { top: 126px; left: 276px; }
-  .peopleSheet { right: 24px; bottom: 0; left: auto; width: min(460px, calc(100vw - 288px)); border: 1px solid rgb(255 255 255 / 72%); border-radius: 30px; transform: translateY(calc(100% - 25dvh)); padding-bottom: 24px; }
+  .peopleSheet { right: 24px; bottom: 0; left: auto; width: min(460px, calc(100vw - 288px)); border: 1px solid rgb(255 255 255 / 72%); border-radius: 30px; transform: translateY(calc(100% - clamp(180px, 28dvh, 260px))); padding-bottom: 24px; }
   .peopleSheetExpanded { transform: translateY(0); }
-  .mapBottomFade { bottom: calc(102px - 1px); }
-  .mapBottomFadeExpanded { bottom: calc(min(72dvh, 660px) - 1px); }
+  .mapBottomFade { bottom: calc(clamp(180px, 28dvh, 260px) - 1px); }
+  .mapBottomFadeExpanded { bottom: calc(min(82dvh, 700px) - 1px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

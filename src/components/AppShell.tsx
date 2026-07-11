@@ -22,7 +22,6 @@ import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
-import LiquidGlass from 'liquid-glass-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
   Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity,
@@ -241,7 +240,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)] pb-[calc(var(--canact-bottom-nav-height)_+_16px)] lg:pb-6">
+    <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)] pb-[calc(6rem_+_16px_+_env(safe-area-inset-bottom,0px))] lg:pb-6">
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
           every page (feed, profile, leaderboard, etc.) gets the gesture
@@ -365,7 +364,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
         className={`canact-create-nav-button fixed z-50 lg:hidden ${radialCreateOpen ? 'canact-create-nav-button-open' : ''}`}
       >
-        <Plus size={29} strokeWidth={2.3} />
+        <Plus className="text-white" size={29} strokeWidth={2.3} />
       </button>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
@@ -472,10 +471,9 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
   return (
     <header
       data-canact-header
-      className={`canact-figma-header fixed top-0 left-0 right-0 z-30 border-0 lg:hidden ${headerChromeClass}`}
-      style={{ paddingTop: topInset ?? undefined }}
+      className={`canact-figma-header fixed top-0 left-0 right-0 z-30 lg:hidden ${headerChromeClass}`}
     >
-      <div className={`relative z-10 flex h-[70px] items-center gap-2 px-6 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+      <div className={`relative z-10 flex h-[70px] items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={38} href="/" />
         <div className="ml-auto inline-flex items-center gap-4">
           <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />

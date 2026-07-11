@@ -21,7 +21,6 @@
 .greeting strong { color: #1f6b55; }
 
 .scoreDock { position: sticky; z-index: 12; top: calc(16px + var(--canact-sticky-header-shift, 0px)); height: 310px; margin-top: 20px; display: flex; justify-content: center; pointer-events: none; }
-.aura { position: absolute; top: var(--aura-y); width: 190px; height: 80px; border-radius: 50%; background: rgb(31 107 85 / var(--aura-alpha)); filter: blur(22px); }
 .scoreShape {
   position: relative;
   width: var(--shape-width);
@@ -47,11 +46,11 @@
 .scoreInner b { margin-top: 4px; color: #174f3f; font-size: 68px; line-height: 1; letter-spacing: -.06em; }
 .scoreInner small { margin-top: 8px; color: #287156; font-size: 12px; font-weight: 700; }
 .scoreInner em { margin-top: 9px; color: rgb(17 40 34 / 35%); font-size: 10px; font-style: normal; font-weight: 700; letter-spacing: .38em; }
-.pillInner { position: absolute; display: flex; align-items: center; gap: 7px; color: white; opacity: var(--pill-opacity); white-space: nowrap; }
+.pillInner { position: absolute; display: flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; background: rgb(24 60 50 / 92%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: white; opacity: var(--pill-opacity); white-space: nowrap; }
 .pillInner i { width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 10px #8ce2b0 !important; }
 .pillInner b { font-size: 14px; }.pillInner span { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 
-.scrollHint { position: relative; z-index: 2; width: max-content; margin: -58px auto 116px; display: grid; justify-items: center; gap: 5px; color: rgb(17 40 34 / 38%); font-size: 11px; font-weight: 650; opacity: var(--hint-opacity); animation: homeBob 1.8s ease-in-out infinite; }
+.scrollHint { position: relative; z-index: 2; width: max-content; margin: 8px auto 100px; display: grid; justify-items: center; gap: 5px; color: rgb(17 40 34 / 38%); font-size: 11px; font-weight: 650; animation: homeBob 1.8s ease-in-out infinite; }
 .scrollHint svg { width: 20px; }
 @keyframes homeBob { 50% { translate: 0 5px; } }
 
@@ -76,5 +75,5 @@
   .hero { min-height: 126px; padding-top: 18px; }
   .scoreDock { height: 280px; margin-top: 22px; }
   .scoreInner b { font-size: 58px; }
-  .scrollHint { margin-top: -48px; margin-bottom: 92px; }
+  .scrollHint { margin-top: 20px; margin-bottom: 82px; }
 }
