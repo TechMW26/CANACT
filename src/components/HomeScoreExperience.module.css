@@ -5,6 +5,7 @@
   --home-text: #112822;
   --home-text-dim: rgba(30, 30, 30, .4);
   --home-border: rgba(31, 107, 85, .12);
+  --home-header-clearance: calc(env(safe-area-inset-top, 0px) + 1em + 72px + 1em);
   --home-footer-clearance: var(--canact-floating-bottom-clearance);
   --home-stage-transition-duration: 680ms;
   --home-stage-transition-ease: cubic-bezier(.33, 0, .2, 1);
@@ -13,7 +14,9 @@
   width: 100vw;
   height: var(--canact-viewport-height);
   min-height: 0;
+  box-sizing: border-box;
   overflow: hidden;
+  padding-top: var(--home-header-clearance);
   transform: translateX(-50%);
   background: #FAF8F2;
   color: var(--home-text);
@@ -766,28 +769,15 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity .12s linear;
-}
-
-.nearbyPanel::before {
-  top: var(--canact-map-header-fade-start, 55px);
-  height: min(calc(var(--canact-vh) * 18), 150px);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .78) 0%, rgba(255, 255, 255, .42) 52%, rgba(255, 255, 255, 0) 100%);
-}
-
-.nearbyPanel::after {
-  bottom: 0;
-  height: min(calc(var(--canact-vh) * 17), 140px);
-  background: linear-gradient(0deg, rgba(255, 255, 255, .68) 0%, rgba(255, 255, 255, .34) 56%, rgba(255, 255, 255, 0) 100%);
+  display: none;
 }
 
 .nearbyPanelActive::before {
-  opacity: .55;
-  transition-delay: .18s;
+  opacity: 0;
 }
 
 .nearbyPanelActive::after {
-  opacity: .45;
-  transition-delay: .26s;
+  opacity: 0;
 }
 
 .nearbyMap {
@@ -847,7 +837,7 @@
 .deckShell {
   position: absolute;
   left: 50%;
-  bottom: var(--home-footer-clearance);
+  bottom: calc(var(--home-footer-clearance) + 1em);
   z-index: 42;
   width: min(calc(100vw - 24px), 430px);
   transform: translate(-50%, -10%);

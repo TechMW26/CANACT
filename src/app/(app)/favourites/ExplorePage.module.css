@@ -29,7 +29,7 @@
 .mapHeading {
   position: fixed;
   z-index: 18;
-  top: calc(env(safe-area-inset-top, 0px) + 86px);
+  top: calc(env(safe-area-inset-top, 0px) + 86px + .5em);
   left: max(20px, env(safe-area-inset-left));
   padding: 0;
   border: 0;
@@ -125,7 +125,7 @@
 @media (min-width: 1024px) {
   .exploreScreen { left: 240px; }
   .mapTopFade, .mapBottomFade { left: 240px; }
-  .mapHeading { top: 28px; left: 276px; }
+  .mapHeading { top: calc(28px + .5em); left: 276px; }
   .legend { top: 126px; left: 276px; }
   .peopleSheet { right: 24px; bottom: 0; left: auto; width: min(460px, calc(100vw - 288px)); border: 1px solid rgb(255 255 255 / 72%); border-radius: 30px; transform: translateY(calc(100% - clamp(180px, 28dvh, 260px))); padding-bottom: 24px; }
   .peopleSheetExpanded { transform: translateY(0); }

@@ -11,14 +11,16 @@ export function Button({ variant = 'primary', size = 'md', loading, icon, full, 
   const base = 'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition active:scale-[.98] focus-ring disabled:opacity-50 disabled:pointer-events-none';
   const sizes: Record<Size, string> = { sm: 'h-9 px-3 text-sm', md: 'h-11 px-5 text-[15px]', lg: 'h-12 px-6 text-base' };
   const variants: Record<Variant, string> = {
-    primary: 'bg-brand text-white hover:bg-brand-dark',
-    outline: 'border border-brand text-brand bg-white hover:bg-brand-light',
-    ghost: 'text-brand hover:bg-brand-light',
-    danger: 'bg-brand-dark text-white hover:bg-brand',
-    subtle: 'bg-brand-light text-brand hover:bg-[#C9E0D5]',
+    primary: 'border border-white/45 bg-transparent text-brand-dark shadow-[0_8px_22px_rgba(31,107,85,.14)]',
+    outline: 'border border-brand/35 bg-transparent text-brand',
+    ghost: 'border border-white/30 bg-transparent text-brand',
+    danger: 'border border-red-300/40 bg-transparent text-red-700',
+    subtle: 'border border-brand/15 bg-transparent text-brand',
   };
+  const tint = variant === 'danger' ? '190,62,55' : variant === 'primary' || variant === 'subtle' ? '31,107,85' : '255,255,255';
+  const tintOpacity = variant === 'danger' ? '.18' : variant === 'primary' ? '.16' : variant === 'subtle' ? '.08' : '.04';
   return (
-    <button className={clsx(base, sizes[size], variants[variant], full && 'w-full', className)} disabled={disabled || loading} {...rest}>
+    <button data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint={tint} data-liquid-tint-opacity={tintOpacity} className={clsx(base, sizes[size], variants[variant], full && 'w-full', className)} disabled={disabled || loading} {...rest}>
       {loading ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : icon}
       {children}
     </button>

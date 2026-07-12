@@ -9,6 +9,7 @@ import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
 import { RadialCreateMenu } from './RadialCreateMenu';
+import { LiquidGlassRuntime } from './LiquidGlassRuntime';
 import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
 import { ShareToChatSheet } from './ShareToChatSheet';
 import { VicinityTracker } from './VicinityTracker';
@@ -89,11 +90,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   const prefetchedRoutesRef = useRef(new Set<string>());
+  const liquidNav = useLiquidNavSlider(pathname, user?.uid, router);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = false;
   const routeFadeChrome = !!pathname && pathname === '/favourites';
   const routeFeed = pathname === '/feed';
+  const headerOverContent = pathname === '/' || pathname === '/favourites' || !!pathname?.startsWith('/profile');
   const profileChrome = routeProfileHero;
   const footerFadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
   const chromeOverContent = profileChrome || footerFadeChrome;
@@ -225,6 +228,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   if (isFullScreen) {
     return (
       <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
+        <LiquidGlassRuntime />
         <ScrollRestoration />
         {/* Pull-to-refresh is intentionally NOT mounted on chat threads:
             those use their own scroll container and a downward swipe at the
@@ -240,7 +244,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)] pb-[calc(6rem_+_16px_+_env(safe-area-inset-bottom,0px))] lg:pb-6">
+    <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
+      <LiquidGlassRuntime />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
           every page (feed, profile, leaderboard, etc.) gets the gesture
@@ -258,7 +263,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           shell has multiple ancestors with `overflow` set, and even the
           slightest CSS containment / transform on any of them silently
           breaks `position: sticky`. Fixed has none of those constraints. */}
-      <div id="canact-app-content" data-disable-sheet-zoom={chromeOverContent ? 'true' : undefined} className="lg:w-full lg:pl-60">
+      <div id="canact-app-content" data-disable-sheet-zoom={chromeOverContent ? 'true' : undefined} className="lg:w-full lg:pl-60 ">
       {/* Desktop sidebar — fixed to the viewport so it's always in view
           regardless of how far the main column scrolls. Hidden under lg
           (tablet portrait still gets the floating mobile header + bottom nav). */}
@@ -302,19 +307,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        {!pageBlendChrome && <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />}
-        {/* Spacer mirroring the fixed top bar so page content starts below it.
-          Top bar = safe-area-inset-top + 70px. When pageBlendChrome is active
-          the header is completely removed so no spacer is needed. */}
-        {!pageBlendChrome && (
-          <div
-            data-canact-header-spacer
-            aria-hidden
-            className="lg:hidden"
-            style={{ height: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 70px)` : '70px' }}
-          />
-        )}
-        <div className={`canact-col ${routeFeed ? 'pb-0' : 'pb-6'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}><PageTransition>{children}</PageTransition></div>
+        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />
+        <div
+          className={`canact-col ${routeFeed ? 'pb-0' : 'pb-6'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
+          style={!headerOverContent ? { paddingTop: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 92px)` : '92px' } : undefined}
+        ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
@@ -325,11 +322,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav */}
       <nav
+        ref={liquidNav.navRef}
         data-canact-bottom-nav
+        data-liquid-glass="surface"
+        data-liquid-radius="999"
+        data-liquid-blur="0"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0"
         className="canact-figma-bottom-nav lg:hidden fixed z-40"
       >
         <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-between">
-          {TABS.map(({ href, label, Icon, isFab }) => {
+          <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
+          <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0" className="canact-bottom-tab-indicator" aria-hidden="true" />
+          {TABS.map(({ href, label, Icon, isFab }, tabIndex) => {
             const active = isNavLinkActive(pathname, href, user.uid);
             const onTap = () => {
               if (isFab) { haptic('strong'); setPlusOpen(true); return; }
@@ -342,14 +347,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             }`;
             if (isFab) {
               return (
-                <button key={href} type="button" onClick={onTap} aria-label="Create" className={cls}>
-                  <Icon size={25} strokeWidth={active ? 2.3 : 1.8} />
+                <button key={href} type="button" onPointerDown={(event) => liquidNav.begin(tabIndex, event)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} aria-label="Create" className={cls}>
+                  <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
                 </button>
               );
             }
             return (
-              <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={() => prefetchRoute(href)} onFocus={() => prefetchRoute(href)} onClick={onTap} className={cls}>
-                <Icon size={25} strokeWidth={active ? 2.3 : 1.8} />
+              <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
+                <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
               </Link>
             );
           })}
@@ -361,15 +366,153 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         aria-label={radialCreateOpen ? 'Close create menu' : 'Open create menu'}
         aria-expanded={radialCreateOpen}
         aria-controls="canact-radial-create-menu"
+        data-liquid-glass="surface"
+        data-liquid-radius="999"
+        data-liquid-tint="31,107,85"
+        data-liquid-tint-opacity="0.10"
         onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
         className={`canact-create-nav-button fixed z-50 lg:hidden ${radialCreateOpen ? 'canact-create-nav-button-open' : ''}`}
       >
-        <Plus className="text-white" size={29} strokeWidth={2.3} />
+        <Plus className="canact-adaptive-icon" size={29} strokeWidth={2.3} />
       </button>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
     </div>
   );
+}
+
+function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>) {
+  const navRef = useRef<HTMLElement | null>(null);
+  const indicatorRef = useRef<HTMLDivElement | null>(null);
+  const glowRef = useRef<HTMLDivElement | null>(null);
+  const suppressClickUntil = useRef(0);
+  const finishTimer = useRef(0);
+
+  const activeIndex = useCallback(() => Math.max(0, TABS.findIndex((tab) => isNavLinkActive(pathname, tab.href, userId))), [pathname, userId]);
+  const metrics = useCallback((index: number) => {
+    const nav = navRef.current;
+    const item = nav?.querySelectorAll<HTMLElement>('.canact-bottom-tab')[index];
+    if (!nav || !item) return { left: 8, width: 56, center: 36 };
+    const navRect = nav.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    const scale = navRect.width > 0 ? nav.clientWidth / navRect.width : 1;
+    const left = (itemRect.left - navRect.left) * scale;
+    const width = itemRect.width * scale;
+    return { left, width, center: left + width / 2 };
+  }, []);
+  const snap = useCallback((index: number, animate: boolean) => {
+    const indicator = indicatorRef.current;
+    if (!indicator) return;
+    const item = metrics(index);
+    if (!animate) indicator.style.transition = 'none';
+    indicator.style.left = `${item.left}px`;
+    indicator.style.width = `${item.width}px`;
+    if (!animate) requestAnimationFrame(() => { if (indicator) indicator.style.transition = ''; });
+  }, [metrics]);
+
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => snap(activeIndex(), false));
+    const onResize = () => snap(activeIndex(), false);
+    window.addEventListener('resize', onResize);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('resize', onResize); };
+  }, [activeIndex, snap]);
+
+  useEffect(() => () => { if (finishTimer.current) window.clearTimeout(finishTimer.current); }, []);
+
+  const begin = useCallback((pressedIndex: number, event: React.PointerEvent<HTMLElement>) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    const nav = navRef.current;
+    const indicator = indicatorRef.current;
+    if (!nav || !indicator) return;
+    event.preventDefault();
+    nav.setPointerCapture?.(event.pointerId);
+    if (finishTimer.current) window.clearTimeout(finishTimer.current);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const pressedWidth = metrics(pressedIndex).width;
+    let dragging = false;
+    let targetIndex = pressedIndex;
+    indicator.classList.add('interacting');
+    nav.classList.add('engaged');
+
+    const localX = (clientX: number) => {
+      const rect = nav.getBoundingClientRect();
+      return (clientX - rect.left) * (rect.width > 0 ? nav.clientWidth / rect.width : 1);
+    };
+    const setGlow = (clientX: number, clientY: number, alpha: number) => {
+      const rect = nav.getBoundingClientRect();
+      nav.style.setProperty('--gx', `${localX(clientX)}px`);
+      nav.style.setProperty('--gy', `${clientY - rect.top}px`);
+      nav.style.setProperty('--ga', String(alpha));
+    };
+    const nearest = (x: number) => {
+      let result = 0;
+      let distance = Number.POSITIVE_INFINITY;
+      TABS.forEach((_, index) => {
+        const nextDistance = Math.abs(x - metrics(index).center);
+        if (nextDistance < distance) { distance = nextDistance; result = index; }
+      });
+      return result;
+    };
+    const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const deltaX = Math.abs(moveEvent.clientX - startX);
+      const deltaY = Math.abs(moveEvent.clientY - startY);
+      if (!dragging && (deltaX > 6 || deltaY > 6)) { dragging = true; nav.classList.add('dragging'); }
+      setGlow(moveEvent.clientX, moveEvent.clientY, dragging ? .18 : .22);
+      if (!dragging) return;
+      const x = localX(moveEvent.clientX);
+      const left = Math.min(nav.clientWidth - pressedWidth + 22, Math.max(-22, x - pressedWidth / 2));
+      indicator.style.left = `${left}px`;
+      indicator.style.width = `${pressedWidth}px`;
+      targetIndex = nearest(x);
+    };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+    const settle = () => {
+      nav.classList.remove('dragging');
+      snap(targetIndex, true);
+      suppressClickUntil.current = performance.now() + 600;
+      const target = TABS[targetIndex];
+      if (target && !isNavLinkActive(pathname, target.href, userId)) {
+        haptic('selection');
+        router.push(target.href);
+      }
+      finishTimer.current = window.setTimeout(() => {
+        indicator.classList.remove('interacting');
+        nav.classList.remove('engaged');
+        nav.style.setProperty('--ga', '0');
+      }, 500);
+    };
+    function onUp(upEvent: PointerEvent) {
+      if (upEvent.pointerId !== event.pointerId) return;
+      cleanup();
+      settle();
+    }
+    function onCancel(cancelEvent: PointerEvent) {
+      if (cancelEvent.pointerId !== event.pointerId) return;
+      cleanup();
+      nav!.classList.remove('dragging', 'engaged');
+      indicator!.classList.remove('interacting');
+      nav!.style.setProperty('--ga', '0');
+      snap(activeIndex(), true);
+    }
+    setGlow(event.clientX, event.clientY, .24);
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  }, [activeIndex, metrics, pathname, router, snap, userId]);
+
+  const consumeClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (event.detail === 0 || performance.now() > suppressClickUntil.current) return false;
+    event.preventDefault();
+    return true;
+  }, []);
+
+  return { navRef, indicatorRef, glowRef, begin, consumeClick };
 }
 
 function isNavLinkActive(pathname: string | null, href: string, currentUid?: string | null) {
@@ -471,22 +614,28 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
   return (
     <header
       data-canact-header
-      className={`canact-figma-header fixed top-0 left-0 right-0 z-30 lg:hidden ${headerChromeClass}`}
+      data-liquid-glass="surface"
+      data-liquid-radius="999"
+      data-liquid-blur="0"
+      data-liquid-tint="250,248,242"
+      data-liquid-tint-opacity="0"
+      className={`canact-figma-header fixed z-30 lg:hidden ${headerChromeClass}`}
+      style={{ top: topInset ? `calc(${topInset} + 0em)` : '1em' }}
     >
-      <div className={`relative z-10 flex h-[70px] items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+      <div className={`relative z-10 flex h-[72px] items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={38} href="/" />
         <div className="ml-auto inline-flex items-center gap-4">
           <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
-          <Link href="/favourites" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-            <Heart size={25} strokeWidth={2.2} />
+          <Link href="/favourites" data-liquid-glass="none" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+            <Heart className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
             {pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
                 {pendingCount > 9 ? '9+' : pendingCount}
               </span>
             )}
           </Link>
-          <Link href="/profile" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-            <SettingsIcon size={25} strokeWidth={2.2} />
+          <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+            <SettingsIcon className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
           </Link>
         </div>
       </div>
@@ -518,12 +667,13 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
   }, [open]);
 
   const pillClassName = `canact-distance-pill inline-flex h-9 w-auto min-w-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-center text-[13px] font-normal leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
-  const menuClassName = `absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl border p-1 backdrop-blur-xl ${blendChrome ? 'border-white/50 bg-white/90 text-ink' : 'border-line bg-white text-ink'}`;
+  const menuClassName = `absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl border border-white/60 bg-transparent p-1 text-ink shadow-xl`;
 
   return (
     <div ref={dropdownRef} className="relative">
       <button
         type="button"
+        data-liquid-glass="none"
         aria-label="Feed distance filter"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -536,7 +686,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
         <span className="block text-center">{selectedOption.label}</span>
       </button>
       {open && (
-        <div role="listbox" aria-label="Feed distance filter" className={menuClassName}>
+        <div role="listbox" aria-label="Feed distance filter" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className={menuClassName}>
           {RADIUS_OPTIONS.map((option) => {
             const selected = option.index === radiusIdx;
             return (
@@ -545,7 +695,9 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className={`flex h-9 w-full items-center justify-center rounded-xl px-3 text-center text-xs font-extrabold transition ${selected ? 'bg-brand text-white' : 'text-ink/75 hover:bg-brand-light hover:text-brand'}`}
+                data-liquid-glass={selected ? 'switcher' : 'none'}
+                data-liquid-radius="12"
+                className={`flex h-9 w-full items-center justify-center rounded-xl bg-transparent px-3 text-center text-xs font-extrabold transition ${selected ? 'text-brand' : 'text-ink/75 hover:text-brand'}`}
                 onClick={() => {
                   setRadiusIdx(option.index);
                   setOpen(false);

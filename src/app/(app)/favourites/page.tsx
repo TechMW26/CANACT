@@ -369,7 +369,7 @@ function RelationshipToggle({
   requestCount: number;
 }) {
   return (
-    <div className="pointer-events-auto mx-auto w-[min(calc(100vw-24px),540px)] overflow-hidden rounded-[28px] border border-[#E4E7E2] bg-white/95 p-1 shadow-sm backdrop-blur">
+    <div data-liquid-glass="surface" data-liquid-radius="28" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.08" className="pointer-events-auto mx-auto w-[min(calc(100vw-24px),540px)] overflow-hidden rounded-[28px] border border-white/60 bg-transparent p-1 shadow-sm">
       <div className="grid grid-cols-3 gap-1">
         <PillTab active={tab === 'friends'} onClick={() => onTabChange('friends')} label="Friends" badge={friendCount} />
         <PillTab active={tab === 'favourites'} onClick={() => onTabChange('favourites')} label="Favourites" badge={favouriteCount} />
@@ -394,18 +394,22 @@ function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 're
 
 function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: PeopleView) => void }) {
   return (
-    <div className="inline-flex shrink-0 rounded-full border border-[#D9DDE5] bg-white p-1">
+    <div data-liquid-glass="surface" data-liquid-radius="999" className="inline-flex shrink-0 rounded-full border border-white/60 bg-transparent p-1">
       <button
         type="button"
+        data-liquid-glass={view === 'map' ? 'switcher' : 'none'}
+        data-liquid-radius="999"
         onClick={() => onChange('map')}
-        className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold transition ${view === 'map' ? 'bg-brand text-white' : 'text-ink/60'}`}
+        className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'map' ? 'text-brand' : 'text-ink/60'}`}
       >
         <MapPin size={13} /> Map
       </button>
       <button
         type="button"
+        data-liquid-glass={view === 'list' ? 'switcher' : 'none'}
+        data-liquid-radius="999"
         onClick={() => onChange('list')}
-        className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold transition ${view === 'list' ? 'bg-brand text-white' : 'text-ink/60'}`}
+        className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'list' ? 'text-brand' : 'text-ink/60'}`}
       >
         <AlignLeft size={13} /> List
       </button>
@@ -648,8 +652,10 @@ function PillTab({ active, onClick, label, badge }: { active: boolean; onClick: 
   return (
     <button
       type="button"
+      data-liquid-glass={active ? 'switcher' : 'none'}
+      data-liquid-radius="999"
       onClick={onClick}
-      className={`relative flex h-11 min-w-0 items-center justify-center rounded-full px-1 text-[13px] font-extrabold transition sm:text-sm ${active ? 'bg-brand text-white' : 'text-ink/60 hover:text-ink'}`}
+      className={`relative flex h-11 min-w-0 items-center justify-center rounded-full bg-transparent px-1 text-[13px] font-extrabold transition sm:text-sm ${active ? 'text-brand' : 'text-ink/60 hover:text-ink'}`}
     >
       <span className="truncate">{label}</span>
       {badge > 0 && (

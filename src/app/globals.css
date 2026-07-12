@@ -18,6 +18,13 @@
   }
 }
 
+.CanactHome_scroller__AsB0C{
+  padding-top: 6em;
+}
+.CanactHome_home__Y3opm{
+  height: 100vh !important;
+  padding: 0 !important;
+}
 :root {
   color-scheme: light;
   --canact-vh: 1vh;
@@ -115,7 +122,7 @@ html[data-canact-fullscreen-page="true"],
 html[data-canact-fullscreen-page="true"] body {
   height: var(--canact-viewport-height);
   min-height: var(--canact-viewport-height);
-  overflow: hidden;
+  overflow: visible;
 }
 
 html[data-canact-fullscreen-page="true"] #canact-app-shell,
@@ -193,18 +200,64 @@ input[type="time"]::-webkit-date-and-time-value {
   margin-right: auto;
 }
 
-/* Figma v2 shared mobile chrome — CSS backdrop-filter glass */
+/* Liquid glass runtime layers, ported from liquid-glass.html. */
+.canact-lg-host { isolation: isolate; }
+.canact-lg-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.canact-lg-refract { background: rgb(255 255 255 / 1.5%); }
+.canact-lg-tint { transition: background-color 180ms ease; }
+
+.canact-figma-header > .canact-lg-refract,
+.canact-figma-header > .canact-lg-tint,
+.canact-figma-bottom-nav > .canact-lg-refract,
+.canact-figma-bottom-nav > .canact-lg-tint {
+  background: transparent !important;
+}
+
+/* Chrome contrast: dark icons with strong light glow — visible on both light and dark backgrounds. */
+.canact-adaptive-icon {
+  color: #173f34 !important;
+  mix-blend-mode: normal;
+  isolation: auto;
+  filter: drop-shadow(0 0 2px rgb(255 255 255 / 92%)) drop-shadow(0 0 5px rgb(255 255 255 / 70%)) drop-shadow(0 1px 3px rgb(10 30 24 / 25%));
+  transition: filter 160ms ease !important;
+}
+
+.canact-figma-header .canact-adaptive-icon {
+  color: #173f34 !important;
+}
+
+.canact-figma-bottom-nav .canact-adaptive-icon,
+.canact-create-nav-button .canact-adaptive-icon,
+.canact-radial-item .canact-adaptive-icon {
+  color: #173f34 !important;
+}
+
+.canact-radial-item-help .canact-adaptive-icon {
+  color: #fff !important;
+}
+
+/* Figma v2 shared mobile chrome — physically-derived liquid glass. */
 .canact-figma-header {
-  background: rgb(250 248 242 / 72%);
-  -webkit-backdrop-filter: blur(18px) saturate(110%);
-  backdrop-filter: blur(18px) saturate(110%);
-  border: 0;
+  left: max(20px, calc((100vw - 480px) / 2 + 20px));
+  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  height: 72px;
+  overflow: visible;
+  border: 1px solid rgb(255 255 255 / 66%);
+  border-radius: 9999px;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    14px 14px 36px rgb(31 56 47 / 12%),
+    -10px -10px 30px rgb(255 255 255 / 54%),
+    inset 0 1px 0 rgb(255 255 255 / 50%),
+    inset 0 -1px 0 rgb(31 107 85 / 5%);
 }
 
 .canact-figma-header .canact-distance-pill {
   height: 38px;
   border: 0;
-  background: rgb(170 179 139 / 10%);
+  background: transparent;
   color: #242424;
   font-size: 14px;
   font-weight: 750;
@@ -217,31 +270,64 @@ input[type="time"]::-webkit-date-and-time-value {
   bottom: calc(12px + env(safe-area-inset-bottom));
   height: 72px;
   border-radius: 9999px;
-  background: rgb(250 248 242 / 52%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgb(255 255 255 / 68%);
-  box-shadow: 0 14px 36px rgb(31 56 47 / 12%), inset 0 0 0 1px rgb(255 255 255 / 45%);
+  overflow: visible;
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 66%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    14px 14px 36px rgb(31 56 47 / 12%),
+    -10px -10px 30px rgb(255 255 255 / 54%),
+    inset 0 1px 0 rgb(255 255 255 / 50%),
+    inset 0 -1px 0 rgb(31 107 85 / 5%);
+  --gx: 50%;
+  --gy: 50%;
+  --ga: 0;
+  transition: transform .28s cubic-bezier(.22,1,.36,1);
 }
 
-.canact-bottom-dock-items { padding: 8px; }
+.canact-figma-bottom-nav.engaged { transform: scale(1.03); }
+.canact-bottom-dock-items { overflow: visible; padding: 8px; border-radius: 9999px; }
+.canact-bottom-nav-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 9999px;
+  clip-path: inset(0 round 9999px);
+  pointer-events: none;
+  background: radial-gradient(240px 150px at var(--gx) var(--gy), rgb(207 232 218 / var(--ga)) 0%, rgb(207 232 218 / 0) 74%);
+}
+.canact-bottom-tab-indicator {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  border: 1px solid rgb(255 255 255 / 46%);
+  border-radius: 9999px;
+  pointer-events: none;
+  transform-origin: center;
+  will-change: left, width, transform;
+  background: transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 46%), 10px 10px 24px rgb(31 56 47 / 14%), -8px -8px 20px rgb(255 255 255 / 38%);
+  transition: left .24s cubic-bezier(.2,.9,.22,1), width .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, box-shadow .25s ease;
+}
+.canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); }
+.canact-figma-bottom-nav.dragging .canact-bottom-tab-indicator { transition: transform .2s ease, box-shadow .2s ease; }
 
 .canact-figma-bottom-nav .canact-bottom-tab {
+  z-index: 2;
   width: clamp(42px, 13.5vw, 64px);
   height: 56px;
   border-radius: 9999px;
+  touch-action: none;
 }
 
 .canact-figma-bottom-nav .canact-bottom-tab-active {
-  background: rgb(31 107 85 / 18%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 55%),
-    inset 0 -2px 6px rgb(31 107 85 / 12%),
-    0 4px 16px rgb(31 56 47 / 18%),
-    0 1px 0 rgb(255 255 255 / 30%);
-  border: 1px solid rgb(255 255 255 / 50%);
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .canact-create-nav-button {
@@ -251,14 +337,12 @@ input[type="time"]::-webkit-date-and-time-value {
   width: 72px;
   height: 72px;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 74%);
+  border: 1px solid rgb(255 255 255 / 66%);
   border-radius: 50%;
   overflow: hidden;
-  background: rgb(31 107 85 / 72%);
-  color: #fff;
+  background: transparent;
+  color: #1f6b55;
   box-shadow: 0 13px 34px rgb(25 73 57 / 17%), inset 0 0 0 1px rgb(31 107 85 / 6%);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), background-color 180ms ease, box-shadow 180ms ease;
 }
 .canact-create-button-glass { border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 52%); }
@@ -266,7 +350,7 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-create-nav-button:active { transform: scale(.95); }
 .canact-create-nav-button-open {
   transform: rotate(135deg);
-  background: rgb(21 63 52 / 82%);
+  background: transparent;
   box-shadow: 0 14px 38px rgb(16 54 42 / 28%);
 }
 
@@ -278,44 +362,37 @@ input[type="time"]::-webkit-date-and-time-value {
   pointer-events: none;
 }
 .canact-radial-menu-open { visibility: visible; pointer-events: auto; }
-.canact-radial-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; background: rgb(18 40 33 / 0%); opacity: 0; backdrop-filter: blur(0); -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); transition: opacity 220ms ease, backdrop-filter 260ms ease; }
+.canact-radial-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(18 40 33 / 0%); opacity: 0; backdrop-filter: blur(0); -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); transition: opacity 220ms ease, backdrop-filter 260ms ease; }
 .canact-radial-menu-open .canact-radial-dismiss { opacity: 1; backdrop-filter: blur(6px); }
-.canact-radial-halo {
-  position: absolute;
-  right: max(-72px, calc((100vw - 480px) / 2 - 72px));
-  bottom: calc(-64px + env(safe-area-inset-bottom));
-  width: 300px;
-  height: 300px;
-  border: 1px solid rgb(255 255 255 / 62%);
-  border-radius: 50%;
-  box-shadow: 0 -18px 60px rgb(21 68 53 / 10%);
-  opacity: 0;
-  transform: scale(.72);
-  transform-origin: 68% 72%;
-  transition: opacity 240ms ease, transform 420ms cubic-bezier(.22,.9,.25,1.08);
-}
-.canact-radial-menu-open .canact-radial-halo { opacity: 1; transform: scale(1); }
 .canact-radial-item {
   position: fixed;
-  display: flex;
-  width: 54px;
-  height: 54px;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 50%;
+  background: rgb(250 248 242 / 32%);
+  box-shadow: 0 10px 26px rgb(22 61 48 / 14%), inset 0 0 0 1px rgb(255 255 255 / 38%);
   opacity: 0;
-  transform: translate(-50%, -50%) scale(.7);
-  transition: left 420ms cubic-bezier(.22,.85,.3,1), top 420ms cubic-bezier(.22,.85,.3,1), opacity 200ms ease, transform 320ms cubic-bezier(.2,.9,.25,1.12);
+  transform: translate(-50%, -50%) scale(.42);
+  transition: left 400ms cubic-bezier(.22,.9,.25,1), top 400ms cubic-bezier(.22,.9,.25,1), opacity 160ms ease, transform 360ms cubic-bezier(.2,.9,.25,1.1), background-color 160ms ease;
   pointer-events: auto;
-  z-index: 45;
+  z-index: 46;
 }
 .canact-radial-menu-open .canact-radial-item {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
-.canact-radial-item span { position: relative; display: grid; width: 54px; height: 54px; place-items: center; border: 1.5px solid rgb(255 255 255 / 78%); border-radius: 50%; color: #1f6b55; background: rgb(255 255 255 / 88%); box-shadow: 0 10px 28px rgb(25 63 51 / 18%), inset 0 0 0 1px rgb(255 255 255 / 60%); }
-.canact-radial-item strong { padding: 5px 10px; border: 1px solid rgb(255 255 255 / 60%); border-radius: 999px; background: rgb(250 248 242 / 88%); box-shadow: 0 4px 14px rgb(25 63 51 / 12%), inset 0 0 0 1px rgb(255 255 255 / 50%); white-space: nowrap; font-size: 10px; font-weight: 850; line-height: 1; color: #173f34; }
-.canact-radial-item-help span { color: #fff; border-color: rgb(255 255 255 / 82%); background: rgb(220 60 50 / 85%); box-shadow: 0 10px 28px rgb(180 50 40 / 28%), inset 0 0 0 1px rgb(255 255 255 / 45%); }
-.canact-radial-item-help strong { color: #c43832; background: rgb(255 240 238 / 88%); border-color: rgb(255 180 175 / 60%); }
+.canact-radial-item:hover { background: rgb(250 248 242 / 54%); }
+.canact-radial-item:active { transform: translate(-50%, -50%) scale(.9); }
+.canact-radial-item:focus-visible { outline: 2px solid #1f6b55; outline-offset: 3px; }
+.canact-radial-item span { position: relative; z-index: 1; display: grid; width: 100%; height: 100%; place-items: center; color: #1f6b55; }
+.canact-radial-item-help { background: rgb(204 59 53 / 16%); border-color: rgb(255 211 207 / 82%); }
+.canact-radial-item-help:hover { background: rgb(204 59 53 / 24%); }
 
 /* Right-edge fade mask for the stories scroller so cards fade into the
    filter button instead of cutting off hard. */
@@ -513,7 +590,7 @@ body.canact-story-open {
 .canact-fade-header-chrome,
 .canact-fade-footer-chrome {
   overflow: visible;
-  background-color: #fff !important;
+  background-color: transparent !important;
   animation: canactProfileChromeIn 420ms cubic-bezier(.22,.85,.3,1) both;
 }
 
@@ -526,65 +603,18 @@ body.canact-story-open {
   display: none;
 }
 
-html[data-canact-home-nearby="true"] [data-canact-header],
-html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
-  border-color: transparent !important;
-  overflow: visible;
-}
-
-html[data-canact-home-nearby="true"] [data-canact-header] {
-  background: #fff !important;
-}
-
-html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
-  background: transparent !important;
-}
-
-html[data-canact-home-nearby="true"] [data-canact-header] {
-  padding-bottom: 0;
-}
-
-html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
-  padding-top: 0;
-}
-
-html[data-canact-home-nearby="true"] [data-canact-header]::before,
 html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
   display: none;
 }
 
-html[data-canact-home-score="true"] [data-canact-bottom-nav] {
-  background: #fff !important;
-  border-top: 0 !important;
-  box-shadow: none !important;
-  overflow: visible;
-}
-
-html[data-canact-home-score="true"] [data-canact-header] {
-  opacity: 0 !important;
-  pointer-events: none !important;
-  transform: translateY(-100%) !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-html[data-canact-home-score="true"] [data-canact-header-spacer] {
-  height: 0 !important;
+html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::after,
+html[data-canact-home-score="true"] [data-canact-bottom-nav]::after {
+  display: none !important;
+  content: none !important;
 }
 
 html[data-canact-home-score="true"] [data-canact-bottom-nav]::before {
   display: none !important;
-}
-
-html[data-canact-home-score="true"] [data-canact-bottom-nav]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -2px;
-  height: 3px;
-  background: #fff;
-  pointer-events: none;
 }
 
 /* Friends/favourites map fades live above map tiles but below controls. */
@@ -677,9 +707,14 @@ html[data-canact-friends-map-fade="true"] [data-canact-bottom-nav]::before {
   );
 }
 
-html[data-canact-map-fade="true"] [data-canact-header],
-html[data-canact-map-fade="true"] [data-canact-header] * {
-  box-shadow: none !important;
+html[data-canact-home-nearby="true"] .canact-map-surface::before,
+html[data-canact-home-nearby="true"] [data-canact-bottom-nav]::before {
+  display: none !important;
+  content: none !important;
+}
+
+html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
+  border-color: rgb(255 255 255 / 66%) !important;
 }
 
 .canact-profile-header-content,
@@ -697,8 +732,8 @@ html[data-canact-map-fade="true"] [data-canact-header] * {
 
 .canact-profile-header-icon {
   border: 1px solid #D9DDE5;
-  background-color: rgb(var(--canact-profile-top-rgb) / 0.18);
-  backdrop-filter: blur(18px);
+  background-color: transparent;
+  backdrop-filter: none;
 }
 
 .canact-profile-header-icon:hover {
@@ -708,8 +743,8 @@ html[data-canact-map-fade="true"] [data-canact-header] * {
 
 .canact-profile-header-select {
   border: 1px solid rgb(var(--canact-profile-top-ink) / 0.16) !important;
-  background-color: rgb(var(--canact-profile-top-rgb) / 0.36) !important;
-  backdrop-filter: blur(18px);
+  background-color: transparent !important;
+  backdrop-filter: none;
 }
 
 .canact-profile-footer-chrome .canact-bottom-tab-inactive {

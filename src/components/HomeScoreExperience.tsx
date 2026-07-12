@@ -403,10 +403,10 @@ export function HomeScoreExperience() {
       const bottomNav = document.querySelector('[data-canact-bottom-nav]');
       const headerBottom = header instanceof HTMLElement ? header.getBoundingClientRect().bottom : 82;
       const navTop = bottomNav instanceof HTMLElement ? bottomNav.getBoundingClientRect().top : (window.innerHeight - 76);
-      const laneTop = stage === 'score' ? 0 : Math.max(0, headerBottom + 14);
+      const laneTop = Math.max(0, headerBottom + 14);
       const laneBottom = Math.max(laneTop + startHeight, navTop - 14);
       const startCenterY = Math.round(laneTop + ((laneBottom - laneTop) / 2));
-      const endCenterY = Math.round(Math.max(laneTop + (height / 2), (stage === 'score' ? 0 : (headerBottom + 10)) + (height / 2)));
+      const endCenterY = Math.round(Math.max(laneTop + (height / 2), headerBottom + 10 + (height / 2)));
       const y = startCenterY - eased * (startCenterY - endCenterY);
       const circleTop = y - (height / 2);
       const circleBottom = y + (height / 2);
@@ -414,7 +414,7 @@ export function HomeScoreExperience() {
       const greetingHeight = greeting.getBoundingClientRect().height || 56;
       const tipStableHeight = 58;
       const tipBottomInset = 12;
-      const greetingTop = Math.max(10, Math.round(circleTop - surroundGap - greetingHeight));
+      const greetingTop = Math.max(headerBottom + 10, Math.round(circleTop - surroundGap - greetingHeight));
       const tipTop = Math.round(Math.min(stageHeight - tipStableHeight - tipBottomInset, circleBottom + surroundGap));
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));

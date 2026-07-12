@@ -1,28 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { BarChart3, Camera, Eye, Film, HeartHandshake, Sparkles } from './icons';
+import { BarChart3, Camera, Eye, Film, HandHeart, Sparkles } from './icons';
 
 type RadialItem = {
   href: string;
   label: string;
   Icon: LucideIcon;
   className: string;
-  angle: number; // degrees, 0 = right, 90 = up
 };
 
-const RADIUS = 150; // px — tight enough to stay fully on-screen on all devices
-const TRAIN_ORIGIN = 135; // middle of the arc
-// 6 items evenly spaced across 120° arc: 75° to 195° — verified on 390×844
+const RADIUS = 170;
+const ARC_SLOTS = [85, 104, 123, 142, 161, 180];
 const ITEMS: RadialItem[] = [
-  { href: '/help/create',   label: 'Help',     Icon: HeartHandshake, className: 'canact-radial-item-help',  angle:  75 },
-  { href: '/story/create',  label: 'Story',    Icon: Sparkles,       className: 'canact-radial-item-story', angle:  99 },
-  { href: '/post/create',   label: 'Post',     Icon: Camera,         className: 'canact-radial-item-post',  angle: 123 },
-  { href: '/reel/create',   label: 'Reel',     Icon: Film,           className: 'canact-radial-item-reel',  angle: 147 },
-  { href: '/poll/create',   label: 'Poll',     Icon: BarChart3,      className: 'canact-radial-item-poll',  angle: 171 },
-  { href: '/rateme/start',  label: 'Rate me',  Icon: Eye,            className: 'canact-radial-item-rate',  angle: 195 },
+  { href: '/help/create',   label: 'Help',     Icon: HandHeart,      className: 'canact-radial-item-help' },
+  { href: '/story/create',  label: 'Story',    Icon: Sparkles,       className: 'canact-radial-item-story' },
+  { href: '/post/create',   label: 'Post',     Icon: Camera,         className: 'canact-radial-item-post' },
+  { href: '/reel/create',   label: 'Reel',     Icon: Film,           className: 'canact-radial-item-reel' },
+  { href: '/poll/create',   label: 'Poll',     Icon: BarChart3,      className: 'canact-radial-item-poll' },
+  { href: '/rateme/start',  label: 'Rate me',  Icon: Eye,            className: 'canact-radial-item-rate' },
 ];
 
 function posFromAngle(cx: number, cy: number, angle: number, radius: number) {
@@ -47,25 +45,29 @@ function useViewportSize() {
 
 export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [orderedItems, setOrderedItems] = useState(ITEMS);
+  const [anchorCenter, setAnchorCenter] = useState<{ cx: number; cy: number } | null>(null);
   const { w: vw, h: vh } = useViewportSize();
 
-  // Compute halo center relative to viewport. Halo is now 300×300 (radius=150),
-  // anchored at: right=max(-72, (vw-480)/2-72), bottom=-64+env(safe-area).
-  const center = useMemo(() => {
-    const rightOffset = Math.max(-72, (vw - 480) / 2 - 72);
-    const cx = vw - (rightOffset + 150); // half of 300
-    const cy = vh - 86; // -64 + 150 = 86px from viewport bottom
-    return { cx, cy };
-  }, [vw, vh]);
+  useEffect(() => {
+    const button = document.querySelector<HTMLElement>('.canact-create-nav-button');
+    const rect = button?.getBoundingClientRect();
+    if (rect?.width && rect.height) setAnchorCenter({ cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 });
+  }, [vw, vh, open]);
 
-  // Precompute positions: closed = all at train origin, open = at target angles
-  const trainPos = posFromAngle(center.cx, center.cy, TRAIN_ORIGIN, RADIUS);
-  const itemPositions = useMemo(() => orderedItems.map((item) => ({
+  const center = useMemo(() => {
+    if (anchorCenter) return anchorCenter;
+    const gutter = Math.max(20, (vw - 480) / 2 + 20);
+    const cx = vw - gutter - 36;
+    const cy = vh - 48;
+    return { cx, cy };
+  }, [anchorCenter, vw, vh]);
+
+  const itemPositions = useMemo(() => orderedItems.map((item, index) => ({
     ...item,
-    final: posFromAngle(center.cx, center.cy, item.angle, RADIUS),
+    final: posFromAngle(center.cx, center.cy, ARC_SLOTS[index], RADIUS),
   })), [orderedItems, center]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) setOrderedItems((current) => shuffleItems(ITEMS, current));
   }, [open]);
 
@@ -86,17 +88,18 @@ export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: ()
             key={href}
             href={href}
             role="menuitem"
+            aria-label={label}
             tabIndex={open ? 0 : -1}
             onClick={onClose}
             className={`canact-radial-item ${className}`}
             style={{
-              left: open ? `${final.left}px` : `${trainPos.left}px`,
-              top: open ? `${final.top}px` : `${trainPos.top}px`,
-              transitionDelay: open ? `${index * 55}ms` : `${(itemPositions.length - 1 - index) * 40}ms`,
+              left: open ? `${final.left}px` : `${center.cx}px`,
+              top: open ? `${final.top}px` : `${center.cy}px`,
+              transitionDelay: open ? `${index * 42}ms` : `${(itemPositions.length - 1 - index) * 28}ms`,
             }}
           >
-            <span>
-              <Icon size={22} strokeWidth={2.3} />
+            <span aria-hidden="true">
+              <Icon className="canact-adaptive-icon" size={22} strokeWidth={2.3} />
             </span>
           </Link>
         );
