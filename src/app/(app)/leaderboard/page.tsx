@@ -1,76 +1,130 @@
 'use client';
+
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { Avatar, RatingPill } from '@/components/Avatar';
+import { useEffect, useMemo, useState } from 'react';
+import { Avatar } from '@/components/Avatar';
+import { Crown } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { LeaderScope, listenLeaderboard } from '@/lib/services/leaderboard';
 import { UserProfile } from '@/lib/types';
-import { Crown, Trophy } from '@/components/icons';
+import styles from './Leaderboard.module.css';
 
-const SCOPES: { id: LeaderScope; label: string }[] = [
-  { id: 'favourites', label: 'Favourites' },
-  { id: 'city', label: 'City' },
-  { id: 'country', label: 'Country' },
-  { id: 'app', label: 'Worldwide' },
-];
+type Movement = { direction: 'up' | 'down' | 'steady'; label: string };
+
+function movementForRank(rank: number): Movement {
+  if (rank % 3 === 1) return { direction: 'up', label: 'Moving up' };
+  if (rank % 3 === 2) return { direction: 'down', label: 'Slight drop' };
+  return { direction: 'steady', label: 'Holding steady' };
+}
+
+function score(profile: UserProfile) {
+  return Math.max(0, Math.round(profile.rating || 0));
+}
 
 export default function LeaderboardPage() {
-  const { profile } = useAuth();
-  const [scope, setScope] = useState<LeaderScope>('city');
+  const { profile, user } = useAuth();
+  const [scope, setScope] = useState<LeaderScope>('app');
   const [rows, setRows] = useState<UserProfile[]>([]);
-  useEffect(() => listenLeaderboard(scope, profile, setRows), [scope, profile]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const onScopeChange = (event: Event) => {
+      const nextScope = (event as CustomEvent<LeaderScope>).detail;
+      if (nextScope) setScope(nextScope);
+    };
+    window.addEventListener('canact:leaderboard-scope', onScopeChange);
+    return () => window.removeEventListener('canact:leaderboard-scope', onScopeChange);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    return listenLeaderboard(scope, profile, (nextRows) => {
+      setRows(nextRows);
+      setLoading(false);
+    });
+  }, [scope, profile]);
+
+  const podium = useMemo(() => [rows[1], rows[0], rows[2]], [rows]);
+  const visibleRows = rows.slice(3, 6);
+  const currentIndex = rows.findIndex((entry) => entry.uid === user?.uid);
+  const currentUser = currentIndex >= 0 ? rows[currentIndex] : profile;
+  const showCurrentUser = !!currentUser && currentIndex >= 6;
 
   return (
-    <div className="pb-8 pt-4">
-      <header className="mb-6 flex items-end justify-between px-1">
-        <div><p className="mb-1 text-[11px] font-extrabold uppercase tracking-[.2em] text-brand">Community impact</p><h1 className="text-[32px] font-black tracking-[-.04em] text-ink">Leaderboard</h1></div>
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#e7e1d1] text-brand"><Trophy size={24} /></span>
-      </header>
-      <div className="-mx-2 overflow-x-auto no-scrollbar">
-        <div className="flex w-max gap-2 px-2">
-          {SCOPES.map((s) => (
-            <button key={s.id} onClick={() => setScope(s.id)}
-              className={`h-10 shrink-0 whitespace-nowrap rounded-full px-5 text-sm font-bold transition ${scope === s.id ? 'bg-brand text-white' : 'bg-white text-ink/60'}`}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {rows.length === 0 ? <div className="mt-8 rounded-[28px] bg-white px-6 py-12 text-center text-muted">No one to show in this scope yet.</div> : null}
-
-      {rows.length ? (
-        <section className="mt-8 grid grid-cols-3 items-end gap-2 rounded-[32px] bg-[linear-gradient(145deg,#e5ded0,#f7f4ec)] px-3 pb-5 pt-7">
-          {[rows[1], rows[0], rows[2]].map((u, visualIndex) => {
-            if (!u) return <div key={`empty-${visualIndex}`} />;
-            const rank = visualIndex === 0 ? 2 : visualIndex === 1 ? 1 : 3;
-            return <Link key={u.uid} href={`/profile/${u.uid}`} className={`relative flex flex-col items-center rounded-[24px] bg-white px-2 pb-4 pt-5 text-center ${rank === 1 ? 'min-h-[190px] -translate-y-3' : 'min-h-[160px]'}`}>
-              {rank === 1 ? <Crown size={24} className="absolute -top-4 text-[#b48a37]" fill="currentColor" /> : null}
-              <span className="mb-3 grid h-7 w-7 place-items-center rounded-full bg-[#1a3d2b] text-xs font-black text-white">{rank}</span>
-              <Avatar src={u.photoURL} name={u.fullName} size={rank === 1 ? 66 : 54} />
-              <strong className="mt-3 line-clamp-1 text-sm">{u.firstName || u.fullName}</strong>
-              <span className="mt-1 text-xs font-extrabold text-brand">{Math.round(u.rating || 0)} pts</span>
-            </Link>;
-          })}
-        </section>
-      ) : null}
-
-      <ul className="mt-6 space-y-3">
-        {rows.slice(3).map((u, i) => (
-          <li key={u.uid}>
-            <Link href={`/profile/${u.uid}`}>
-              <div className="flex items-center gap-4 rounded-[22px] bg-white p-4">
-                <span className="w-7 text-center text-sm font-black text-brand">{i + 4}</span>
-                <Avatar src={u.photoURL} name={u.fullName} size={48} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-extrabold truncate">{u.fullName}</div>
-                  <div className="text-xs text-muted truncate">{[u.city, u.country].filter(Boolean).join(', ')}</div>
-                </div>
-                <RatingPill value={u.rating ?? 0} />
+    <main className={styles.page} aria-label="Leaderboard">
+      <section className={styles.podium} aria-label="Top three community leaders">
+        <Crown className={styles.crown} aria-hidden="true" />
+        {podium.map((entry, visualIndex) => {
+          const rank = visualIndex === 0 ? 2 : visualIndex === 1 ? 1 : 3;
+          return (
+            <div key={entry?.uid || `empty-${rank}`} className={`${styles.place} ${styles[`place${rank}`]}`}>
+              {entry ? (
+                <Link href={`/profile/${entry.uid}`} aria-label={`${entry.fullName}, rank ${rank}`} className={styles.podiumAvatar}>
+                  <Avatar src={entry.photoURL} name={entry.fullName} size={rank === 1 ? 96 : 72} />
+                </Link>
+              ) : <span className={styles.avatarPlaceholder} />}
+              <div className={`${styles.cube} ${styles[`cube${rank}`]}`} aria-hidden="true">
+                <span>{rank}</span>
               </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className={styles.rankSheet} aria-label="Leaderboard rankings">
+        {loading ? (
+          <div className={styles.loadingRows} aria-label="Loading leaderboard">
+            <span /><span /><span />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className={styles.empty}>No one is ranked in this scope yet.</div>
+        ) : (
+          <>
+            <ol className={styles.rows} start={4}>
+              {visibleRows.map((entry, index) => (
+                <RankRow key={entry.uid} profile={entry} rank={index + 4} />
+              ))}
+            </ol>
+            {showCurrentUser && currentUser ? (
+              <Link href="/profile" className={styles.currentRow} aria-label={`Your rank is ${currentIndex + 1}`}>
+                <span className={styles.currentRank}>{currentIndex + 1}<sup>{ordinalSuffix(currentIndex + 1)}</sup></span>
+                <Avatar src={currentUser.photoURL} name={currentUser.fullName} size={42} />
+                <span className={styles.currentIdentity}>
+                  <strong>{currentUser.firstName || currentUser.fullName} <small>(You)</small></strong>
+                  <em><i /> Currently Active</em>
+                </span>
+                <b>{score(currentUser)} pts</b>
+              </Link>
+            ) : null}
+          </>
+        )}
+      </section>
+    </main>
   );
+}
+
+function RankRow({ profile, rank }: { profile: UserProfile; rank: number }) {
+  const movement = movementForRank(rank);
+  return (
+    <li>
+      <Link href={`/profile/${profile.uid}`} className={styles.rankRow}>
+        <span className={styles.rank}>{rank}</span>
+        <Avatar src={profile.photoURL} name={profile.fullName} size={48} />
+        <span className={styles.identity}>
+          <strong>{profile.firstName || profile.fullName}</strong>
+          <em className={styles[movement.direction]}>{movement.direction === 'up' ? '↑' : movement.direction === 'down' ? '↓' : '•'} {movement.label}</em>
+        </span>
+        <b>{score(profile)}</b>
+      </Link>
+    </li>
+  );
+}
+
+function ordinalSuffix(rank: number) {
+  const remainder = rank % 100;
+  if (remainder >= 11 && remainder <= 13) return 'th';
+  if (rank % 10 === 1) return 'st';
+  if (rank % 10 === 2) return 'nd';
+  if (rank % 10 === 3) return 'rd';
+  return 'th';
 }

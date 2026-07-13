@@ -11,6 +11,11 @@ const MEDIA_ALLOWED = [
   'video/mp4',
   'video/webm',
   'video/quicktime',
+  'video/3gpp',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/ogg',
+  'video/mpeg',
 ];
 
 const MAX_BYTES = 80 * 1024 * 1024; // 80 MB

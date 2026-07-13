@@ -72,8 +72,9 @@ export function VideoPreview({
       />
 
       {/* Mute toggle (top right) */}
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={-1}
         onClick={(e) => {
           e.stopPropagation();
           setMuted((m) => !m);
@@ -82,11 +83,12 @@ export function VideoPreview({
         className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
       >
         {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-      </button>
+      </span>
 
       {/* Play/Pause hint pulse */}
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={-1}
         onClick={toggle}
         aria-label={playing ? 'Pause' : 'Play'}
         className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ${
@@ -96,7 +98,7 @@ export function VideoPreview({
         <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur">
           {playing ? <Pause size={22} /> : <Play size={22} />}
         </span>
-      </button>
+      </span>
     </div>
   );
 }

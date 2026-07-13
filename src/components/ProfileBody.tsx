@@ -1,7 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useLayoutEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FastAverageColor } from 'fast-average-color';
 import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
@@ -16,6 +15,7 @@ import { deleteReel, listenUserReels } from '@/lib/services/reels';
 import { listenUserPolls, deletePoll } from '@/lib/services/poll';
 import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
 import { toast } from '@/components/Toaster';
+import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
 import { requestFollow } from '@/lib/services/favourites';
 import {
@@ -486,13 +486,11 @@ function ProfileVotePill({
     const active = vote === kind;
     if (active && kind === 'like') return 'bg-white text-emerald-600';
     if (active && kind === 'dislike') return 'bg-white text-rose-600';
-    return lightTop
-      ? 'text-black/70 hover:bg-black/8 active:bg-black/14'
-      : 'text-white/72 hover:bg-white/12 active:bg-white/18';
+    return 'text-white/80 hover:bg-white/12 active:bg-white/18';
   };
 
-  const node = (
-    <div className={`fixed right-4 top-[calc(env(safe-area-inset-top,0px)+86px)] z-[31] inline-flex items-center gap-1 rounded-full p-1 backdrop-blur-md lg:top-6 ${lightTop ? 'border border-black/25 bg-white/70' : 'border border-white/25 bg-black/18'}`}>
+  return (
+    <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/18 p-1 backdrop-blur-md">
       <button
         type="button"
         disabled={busy}
@@ -515,8 +513,6 @@ function ProfileVotePill({
       </button>
     </div>
   );
-
-  return typeof document !== 'undefined' ? createPortal(node, document.body) : null;
 }
 
 function CanactPagesProfileUI({
@@ -558,6 +554,9 @@ function CanactPagesProfileUI({
   profileVoteBusy: boolean;
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
 }) {
+  const { updateMyProfile } = useAuth();
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
   const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
@@ -575,16 +574,41 @@ function CanactPagesProfileUI({
           : 'Support';
   const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
 
+  const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return toast('Please select an image', 'error');
+    const previousUrl = userProfile.coverPhoto ?? heroSrc;
+    setCoverBusy(true);
+    try {
+      const blob = new Blob([f], { type: f.type });
+      const { url } = await uploadMedia(blob, { kind: 'cover', uid: userProfile.uid });
+      await updateMyProfile({ coverPhoto: url });
+      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* ignore */ }
+      }
+      toast('Cover photo updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Could not upload cover', 'error');
+    } finally {
+      setCoverBusy(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
+    }
+  };
+
   return (
     <div className="-mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
-      <div className="relative h-[260px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
-        {heroSrc ? <img src={heroSrc} alt="" className="h-full w-full object-cover opacity-55 mix-blend-luminosity" /> : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
+      <div className="relative h-[320px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
+        {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-top opacity-55 mix-blend-luminosity" /> : null}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
         {!isSelf ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} /> : null}
         {isSelf ? (
-          <Link href="/edit-profile" prefetch className="absolute right-3 top-3 flex h-9 items-center gap-1.5 rounded-full bg-black/30 px-3 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-black/45">
-            <Camera size={14} /> Edit cover
-          </Link>
+          <>
+            <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={onCoverPick} />
+            <button type="button" disabled={coverBusy} onClick={() => coverFileRef.current?.click()} className="absolute bottom-3 right-3 z-10 flex h-9 items-center gap-1.5 rounded-full bg-black/30 px-3 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-black/45 disabled:opacity-55">
+              <Camera size={14} /> {coverBusy ? 'Uploading…' : 'Edit cover'}
+            </button>
+          </>
         ) : null}
       </div>
 

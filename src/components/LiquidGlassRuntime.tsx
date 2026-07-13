@@ -83,7 +83,17 @@ export function LiquidGlassRuntime() {
       });
     };
     const scheduleScan = () => { if (!scanFrame) scanFrame = requestAnimationFrame(scan); };
-    const observer = new MutationObserver(scheduleScan);
+    const observer = new MutationObserver((records) => {
+      const changed = new Set<HTMLElement>();
+      records.forEach((record) => {
+        if (record.type !== 'attributes' || !(record.target instanceof HTMLElement)) return;
+        if (record.attributeName?.startsWith('data-liquid-')) changed.add(record.target);
+      });
+      changed.forEach((element) => {
+        if (shouldHaveGlass(element)) instances.get(element)?.rebuild();
+      });
+      scheduleScan();
+    });
     observer.observe(document.body, {
       subtree: true,
       childList: true,
@@ -135,13 +145,13 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
   element.classList.add('canact-lg-host');
   const refract = document.createElement('span');
   const tint = document.createElement('span');
-  const outerEdge = document.createElement('span');
-  const innerEdge = document.createElement('span');
+  const outerEdge = useWebKitFallback ? document.createElement('span') : null;
+  const innerEdge = useWebKitFallback ? document.createElement('span') : null;
   refract.className = 'canact-lg-layer canact-lg-refract';
   tint.className = 'canact-lg-layer canact-lg-tint';
-  outerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-outer';
-  innerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-inner';
-  element.prepend(refract, tint, outerEdge, innerEdge);
+  if (outerEdge) outerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-outer';
+  if (innerEdge) innerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-inner';
+  element.prepend(refract, tint, ...[outerEdge, innerEdge].filter((edge): edge is HTMLSpanElement => !!edge));
 
   let filterNode: SVGFilterElement | null = null;
   let frame = 0;
@@ -176,24 +186,17 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
     filterNode = null;
     refract.style.borderRadius = `${radius}px`;
     tint.style.borderRadius = `${radius}px`;
-    outerEdge.style.borderRadius = `${radius}px`;
-    innerEdge.style.borderRadius = `${Math.max(2, radius - 3)}px`;
+    if (outerEdge) outerEdge.style.borderRadius = `${radius}px`;
+    if (innerEdge) innerEdge.style.borderRadius = `${Math.max(2, radius - 3)}px`;
     tint.style.backgroundColor = `rgba(${config.tintColor},${config.tintOpacity})`;
     tint.style.boxShadow = `inset 0 0 ${config.innerShadowBlur}px ${config.innerShadowSpread}px ${config.innerShadow}`;
-    if (useWebKitFallback) {
-      refract.classList.add('canact-lg-webkit-fallback');
-      refract.style.backdropFilter = 'brightness(1.06) contrast(1.04) saturate(1.18)';
-      refract.style.setProperty('-webkit-backdrop-filter', 'brightness(1.06) contrast(1.04) saturate(1.18)');
-      elevateChildren(element, refract, tint, outerEdge, innerEdge);
-      return;
-    }
-    refract.classList.remove('canact-lg-webkit-fallback');
+    refract.classList.toggle('canact-lg-webkit-fallback', useWebKitFallback);
     const id = `canact-lg-${nextId()}`;
     filterNode = buildFilter(id, width, height, radius, config);
     defs.appendChild(filterNode);
     refract.style.backdropFilter = `url(#${id})`;
     refract.style.setProperty('-webkit-backdrop-filter', `url(#${id})`);
-    elevateChildren(element, refract, tint, outerEdge, innerEdge);
+    elevateChildren(element, refract, tint, ...[outerEdge, innerEdge].filter((edge): edge is HTMLSpanElement => !!edge));
   };
   const schedule = () => { if (!frame) frame = requestAnimationFrame(rebuild); };
   const resizeObserver = new ResizeObserver(schedule);
@@ -201,15 +204,19 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
   schedule();
   return {
     rebuild,
-    isAttached: () => refract.parentElement === element && tint.parentElement === element && outerEdge.parentElement === element && innerEdge.parentElement === element && (useWebKitFallback || !!filterNode?.isConnected),
+    isAttached: () => refract.parentElement === element
+      && tint.parentElement === element
+      && (!outerEdge || outerEdge.parentElement === element)
+      && (!innerEdge || innerEdge.parentElement === element)
+      && !!filterNode?.isConnected,
     destroy: () => {
       if (frame) cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       filterNode?.remove();
       refract.remove();
       tint.remove();
-      outerEdge.remove();
-      innerEdge.remove();
+      outerEdge?.remove();
+      innerEdge?.remove();
       element.classList.remove('canact-lg-host');
     },
   };
@@ -255,16 +262,20 @@ function calcRefractionProfile(glassThickness: number, bezelWidth: number, ior: 
   return profile;
 }
 
-function generateDisplacementMap(width: number, height: number, radius: number, bezelWidth: number, profile: Float64Array, maxDisplacement: number) {
+function generateDisplacementMap(width: number, height: number, radius: number, bezelWidth: number, profile: Float64Array, maxDisplacement: number, renderScale: number) {
+  const mapWidth = Math.max(1, Math.round(width * renderScale));
+  const mapHeight = Math.max(1, Math.round(height * renderScale));
+  const mapRadius = radius * renderScale;
+  const mapBezel = bezelWidth * renderScale;
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = mapWidth;
+  canvas.height = mapHeight;
   const context = canvas.getContext('2d')!;
-  const image = context.createImageData(width, height);
+  const image = context.createImageData(mapWidth, mapHeight);
   const data = image.data;
   for (let index = 0; index < data.length; index += 4) { data[index] = 128; data[index + 1] = 128; data[index + 3] = 255; }
-  paintBezel(width, height, radius, bezelWidth, (pixel, x, y, fromSide, opacity, distance) => {
-    const sample = Math.min(Math.floor((fromSide / bezelWidth) * profile.length), profile.length - 1);
+  paintBezel(mapWidth, mapHeight, mapRadius, mapBezel, (pixel, x, y, fromSide, opacity, distance) => {
+    const sample = Math.min(Math.floor((fromSide / mapBezel) * profile.length), profile.length - 1);
     const displacement = profile[sample] || 0;
     data[pixel] = Math.round(128 + ((-x / distance) * displacement / maxDisplacement) * 127 * opacity);
     data[pixel + 1] = Math.round(128 + ((-y / distance) * displacement / maxDisplacement) * 127 * opacity);
@@ -273,17 +284,22 @@ function generateDisplacementMap(width: number, height: number, radius: number, 
   return canvas.toDataURL();
 }
 
-function generateSpecularMap(width: number, height: number, radius: number, bezelWidth: number, balanced: boolean) {
+function generateSpecularMap(width: number, height: number, radius: number, bezelWidth: number, balanced: boolean, renderScale: number) {
+  const mapWidth = Math.max(1, Math.round(width * renderScale));
+  const mapHeight = Math.max(1, Math.round(height * renderScale));
+  const mapRadius = radius * renderScale;
+  const mapBezel = bezelWidth * renderScale;
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = mapWidth;
+  canvas.height = mapHeight;
   const context = canvas.getContext('2d')!;
-  const image = context.createImageData(width, height);
+  const image = context.createImageData(mapWidth, mapHeight);
   const data = image.data;
   const angle = Math.PI / 3;
-  paintBezel(width, height, radius, bezelWidth, (pixel, x, y, fromSide, opacity, distance) => {
+  paintBezel(mapWidth, mapHeight, mapRadius, mapBezel, (pixel, x, y, fromSide, opacity, distance) => {
     const dot = balanced ? 1 : Math.abs((x / distance) * Math.cos(angle) + (-y / distance) * Math.sin(angle));
-    const edge = Math.sqrt(Math.max(0, 1 - Math.pow(1 - fromSide, 2)));
+    const edgePosition = Math.max(0, Math.min(1, fromSide / mapBezel));
+    const edge = Math.sqrt(Math.max(0, 1 - Math.pow(1 - edgePosition, 2)));
     const coefficient = dot * edge;
     const color = Math.floor(255 * coefficient);
     data[pixel] = color;
@@ -319,22 +335,39 @@ function buildFilter(id: string, width: number, height: number, radius: number, 
   const bezel = Math.max(1, Math.min(config.bezelWidth, radius - 1, Math.min(width, height) / 2 - 1));
   const profile = calcRefractionProfile(config.glassThickness, bezel, config.ior);
   const maxDisplacement = Math.max(...Array.from(profile, Math.abs)) || 1;
-  const displacementUrl = generateDisplacementMap(width, height, radius, bezel, profile, maxDisplacement);
-  const specularUrl = generateSpecularMap(width, height, radius, bezel * 2.5, config.balancedSpecular);
+  const renderScale = glassMapRenderScale(width, height);
+  const displacementUrl = generateDisplacementMap(width, height, radius, bezel, profile, maxDisplacement, renderScale);
   const pad = config.balancedSpecular ? .36 : 0;
-  const filter = svgElement('filter', { id, x: -width * pad, y: -height * pad, width: width * (1 + pad * 2), height: height * (1 + pad * 2), filterUnits: 'userSpaceOnUse', primitiveUnits: 'userSpaceOnUse', 'color-interpolation-filters': 'sRGB' }) as SVGFilterElement;
+  const filter = svgElement('filter', {
+    id,
+    x: Math.round(-width * pad),
+    y: Math.round(-height * pad),
+    width: Math.round(width * (1 + pad * 2)),
+    height: Math.round(height * (1 + pad * 2)),
+    filterUnits: 'userSpaceOnUse',
+    primitiveUnits: 'userSpaceOnUse',
+    'color-interpolation-filters': 'sRGB',
+  }) as SVGFilterElement;
   filter.append(
     svgElement('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: config.blur, result: 'blurred' }),
     svgElement('feImage', { href: displacementUrl, x: 0, y: 0, width, height, result: 'disp_map' }),
     svgElement('feDisplacementMap', { in: 'blurred', in2: 'disp_map', scale: maxDisplacement * config.scaleRatio, xChannelSelector: 'R', yChannelSelector: 'G', result: 'displaced' }),
-    svgElement('feColorMatrix', { in: 'displaced', type: 'saturate', values: config.specularSat, result: 'displaced_sat' }),
   );
+  if (config.specularOpacity <= 0) return filter;
+  const specularUrl = generateSpecularMap(width, height, radius, bezel * 2.5, config.balancedSpecular, renderScale);
+  filter.append(svgElement('feColorMatrix', { in: 'displaced', type: 'saturate', values: config.specularSat, result: 'displaced_sat' }));
   const spec = svgElement('feImage', { href: specularUrl, x: 0, y: 0, width, height, result: 'spec_layer' });
   const composite = svgElement('feComposite', { in: 'displaced_sat', in2: 'spec_layer', operator: 'in', result: 'spec_masked' });
   const transfer = svgElement('feComponentTransfer', { in: 'spec_layer', result: 'spec_faded' });
   transfer.appendChild(svgElement('feFuncA', { type: 'linear', slope: config.specularOpacity }));
   filter.append(spec, composite, transfer, svgElement('feBlend', { in: 'spec_masked', in2: 'displaced', mode: 'normal', result: 'with_sat' }), svgElement('feBlend', { in: 'spec_faded', in2: 'with_sat', mode: 'normal' }));
   return filter;
+}
+
+function glassMapRenderScale(width: number, height: number) {
+  const deviceScale = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5));
+  const pixelBudgetScale = Math.sqrt(1_500_000 / Math.max(1, width * height));
+  return Math.max(1, Math.min(deviceScale, pixelBudgetScale));
 }
 
 function svgElement(tag: string, attributes: Record<string, string | number>) {

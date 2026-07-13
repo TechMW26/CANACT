@@ -393,7 +393,7 @@
 
 .scoreWrap {
   position: absolute;
-  top: 50%;
+  top: 42%;
   left: 50%;
   z-index: 50;
   display: grid;

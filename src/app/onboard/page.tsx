@@ -65,7 +65,7 @@ function AuthField({ icon, label, children }: { icon: React.ReactNode; label: st
 function RegistrationArt({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`${styles.registerOrbit} ${compact ? styles.registerOrbitCompact : ''}`} aria-hidden="true">
-      <Image src="/canact-onboarding-orbit.png" alt="" width={900} height={1600} priority />
+      <Image src="/canact-register-art.svg" alt="" width={900} height={1600} priority />
     </div>
   );
 }

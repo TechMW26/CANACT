@@ -6,6 +6,7 @@ import { Toaster } from '@/components/Toaster';
 import EarlyPermissionsPrompt from '@/components/EarlyPermissionsPrompt';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import ViewportHeightManager from '@/components/ViewportHeightManager';
+import { LiquidGlassRuntime } from '@/components/LiquidGlassRuntime';
 
 export const metadata: Metadata = {
   title: 'Canact',
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-[var(--canact-viewport-height)] w-screen max-w-[100vw] overflow-x-hidden bg-candy text-ink antialiased">
         <ViewportHeightManager />
+        <LiquidGlassRuntime />
         <AuthProvider>
           <EarlyPermissionsPrompt />
           <ServiceWorkerRegister />

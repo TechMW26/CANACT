@@ -37,7 +37,7 @@ export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: ()
     const { cx, cy } = triggerCenter;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const margin = ITEM_SIZE / 2 + 4;
+    const margin = ITEM_SIZE / 2 + 12;
     const minRight = margin;
     const maxRight = vw - ITEM_SIZE - margin;
     const minBottom = margin;
@@ -84,11 +84,7 @@ export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: ()
             href={href}
             role="menuitem"
             aria-label={label}
-            data-liquid-glass="surface"
-            data-liquid-radius="999"
-            data-liquid-blur="0"
-            data-liquid-tint={label === 'Help' ? '204,59,53' : '250,248,242'}
-            data-liquid-tint-opacity={label === 'Help' ? '0.22' : '0.08'}
+            data-liquid-glass="none"
             tabIndex={open ? 0 : -1}
             onClick={() => { haptic('subtle'); onClose(); }}
             className={`canact-radial-item ${className}`}

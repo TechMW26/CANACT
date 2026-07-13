@@ -77,8 +77,17 @@ export default function WelcomePage() {
 
   useEffect(() => {
     if (loading || !user) return;
+    const registrationInProgress = sessionStorage.getItem('canact:registration-screen');
+    if (registrationInProgress || profile?.profileComplete === false) {
+      router.replace('/onboard');
+      return;
+    }
     if (!profile && !profileTimedOut) return;
-    router.replace(!profile || profile.profileComplete === false ? '/onboard' : '/');
+    if (!profile) {
+      router.replace('/onboard');
+      return;
+    }
+    if (profile?.profileComplete) router.replace('/');
   }, [user, profile, loading, profileTimedOut, router]);
 
   const google = async () => {
@@ -134,6 +143,7 @@ export default function WelcomePage() {
       sessionStorage.setItem('canact:registration-screen', 'name');
       sessionStorage.setItem('canact:registration-mobile', storedMobile);
       await signUpWithEmail(cleanEmail, password, { email: cleanEmail, mobile: storedMobile, profileComplete: false });
+      router.replace('/onboard');
     } catch (err: any) {
       sessionStorage.removeItem('canact:registration-screen');
       const message = err?.code === 'auth/email-already-in-use'
@@ -150,7 +160,7 @@ export default function WelcomePage() {
     return (
       <main className={styles.welcomePage}>
         <div className={styles.welcomeArt}>
-          <Image src="/canact-onboarding-orbit.png" alt="People connecting around Canact" width={900} height={1600} priority />
+          <Image src="/canact-register-art.svg" alt="People connecting around Canact" width={900} height={1600} priority />
         </div>
         <section className={styles.welcomeContent}>
           <h1 className={styles.title}>Create your account</h1>

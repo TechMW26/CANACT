@@ -23,7 +23,7 @@
 
 .welcomeArt img {
   position: absolute;
-  inset: 0 auto auto 50%;
+  inset: 20% auto auto 50%;
   width: min(100vw, 560px);
   height: auto;
   transform: translateX(-50%);

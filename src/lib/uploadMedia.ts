@@ -17,7 +17,15 @@ export const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
 /** Soft cap for video duration (seconds) — keeps reels & stories trim-friendly. */
 export const MAX_VIDEO_SEC = 60;
 
-const SUPPORTED_VIDEO = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+const SUPPORTED_VIDEO = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/3gpp',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/ogg',
+]);
 const SUPPORTED_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** Re-encode a still image to WebP at near-lossless quality.
@@ -75,6 +83,10 @@ export function extForMime(mime: string): string {
     case 'video/mp4': return 'mp4';
     case 'video/webm': return 'webm';
     case 'video/quicktime': return 'mov';
+    case 'video/3gpp': return '3gp';
+    case 'video/x-msvideo': return 'avi';
+    case 'video/x-matroska': return 'mkv';
+    case 'video/ogg': return 'ogv';
     case 'image/jpeg': return 'jpg';
     case 'image/png': return 'png';
     case 'image/webp': return 'webp';
@@ -131,12 +143,6 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
 
   if (!isVideo && !isImage) {
     throw new Error('Unsupported media type');
-  }
-  if (isVideo && !SUPPORTED_VIDEO.has(mime)) {
-    // Most browsers record `video/webm`; some iOS Safari variants record mp4.
-    // Coerce unknown video subtypes to webm so the server token accepts them.
-    mime = 'video/webm';
-    blob = blob.slice(0, blob.size, mime);
   }
   if (isImage && !SUPPORTED_IMAGE.has(mime)) {
     mime = 'image/jpeg';

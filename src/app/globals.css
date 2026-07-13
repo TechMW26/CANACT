@@ -227,6 +227,7 @@ input[type="time"]::-webkit-date-and-time-value {
 /* Liquid glass runtime layers, ported from liquid-glass.html. Backdrop
    sampling must stay in the page compositing context for refraction to work. */
 :root {
+  --canact-header-lift: 7.6px;
   --canact-lg-panel-soft: rgb(250 248 242 / 42%);
   --canact-lg-shadow-light: rgb(255 255 255 / 72%);
   --canact-lg-shadow-dark: rgb(31 56 47 / 16%);
@@ -236,7 +237,18 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-lg-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .canact-lg-refract { overflow: hidden; background: rgb(255 255 255 / 1.5%); }
 .canact-lg-tint { transition: background-color 180ms ease; }
-.canact-lg-edge { z-index: 2; opacity: 0; overflow: hidden; }
+.canact-lg-edge { z-index: 1; opacity: 0; overflow: hidden; }
+.canact-lg-host > :not(.canact-lg-layer) { z-index: 2 !important; }
+
+/* The reference implementation applies backdrop-filter only to its injected
+   refraction layer. A filter on the host creates a new backdrop root and
+   prevents the SVG displacement map from seeing the page behind it. */
+[data-liquid-glass]:not([data-liquid-glass="none"]) {
+  border-color: transparent !important;
+  outline: 0 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 
 /* WebKit currently drops SVG URL displacement filters in backdrop-filter.
    Use Apple's native glass material when present and retain an edge/specular
@@ -275,15 +287,7 @@ html[data-canact-webkit-glass] .canact-lg-edge-outer {
   backdrop-filter: brightness(1.28) contrast(1.15) saturate(1.42);
 }
 
-html[data-canact-webkit-glass] .canact-lg-edge-inner {
-  inset: 3px;
-  padding: 1.5px;
-  background:
-    linear-gradient(145deg, rgb(255 255 255 / 45%) 0%, transparent 42%),
-    linear-gradient(325deg, rgb(9 66 49 / 20%) 0%, transparent 38%);
-  -webkit-backdrop-filter: brightness(.88) contrast(1.2) saturate(1.55);
-  backdrop-filter: brightness(.88) contrast(1.2) saturate(1.55);
-}
+html[data-canact-webkit-glass] .canact-lg-edge-inner { display: none; }
 
 @supports (-apple-visual-effect: -apple-system-glass-material-clear) {
   html[data-canact-webkit-glass] .canact-lg-refract {
@@ -319,8 +323,8 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
 /* The semantic header/navbar own only viewport positioning. Their children
    are the exact reference-style refractive surfaces. */
 .canact-header-shell {
-  left: max(20px, calc((100vw - 480px) / 2 + 20px));
-  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  left: max(10px, calc((100vw - 480px) / 2 + 10px));
+  right: max(10px, calc((100vw - 480px) / 2 + 10px));
   height: 76px;
   overflow: visible;
 }
@@ -344,9 +348,7 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
   height: 100%;
   border-radius: 9999px;
   background: var(--canact-lg-panel-soft);
-  box-shadow:
-    14px 14px 36px var(--canact-lg-shadow-dark),
-    -14px -14px 36px var(--canact-lg-shadow-light);
+  box-shadow: none;
 }
 
 .canact-figma-header .canact-distance-pill {
@@ -359,9 +361,18 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
   padding-inline: 14px;
 }
 
+.canact-glass-dropdown {
+  background: transparent !important;
+  box-shadow: 0 12px 32px rgb(20 54 42 / 10%);
+}
+
+.canact-glass-dropdown [role="option"] {
+  text-shadow: 0 1px 0 rgb(255 255 255 / 80%);
+}
+
 .canact-bottom-nav-shell {
-  left: max(20px, calc((100vw - 480px) / 2 + 20px));
-  right: max(114px, calc((100vw - 480px) / 2 + 114px));
+  left: max(10px, calc((100vw - 480px) / 2 + 10px));
+  right: max(98px, calc((100vw - 480px) / 2 + 98px));
   bottom: calc(var(--canact-footer-offset, 12px) + env(safe-area-inset-bottom));
   height: 76px;
   overflow: visible;
@@ -386,15 +397,14 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
 .canact-bottom-dock-items {
   overflow: visible;
   display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 60px));
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  justify-content: space-between;
+  gap: 0;
+  padding: 8px;
   border-radius: 9999px;
   background: var(--canact-lg-panel-soft);
-  box-shadow:
-    14px 14px 36px var(--canact-lg-shadow-dark),
-    -14px -14px 36px var(--canact-lg-shadow-light);
+  box-shadow: none;
 }
 .canact-bottom-nav-glow {
   position: absolute;
@@ -418,7 +428,7 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
   transform-origin: center;
   will-change: left, width, transform;
   background: rgb(255 255 255 / 22%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 46%), 10px 10px 24px rgb(31 56 47 / 14%), -8px -8px 20px rgb(255 255 255 / 58%);
+  box-shadow: none;
   transition: left .24s cubic-bezier(.2,.9,.22,1), width .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, background-color .25s ease, box-shadow .25s ease;
 }
 .canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); background: rgb(255 255 255 / 16%); }
@@ -455,7 +465,7 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
 }
 
 .canact-create-nav-button {
-  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  right: max(10px, calc((100vw - 480px) / 2 + 10px));
   bottom: calc(var(--canact-footer-offset, 12px) + env(safe-area-inset-bottom));
   display: grid;
   width: 76px;
@@ -464,22 +474,20 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
   border: 1px solid rgb(255 255 255 / 66%);
   border-radius: 50%;
   overflow: hidden;
-  background: rgb(255 255 255 / 8%);
+  background: transparent;
   color: #1f6b55;
-  box-shadow:
-    14px 14px 36px var(--canact-lg-shadow-dark),
-    -14px -14px 36px var(--canact-lg-shadow-light),
-    inset 0 1px 0 rgb(255 255 255 / 46%);
+  box-shadow: none;
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), background-color 180ms ease, box-shadow 180ms ease;
 }
-.canact-create-button-glass { border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 52%); }
+.canact-create-button-glass { border-radius: 50%; box-shadow: none; }
 
-.canact-create-nav-button:active { transform: scale(.95); }
+.canact-create-nav-button:active { opacity: .82; }
 .canact-create-nav-button-open {
-  transform: rotate(135deg);
-  background: rgb(255 255 255 / 12%);
-  box-shadow: 0 14px 38px rgb(16 54 42 / 28%);
+  background: transparent;
+  box-shadow: none;
 }
+.canact-create-nav-icon { transform-origin: center; transition: transform 320ms cubic-bezier(.22,.85,.3,1) !important; }
+.canact-create-nav-button-open .canact-create-nav-icon { transform: rotate(135deg); }
 
 .canact-radial-menu {
   position: fixed;
@@ -517,30 +525,29 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
 
   display: grid;
   place-items: center;
+  overflow: hidden;
   border-radius: 50%;
-  border: 1px solid rgb(255 255 255 / 78%);
-  background: rgb(255 255 255 / 8%);
-  box-shadow:
-    10px 10px 24px var(--canact-lg-shadow-dark),
-    -8px -8px 20px var(--canact-lg-shadow-light),
-    inset 0 1px 0 rgb(255 255 255 / 46%);
+  border: 1px solid rgb(255 255 255 / 82%);
+  background: rgb(248 244 232 / 62%);
+  -webkit-backdrop-filter: blur(12px) saturate(1.18);
+  backdrop-filter: blur(12px) saturate(1.18);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 68%);
 
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.2);
+  transform: none;
 
   transition:
     right 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.22s ease,
-    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 0.22s ease;
   z-index: 46;
 }
 
 .canact-radial-menu-open .canact-radial-item {
   opacity: 1;
   pointer-events: auto;
-  transform: scale(1);
+  transform: none;
   right: var(--arc-right);
   bottom: var(--arc-bottom);
 }
@@ -556,12 +563,12 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
 /* Zero delay when closing — same specificity as nth-child, wins by source order */
 .canact-radial-menu:not(.canact-radial-menu-open) .canact-radial-item { transition-delay: 0s; }
 
-.canact-radial-item:hover { background: rgb(255 255 255 / 14%); transform: scale(1.08); }
-.canact-radial-item:active { transform: scale(0.92); }
+.canact-radial-item:hover { background: rgb(248 244 232 / 72%); opacity: .94; }
+.canact-radial-item:active { opacity: .72; }
 .canact-radial-item:focus-visible { outline: 2px solid #1f6b55; outline-offset: 3px; }
-.canact-radial-item span { position: relative; z-index: 1; display: grid; width: 100%; height: 100%; place-items: center; color: #1f6b55; }
-.canact-radial-item-help { background: rgb(255 255 255 / 8%); border-color: rgb(255 211 207 / 82%); }
-.canact-radial-item-help:hover { background: rgb(204 59 53 / 12%); }
+.canact-radial-item span { position: relative; z-index: 3; display: grid; width: 100%; height: 100%; place-items: center; color: #1f6b55; }
+.canact-radial-item-help,
+.canact-radial-item-help:hover { border-color: rgb(255 223 219 / 88%); background: rgb(204 59 53 / 64%); }
 
 /* Reference-style glass switches and sliders. The track and thumb are
    independent liquid-glass targets so each receives its own refraction map. */
@@ -669,6 +676,10 @@ html[data-canact-webkit-glass] .canact-lg-edge-inner {
   animation: canactBackdropIn 220ms ease-out forwards;
   will-change: opacity;
 }
+.canact-liquid-sheet-panel {
+  background: transparent !important;
+  box-shadow: none !important;
+}
 .canact-sheet-panel {
   opacity: 0;
   transform: translate3d(0, 100%, 0);
@@ -765,9 +776,9 @@ body.canact-story-open {
    view (and the sticky filters strip below it fades). Reverses on any
    upward scroll (or when near top). */
 [data-canact-header] {
-  transform: translate3d(0, 0, 0);
-  transition: transform 180ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease;
-  will-change: transform, opacity;
+  transform: none;
+  transition: opacity 160ms ease;
+  will-change: opacity;
 }
 
 .canact-profile-header-chrome,
@@ -1065,7 +1076,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 /* iOS: reduce header/footer offset by 40% (notch/home-indicator already handled by safe-area-inset) */
 @supports (-webkit-touch-callout: none) {
   :root {
-    --canact-header-offset: 0.6em;
+    --canact-header-offset: 7px;
     --canact-footer-offset: 7px;
   }
 }

@@ -114,22 +114,30 @@ export function Sheet({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 bg-transparent backdrop-blur-sm transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-transparent transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         {...swipeDismissHandlers}
+        data-liquid-glass="surface"
+        data-liquid-radius="32"
+        data-liquid-blur="0"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0.1"
+        data-liquid-thickness="58"
+        data-liquid-bezel="28"
+        data-liquid-specular-opacity="0.48"
         style={{
           transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)',
           maxHeight: 'var(--canact-popup-max-height)',
           paddingBottom: 'var(--canact-popup-bottom-inset)',
         }}
-        className={`relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-white pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        className={`canact-liquid-sheet-panel relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-transparent pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
         {title !== undefined && (
           <div className="mb-3 flex shrink-0 items-center justify-between px-4">
             <h2 className="text-xl font-black tracking-tight text-ink">{title}</h2>
-            <button type="button" onClick={onClose} aria-label="Close" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-light/60 text-brand">
+            <button type="button" onClick={onClose} aria-label="Close" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.1" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-brand">
               <X size={16} />
             </button>
           </div>

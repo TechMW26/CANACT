@@ -290,7 +290,6 @@ function ExploreMapSurface({
         activities={activities}
       />
       <div className={styles.mapTopFade} aria-hidden="true" />
-      <div className={`${styles.mapBottomFade} ${sheetExpanded ? styles.mapBottomFadeExpanded : ''}`} aria-hidden="true" />
 
       <button
         type="button"
@@ -306,13 +305,17 @@ function ExploreMapSurface({
         <span><i className={styles.storyDot} /> Stories</span>
       </div>
 
-      {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}>Enable location to center the map around you.</div> : null}
+      {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}><span>Enable location to center the map around you.</span></div> : null}
 
       <aside
         data-liquid-glass="surface"
         data-liquid-radius="30"
-        data-liquid-tint="250,248,242"
-        data-liquid-tint-opacity="0.38"
+        data-liquid-blur="0"
+        data-liquid-thickness="58"
+        data-liquid-bezel="28"
+        data-liquid-specular-opacity="0.52"
+        data-liquid-tint="248,244,232"
+        data-liquid-tint-opacity="0"
         className={`${styles.peopleSheet} ${sheetExpanded ? styles.peopleSheetExpanded : ''}`}
         style={sheetStyle}
         aria-label="People nearby"
@@ -332,7 +335,7 @@ function ExploreMapSurface({
             </button>
             <div className={styles.sheetActions}>
               <button type="button" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" onClick={onToggleFilters} aria-label="Filter nearby people" aria-expanded={filtersOpen}><Filter size={17} /></button>
-              <button type="button" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" onClick={onSeeAll}>See all</button>
+              <button type="button" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" onClick={onSeeAll}><span>See all</span></button>
             </div>
           </div>
           {!sheetExpanded ? <p className={styles.swipeHint}>Swipe up to explore nearby people</p> : null}
@@ -408,7 +411,7 @@ function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: Peo
         onClick={() => onChange('map')}
         className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'map' ? 'text-brand' : 'text-ink/60'}`}
       >
-        <MapPin size={13} /> Map
+        <MapPin size={13} /> <span>Map</span>
       </button>
       <button
         type="button"
@@ -419,7 +422,7 @@ function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: Peo
         onClick={() => onChange('list')}
         className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'list' ? 'text-brand' : 'text-ink/60'}`}
       >
-        <AlignLeft size={13} /> List
+        <AlignLeft size={13} /> <span>List</span>
       </button>
     </div>
   );
@@ -475,20 +478,20 @@ function NearbyPeopleDeck({ people, onVote }: { people: PeoplePerson[]; onVote: 
         return (
           <article
             key={person.uid}
-            className="absolute left-1/2 top-0 w-[268px] overflow-hidden rounded-[28px] bg-white ring-1 ring-[#e1ddd3] transition-[transform,opacity,filter] duration-500 ease-[cubic-bezier(.22,.85,.3,1)]"
+            className={styles.personCard}
             style={{ transform: `translateX(calc(-50% + ${x}px)) translateY(${y}px) scale(${scale})`, zIndex: 20 - distance, opacity: distance === 2 ? .35 : distance === 1 ? .68 : 1, filter: distance ? `blur(${distance}px)` : 'none' }}
           >
-            <button type="button" onClick={() => distance ? setActiveIndex(index) : undefined} className="relative block h-[228px] w-full overflow-hidden bg-[#273937]">
-              {person.photoURL ? <img src={person.photoURL} alt={person.name} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center"><Avatar src={null} name={person.name} size={104} /></span>}
-              {distance ? <span className="absolute inset-0 bg-[#173f34]/12" /> : null}
+            <button type="button" onClick={() => distance ? setActiveIndex(index) : undefined} className={styles.personMedia}>
+              {person.photoURL ? <img src={person.photoURL} alt={person.name} className={styles.personImage} /> : <span className="grid h-full place-items-center"><Avatar src={null} name={person.name} size={104} /></span>}
+              {distance ? <span className={styles.personImageVeil} /> : null}
               {!distance ? <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/55 px-4 py-1.5 text-[10px] font-bold text-white">Reliable</span> : null}
             </button>
-            <div className="px-6 pb-5 pt-4">
-              <Link href={`/profile/${person.uid}`} className="block truncate text-[17px] font-semibold text-[#436424]">{person.name}</Link>
-              <p className="mt-1 text-[15px] font-bold text-[#8a654d]">{Math.round(person.rating || 0)}</p>
-              <div className="mt-4 flex items-center justify-between border-t border-[#e8e2d8] pt-4">
-                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'like')} aria-label={`Like ${person.name}`} className="grid h-10 w-14 place-items-center rounded-xl bg-[#6d8a72] text-white disabled:opacity-35"><ThumbsUp size={18} /></button>
-                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'dislike')} aria-label={`Dislike ${person.name}`} className="grid h-10 w-14 place-items-center rounded-xl bg-[#ecebea] text-[#58615d] disabled:opacity-35"><ThumbsDown size={18} /></button>
+            <div className={styles.personDetails}>
+              <Link href={`/profile/${person.uid}`} className={styles.personName}>{person.name}</Link>
+              <p className={styles.personRating}>{Math.round(person.rating || 0)}</p>
+              <div className={styles.personActions}>
+                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'like')} aria-label={`Like ${person.name}`} className={styles.personLike}><ThumbsUp size={18} /></button>
+                <button type="button" disabled={!!distance} onClick={() => onVote(person, 'dislike')} aria-label={`Dislike ${person.name}`} className={styles.personDislike}><ThumbsDown size={18} /></button>
               </div>
             </div>
           </article>

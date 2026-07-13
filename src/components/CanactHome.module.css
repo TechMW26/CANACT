@@ -20,7 +20,7 @@
 .greeting h1 { margin: 0; font-size: 21px; font-weight: 750; letter-spacing: -.025em; }
 .greeting strong { color: #1f6b55; }
 
-.scoreDock { position: sticky; z-index: 12; top: calc(16px + var(--canact-sticky-header-shift, 0px)); height: 94vw; margin-top: 20px; display: flex; justify-content: center; pointer-events: none; }
+.scoreDock { position: sticky; z-index: 12; top: calc(var(--canact-header-top-inset, 0px) + var(--canact-header-offset, 0px) + 88px); height: 94vw; margin-top: 20px; display: flex; justify-content: center; pointer-events: none; }
 .scoreShape {
   position: relative;
   width: var(--shape-width);

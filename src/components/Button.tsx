@@ -22,7 +22,7 @@ export function Button({ variant = 'primary', size = 'md', loading, icon, full, 
   return (
     <button data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint={tint} data-liquid-tint-opacity={tintOpacity} className={clsx(base, sizes[size], variants[variant], full && 'w-full', className)} disabled={disabled || loading} {...rest}>
       {loading ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : icon}
-      {children}
+      <span className="relative z-[2] inline-flex items-center justify-center gap-2">{children}</span>
     </button>
   );
 }

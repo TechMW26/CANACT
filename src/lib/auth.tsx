@@ -13,7 +13,7 @@ import {
   deleteUser,
   type User as FbUser,
 } from 'firebase/auth';
-import { onValue, ref, update, get, remove, set } from 'firebase/database';
+import { onValue, ref, update, get, remove } from 'firebase/database';
 import { db, getFirebaseAuth, getGoogleProvider } from './firebase';
 import { UserProfile } from './types';
 
@@ -108,14 +108,10 @@ function isMobile(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
-/** Seed a minimal profile after first Google sign-in. Profile is marked incomplete
- * so the profile page can prompt the user to finish it. Safe to call repeatedly. */
-async function seedProfileIfMissing(u: FbUser) {
-  const snap = await get(ref(db, `users/${u.uid}`));
-  if (snap.exists()) return;
+function registrationProfile(u: FbUser): UserProfile {
   const fullName = fallbackDisplayName(u);
   const { firstName, lastName, middleName } = splitNameParts(fullName);
-  const seed: UserProfile = {
+  return {
     uid: u.uid,
     fullName,
     firstName,
@@ -136,10 +132,22 @@ async function seedProfileIfMissing(u: FbUser) {
     notificationSound: true,
     createdAt: Date.now(),
   };
+}
+
+function cleanProfilePatch(profile: Partial<UserProfile>) {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(profile)) if (value !== undefined) cleaned[key] = value;
+  return cleaned;
+}
+
+/** Seed a minimal profile after first sign-in. Profile is marked incomplete so
+ * registration can continue. `update` keeps concurrent registration fields. */
+async function seedProfileIfMissing(u: FbUser) {
+  const snap = await get(ref(db, `users/${u.uid}`));
+  if (snap.exists()) return;
+  const seed = registrationProfile(u);
   // Strip undefined keys — RTDB rejects them.
-  const cleaned: Record<string, any> = {};
-  for (const [k, v] of Object.entries(seed)) if (v !== undefined) cleaned[k] = v;
-  await set(ref(db, `users/${u.uid}`), cleaned);
+  await update(ref(db, `users/${u.uid}`), cleanProfilePatch(seed));
 }
 
 function profileBackfillFromAuth(u: SessionUser, profile: UserProfile | null): Partial<UserProfile> {
@@ -209,6 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         // Set user IMMEDIATELY so routing can react.
         setUser(toSession(u));
+        setProfile((current) => current?.uid === u.uid ? current : null);
         setLoading(false);
         // Seed profile in background; never blocks the listener.
         seedInBackground(u);
@@ -281,7 +290,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (snap) => {
         const v = snap.val() as UserProfile | null;
         if (!v) {
-          setProfile(null);
+          // Preserve the optimistic profile created by email registration
+          // while its first database write is still in flight.
+          setProfile((current) => current?.uid === user.uid ? current : null);
           return;
         }
 
@@ -354,12 +365,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const auth = getFirebaseAuth();
       const r = await createUserWithEmailAndPassword(auth, email, password);
       if (!r.user) return;
-      await seedProfileIfMissing(r.user);
-      if (profilePatch) {
-        const cleaned: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(profilePatch)) if (value !== undefined) cleaned[key] = value;
-        if (Object.keys(cleaned).length) await update(ref(db, `users/${r.user.uid}`), cleaned);
-      }
+      const optimisticProfile = { ...registrationProfile(r.user), ...profilePatch } as UserProfile;
+      setUser(toSession(r.user));
+      setProfile(optimisticProfile);
+      setLoading(false);
+      update(ref(db, `users/${r.user.uid}`), cleanProfilePatch(optimisticProfile)).catch((err) => {
+        // Auth has already succeeded, so never strand the user on a loader
+        // because the initial profile write is slow or temporarily offline.
+        // Later registration steps retry writes through updateMyProfile.
+        // eslint-disable-next-line no-console
+        console.warn('[auth] initial registration profile write failed', err);
+      });
     },
     signOut: async () => {
       await fbSignOut(getFirebaseAuth());

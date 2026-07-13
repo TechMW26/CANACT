@@ -68,13 +68,12 @@ export function ExploreMap({
         container: containerRef.current,
         style: 'https://tiles.openfreemap.org/styles/bright',
         center,
-        zoom: currentLocation ? 13.5 : 10,
+        zoom: currentLocation ? 16 : 13,
         attributionControl: false,
         cooperativeGestures: false,
       });
       map.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
       map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
-      map.addControl(new library.AttributionControl({ compact: true }), 'bottom-right');
       map.on('dragstart', () => interactionRef.current?.());
       map.on('zoomstart', () => interactionRef.current?.());
       map.on('rotatestart', () => interactionRef.current?.());
@@ -93,7 +92,7 @@ export function ExploreMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !currentLocation) return;
-    map.easeTo({ center: [currentLocation.lng, currentLocation.lat], zoom: Math.max(map.getZoom(), 13), duration: 850 });
+    map.easeTo({ center: [currentLocation.lng, currentLocation.lat], zoom: Math.max(map.getZoom(), 16), duration: 850 });
   }, [currentLocation?.lat, currentLocation?.lng, ready]);
 
   useEffect(() => {

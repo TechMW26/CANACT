@@ -303,12 +303,19 @@ function CommentsSheet({
       <div className="absolute inset-0 bg-transparent backdrop-blur-sm canact-sheet-backdrop" />
       <div
         {...swipeDismissHandlers}
+        data-liquid-glass="surface"
+        data-liquid-radius="24"
+        data-liquid-blur="0"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0.12"
+        data-liquid-thickness="52"
+        data-liquid-bezel="22"
         style={{
           height: commentsSheetHeight,
           maxHeight: 'var(--canact-popup-max-height)',
           paddingBottom: 'var(--canact-popup-bottom-inset)',
         }}
-        className="absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white text-ink canact-sheet-slide transition-[height,max-height] duration-300 ease-out"
+        className="absolute inset-x-0 bottom-0 flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-transparent text-ink canact-sheet-slide transition-[height,max-height] duration-300 ease-out"
         onClick={(e) => e.stopPropagation()}
       >
         <button

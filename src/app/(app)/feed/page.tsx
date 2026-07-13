@@ -353,9 +353,14 @@ export default function FeedPage() {
                 key={f.id}
                 type="button"
                 onClick={() => { setFilter(f.id as any); setFilterOpen(false); }}
-                className={`rounded-2xl px-4 py-3 text-sm font-semibold border ${filter === f.id ? 'bg-brand text-white border-brand' : 'bg-white text-ink border-line'}`}
+                data-liquid-glass={filter === f.id ? 'switcher' : 'surface'}
+                data-liquid-radius="16"
+                data-liquid-blur="0"
+                data-liquid-tint={filter === f.id ? '31,107,85' : '250,248,242'}
+                data-liquid-tint-opacity={filter === f.id ? '0.22' : '0.08'}
+                className={`rounded-2xl bg-transparent px-4 py-3 text-sm font-semibold ${filter === f.id ? 'text-brand' : 'text-ink'}`}
               >
-                {f.label}
+                <span>{f.label}</span>
               </button>
             ))}
           </div>

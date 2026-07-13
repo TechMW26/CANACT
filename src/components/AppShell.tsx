@@ -9,7 +9,6 @@ import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
 import { RadialCreateMenu } from './RadialCreateMenu';
-import { LiquidGlassRuntime } from './LiquidGlassRuntime';
 import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
 import { ShareToChatSheet } from './ShareToChatSheet';
 import { VicinityTracker } from './VicinityTracker';
@@ -96,6 +95,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const routeProfileHero = false;
   const routeFadeChrome = !!pathname && pathname === '/favourites';
   const routeFeed = pathname === '/feed';
+  const routeLeaderboard = pathname === '/leaderboard';
   const headerOverContent = pathname === '/' || pathname === '/favourites' || !!pathname?.startsWith('/profile');
   const profileChrome = routeProfileHero;
   const footerFadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
@@ -137,8 +137,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    root.style.setProperty('--canact-header-top-inset', mobileHeaderTopInset ?? '0px');
     root.style.setProperty('--canact-map-header-fade-start', mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 55px)` : '55px');
     return () => {
+      root.style.removeProperty('--canact-header-top-inset');
       root.style.removeProperty('--canact-map-header-fade-start');
     };
   }, [mobileHeaderTopInset]);
@@ -228,7 +230,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   if (isFullScreen) {
     return (
       <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
-        <LiquidGlassRuntime />
         <ScrollRestoration />
         {/* Pull-to-refresh is intentionally NOT mounted on chat threads:
             those use their own scroll container and a downward swipe at the
@@ -245,13 +246,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
-      <LiquidGlassRuntime />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
           every page (feed, profile, leaderboard, etc.) gets the gesture
           without having to wrap its own root. Pages that maintain client
           subscriptions can listen for the `canact:pull-refresh` event. */}
-      <PullToRefresh />
+      <PullToRefresh disabled={pathname !== '/feed'} />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
@@ -306,14 +306,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           onClick={() => { haptic('strong'); setPlusOpen(true); }}
           className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-brand text-white font-semibold py-2.5 hover:bg-brand-dark"
         >
-          <Sparkles size={18} /> Create
+          <Sparkles size={18} /> <span>Create</span>
         </button>
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} topInset={mobileHeaderTopInset} />
+        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderTopInset} />
         <div
-          className={`canact-col ${routeFeed ? 'pb-0' : 'pb-6'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
+          className={`canact-col ${routeFeed ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 92px)` : '92px' } : undefined}
         ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
@@ -376,12 +376,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         aria-controls="canact-radial-create-menu"
         data-liquid-glass="surface"
         data-liquid-radius="999"
+        data-liquid-blur="0"
+        data-liquid-thickness="28"
+        data-liquid-bezel="18"
+        data-liquid-specular-opacity="0.42"
+        data-liquid-balanced-specular="true"
         data-liquid-tint="31,107,85"
-        data-liquid-tint-opacity="0.10"
+        data-liquid-tint-opacity="0.14"
         onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
         className={`canact-create-nav-button fixed z-50 lg:hidden ${radialCreateOpen ? 'canact-create-nav-button-open' : ''}`}
       >
-        <Plus className="canact-adaptive-icon" size={29} strokeWidth={2.3} />
+        <Plus className="canact-adaptive-icon canact-create-nav-icon" size={29} strokeWidth={2.3} />
       </button>
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
@@ -597,7 +602,7 @@ function titleFor(path: string | null) {
   return '';
 }
 
-function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; topInset?: string | null }) {
+function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; leaderboard?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
@@ -623,13 +628,22 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
     <header
       data-canact-header
       className={`canact-header-shell fixed z-30 lg:hidden ${headerChromeClass}`}
-      style={{ top: topInset ? `calc(${topInset} + var(--canact-header-offset, 1em))` : 'var(--canact-header-offset, 1em)' }}
+      style={{ top: topInset ? `calc(${topInset} + var(--canact-header-offset, 0px))` : 'var(--canact-header-offset, 0px)' }}
     >
-      <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className="canact-figma-header">
+      <div
+        data-liquid-glass="surface"
+        data-liquid-radius="999"
+        data-liquid-blur="0"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0.12"
+        className="canact-figma-header"
+      >
         <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
           <Brand size={38} href="/" />
           <div className="ml-auto inline-flex items-center gap-4">
-            <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
+            {leaderboard
+              ? <LeaderboardScopeDropdown blendChrome={profileChrome} />
+              : <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />}
             <Link href="/favourites" data-liquid-glass="none" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
               <Heart className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
               {pendingCount > 0 && (
@@ -645,6 +659,73 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
         </div>
       </div>
     </header>
+  );
+}
+
+const LEADERBOARD_SCOPES = [
+  { id: 'app', label: 'Global Rank' },
+  { id: 'city', label: 'City Rank' },
+  { id: 'country', label: 'Country Rank' },
+  { id: 'favourites', label: 'Favourites' },
+] as const;
+
+function LeaderboardScopeDropdown({ blendChrome }: { blendChrome: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<(typeof LEADERBOARD_SCOPES)[number]>(LEADERBOARD_SCOPES[0]);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (event.target instanceof Node && !dropdownRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        data-liquid-glass="switcher"
+        data-liquid-radius="999"
+        data-liquid-tint="31,107,85"
+        data-liquid-tint-opacity="0.05"
+        aria-label="Leaderboard scope"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`canact-distance-pill inline-flex h-9 items-center justify-center whitespace-nowrap rounded-full px-3 text-[13px] font-semibold leading-none ${blendChrome ? 'canact-profile-header-select' : 'text-ink'}`}
+        onClick={() => { haptic('subtle'); setOpen((value) => !value); }}
+      >
+        <span>{selected.label}</span>
+      </button>
+      {open && (
+        <div role="listbox" aria-label="Leaderboard scope" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.1" data-liquid-thickness="36" data-liquid-bezel="14" className="canact-glass-dropdown absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl p-1 text-ink">
+          {LEADERBOARD_SCOPES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="option"
+              aria-selected={selected.id === option.id}
+              className={`flex h-9 w-full items-center justify-center rounded-xl px-3 text-xs font-extrabold ${selected.id === option.id ? 'text-brand' : 'text-ink/75'}`}
+              onClick={() => {
+                setSelected(option);
+                setOpen(false);
+                window.dispatchEvent(new CustomEvent('canact:leaderboard-scope', { detail: option.id }));
+                haptic('selection');
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -672,7 +753,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
   }, [open]);
 
   const pillClassName = `canact-distance-pill inline-flex h-9 w-auto min-w-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-center text-[13px] font-normal leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
-  const menuClassName = `absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl border border-white/60 bg-transparent p-1 text-ink shadow-xl`;
+  const menuClassName = `canact-glass-dropdown absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl bg-transparent p-1 text-ink`;
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -694,7 +775,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
         <span className="block text-center">{selectedOption.label}</span>
       </button>
       {open && (
-        <div role="listbox" aria-label="Feed distance filter" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className={menuClassName}>
+        <div role="listbox" aria-label="Feed distance filter" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.1" data-liquid-thickness="36" data-liquid-bezel="14" className={menuClassName}>
           {RADIUS_OPTIONS.map((option) => {
             const selected = option.index === radiusIdx;
             return (
@@ -712,7 +793,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
                   haptic('selection');
                 }}
               >
-                {option.label}
+                <span>{option.label}</span>
               </button>
             );
           })}
