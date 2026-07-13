@@ -59,7 +59,7 @@ interface AuthCtx {
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, profilePatch?: Partial<UserProfile>) => Promise<void>;
   signOut: () => Promise<void>;
   updateMyProfile: (patch: Partial<UserProfile>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -350,10 +350,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await signInWithEmailAndPassword(auth, email, password);
       if (r.user) seedInBackground(r.user);
     },
-    signUpWithEmail: async (email, password) => {
+    signUpWithEmail: async (email, password, profilePatch) => {
       const auth = getFirebaseAuth();
       const r = await createUserWithEmailAndPassword(auth, email, password);
-      if (r.user) seedInBackground(r.user);
+      if (!r.user) return;
+      await seedProfileIfMissing(r.user);
+      if (profilePatch) {
+        const cleaned: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(profilePatch)) if (value !== undefined) cleaned[key] = value;
+        if (Object.keys(cleaned).length) await update(ref(db, `users/${r.user.uid}`), cleaned);
+      }
     },
     signOut: async () => {
       await fbSignOut(getFirebaseAuth());

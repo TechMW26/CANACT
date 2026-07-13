@@ -4,7 +4,9 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updatePassword } from 'firebase/auth';
+import type { CountryCode } from 'libphonenumber-js';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
+import { PhoneInput, isPhoneValid, toE164 } from '@/components/PhoneInput';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
@@ -26,11 +28,11 @@ function GoogleGlyph() {
   );
 }
 
-function Progress() {
+function Progress({ step = 1 }: { step?: number }) {
   return (
-    <div className={styles.progressWrap} aria-label="Step 1 of 7">
-      <div className={styles.progress}>{Array.from({ length: 7 }, (_, index) => <span key={index} className={index === 0 ? styles.active : ''} />)}</div>
-      <div className={styles.progressLabel}>Step 1 <b>of</b> 7</div>
+    <div className={styles.progressWrap} aria-label={`Step ${step} of 7`}>
+      <div className={styles.progress}>{Array.from({ length: 7 }, (_, index) => <span key={index} className={index < step ? styles.active : ''} />)}</div>
+      <div className={styles.progressLabel}>Step {step} <b>of</b> 7</div>
     </div>
   );
 }
@@ -48,7 +50,7 @@ function isInvalidCredentialError(err: any) {
 export default function WelcomePage() {
   const router = useRouter();
   const { user, profile, loading, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
-  const [mode, setMode] = useState<'register' | 'login'>('register');
+  const [mode, setMode] = useState<'register' | 'details' | 'login'>('register');
   const [busy, setBusy] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -56,14 +58,16 @@ export default function WelcomePage() {
   const [devMode, setDevMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>('IN');
+  const [mobile, setMobile] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => { setDevMode(isLocalhost()); }, []);
   useEffect(() => {
-    if (!devMode || email || password) return;
+    if (!devMode || mode !== 'login' || email || password) return;
     setEmail(ADMIN_EMAIL);
     setPassword(ADMIN_PASSWORD);
-  }, [devMode, email, password]);
+  }, [devMode, email, mode, password]);
 
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return; }
@@ -118,6 +122,28 @@ export default function WelcomePage() {
     } finally { setBusy(false); }
   };
 
+  const registerWithEmail = async () => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) { setError('Enter a valid email address'); return; }
+    if (!isPhoneValid(phoneCountry, mobile)) { setError('Enter a valid phone number'); return; }
+    if (password.length < 8) { setError('Use at least 8 characters for your password'); return; }
+    setError('');
+    setBusy(true);
+    const storedMobile = toE164(phoneCountry, mobile);
+    try {
+      sessionStorage.setItem('canact:registration-screen', 'name');
+      sessionStorage.setItem('canact:registration-mobile', storedMobile);
+      await signUpWithEmail(cleanEmail, password, { email: cleanEmail, mobile: storedMobile, profileComplete: false });
+    } catch (err: any) {
+      sessionStorage.removeItem('canact:registration-screen');
+      const message = err?.code === 'auth/email-already-in-use'
+        ? 'An account already exists for this email. Log in instead.'
+        : err?.message ?? 'Could not create your account';
+      setError(message);
+      toast(message, 'error');
+    } finally { setBusy(false); }
+  };
+
   if (user) return <Splash message="Signing you in…" />;
 
   if (mode === 'register') {
@@ -130,13 +156,50 @@ export default function WelcomePage() {
           <h1 className={styles.title}>Create your account</h1>
           <p className={styles.subtitle}>Start building genuine connections</p>
           <Progress />
-          <button type="button" className={styles.primaryButton} disabled={busy} onClick={google}>
-            <span>{busy ? 'Connecting…' : 'Get started'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
+          <button type="button" className={styles.primaryButton} onClick={() => { setError(''); setMode('details'); }}>
+            <span>Get started</span><span className={styles.primaryIcon}><ArrowRight /></span>
           </button>
           {error ? <p className={styles.error}>{error}</p> : null}
           <button type="button" className={styles.textLink} onClick={() => { setError(''); setMode('login'); }}>
             Already have an account? <strong>Log in</strong>
           </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (mode === 'details') {
+    return (
+      <main className={styles.page}>
+        <section className={`${styles.registerPage} ${styles.detailsPage}`}>
+          <button type="button" className={styles.backButton} aria-label="Back" onClick={() => { setError(''); setMode('register'); }}><ArrowLeft size={22} /></button>
+          <Image className={styles.registerBrand} src="/canact-brand.png" alt="Canact" width={1254} height={1254} priority />
+          <p className={styles.eyebrow}>Let&apos;s get your basics</p>
+          <Progress step={2} />
+          <div className={styles.registerBody}>
+            <h1 className={styles.title}>Your details</h1>
+            <p className={styles.subtitle}>We&apos;ll use these to create and secure your account.</p>
+            <div className={styles.registerFields}>
+              <label className={styles.field}>
+                <Mail aria-hidden="true" />
+                <span className={styles.fieldText}><span>Email address</span><input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} /></span>
+              </label>
+              <div className={styles.phoneWrap}>
+                <PhoneInput country={phoneCountry} onCountryChange={setPhoneCountry} value={mobile} onChange={setMobile} required error={mobile && !isPhoneValid(phoneCountry, mobile) ? 'Enter a valid phone number' : undefined} />
+              </div>
+              <label className={styles.field}>
+                <LockKeyhole aria-hidden="true" />
+                <span className={styles.fieldText}><span>Password</span><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void registerWithEmail(); }} /></span>
+                <button type="button" className={styles.passwordToggle} aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff /> : <Eye />}</button>
+              </label>
+            </div>
+            {error ? <p className={styles.error}>{error}</p> : null}
+          </div>
+          <footer className={styles.registerFooter}>
+            <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void registerWithEmail()}>
+              <span>{busy ? 'Creating account…' : 'Continue'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
+            </button>
+          </footer>
         </section>
       </main>
     );

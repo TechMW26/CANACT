@@ -55,9 +55,8 @@
   gap: 6px;
   padding: 6px;
   border-radius: 999px;
-  background: rgb(250 248 242 / 78%);
+  background: rgb(255 255 255 / 8%);
   box-shadow: 0 8px 22px rgb(20 54 42 / 9%);
-  backdrop-filter: blur(14px);
   transition: top 240ms cubic-bezier(.2,.8,.2,1), opacity 160ms ease;
 }
 .legend span { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; color: #244937; font-size: 10px; font-weight: 800; }
@@ -74,13 +73,12 @@
   width: min(calc(100vw - 36px), 380px);
   transform: translateX(-50%);
   border-radius: 14px;
-  background: rgb(250 248 242 / 90%);
+  background: rgb(255 255 255 / 8%);
   padding: 9px 12px;
   color: rgb(20 32 49 / 65%);
   text-align: center;
   font-size: 11px;
   font-weight: 700;
-  backdrop-filter: blur(15px);
 }
 
 .peopleSheet {
@@ -95,9 +93,8 @@
   border: 1px solid rgb(255 255 255 / 72%);
   border-bottom: 0;
   border-radius: 30px 30px 0 0;
-  background: rgb(250 248 242 / 95%);
+  background: rgb(255 255 255 / 8%);
   box-shadow: 0 -12px 42px rgb(17 48 38 / 18%);
-  backdrop-filter: blur(24px) saturate(1.08);
   --collapsed-peek: clamp(180px, 28dvh, 260px);
   transform: translateY(calc(100% - var(--collapsed-peek) + var(--canact-sheet-drag)));
   transition: transform 400ms cubic-bezier(.22,.85,.3,1);
@@ -113,11 +110,11 @@
 .sheetTitle strong { font-size: 17px; font-weight: 900; letter-spacing: -.02em; }
 .sheetTitle span { display: grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; background: #e6e0d1; color: #1a4f3f; font-size: 11px; font-weight: 900; }
 .sheetActions { display: flex; align-items: center; gap: 7px; }
-.sheetActions button { display: grid; min-width: 36px; height: 36px; place-items: center; border: 1px solid rgb(31 107 85 / 6%); border-radius: 999px; background: rgb(255 255 255 / 82%); color: #244937; padding: 0 11px; box-shadow: 0 5px 16px rgb(18 63 52 / 7%); font-size: 12px; font-weight: 800; }
+.sheetActions button { display: grid; min-width: 36px; height: 36px; place-items: center; border: 1px solid rgb(255 255 255 / 52%); border-radius: 999px; background: rgb(255 255 255 / 8%); color: #244937; padding: 0 11px; box-shadow: 0 5px 16px rgb(18 63 52 / 7%); font-size: 12px; font-weight: 800; }
 .swipeHint { margin: 6px 0 0 29px; color: rgb(36 73 55 / 48%); font-size: 10px; font-weight: 700; }
 .sheetBody { height: calc(100% - 102px); overflow: hidden; overscroll-behavior: contain; padding: 0 20px max(22px, env(safe-area-inset-bottom)); touch-action: pan-y; }
 .peopleSheetExpanded .sheetBody { overflow-x: hidden; overflow-y: auto; }
-.filtersPanel { margin-bottom: 13px; padding: 10px; border-radius: 20px; background: rgb(255 255 255 / 68%); }
+.filtersPanel { margin-bottom: 13px; padding: 10px; border-radius: 20px; background: rgb(255 255 255 / 8%); }
 .filterLegend { display: flex; align-items: center; gap: 16px; padding: 3px 8px 10px; color: #244937; font-size: 11px; font-weight: 800; }
 .filterLegend span { display: inline-flex; align-items: center; gap: 7px; }
 .emptyPeople { border-radius: 22px; background: #fff; padding: 34px 18px; color: #718078; text-align: center; font-size: 13px; font-weight: 700; }

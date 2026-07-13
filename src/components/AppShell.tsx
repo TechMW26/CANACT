@@ -299,6 +299,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         })}
         <button
           type="button"
+          data-liquid-glass="surface"
+          data-liquid-radius="999"
+          data-liquid-tint="31,107,85"
+          data-liquid-tint-opacity="0.18"
           onClick={() => { haptic('strong'); setPlusOpen(true); }}
           className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-brand text-white font-semibold py-2.5 hover:bg-brand-dark"
         >
@@ -320,44 +324,48 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </main>
       </div>{/* /canact-app-content */}
 
-        {/* Mobile bottom nav */}
+      {/* Mobile bottom nav */}
       <nav
-        ref={liquidNav.navRef}
         data-canact-bottom-nav
-        data-liquid-glass="surface"
-        data-liquid-radius="999"
-        data-liquid-blur="0"
-        data-liquid-tint="250,248,242"
-        data-liquid-tint-opacity="0"
-        className="canact-figma-bottom-nav lg:hidden fixed z-40"
+        className="canact-bottom-nav-shell lg:hidden fixed z-40"
       >
-        <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-between">
-          <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
-          <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0" className="canact-bottom-tab-indicator" aria-hidden="true" />
-          {TABS.map(({ href, label, Icon, isFab }, tabIndex) => {
-            const active = isNavLinkActive(pathname, href, user.uid);
-            const onTap = () => {
-              if (isFab) { haptic('strong'); setPlusOpen(true); return; }
-              if (!active) haptic('selection');
-            };
-            const cls = `canact-bottom-tab group relative flex h-16 w-16 items-center justify-center rounded-[22px] transition-colors duration-300 ${
-              active
-                ? 'canact-bottom-tab-active bg-[#e7e1d1] text-[#1a4f3f]'
-                : 'canact-bottom-tab-inactive text-[#707981] hover:text-ink'
-            }`;
-            if (isFab) {
+        <div
+          ref={liquidNav.navRef}
+          data-liquid-glass="surface"
+          data-liquid-radius="999"
+          data-liquid-blur="0"
+          data-liquid-tint="250,248,242"
+          data-liquid-tint-opacity="0.12"
+          className="canact-figma-bottom-nav"
+        >
+          <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-between">
+            <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
+            <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.08" className="canact-bottom-tab-indicator" aria-hidden="true" />
+            {TABS.map(({ href, label, Icon, isFab }, tabIndex) => {
+              const active = isNavLinkActive(pathname, href, user.uid);
+              const onTap = () => {
+                if (isFab) { haptic('strong'); setPlusOpen(true); return; }
+                if (!active) haptic('selection');
+              };
+              const cls = `canact-bottom-tab group relative flex h-16 w-16 items-center justify-center rounded-[22px] transition-colors duration-300 ${
+                active
+                  ? 'canact-bottom-tab-active bg-[#e7e1d1] text-[#1a4f3f]'
+                  : 'canact-bottom-tab-inactive text-[#707981] hover:text-ink'
+              }`;
+              if (isFab) {
+                return (
+                  <button key={href} type="button" onPointerDown={(event) => liquidNav.begin(tabIndex, event)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} aria-label="Create" className={cls}>
+                    <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
+                  </button>
+                );
+              }
               return (
-                <button key={href} type="button" onPointerDown={(event) => liquidNav.begin(tabIndex, event)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} aria-label="Create" className={cls}>
+                <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
                   <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
-                </button>
+                </Link>
               );
-            }
-            return (
-              <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
-                <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
-              </Link>
-            );
-          })}
+            })}
+          </div>
         </div>
       </nav>
       <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} />
@@ -382,7 +390,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 }
 
 function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>) {
-  const navRef = useRef<HTMLElement | null>(null);
+  const navRef = useRef<HTMLDivElement | null>(null);
   const indicatorRef = useRef<HTMLDivElement | null>(null);
   const glowRef = useRef<HTMLDivElement | null>(null);
   const suppressClickUntil = useRef(0);
@@ -614,29 +622,26 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
   return (
     <header
       data-canact-header
-      data-liquid-glass="surface"
-      data-liquid-radius="999"
-      data-liquid-blur="0"
-      data-liquid-tint="250,248,242"
-      data-liquid-tint-opacity="0"
-      className={`canact-figma-header fixed z-30 lg:hidden ${headerChromeClass}`}
-      style={{ top: topInset ? `calc(${topInset} + 1em)` : '1em' }}
+      className={`canact-header-shell fixed z-30 lg:hidden ${headerChromeClass}`}
+      style={{ top: topInset ? `calc(${topInset} + var(--canact-header-offset, 1em))` : 'var(--canact-header-offset, 1em)' }}
     >
-      <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
-        <Brand size={38} href="/" />
-        <div className="ml-auto inline-flex items-center gap-4">
-          <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
-          <Link href="/favourites" data-liquid-glass="none" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-            <Heart className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
-            {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
-                {pendingCount > 9 ? '9+' : pendingCount}
-              </span>
-            )}
-          </Link>
-          <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-            <SettingsIcon className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
-          </Link>
+      <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className="canact-figma-header">
+        <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+          <Brand size={38} href="/" />
+          <div className="ml-auto inline-flex items-center gap-4">
+            <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />
+            <Link href="/favourites" data-liquid-glass="none" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+              <Heart className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
+              {pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
+                  {pendingCount > 9 ? '9+' : pendingCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+              <SettingsIcon className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
+            </Link>
+          </div>
         </div>
       </div>
     </header>
@@ -673,7 +678,10 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
     <div ref={dropdownRef} className="relative">
       <button
         type="button"
-        data-liquid-glass="none"
+        data-liquid-glass="switcher"
+        data-liquid-radius="999"
+        data-liquid-tint="31,107,85"
+        data-liquid-tint-opacity="0.05"
         aria-label="Feed distance filter"
         aria-haspopup="listbox"
         aria-expanded={open}

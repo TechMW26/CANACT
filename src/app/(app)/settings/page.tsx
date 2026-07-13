@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { ConfirmDialog } from '@/components/Modal';
 import { toast } from '@/components/Toaster';
 import { enableWebPush, pushSupported } from '@/lib/services/push';
+import { GlassSwitch } from '@/components/GlassSwitch';
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateMyProfile, deleteAccount } = useAuth();
@@ -40,10 +41,14 @@ export default function SettingsPage() {
     <div className="space-y-3 pt-4">
       <Card>
         <h3 className="font-bold">Notifications</h3>
-        <label className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <span>Sound for help &amp; reactions</span>
-          <input type="checkbox" className="h-5 w-5 accent-[#1F6B55]" checked={!!profile.notificationSound} onChange={(e) => updateMyProfile({ notificationSound: e.target.checked })} />
-        </label>
+          <GlassSwitch
+            checked={!!profile.notificationSound}
+            label="Sound for help and reactions"
+            onChange={(checked) => updateMyProfile({ notificationSound: checked })}
+          />
+        </div>
         <div className="mt-4 border-t border-line pt-3">
           <div className="text-sm font-extrabold text-ink">Push notifications</div>
           <p className="mt-1 text-xs text-ink/60">

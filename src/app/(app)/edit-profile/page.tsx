@@ -21,15 +21,18 @@ export default function EditProfilePage() {
   const { user, profile, updateMyProfile } = useAuth();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
   const displayName = (profile?.fullName || user?.displayName || user?.email?.split('@')[0] || '').trim();
   const displayNameParts = displayName.split(/\s+/).filter(Boolean);
   const fallbackFirstName = displayNameParts[0] || '';
   const fallbackLastName = displayNameParts.length > 1 ? displayNameParts[displayNameParts.length - 1] : '';
   const initialPhone = splitStoredPhone(profile?.mobile, (profile?.countryCode as CountryCode) || 'IN');
   const [photo, setPhoto] = useState(profile?.photoURL ?? user?.photoURL ?? '');
+  const [coverPhoto, setCoverPhoto] = useState(profile?.coverPhoto ?? '');
   const [photoEditorFile, setPhotoEditorFile] = useState<File | null>(null);
   const [photoEditorOpen, setPhotoEditorOpen] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [coverBusy, setCoverBusy] = useState(false);
   const [firstName, setFirstName] = useState(profile?.firstName ?? fallbackFirstName);
   const [lastName, setLastName] = useState(profile?.lastName ?? fallbackLastName);
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -53,6 +56,7 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (!profile) return;
     if (!photo) setPhoto(profile.photoURL || user?.photoURL || '');
+    if (!coverPhoto) setCoverPhoto(profile.coverPhoto || '');
     if (!firstName) setFirstName(profile.firstName || fallbackFirstName);
     if (!lastName) setLastName(profile.lastName || fallbackLastName);
     if (!bio && profile.bio) setBio(profile.bio);
@@ -123,6 +127,47 @@ export default function EditProfilePage() {
     }
   };
 
+  const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return toast('Please select an image', 'error');
+    const previousUrl = coverPhoto;
+    setCoverBusy(true);
+    try {
+      const blob = new Blob([f], { type: f.type });
+      const { url } = await uploadMedia(blob, { kind: 'cover', uid: profile.uid });
+      await updateMyProfile({ coverPhoto: url });
+      setCoverPhoto(url);
+      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* ignore */ }
+      }
+      toast('Cover photo updated', 'success');
+    } catch (err: any) {
+      toast(err?.message ?? 'Could not upload cover', 'error');
+    } finally {
+      setCoverBusy(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
+    }
+  };
+
+  const removeCover = async () => {
+    const previousUrl = coverPhoto;
+    setCoverPhoto('');
+    setCoverBusy(true);
+    try {
+      await updateMyProfile({ coverPhoto: '' });
+      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* ignore */ }
+      }
+      toast('Cover photo removed', 'success');
+    } catch (err: any) {
+      setCoverPhoto(previousUrl);
+      toast(err?.message ?? 'Could not remove cover', 'error');
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
   const removePhoto = async () => {
     const previousUrl = photo;
     setPhoto('');
@@ -150,6 +195,7 @@ export default function EditProfilePage() {
       const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || profile.fullName || displayName || 'Canact user';
       await updateMyProfile({
         photoURL: photo,
+        coverPhoto: coverPhoto || undefined,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         fullName,
@@ -195,6 +241,36 @@ export default function EditProfilePage() {
             </Button>
             {photo ? (
               <Button size="sm" variant="ghost" onClick={removePhoto} loading={photoBusy}>
+                <Trash2 size={14} className="mr-1" /> Remove
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+
+      {/* Cover Photo */}
+      <Card className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <div className="relative h-24 w-full overflow-hidden rounded-xl bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)] sm:w-40">
+          {coverPhoto ? <img src={coverPhoto} alt="" className="h-full w-full object-cover" /> : null}
+          <button
+            type="button"
+            onClick={() => coverFileRef.current?.click()}
+            aria-label="Change cover"
+            className="absolute bottom-2 right-2 inline-flex h-8 items-center gap-1 rounded-full bg-black/35 px-2.5 text-xs font-semibold text-white backdrop-blur-sm"
+          >
+            <Camera size={13} /> Change
+          </button>
+          <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={onCoverPick} />
+        </div>
+        <div className="flex-1 text-center sm:text-left">
+          <h2 className="text-lg font-extrabold text-ink">Cover photo</h2>
+          <p className="mt-0.5 text-sm text-muted">Appears at the top of your profile.</p>
+          <div className="mt-3 inline-flex flex-wrap justify-center gap-2 sm:justify-start">
+            <Button size="sm" variant="outline" onClick={() => coverFileRef.current?.click()} loading={coverBusy}>
+              <Camera size={14} className="mr-1" /> Change cover
+            </Button>
+            {coverPhoto ? (
+              <Button size="sm" variant="ghost" onClick={removeCover} loading={coverBusy}>
                 <Trash2 size={14} className="mr-1" /> Remove
               </Button>
             ) : null}

@@ -25,8 +25,13 @@ export function FilterStrip({
             <button
               key={f.id}
               type="button"
+              data-liquid-glass={active ? 'switcher' : 'surface'}
+              data-liquid-radius="16"
+              data-liquid-blur="0"
+              data-liquid-tint={active ? '31,107,85' : '12,26,22'}
+              data-liquid-tint-opacity={active ? '0.22' : '0.12'}
               onClick={() => onChange(f.id)}
-              className={`flex shrink-0 flex-col items-center gap-1.5 rounded-2xl p-1.5 transition ${active ? 'bg-white/15 ring-2 ring-white' : 'ring-1 ring-white/15 hover:bg-white/10'}`}
+              className={`flex shrink-0 flex-col items-center gap-1.5 rounded-2xl bg-transparent p-1.5 transition ${active ? 'ring-2 ring-white' : 'ring-1 ring-white/15 hover:bg-white/10'}`}
               aria-pressed={active}
             >
               <span className="block h-14 w-14 overflow-hidden rounded-xl bg-black">

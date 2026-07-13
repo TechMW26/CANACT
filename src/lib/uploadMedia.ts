@@ -184,7 +184,7 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
 
 /** Upload a prepared media blob to Vercel Blob via the client-upload flow.
  * Returns the public URL. */
-type UploadMediaKind = 'story' | 'reel' | 'post' | 'poll' | 'avatar';
+type UploadMediaKind = 'story' | 'reel' | 'post' | 'poll' | 'avatar' | 'cover';
 
 export async function uploadPreparedMedia(prepared: PreparedMedia, opts: { kind: UploadMediaKind; uid: string }): Promise<string> {
   const ts = Date.now();
@@ -231,7 +231,7 @@ export async function uploadMedia(input: Blob | File | string | PreparedMedia, o
   // Run the main upload + poster upload in parallel for videos so the user
   // doesn't pay the latency twice.
   const isVideo = prepared.mime.startsWith('video/');
-  if (isVideo && prepared.posterDataUrl && opts.kind !== 'avatar') {
+  if (isVideo && prepared.posterDataUrl && opts.kind !== 'avatar' && opts.kind !== 'cover') {
     const [url, posterUrl] = await Promise.all([
       uploadPreparedMedia(prepared, opts),
       uploadPoster(prepared.posterDataUrl, opts as { kind: 'story' | 'reel' | 'post' | 'poll'; uid: string }),

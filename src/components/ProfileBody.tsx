@@ -428,7 +428,8 @@ function postCover(post: WhaPost) {
 }
 
 function profileHeroImage(userProfile: UserProfile, posts: WhaPost[], reels: ReelItem[], ratemes: RateMeSession[]) {
-  return userProfile.photoURL
+  return userProfile.coverPhoto
+    || userProfile.photoURL
     || posts.map(postCover).find(Boolean)
     || reels.map((reel) => reel.posterUrl).find(Boolean)
     || ratemes.map((item) => item.photoURL).find(Boolean)
@@ -576,10 +577,15 @@ function CanactPagesProfileUI({
 
   return (
     <div className="-mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
-      <div className="relative h-[190px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
+      <div className="relative h-[260px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
         {heroSrc ? <img src={heroSrc} alt="" className="h-full w-full object-cover opacity-55 mix-blend-luminosity" /> : null}
         <div className="absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
         {!isSelf ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} /> : null}
+        {isSelf ? (
+          <Link href="/edit-profile" prefetch className="absolute right-3 top-3 flex h-9 items-center gap-1.5 rounded-full bg-black/30 px-3 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-black/45">
+            <Camera size={14} /> Edit cover
+          </Link>
+        ) : null}
       </div>
 
       <section className="relative px-5 pb-5 text-center">

@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { GlassSwitch } from '@/components/GlassSwitch';
 import { Input, Select, Textarea } from '@/components/Input';
 import { ImageIcon, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
@@ -78,10 +79,10 @@ export default function PollCreatePage() {
               <ImageIcon size={18} /> Add poll photo
             </button>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={openEnded} onChange={(e) => setOpenEnded(e.target.checked)} />
+          <div className="flex items-center gap-2 text-sm">
+            <GlassSwitch checked={openEnded} label="Open-ended poll" onChange={setOpenEnded} />
             <span>Open-ended (no preset options — just gather replies in comments)</span>
-          </label>
+          </div>
           {!openEnded && (
             <div className="space-y-2">
               <span className="text-sm font-semibold">Options</span>

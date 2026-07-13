@@ -38,6 +38,11 @@
   background: linear-gradient(180deg, transparent 0, #faf8f2 24px);
 }
 
+.welcomeContent .title {
+  font-size: clamp(2rem, 8vw, 2.4rem);
+  white-space: nowrap;
+}
+
 .title {
   margin: 20px 0 8px;
   font-size: clamp(2.15rem, 9vw, 3.1rem);
@@ -238,31 +243,53 @@
   width: min(100%, 560px);
   min-height: var(--canact-viewport-height);
   margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 38px calc(118px + env(safe-area-inset-bottom));
+  padding: max(18px, env(safe-area-inset-top)) 38px calc(126px + env(safe-area-inset-bottom));
   background: #faf8f2;
   text-align: center;
   position: relative;
 }
 
 .registerBrand { width: 150px; height: 170px; margin: -10px auto 0; object-fit: contain; }
+.registerOrbit {
+  height: min(42vh, 390px);
+  margin: calc(-1 * max(18px, env(safe-area-inset-top))) -38px 0;
+  overflow: hidden;
+  position: relative;
+}
+.registerOrbit img { display: block; width: 100%; height: auto; transform: translateY(-12px); }
+.registerOrbitCompact { height: min(32vh, 292px); }
 .eyebrow { margin: -12px 0 18px; color: #287156; font-weight: 650; }
 .registerPage .progressWrap { margin-top: 0; gap: 13px; }
-.registerBody { margin-top: 32px; }
-.registerBody .title { font-size: clamp(2rem, 8vw, 2.65rem); margin-top: 0; }
+.registerBody { margin-top: 28px; }
+.registerBody .title { font-size: clamp(1.9rem, 7.4vw, 2.35rem); margin-top: 0; }
 .registerBody .subtitle { font-size: 1rem; }
 .registerFields { display: grid; gap: 16px; margin-top: 30px; }
 .registerFields .field { margin: 0; }
+
+.registerScreen_name .registerBody,
+.registerScreen_gender .registerBody,
+.registerScreen_birthday .registerBody,
+.registerScreen_selfie .registerBody { margin-top: 4px; }
+.registerScreen_name .registerBody .progressWrap,
+.registerScreen_gender .registerBody .progressWrap,
+.registerScreen_birthday .registerBody .progressWrap,
+.registerScreen_zodiac .registerBody .progressWrap,
+.registerScreen_selfie .registerBody .progressWrap,
+.registerScreen_complete .registerBody .progressWrap { margin-top: 28px; }
+
+.detailsPage .registerBody { margin-top: 32px; }
+.detailsPage .registerFields { gap: 13px; margin-top: 26px; }
 
 .phoneWrap { margin-top: 0; text-align: left; }
 .phoneWrap > label > span:first-child { display: none; }
 .phoneWrap > label > div { height: 76px; border-color: #e5e7e6; border-radius: 19px; }
 
-.choiceList { display: grid; gap: 14px; margin-top: 30px; }
+.choiceList { display: grid; gap: 14px; margin-top: 24px; }
 .choice {
-  min-height: 88px;
-  padding: 12px 20px;
+  min-height: 82px;
+  padding: 10px 20px;
   display: grid;
-  grid-template-columns: 58px 1fr 32px;
+  grid-template-columns: 52px 1fr 30px;
   gap: 16px;
   align-items: center;
   border: 1px solid #e4e5df;
@@ -273,43 +300,100 @@
   font-weight: 700;
 }
 .choice.selected { border: 2px solid #247159; background: #f6fcf8; }
-.choiceIcon { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: #dcece5; }
+.choiceIcon { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; background: #dcece5; color: #34745f; }
 .choiceCheck { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #13664a; color: white; }
 .choiceCheck svg { width: 16px; }
+.choiceEmpty { width: 26px; height: 26px; border: 2px solid #d5d7d2; border-radius: 50%; }
 
-.birthdayCard, .selfieCard, .locationCard {
-  margin-top: 30px;
-  padding: 26px;
+.birthdayWheel {
+  margin-top: 24px;
+  padding: 18px 14px;
+  display: grid;
+  grid-template-columns: .8fr 1.35fr 1fr;
+  gap: 8px;
   border: 1px solid rgb(17 40 34 / 7%);
-  border-radius: 26px;
+  border-radius: 22px;
   background: white;
+  box-shadow: 0 10px 24px rgb(17 40 34 / 12%);
 }
-.birthdayCard > svg { width: 58px; height: 58px; color: #287156; margin: 0 auto 18px; }
-.birthdayCard input { width: 100%; padding: 16px; border: 0; border-radius: 15px; background: #f3f1eb; color: #112822; font-size: 1.1rem; }
+.birthdayWheel label { display: grid; gap: 7px; color: rgb(17 40 34 / 52%); font-size: .78rem; }
+.birthdayWheel select {
+  width: 100%;
+  height: 54px;
+  padding: 0 4px;
+  border: 1px solid #ecece8;
+  border-radius: 12px;
+  appearance: none;
+  background: #fff;
+  color: #112822;
+  text-align: center;
+  text-align-last: center;
+  font-size: 1.28rem;
+  font-weight: 750;
+}
 .privacyNote { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 18px 0 0; color: rgb(17 40 34 / 52%); font-size: .78rem; }
 .privacyNote svg { width: 16px; height: 16px; }
 
-.selfiePreview {
-  width: 215px;
-  height: 215px;
-  margin: 0 auto;
+.zodiacCard {
+  margin-top: 18px;
+  padding: 22px 24px 18px;
+  border: 1px solid rgb(17 40 34 / 7%);
+  border-radius: 28px;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: 0 10px 24px rgb(17 40 34 / 10%);
+}
+.zodiacDate { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; color: #34745f; font-size: .76rem; }
+.zodiacDate span { height: 1px; background: #e2e4df; }
+.zodiacHeading { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 25px; }
+.zodiacHeading > span { width: 70px; height: 70px; display: grid; place-items: center; border-radius: 50%; background: #e3f0ea; color: #1f6b55; font-size: 2.7rem; }
+.zodiacHeading strong { font-family: Georgia, serif; font-size: clamp(2.15rem, 10vw, 3rem); }
+.zodiacCard > p { max-width: 330px; margin: 18px auto; font-size: .86rem; line-height: 1.5; }
+.zodiacNote { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 16px; border-top: 1px solid #e6e8e3; color: rgb(17 40 34 / 52%); font-size: .75rem; }
+.zodiacNote svg { width: 16px; height: 16px; color: #2e8068; }
+
+.selfieScan {
+  width: 100%;
+  height: min(28vh, 248px);
+  margin-top: 22px;
   overflow: hidden;
-  border: 4px dashed #2e7660;
-  border-radius: 50%;
-  background: #e8f3ed;
+  border: 1px solid #cfe0d8;
+  border-radius: 25px;
+  background: linear-gradient(145deg, #edf7f2, #daeae3);
   display: grid;
   place-items: center;
+  position: relative;
+  color: #2e7660;
 }
-.selfiePreview img { width: 100%; height: 100%; object-fit: cover; }
-.selfiePreview svg { width: 66px; height: 66px; color: #2e7660; }
-.captureButton { margin-top: 18px; padding: 12px 20px; border-radius: 999px; background: #e2eee8; color: #175e48; font-weight: 750; }
-.trustRow { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 18px; color: #35715e; font-size: .75rem; }
-.trustRow span { display: inline-flex; align-items: center; gap: 4px; }
-.trustRow svg { width: 15px; height: 15px; }
+.selfieScan > img { width: 100%; height: 100%; object-fit: cover; }
+.selfieScan > svg { width: 70px; height: 70px; }
+.selfieScan > span { position: absolute; bottom: 18px; padding: 7px 12px; border-radius: 999px; background: rgb(255 255 255 / 76%); font-size: .78rem; font-weight: 700; }
+.selfieScan i { position: absolute; width: 25px; height: 25px; border-color: #429078; }
+.scanCornerA { left: 18px; top: 18px; border-left: 3px solid; border-top: 3px solid; border-radius: 9px 0 0; }
+.scanCornerB { right: 18px; top: 18px; border-right: 3px solid; border-top: 3px solid; border-radius: 0 9px 0 0; }
+.scanCornerC { right: 18px; bottom: 18px; border-right: 3px solid; border-bottom: 3px solid; border-radius: 0 0 9px; }
+.scanCornerD { left: 18px; bottom: 18px; border-left: 3px solid; border-bottom: 3px solid; border-radius: 0 0 0 9px; }
+.trustPills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 16px; }
+.trustPills span { min-height: 30px; padding: 5px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 999px; background: #e8f2ed; color: #35715e; font-size: .55rem; line-height: 1.15; }
+.trustPills svg { width: 12px; height: 12px; flex: none; }
 
-.locationCard { display: grid; gap: 16px; text-align: left; }
-.locationCard label > span:first-child { color: #112822; }
-.locationCard input, .locationCard button { border-color: #e5e7e6; }
+.completeGraphic {
+  width: min(100%, 340px);
+  margin: 4px auto 0;
+  padding: 46px 36px 22px;
+  display: grid;
+  gap: 0;
+  border-radius: 44% 44% 30px 30px;
+  background: radial-gradient(circle at 50% 16%, rgb(164 218 190 / 45%), transparent 46%), rgb(255 255 255 / 36%);
+  position: relative;
+}
+.completeGraphic > span { min-height: 48px; padding: 0 18px; display: flex; align-items: center; gap: 12px; border-radius: 15px; background: rgb(255 255 255 / 92%); box-shadow: 0 7px 16px rgb(17 40 34 / 9%); color: #173f34; font-size: .84rem; text-align: left; }
+.completeGraphic > span + span { margin-top: -3px; }
+.completeGraphic > span:nth-of-type(2) { transform: translateX(8px); }
+.completeGraphic > span:nth-of-type(3) { transform: translateX(-6px); }
+.completeGraphic svg { width: 20px; color: #2e8068; }
+.completeCheck { position: absolute; left: 50%; top: 0; width: 58px; height: 58px; transform: translate(-50%, -28%); display: grid; place-items: center; border-radius: 50%; background: linear-gradient(145deg, #58a885, #1b684f); color: white; box-shadow: 0 8px 14px rgb(25 92 70 / 28%); }
+.completeCheck svg { width: 32px; height: 32px; color: white; }
+.reviewButton { margin-top: 18px; color: #1f6b55; font-size: .82rem; font-weight: 700; }
 
 .registerFooter {
   position: fixed;
@@ -319,7 +403,7 @@
   width: min(100%, 560px);
   transform: translateX(-50%);
   padding: 16px 38px calc(22px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent, #faf8f2 20%);
+  background: linear-gradient(180deg, transparent, #faf8f2 26%);
 }
 .registerFooter .primaryButton { min-height: 70px; margin-top: 0; }
 
@@ -334,7 +418,16 @@
   .loginCard { margin-top: -18px; padding-top: 24px; }
   .registerBrand { height: 132px; }
   .registerBody { margin-top: 22px; }
-  .selfiePreview { width: 165px; height: 165px; }
+  .registerOrbit { height: 245px; }
+  .registerOrbitCompact { height: 190px; }
+  .registerScreen_name .registerBody,
+  .registerScreen_gender .registerBody,
+  .registerScreen_birthday .registerBody,
+  .registerScreen_selfie .registerBody { margin-top: 0; }
+  .choice { min-height: 66px; }
+  .choiceIcon { width: 42px; height: 42px; }
+  .selfieScan { height: 170px; }
+  .zodiacCard { padding-top: 16px; }
 }
 
 @media (min-width: 700px) {

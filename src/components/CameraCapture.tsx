@@ -488,7 +488,7 @@ export function CameraCapture({
                     })}
                   </div>
                 )}
-                <div className="flex items-center gap-3 rounded-full bg-black/30 px-3 py-2 backdrop-blur-xl ring-1 ring-white/15">
+                <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="12,26,22" data-liquid-tint-opacity="0.28" className="flex items-center gap-3 rounded-full bg-transparent px-3 py-2 ring-1 ring-white/20">
                   <span className="w-9 text-center text-xs font-bold">
                     {zoom.value.toFixed(zoom.value < 10 ? 1 : 0)}×
                   </span>
@@ -500,7 +500,7 @@ export function CameraCapture({
                     step={zoom.step}
                     value={zoom.value}
                     onChange={(event) => applyZoomValue(Number(event.target.value))}
-                    className="min-w-0 flex-1 accent-white"
+                    className="canact-glass-range min-w-0 flex-1"
                   />
                 </div>
               </div>

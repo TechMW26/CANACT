@@ -300,15 +300,19 @@ function ExploreMapSurface({
         <span>Explore <strong>Canact</strong><br />near you</span>
       </button>
 
-      <div className={styles.legend} aria-label="Map legend">
+      <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.14" className={styles.legend} aria-label="Map legend">
         <span><i className={styles.heatDot} /> Activity</span>
         <span><i className={styles.postDot} /> Posts</span>
         <span><i className={styles.storyDot} /> Stories</span>
       </div>
 
-      {locationUnavailable ? <div className={styles.locationNotice}>Enable location to center the map around you.</div> : null}
+      {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}>Enable location to center the map around you.</div> : null}
 
       <aside
+        data-liquid-glass="surface"
+        data-liquid-radius="30"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0.38"
         className={`${styles.peopleSheet} ${sheetExpanded ? styles.peopleSheetExpanded : ''}`}
         style={sheetStyle}
         aria-label="People nearby"
@@ -327,8 +331,8 @@ function ExploreMapSurface({
               <Users size={21} /> <strong>People Nearby</strong><span>{people.length}</span>
             </button>
             <div className={styles.sheetActions}>
-              <button type="button" onClick={onToggleFilters} aria-label="Filter nearby people" aria-expanded={filtersOpen}><Filter size={17} /></button>
-              <button type="button" onClick={onSeeAll}>See all</button>
+              <button type="button" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" onClick={onToggleFilters} aria-label="Filter nearby people" aria-expanded={filtersOpen}><Filter size={17} /></button>
+              <button type="button" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" onClick={onSeeAll}>See all</button>
             </div>
           </div>
           {!sheetExpanded ? <p className={styles.swipeHint}>Swipe up to explore nearby people</p> : null}
@@ -336,7 +340,7 @@ function ExploreMapSurface({
 
         <div className={styles.sheetBody}>
           {filtersOpen ? (
-            <div className={styles.filtersPanel}>
+            <div data-liquid-glass="surface" data-liquid-radius="20" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className={styles.filtersPanel}>
               <div className={styles.filterLegend}>
                 <span><i className={styles.heatDot} /> High activity</span>
                 <span><Star size={15} className="text-[#f2b72e]" /> Favourites</span>
@@ -382,7 +386,7 @@ function RelationshipToggle({
 function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 'requests'>; people: PeoplePerson[]; view: PeopleView; onViewChange: (view: PeopleView) => void }) {
   const locatedCount = people.filter(hasLocation).length;
   return (
-    <div className="pointer-events-auto mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-[#F0D7DC] bg-white/50 pl-6 pr-2 py-2 shadow-sm backdrop-blur">
+    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className="pointer-events-auto mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white/60 bg-transparent pl-6 pr-2 py-2 shadow-sm">
       <div className="min-w-0">
         <h3 className="truncate text-base font-extrabold text-ink">{tab === 'friends' ? 'My friends' : 'My favourites'}</h3>
         <div className="mt-0.5 truncate text-xs font-semibold text-ink/50">{locatedCount} of {people.length} visible on map</div>
@@ -394,11 +398,13 @@ function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 're
 
 function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: PeopleView) => void }) {
   return (
-    <div data-liquid-glass="surface" data-liquid-radius="999" className="inline-flex shrink-0 rounded-full border border-white/60 bg-transparent p-1">
+    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.08" className="inline-flex shrink-0 rounded-full border border-white/60 bg-transparent p-1">
       <button
         type="button"
         data-liquid-glass={view === 'map' ? 'switcher' : 'none'}
         data-liquid-radius="999"
+        data-liquid-tint="31,107,85"
+        data-liquid-tint-opacity="0.08"
         onClick={() => onChange('map')}
         className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'map' ? 'text-brand' : 'text-ink/60'}`}
       >
@@ -408,6 +414,8 @@ function ViewSwitch({ view, onChange }: { view: PeopleView; onChange: (view: Peo
         type="button"
         data-liquid-glass={view === 'list' ? 'switcher' : 'none'}
         data-liquid-radius="999"
+        data-liquid-tint="31,107,85"
+        data-liquid-tint-opacity="0.08"
         onClick={() => onChange('list')}
         className={`inline-flex h-8 items-center gap-1.5 rounded-full bg-transparent px-3 text-xs font-extrabold transition ${view === 'list' ? 'text-brand' : 'text-ink/60'}`}
       >
@@ -654,6 +662,8 @@ function PillTab({ active, onClick, label, badge }: { active: boolean; onClick: 
       type="button"
       data-liquid-glass={active ? 'switcher' : 'none'}
       data-liquid-radius="999"
+      data-liquid-tint="31,107,85"
+      data-liquid-tint-opacity="0.08"
       onClick={onClick}
       className={`relative flex h-11 min-w-0 items-center justify-center rounded-full bg-transparent px-1 text-[13px] font-extrabold transition sm:text-sm ${active ? 'text-brand' : 'text-ink/60 hover:text-ink'}`}
     >

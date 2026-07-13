@@ -193,15 +193,17 @@ function RangeControl({
         <span>{label}</span>
         <span>{value.toFixed(step < 1 ? 2 : 0)}</span>
       </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full accent-brand"
-      />
+      <span data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.10" className="canact-glass-range-shell">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="canact-glass-range"
+        />
+      </span>
     </label>
   );
 }

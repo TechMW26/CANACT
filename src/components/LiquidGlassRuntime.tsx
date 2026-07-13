@@ -84,7 +84,29 @@ export function LiquidGlassRuntime() {
     };
     const scheduleScan = () => { if (!scanFrame) scanFrame = requestAnimationFrame(scan); };
     const observer = new MutationObserver(scheduleScan);
-    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'data-liquid-glass', 'data-liquid-radius', 'data-liquid-blur', 'data-liquid-tint', 'data-liquid-tint-opacity'] });
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: [
+        'class',
+        'data-liquid-glass',
+        'data-liquid-radius',
+        'data-liquid-blur',
+        'data-liquid-tint',
+        'data-liquid-tint-opacity',
+        'data-liquid-thickness',
+        'data-liquid-bezel',
+        'data-liquid-ior',
+        'data-liquid-scale',
+        'data-liquid-specular-opacity',
+        'data-liquid-specular-saturation',
+        'data-liquid-inner-shadow',
+        'data-liquid-inner-shadow-blur',
+        'data-liquid-inner-shadow-spread',
+        'data-liquid-balanced-specular',
+      ],
+    });
     scan();
     const rebuildAll = () => instances.forEach((instance) => instance.rebuild());
     window.addEventListener('canact:liquid-glass-rebuild', rebuildAll);
@@ -113,10 +135,13 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
   element.classList.add('canact-lg-host');
   const refract = document.createElement('span');
   const tint = document.createElement('span');
+  const outerEdge = document.createElement('span');
+  const innerEdge = document.createElement('span');
   refract.className = 'canact-lg-layer canact-lg-refract';
   tint.className = 'canact-lg-layer canact-lg-tint';
-  element.insertBefore(tint, element.firstChild);
-  element.insertBefore(refract, element.firstChild);
+  outerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-outer';
+  innerEdge.className = 'canact-lg-layer canact-lg-edge canact-lg-edge-inner';
+  element.prepend(refract, tint, outerEdge, innerEdge);
 
   let filterNode: SVGFilterElement | null = null;
   let frame = 0;
@@ -131,21 +156,35 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
     const base = element.dataset.liquidGlass === 'switcher' ? SWITCHER_CONFIG : SURFACE_CONFIG;
     const config: GlassConfig = {
       ...base,
+      glassThickness: finiteNumber(element.dataset.liquidThickness, base.glassThickness, 0, 400),
+      bezelWidth: finiteNumber(element.dataset.liquidBezel, base.bezelWidth, 0, 400),
+      ior: finiteNumber(element.dataset.liquidIor, base.ior, 1, 8),
+      scaleRatio: finiteNumber(element.dataset.liquidScale, base.scaleRatio, 0, 10),
       blur: finiteNumber(element.dataset.liquidBlur, base.blur, 0, 20),
+      specularOpacity: finiteNumber(element.dataset.liquidSpecularOpacity, base.specularOpacity, 0, 3),
+      specularSat: finiteNumber(element.dataset.liquidSpecularSaturation, base.specularSat, 0, 3),
       tintColor: element.dataset.liquidTint || base.tintColor,
       tintOpacity: finiteNumber(element.dataset.liquidTintOpacity, base.tintOpacity, 0, 1),
+      innerShadow: element.dataset.liquidInnerShadow || base.innerShadow,
+      innerShadowBlur: finiteNumber(element.dataset.liquidInnerShadowBlur, base.innerShadowBlur, 0, 300),
+      innerShadowSpread: finiteNumber(element.dataset.liquidInnerShadowSpread, base.innerShadowSpread, -300, 300),
+      balancedSpecular: element.dataset.liquidBalancedSpecular === undefined
+        ? base.balancedSpecular
+        : element.dataset.liquidBalancedSpecular === 'true',
     };
     filterNode?.remove();
     filterNode = null;
     refract.style.borderRadius = `${radius}px`;
     tint.style.borderRadius = `${radius}px`;
+    outerEdge.style.borderRadius = `${radius}px`;
+    innerEdge.style.borderRadius = `${Math.max(2, radius - 3)}px`;
     tint.style.backgroundColor = `rgba(${config.tintColor},${config.tintOpacity})`;
     tint.style.boxShadow = `inset 0 0 ${config.innerShadowBlur}px ${config.innerShadowSpread}px ${config.innerShadow}`;
     if (useWebKitFallback) {
       refract.classList.add('canact-lg-webkit-fallback');
       refract.style.backdropFilter = 'brightness(1.06) contrast(1.04) saturate(1.18)';
       refract.style.setProperty('-webkit-backdrop-filter', 'brightness(1.06) contrast(1.04) saturate(1.18)');
-      elevateChildren(element, refract, tint);
+      elevateChildren(element, refract, tint, outerEdge, innerEdge);
       return;
     }
     refract.classList.remove('canact-lg-webkit-fallback');
@@ -154,7 +193,7 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
     defs.appendChild(filterNode);
     refract.style.backdropFilter = `url(#${id})`;
     refract.style.setProperty('-webkit-backdrop-filter', `url(#${id})`);
-    elevateChildren(element, refract, tint);
+    elevateChildren(element, refract, tint, outerEdge, innerEdge);
   };
   const schedule = () => { if (!frame) frame = requestAnimationFrame(rebuild); };
   const resizeObserver = new ResizeObserver(schedule);
@@ -162,21 +201,23 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
   schedule();
   return {
     rebuild,
-    isAttached: () => refract.parentElement === element && tint.parentElement === element && (useWebKitFallback || !!filterNode?.isConnected),
+    isAttached: () => refract.parentElement === element && tint.parentElement === element && outerEdge.parentElement === element && innerEdge.parentElement === element && (useWebKitFallback || !!filterNode?.isConnected),
     destroy: () => {
       if (frame) cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       filterNode?.remove();
       refract.remove();
       tint.remove();
+      outerEdge.remove();
+      innerEdge.remove();
       element.classList.remove('canact-lg-host');
     },
   };
 }
 
-function elevateChildren(element: HTMLElement, refract: HTMLElement, tint: HTMLElement) {
+function elevateChildren(element: HTMLElement, ...glassLayers: HTMLElement[]) {
   Array.from(element.children).forEach((child) => {
-    if (child === refract || child === tint) return;
+    if (glassLayers.includes(child as HTMLElement)) return;
     const node = child as HTMLElement;
     if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
     if (!node.style.zIndex) node.style.zIndex = '1';

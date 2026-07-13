@@ -36,6 +36,7 @@ export interface UserProfile {
   dateOfBirth?: string;
   bio?: string;
   photoURL?: string;
+  coverPhoto?: string;
   profileVerified?: boolean;
   verificationProvider?: 'digilocker';
   verificationIdLast4?: string;

@@ -388,8 +388,7 @@ export function HomeScoreExperience() {
       const viewportWidth = window.innerWidth || 390;
       const compactHeight = stageHeight < 620 || window.innerHeight < 740;
       const widthScale = Math.max(0.62, Math.min(1, (viewportWidth - 44) / 324));
-      const stageWidth = stageRect?.width || viewportWidth;
-      const startWidth = Math.round(viewportWidth < 1024 ? viewportWidth * .96 : Math.min(480, stageWidth * .96));
+      const startWidth = Math.round(viewportWidth * .96);
       const circleScale = Math.max(.88, Math.min(1.2, startWidth / 304));
       const endWidth = Math.round(188 * Math.max(0.88, Math.min(1, widthScale)));
       const startHeight = startWidth;

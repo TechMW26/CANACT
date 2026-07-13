@@ -20,7 +20,7 @@
 .greeting h1 { margin: 0; font-size: 21px; font-weight: 750; letter-spacing: -.025em; }
 .greeting strong { color: #1f6b55; }
 
-.scoreDock { position: sticky; z-index: 12; top: calc(16px + var(--canact-sticky-header-shift, 0px)); height: 310px; margin-top: 20px; display: flex; justify-content: center; pointer-events: none; }
+.scoreDock { position: sticky; z-index: 12; top: calc(16px + var(--canact-sticky-header-shift, 0px)); height: 94vw; margin-top: 20px; display: flex; justify-content: center; pointer-events: none; }
 .scoreShape {
   position: relative;
   width: var(--shape-width);
@@ -73,7 +73,7 @@
 
 @media (max-height: 760px) {
   .hero { min-height: 126px; padding-top: 18px; }
-  .scoreDock { height: 280px; margin-top: 22px; }
+  .scoreDock { height: 94vw; margin-top: 18px; }
   .scoreInner b { font-size: 58px; }
   .scrollHint { margin-top: 20px; margin-bottom: 82px; }
 }
