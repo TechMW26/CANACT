@@ -58,6 +58,8 @@ export function LiquidGlassRuntime() {
 
     let sequence = 0;
     let scanFrame = 0;
+    const useWebKitFallback = needsWebKitGlassFallback();
+    document.documentElement.toggleAttribute('data-canact-webkit-glass', useWebKitFallback);
 
     const shouldHaveGlass = (element: HTMLElement) => {
       return !!element.dataset.liquidGlass && element.dataset.liquidGlass !== 'none';
@@ -71,7 +73,7 @@ export function LiquidGlassRuntime() {
           current.destroy();
           instances.delete(element);
         }
-        if (shouldHaveGlass(element) && !instances.has(element)) instances.set(element, mountGlass(element, defs, () => ++sequence));
+        if (shouldHaveGlass(element) && !instances.has(element)) instances.set(element, mountGlass(element, defs, () => ++sequence, useWebKitFallback));
       });
       instances.forEach((instance, element) => {
         if (!element.isConnected || !shouldHaveGlass(element)) {
@@ -82,23 +84,31 @@ export function LiquidGlassRuntime() {
     };
     const scheduleScan = () => { if (!scanFrame) scanFrame = requestAnimationFrame(scan); };
     const observer = new MutationObserver(scheduleScan);
-    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'data-liquid-glass', 'data-liquid-blur', 'data-liquid-tint', 'data-liquid-tint-opacity'] });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'data-liquid-glass', 'data-liquid-radius', 'data-liquid-blur', 'data-liquid-tint', 'data-liquid-tint-opacity'] });
     scan();
-    window.addEventListener('canact:liquid-glass-rebuild', scheduleScan);
+    const rebuildAll = () => instances.forEach((instance) => instance.rebuild());
+    window.addEventListener('canact:liquid-glass-rebuild', rebuildAll);
+    window.addEventListener('resize', rebuildAll, { passive: true });
+    window.addEventListener('orientationchange', rebuildAll, { passive: true });
+    window.visualViewport?.addEventListener('resize', rebuildAll, { passive: true });
 
     return () => {
       observer.disconnect();
       if (scanFrame) cancelAnimationFrame(scanFrame);
-      window.removeEventListener('canact:liquid-glass-rebuild', scheduleScan);
+      window.removeEventListener('canact:liquid-glass-rebuild', rebuildAll);
+      window.removeEventListener('resize', rebuildAll);
+      window.removeEventListener('orientationchange', rebuildAll);
+      window.visualViewport?.removeEventListener('resize', rebuildAll);
       instances.forEach((instance) => instance.destroy());
       instances.clear();
+      document.documentElement.removeAttribute('data-canact-webkit-glass');
       svg.remove();
     };
   }, []);
   return null;
 }
 
-function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => number): GlassInstance {
+function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => number, useWebKitFallback: boolean): GlassInstance {
   if (getComputedStyle(element).position === 'static') element.style.position = 'relative';
   element.classList.add('canact-lg-host');
   const refract = document.createElement('span');
@@ -126,21 +136,25 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
       tintOpacity: finiteNumber(element.dataset.liquidTintOpacity, base.tintOpacity, 0, 1),
     };
     filterNode?.remove();
-    const id = `canact-lg-${nextId()}`;
-    filterNode = buildFilter(id, width, height, radius, config);
-    defs.appendChild(filterNode);
+    filterNode = null;
     refract.style.borderRadius = `${radius}px`;
-    refract.style.backdropFilter = `url(#${id})`;
-    refract.style.setProperty('-webkit-backdrop-filter', `url(#${id})`);
     tint.style.borderRadius = `${radius}px`;
     tint.style.backgroundColor = `rgba(${config.tintColor},${config.tintOpacity})`;
     tint.style.boxShadow = `inset 0 0 ${config.innerShadowBlur}px ${config.innerShadowSpread}px ${config.innerShadow}`;
-    Array.from(element.children).forEach((child) => {
-      if (child === refract || child === tint || child.tagName.toLowerCase() === 'svg') return;
-      const node = child as HTMLElement;
-      if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
-      if (!node.style.zIndex) node.style.zIndex = '1';
-    });
+    if (useWebKitFallback) {
+      refract.classList.add('canact-lg-webkit-fallback');
+      refract.style.backdropFilter = 'brightness(1.06) contrast(1.04) saturate(1.18)';
+      refract.style.setProperty('-webkit-backdrop-filter', 'brightness(1.06) contrast(1.04) saturate(1.18)');
+      elevateChildren(element, refract, tint);
+      return;
+    }
+    refract.classList.remove('canact-lg-webkit-fallback');
+    const id = `canact-lg-${nextId()}`;
+    filterNode = buildFilter(id, width, height, radius, config);
+    defs.appendChild(filterNode);
+    refract.style.backdropFilter = `url(#${id})`;
+    refract.style.setProperty('-webkit-backdrop-filter', `url(#${id})`);
+    elevateChildren(element, refract, tint);
   };
   const schedule = () => { if (!frame) frame = requestAnimationFrame(rebuild); };
   const resizeObserver = new ResizeObserver(schedule);
@@ -148,7 +162,7 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
   schedule();
   return {
     rebuild,
-    isAttached: () => refract.parentElement === element && tint.parentElement === element && !!filterNode?.isConnected,
+    isAttached: () => refract.parentElement === element && tint.parentElement === element && (useWebKitFallback || !!filterNode?.isConnected),
     destroy: () => {
       if (frame) cancelAnimationFrame(frame);
       resizeObserver.disconnect();
@@ -158,6 +172,22 @@ function mountGlass(element: HTMLElement, defs: SVGDefsElement, nextId: () => nu
       element.classList.remove('canact-lg-host');
     },
   };
+}
+
+function elevateChildren(element: HTMLElement, refract: HTMLElement, tint: HTMLElement) {
+  Array.from(element.children).forEach((child) => {
+    if (child === refract || child === tint) return;
+    const node = child as HTMLElement;
+    if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
+    if (!node.style.zIndex) node.style.zIndex = '1';
+  });
+}
+
+function needsWebKitGlassFallback() {
+  const ua = navigator.userAgent;
+  const iOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  const desktopWebKit = /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/.test(ua);
+  return iOS || desktopWebKit;
 }
 
 function surfaceFn(x: number) { return Math.pow(1 - Math.pow(1 - x, 4), .25); }

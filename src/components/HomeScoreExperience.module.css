@@ -398,7 +398,7 @@
   z-index: 50;
   display: grid;
   place-items: center;
-  width: min(100vw, 430px);
+  width: 96vh;
   pointer-events: none;
   transform: translate(-50%, -50%);
   will-change: transform, top;
@@ -438,8 +438,8 @@
   border: 0 solid transparent;
   position: relative;
   display: flex;
-  width: 304px;
-  height: 304px;
+  width: 96vh;
+  height: 96vh;
   align-items: center;
   justify-content: center;
   flex-direction: column;

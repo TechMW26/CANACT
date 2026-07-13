@@ -620,9 +620,9 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, topInset }: 
       data-liquid-tint="250,248,242"
       data-liquid-tint-opacity="0"
       className={`canact-figma-header fixed z-30 lg:hidden ${headerChromeClass}`}
-      style={{ top: topInset ? `calc(${topInset} + 0em)` : '1em' }}
+      style={{ top: topInset ? `calc(${topInset} + 1em)` : '1em' }}
     >
-      <div className={`relative z-10 flex h-[72px] items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+      <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
         <Brand size={38} href="/" />
         <div className="ml-auto inline-flex items-center gap-4">
           <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />

@@ -388,10 +388,9 @@ export function HomeScoreExperience() {
       const viewportWidth = window.innerWidth || 390;
       const compactHeight = stageHeight < 620 || window.innerHeight < 740;
       const widthScale = Math.max(0.62, Math.min(1, (viewportWidth - 44) / 324));
-      const heightScale = Math.max(0.54, Math.min(1, (stageHeight - (compactHeight ? 32 : 44)) / 334));
-      const circleScale = Math.min(widthScale, heightScale);
-
-      const startWidth = Math.round(304 * circleScale);
+      const stageWidth = stageRect?.width || viewportWidth;
+      const startWidth = Math.round(viewportWidth < 1024 ? viewportWidth * .96 : Math.min(480, stageWidth * .96));
+      const circleScale = Math.max(.88, Math.min(1.2, startWidth / 304));
       const endWidth = Math.round(188 * Math.max(0.88, Math.min(1, widthScale)));
       const startHeight = startWidth;
       const endHeight = Math.round(44 * Math.max(0.92, Math.min(1, widthScale)));
@@ -405,17 +404,22 @@ export function HomeScoreExperience() {
       const navTop = bottomNav instanceof HTMLElement ? bottomNav.getBoundingClientRect().top : (window.innerHeight - 76);
       const laneTop = Math.max(0, headerBottom + 14);
       const laneBottom = Math.max(laneTop + startHeight, navTop - 14);
-      const startCenterY = Math.round(laneTop + ((laneBottom - laneTop) / 2));
+      const greetingHeight = greeting.getBoundingClientRect().height || 56;
+      const tipStableHeight = 58;
+      const contentCenterY = laneTop + ((laneBottom - laneTop) / 2);
+      const minimumCenterY = laneTop + greetingHeight + 14 + (startHeight / 2);
+      const maximumCenterY = laneBottom - tipStableHeight - 14 - (startHeight / 2);
+      const startCenterY = Math.round(minimumCenterY <= maximumCenterY
+        ? Math.min(maximumCenterY, Math.max(minimumCenterY, contentCenterY))
+        : contentCenterY);
       const endCenterY = Math.round(Math.max(laneTop + (height / 2), headerBottom + 10 + (height / 2)));
       const y = startCenterY - eased * (startCenterY - endCenterY);
       const circleTop = y - (height / 2);
       const circleBottom = y + (height / 2);
-      const surroundGap = Math.round(Math.max(22, Math.min(52, stageHeight * 0.06)));
-      const greetingHeight = greeting.getBoundingClientRect().height || 56;
-      const tipStableHeight = 58;
+      const surroundGap = Math.round(Math.max(compactHeight ? 12 : 22, Math.min(52, stageHeight * 0.06)));
       const tipBottomInset = 12;
       const greetingTop = Math.max(headerBottom + 10, Math.round(circleTop - surroundGap - greetingHeight));
-      const tipTop = Math.round(Math.min(stageHeight - tipStableHeight - tipBottomInset, circleBottom + surroundGap));
+      const tipTop = Math.round(Math.min(navTop - tipStableHeight - tipBottomInset, circleBottom + surroundGap));
       const meterReveal = easeInOutQuart(Math.max(0, Math.min(1, (0.72 - progress) / 0.42)));
       const gradientBorderProgress = easeInOutQuart(Math.max(0, Math.min(1, (1 - progress) / 0.28)));
       const pillReveal = easeInOutQuart(Math.max(0, Math.min(1, (progress - 0.72) / 0.22)));
@@ -426,6 +430,7 @@ export function HomeScoreExperience() {
 
       circle.style.width = `${width}px`;
       circle.style.height = `${height}px`;
+      scoreWrap.style.width = `${width}px`;
       circle.style.borderRadius = `${height / 2}px`;
       circle.style.setProperty('--score-circle-scale', String(circleScale));
       circle.style.setProperty('--score-meter-opacity', String(meterReveal));

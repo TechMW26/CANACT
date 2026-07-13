@@ -200,17 +200,35 @@ input[type="time"]::-webkit-date-and-time-value {
   margin-right: auto;
 }
 
-/* Liquid glass runtime layers, ported from liquid-glass.html. */
-.canact-lg-host { isolation: isolate; }
+/* Liquid glass runtime layers, ported from liquid-glass.html. Backdrop
+   sampling must stay in the page compositing context for refraction to work. */
+.canact-lg-host { isolation: auto; }
 .canact-lg-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.canact-lg-refract { background: rgb(255 255 255 / 1.5%); }
+.canact-lg-refract { overflow: hidden; background: rgb(255 255 255 / 1.5%); }
 .canact-lg-tint { transition: background-color 180ms ease; }
 
-.canact-figma-header > .canact-lg-refract,
-.canact-figma-header > .canact-lg-tint,
-.canact-figma-bottom-nav > .canact-lg-refract,
-.canact-figma-bottom-nav > .canact-lg-tint {
-  background: transparent !important;
+/* WebKit currently drops SVG URL displacement filters in backdrop-filter.
+   Use Apple's native glass material when present and retain an edge/specular
+   fallback on older iPhone, iPad and Safari versions. */
+.canact-lg-refract.canact-lg-webkit-fallback {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 18%) 0%, transparent 34%, rgb(255 255 255 / 5%) 62%, rgb(19 69 52 / 7%) 100%) !important;
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 72%),
+    inset -1px -1px 0 rgb(20 61 48 / 12%),
+    inset 0 10px 22px rgb(255 255 255 / 5%);
+}
+
+html[data-canact-webkit-glass] .canact-lg-refract {
+  will-change: -webkit-backdrop-filter, backdrop-filter;
+}
+
+@supports (-apple-visual-effect: -apple-system-glass-material-clear) {
+  html[data-canact-webkit-glass] .canact-lg-refract {
+    -apple-visual-effect: -apple-system-glass-material-clear;
+    background: rgb(255 255 255 / 3%) !important;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 62%), inset 0 -1px 0 rgb(20 61 48 / 10%);
+  }
 }
 
 /* Chrome contrast: dark icons with strong light glow — visible on both light and dark backgrounds. */
@@ -236,22 +254,31 @@ input[type="time"]::-webkit-date-and-time-value {
   color: #fff !important;
 }
 
-/* Figma v2 shared mobile chrome — physically-derived liquid glass. */
+/* Figma v2 shared mobile chrome — liquid-glass neumorphic style (ported from liquid-glass.html). */
 .canact-figma-header {
   left: max(20px, calc((100vw - 480px) / 2 + 20px));
   right: max(20px, calc((100vw - 480px) / 2 + 20px));
   height: 72px;
   overflow: visible;
-  border: 1px solid rgb(255 255 255 / 66%);
+  border: 1px solid rgb(255 255 255 / 52%);
   border-radius: 9999px;
-  background: transparent;
+  background: rgb(255 255 255 / 8%);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow:
-    14px 14px 36px rgb(31 56 47 / 12%),
-    -10px -10px 30px rgb(255 255 255 / 54%),
-    inset 0 1px 0 rgb(255 255 255 / 50%),
-    inset 0 -1px 0 rgb(31 107 85 / 5%);
+  box-shadow: 14px 14px 36px rgb(31 56 47 / 14%), -14px -14px 36px rgb(255 255 255 / 58%);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.canact-figma-header.engaged { transform: scale(1.03); }
+
+/* A low-opacity support layer mirrors the reference implementation while
+   leaving enough of the page visible for the displacement map to refract. */
+.canact-figma-header > .canact-header-inner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  border-radius: 9999px;
+  background: rgb(250 248 242 / 30%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
 }
 
 .canact-figma-header .canact-distance-pill {
@@ -271,15 +298,11 @@ input[type="time"]::-webkit-date-and-time-value {
   height: 72px;
   border-radius: 9999px;
   overflow: visible;
-  background: transparent;
-  border: 1px solid rgb(255 255 255 / 66%);
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 52%);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow:
-    14px 14px 36px rgb(31 56 47 / 12%),
-    -10px -10px 30px rgb(255 255 255 / 54%),
-    inset 0 1px 0 rgb(255 255 255 / 50%),
-    inset 0 -1px 0 rgb(31 107 85 / 5%);
+  box-shadow: 14px 14px 36px rgb(31 56 47 / 14%), -14px -14px 36px rgb(255 255 255 / 58%);
   --gx: 50%;
   --gy: 50%;
   --ga: 0;
@@ -287,7 +310,13 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 
 .canact-figma-bottom-nav.engaged { transform: scale(1.03); }
-.canact-bottom-dock-items { overflow: visible; padding: 8px; border-radius: 9999px; }
+.canact-bottom-dock-items {
+  overflow: visible;
+  padding: 8px;
+  border-radius: 9999px;
+  background: rgb(250 248 242 / 30%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 42%);
+}
 .canact-bottom-nav-glow {
   position: absolute;
   inset: 0;
@@ -295,7 +324,8 @@ input[type="time"]::-webkit-date-and-time-value {
   border-radius: 9999px;
   clip-path: inset(0 round 9999px);
   pointer-events: none;
-  background: radial-gradient(240px 150px at var(--gx) var(--gy), rgb(207 232 218 / var(--ga)) 0%, rgb(207 232 218 / 0) 74%);
+  background: radial-gradient(240px 150px at var(--gx) var(--gy), rgb(255 255 255 / var(--ga)) 0%, rgb(255 255 255 / 0) 74%);
+  transition: background 0.18s ease;
 }
 .canact-bottom-tab-indicator {
   position: absolute;
@@ -304,30 +334,45 @@ input[type="time"]::-webkit-date-and-time-value {
   z-index: 1;
   width: 56px;
   height: 56px;
-  border: 1px solid rgb(255 255 255 / 46%);
   border-radius: 9999px;
   pointer-events: none;
   transform-origin: center;
   will-change: left, width, transform;
-  background: transparent;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 46%), 10px 10px 24px rgb(31 56 47 / 14%), -8px -8px 20px rgb(255 255 255 / 38%);
-  transition: left .24s cubic-bezier(.2,.9,.22,1), width .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, box-shadow .25s ease;
+  background: rgb(255 255 255 / 22%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 46%), 10px 10px 24px rgb(31 56 47 / 14%), -8px -8px 20px rgb(255 255 255 / 58%);
+  transition: left .24s cubic-bezier(.2,.9,.22,1), width .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, background-color .25s ease, box-shadow .25s ease;
 }
-.canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); }
-.canact-figma-bottom-nav.dragging .canact-bottom-tab-indicator { transition: transform .2s ease, box-shadow .2s ease; }
+.canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); background: rgb(255 255 255 / 16%); }
+.canact-figma-bottom-nav.dragging .canact-bottom-tab-indicator { transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease; }
 
 .canact-figma-bottom-nav .canact-bottom-tab {
+  position: relative;
   z-index: 2;
   width: clamp(42px, 13.5vw, 64px);
   height: 56px;
   border-radius: 9999px;
   touch-action: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1px;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  transition: color 0.2s ease;
+  text-shadow: 0 1px 4px rgb(255 255 255 / 70%);
 }
 
 .canact-figma-bottom-nav .canact-bottom-tab-active {
   background: transparent;
   box-shadow: none;
   border-color: transparent;
+  color: #1f6b55;
 }
 
 .canact-create-nav-button {
@@ -340,9 +385,9 @@ input[type="time"]::-webkit-date-and-time-value {
   border: 1px solid rgb(255 255 255 / 66%);
   border-radius: 50%;
   overflow: hidden;
-  background: transparent;
+  background: rgb(255 255 255 / 8%);
   color: #1f6b55;
-  box-shadow: 0 13px 34px rgb(25 73 57 / 17%), inset 0 0 0 1px rgb(31 107 85 / 6%);
+  box-shadow: 14px 14px 36px rgb(31 56 47 / 16%), -12px -12px 30px rgb(255 255 255 / 60%), inset 0 1px 0 rgb(255 255 255 / 46%);
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), background-color 180ms ease, box-shadow 180ms ease;
 }
 .canact-create-button-glass { border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 52%); }
@@ -350,7 +395,7 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-create-nav-button:active { transform: scale(.95); }
 .canact-create-nav-button-open {
   transform: rotate(135deg);
-  background: transparent;
+  background: rgb(255 255 255 / 12%);
   box-shadow: 0 14px 38px rgb(16 54 42 / 28%);
 }
 
@@ -362,37 +407,76 @@ input[type="time"]::-webkit-date-and-time-value {
   pointer-events: none;
 }
 .canact-radial-menu-open { visibility: visible; pointer-events: auto; }
-.canact-radial-dismiss { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: rgb(18 40 33 / 0%); opacity: 0; backdrop-filter: blur(0); -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%); transition: opacity 220ms ease, backdrop-filter 260ms ease; }
+.canact-radial-dismiss {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+  background: rgb(18 40 33 / 0%); opacity: 0;
+  backdrop-filter: blur(0);
+  -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%);
+          mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%);
+  transition: opacity 220ms ease, backdrop-filter 260ms ease;
+}
 .canact-radial-menu-open .canact-radial-dismiss { opacity: 1; backdrop-filter: blur(6px); }
+
+/* Radial items — diagonal arc fan-out from bottom-right trigger.
+   Closed: items hide at trigger center (right=trigger-right, bottom=trigger-bottom).
+   Open: items spread to arc positions via CSS custom properties. */
 .canact-radial-item {
+  --item-size: 52px;
+  --trigger-right: 0px;
+  --trigger-bottom: 0px;
+  --arc-right: 0px;
+  --arc-bottom: 0px;
+
   position: fixed;
+  width: var(--item-size);
+  height: var(--item-size);
+  right: var(--trigger-right);
+  bottom: var(--trigger-bottom);
+
   display: grid;
-  width: 52px;
-  height: 52px;
   place-items: center;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 78%);
   border-radius: 50%;
-  background: rgb(250 248 242 / 32%);
-  box-shadow: 0 10px 26px rgb(22 61 48 / 14%), inset 0 0 0 1px rgb(255 255 255 / 38%);
+  border: 1px solid rgb(255 255 255 / 78%);
+  background: rgb(250 248 242 / 44%);
+  box-shadow: 0 8px 20px rgb(22 61 48 / 12%), inset 0 0 0 1px rgb(255 255 255 / 38%);
+
   opacity: 0;
-  transform: translate(-50%, -50%) scale(.42);
-  transition: left 400ms cubic-bezier(.22,.9,.25,1), top 400ms cubic-bezier(.22,.9,.25,1), opacity 160ms ease, transform 360ms cubic-bezier(.2,.9,.25,1.1), background-color 160ms ease;
-  pointer-events: auto;
+  pointer-events: none;
+  transform: scale(0.2);
+
+  transition:
+    right 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 46;
 }
+
 .canact-radial-menu-open .canact-radial-item {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+  transform: scale(1);
+  right: var(--arc-right);
+  bottom: var(--arc-bottom);
 }
-.canact-radial-item:hover { background: rgb(250 248 242 / 54%); }
-.canact-radial-item:active { transform: translate(-50%, -50%) scale(.9); }
+
+/* Staggered delays for opening (also apply during close, overridden below) */
+.canact-radial-item:nth-of-type(1) { transition-delay: 0.02s; }
+.canact-radial-item:nth-of-type(2) { transition-delay: 0.06s; }
+.canact-radial-item:nth-of-type(3) { transition-delay: 0.10s; }
+.canact-radial-item:nth-of-type(4) { transition-delay: 0.14s; }
+.canact-radial-item:nth-of-type(5) { transition-delay: 0.18s; }
+.canact-radial-item:nth-of-type(6) { transition-delay: 0.22s; }
+
+/* Zero delay when closing — same specificity as nth-child, wins by source order */
+.canact-radial-menu:not(.canact-radial-menu-open) .canact-radial-item { transition-delay: 0s; }
+
+.canact-radial-item:hover { background: rgb(250 248 242 / 62%); transform: scale(1.08); }
+.canact-radial-item:active { transform: scale(0.92); }
 .canact-radial-item:focus-visible { outline: 2px solid #1f6b55; outline-offset: 3px; }
 .canact-radial-item span { position: relative; z-index: 1; display: grid; width: 100%; height: 100%; place-items: center; color: #1f6b55; }
 .canact-radial-item-help { background: rgb(204 59 53 / 16%); border-color: rgb(255 211 207 / 82%); }
-.canact-radial-item-help:hover { background: rgb(204 59 53 / 24%); }
+.canact-radial-item-help:hover { background: rgb(204 59 53 / 28%); }
 
 /* Right-edge fade mask for the stories scroller so cards fade into the
    filter button instead of cutting off hard. */
