@@ -22,8 +22,9 @@ const ITEMS: RadialItem[] = [
   { href: '/rateme/start',  label: 'Rate me',  Icon: Eye,            className: '' },
 ];
 
-const RADIUS = 210;
+const RADIUS = 238;
 const ITEM_SIZE = 52;
+const EDGE_GAP = 12;
 // A true upper-left quarter fan. Keeping every angle inside 180°–270° avoids
 // viewport clamping that previously collapsed the outer actions together.
 const ANGLES = [185, 202, 219, 236, 253, 270];
@@ -31,26 +32,29 @@ const ANGLES = [185, 202, 219, 236, 253, 270];
 export function RadialCreateMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const triggerCenter = useTriggerCenter(open);
 
-  // Compute arc positions from trigger center, clamped to viewport
+  // Use one viewport-bounded radius for the whole fan. Clamping individual
+  // items distorts the gaps near an edge; bounding the radius keeps every
+  // centre on the same arc and therefore evenly spaced.
   const arcPositions = useMemo(() => {
     if (!triggerCenter) return [];
     const { cx, cy } = triggerCenter;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const margin = ITEM_SIZE / 2 + 12;
-    const minRight = margin;
-    const maxRight = vw - ITEM_SIZE - margin;
-    const minBottom = margin;
-    const maxBottom = vh - ITEM_SIZE - margin;
+    const halfItem = ITEM_SIZE / 2;
+    const safeRadius = Math.max(0, Math.min(
+      RADIUS,
+      cx - EDGE_GAP - halfItem,
+      cy - EDGE_GAP - halfItem,
+    ));
+    const triggerRight = Math.round(vw - cx - halfItem);
+    const triggerBottom = Math.round(vh - cy - halfItem);
 
     return ANGLES.map((angle) => {
       const rad = (angle * Math.PI) / 180;
-      const triggerRight = Math.round(vw - cx - ITEM_SIZE / 2);
-      const triggerBottom = Math.round(vh - cy - ITEM_SIZE / 2);
-      const rawRight = Math.round(triggerRight - RADIUS * Math.cos(rad));
-      const rawBottom = Math.round(triggerBottom - RADIUS * Math.sin(rad));
-      const arcRight = Math.max(minRight, Math.min(maxRight, rawRight));
-      const arcBottom = Math.max(minBottom, Math.min(maxBottom, rawBottom));
+      const itemCx = cx + safeRadius * Math.cos(rad);
+      const itemCy = cy + safeRadius * Math.sin(rad);
+      const arcRight = Math.round(vw - itemCx - halfItem);
+      const arcBottom = Math.round(vh - itemCy - halfItem);
       return { triggerRight, triggerBottom, arcRight, arcBottom };
     });
   }, [triggerCenter]);

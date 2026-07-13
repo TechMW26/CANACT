@@ -304,7 +304,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           data-liquid-tint="31,107,85"
           data-liquid-tint-opacity="0.18"
           onClick={() => { haptic('strong'); setPlusOpen(true); }}
-          className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-brand text-white font-semibold py-2.5 hover:bg-brand-dark"
+          className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-transparent py-2.5 font-semibold text-brand"
         >
           <Sparkles size={18} /> <span>Create</span>
         </button>
@@ -705,7 +705,7 @@ function LeaderboardScopeDropdown({ blendChrome }: { blendChrome: boolean }) {
         <span>{selected.label}</span>
       </button>
       {open && (
-        <div role="listbox" aria-label="Leaderboard scope" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.1" data-liquid-thickness="36" data-liquid-bezel="14" className="canact-glass-dropdown absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl p-1 text-ink">
+        <div role="listbox" aria-label="Leaderboard scope" data-liquid-glass="surface" data-liquid-radius="16" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.1" data-liquid-thickness="36" data-liquid-bezel="14" className="canact-glass-dropdown absolute left-1/2 top-[calc(100%+8px)] z-50 w-36 -translate-x-1/2 overflow-hidden rounded-2xl p-1 text-ink">
           {LEADERBOARD_SCOPES.map((option) => (
             <button
               key={option.id}
@@ -753,7 +753,7 @@ function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx:
   }, [open]);
 
   const pillClassName = `canact-distance-pill inline-flex h-9 w-auto min-w-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-center text-[13px] font-normal leading-none transition [&:focus-visible]:outline-none [&:focus-visible]:ring-2 [&:focus-visible]:ring-brand/25 ${blendChrome ? 'canact-profile-header-select' : 'border border-[#D9DDE5] bg-white text-ink'}`;
-  const menuClassName = `canact-glass-dropdown absolute right-0 top-[calc(100%+8px)] z-50 w-36 overflow-hidden rounded-2xl bg-transparent p-1 text-ink`;
+  const menuClassName = `canact-glass-dropdown absolute left-1/2 top-[calc(100%+8px)] z-50 w-36 -translate-x-1/2 overflow-hidden rounded-2xl bg-transparent p-1 text-ink`;
 
   return (
     <div ref={dropdownRef} className="relative">

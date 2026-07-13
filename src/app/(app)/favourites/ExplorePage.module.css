@@ -92,10 +92,7 @@
   touch-action: none;
   padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
 }
-.peopleSheet > :global(.canact-lg-tint) {
-  background: transparent !important;
-  box-shadow: none !important;
-}
+.peopleSheet > :global(.canact-lg-tint) { box-shadow: none !important; }
 .peopleSheet > :global(.canact-lg-refract) {
   background: transparent !important;
 }

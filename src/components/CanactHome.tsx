@@ -53,7 +53,7 @@ export function CanactHome() {
         </div>
 
         <div className={`${styles.scoreDock} canact-header-aware-sticky`}>
-          <div className={styles.scoreShape}>
+          <div className={styles.scoreShape} data-compact={progress >= .72 ? 'true' : undefined}>
             <svg className={styles.scoreRing} viewBox="0 0 280 280" aria-hidden="true">
               <circle cx="140" cy="140" r="126" pathLength="100" />
               <circle className={styles.scoreArc} cx="140" cy="140" r="126" pathLength="100" style={{ strokeDashoffset: 100 - Math.max(4, Math.min(100, (score / Math.max(summary.max, 1)) * 100)) }} />

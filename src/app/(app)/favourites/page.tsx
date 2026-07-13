@@ -311,11 +311,11 @@ function ExploreMapSurface({
         data-liquid-glass="surface"
         data-liquid-radius="30"
         data-liquid-blur="0"
-        data-liquid-thickness="58"
-        data-liquid-bezel="28"
+        data-liquid-thickness="38"
+        data-liquid-bezel="14"
         data-liquid-specular-opacity="0.52"
         data-liquid-tint="248,244,232"
-        data-liquid-tint-opacity="0"
+        data-liquid-tint-opacity="0.2"
         className={`${styles.peopleSheet} ${sheetExpanded ? styles.peopleSheetExpanded : ''}`}
         style={sheetStyle}
         aria-label="People nearby"
