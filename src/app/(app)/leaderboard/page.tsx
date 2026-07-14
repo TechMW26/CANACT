@@ -17,10 +17,6 @@ function movementForRank(rank: number): Movement {
   return { direction: 'steady', label: 'Holding steady' };
 }
 
-function score(profile: UserProfile) {
-  return Math.max(0, Math.round(profile.rating || 0));
-}
-
 export default function LeaderboardPage() {
   const { profile, user } = useAuth();
   const [scope, setScope] = useState<LeaderScope>('app');
@@ -87,13 +83,12 @@ export default function LeaderboardPage() {
             </ol>
             {showCurrentUser && currentUser ? (
               <Link href="/profile" className={styles.currentRow} aria-label={`Your rank is ${currentIndex + 1}`}>
-                <span className={styles.currentRank}>{currentIndex + 1}<sup>{ordinalSuffix(currentIndex + 1)}</sup></span>
+                <span className={styles.currentRank}>{currentIndex + 1}</span>
                 <Avatar src={currentUser.photoURL} name={currentUser.fullName} size={42} />
                 <span className={styles.currentIdentity}>
                   <strong>{currentUser.firstName || currentUser.fullName} <small>(You)</small></strong>
                   <em><i /> Currently Active</em>
                 </span>
-                <b>{score(currentUser)} pts</b>
               </Link>
             ) : null}
           </>
@@ -114,7 +109,6 @@ function RankRow({ profile, rank }: { profile: UserProfile; rank: number }) {
           <strong>{profile.firstName || profile.fullName}</strong>
           <em className={styles[movement.direction]}>{movement.direction === 'up' ? '↑' : movement.direction === 'down' ? '↓' : '•'} {movement.label}</em>
         </span>
-        <b>{score(profile)}</b>
       </Link>
     </li>
   );

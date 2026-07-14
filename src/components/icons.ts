@@ -5,6 +5,7 @@
 export {
   Home,
   Compass,
+  Menu,
   LifeBuoy,
   HandHeart,
   HeartHandshake,
@@ -25,6 +26,7 @@ export {
   ChevronDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   ArrowDown,
   Eye,
   EyeOff,

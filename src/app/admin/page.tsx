@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { onValue, ref as dbRef, set as dbSet } from 'firebase/database';
+import { db } from '@/lib/firebase';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Brand } from '@/components/Brand';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
-import { BarChart3, CloudUpload, Search, ShieldAlert, Users, Globe2, Clock, Mail, Phone, MapPin } from '@/components/icons';
+import { BarChart3, Bell, Camera, CloudUpload, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
 
@@ -52,7 +54,7 @@ type BackupResponse = {
   users?: BackupUser[];
 };
 
-type AdminView = 'overview' | 'backups' | 'users' | 'analytics';
+type AdminView = 'overview' | 'backups' | 'users' | 'analytics' | 'navigation';
 type BackupItemWithOwner = BackupItem & { owner: BackupUser };
 
 const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Icon: LucideIcon }> = [
@@ -60,6 +62,7 @@ const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Ic
   { id: 'backups', label: 'User backups', description: 'Files by account', Icon: CloudUpload },
   { id: 'users', label: 'Users', description: 'Profiles and status', Icon: Users },
   { id: 'analytics', label: 'Analytics', description: 'Storage and growth', Icon: BarChart3 },
+  { id: 'navigation', label: 'Navigation', description: 'App navbar config', Icon: Compass },
 ];
 
 export default function AdminDashboardPage() {
@@ -246,6 +249,8 @@ export default function AdminDashboardPage() {
             {activeView === 'users' && <UsersPage users={filteredUsers} setActiveView={setActiveView} setSelectedUid={setSelectedUid} />}
 
             {activeView === 'analytics' && <AnalyticsPage analytics={analytics} totals={totals} />}
+
+            {activeView === 'navigation' && <NavbarConfigPage />}
           </div>
         </section>
       </div>
@@ -715,4 +720,131 @@ function formatBytes(bytes: number): string {
 function formatDate(value: number): string {
   if (!value) return 'Unknown';
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+/* ================================================================
+   NAVIGATION CONFIG
+   ================================================================ */
+
+type NavbarConfig = { tabs: string[]; plusIcon: string; plusItems: string[] };
+
+const PLUS_ICON_OPTIONS: Array<{ id: string; label: string; Icon: LucideIcon }> = [
+  { id: 'Plus', label: 'Plus', Icon: Plus },
+  { id: 'Menu', label: 'Menu', Icon: AlignLeft },
+  { id: 'Sparkles', label: 'Sparkles', Icon: Sparkles },
+  { id: 'Camera', label: 'Camera', Icon: Camera },
+  { id: 'Pencil', label: 'Edit', Icon: Pencil },
+];
+
+const ALL_PLUS_PAGES = [
+  { href: '/help',          label: 'Help',     Icon: HandHeart },
+  { href: '/story/create',  label: 'Story',    Icon: Sparkles },
+  { href: '/post/create',   label: 'Post',     Icon: Camera },
+  { href: '/reel/create',   label: 'Reel',     Icon: Film },
+  { href: '/poll/create',   label: 'Poll',     Icon: BarChart3 },
+  { href: '/rateme/start',  label: 'Rate me',  Icon: Eye },
+  { href: '/feed',          label: 'Feed',     Icon: Grid3X3 },
+  { href: '/leaderboard',   label: 'Leaderboard', Icon: Activity },
+  { href: '/search',        label: 'Search',   Icon: Search },
+  { href: '/inbox',         label: 'Inbox',    Icon: MessageSquare },
+  { href: '/notifications', label: 'Notifications', Icon: Bell },
+  { href: '/profile',       label: 'Profile',  Icon: Users },
+  { href: '/settings',      label: 'Settings', Icon: ShieldAlert },
+  { href: '/underground',   label: 'Underground', Icon: Globe2 },
+];
+
+const DEFAULT_NAVBAR: NavbarConfig = {
+  tabs: ['/', '/favourites', '/feed', '/leaderboard'],
+  plusIcon: 'Plus',
+  plusItems: ['/help', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'],
+};
+
+const ALL_TABS = [
+  { href: '/',             label: 'Home',          Icon: Home },
+  { href: '/favourites',  label: 'Nearby',        Icon: MapPinIcon },
+  { href: '/feed',        label: 'Community',     Icon: Grid3X3 },
+  { href: '/leaderboard', label: 'Leaderboard',   Icon: Activity },
+];
+
+
+function NavbarConfigPage() {
+  const [config, setConfig] = useState<NavbarConfig>(DEFAULT_NAVBAR);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    return onValue(dbRef(db, 'config/navbar'), (snap) => {
+      const val = snap.val() as NavbarConfig | null;
+      if (val) setConfig((prev) => ({ ...prev, ...val }));
+    });
+  }, []);
+
+  const toggleTab = (href: string) => {
+    setConfig((prev) => ({ ...prev, tabs: prev.tabs.includes(href) ? prev.tabs.filter((t) => t !== href) : [...prev.tabs, href] }));
+  };
+  const togglePlusItem = (href: string) => {
+    setConfig((prev) => ({ ...prev, plusItems: prev.plusItems.includes(href) ? prev.plusItems.filter((i) => i !== href) : [...prev.plusItems, href] }));
+  };
+  const setPlusIcon = (id: string) => setConfig((prev) => ({ ...prev, plusIcon: id }));
+
+  const save = async () => {
+    setSaving(true);
+    try { await dbSet(dbRef(db, 'config/navbar'), config); toast('Navigation config saved', 'success'); }
+    catch (error: any) { toast(error?.message ?? 'Could not save config', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="rounded-lg bg-white">
+        <SectionHeader title="Bottom navigation tabs" eyebrow="Mobile app" action={<Button onClick={save} loading={saving} size="sm">Save config</Button>} />
+        <p className="mb-4 text-sm text-ink/60">Toggle tabs in the bottom nav. Bar width adjusts automatically based on count.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {ALL_TABS.map(({ href, label, Icon }) => {
+            const enabled = config.tabs.includes(href);
+            return (
+              <button key={href} type="button" onClick={() => toggleTab(href)}
+                className={`flex items-center gap-3 rounded-lg border p-4 text-left transition ${enabled ? 'border-brand bg-brand/8 text-brand' : 'border-[#E0D4CA] bg-white text-ink/60 hover:border-brand/40'}`}>
+                <Icon className="h-5 w-5 shrink-0" /><span><span className="block text-sm font-extrabold">{label}</span><span className="block text-xs text-ink/50">{href}</span></span>
+                {enabled && <Check className="ml-auto h-5 w-5 shrink-0 text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="rounded-lg bg-white">
+        <SectionHeader title="Plus button icon" eyebrow="Customize" />
+        <p className="mb-4 text-sm text-ink/60">Choose the icon for the floating create button.</p>
+        <div className="grid gap-3 grid-cols-4">
+          {PLUS_ICON_OPTIONS.map(({ id, label, Icon }) => {
+            const active = config.plusIcon === id;
+            return (
+              <button key={id} type="button" onClick={() => setPlusIcon(id)}
+                className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition ${active ? 'border-brand bg-brand/8 text-brand' : 'border-[#E0D4CA] bg-white text-ink/60 hover:border-brand/40'}`}>
+                <Icon className="h-7 w-7" /><span className="text-xs font-extrabold">{label}</span>
+                {active && <Check className="h-4 w-4 text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="rounded-lg bg-white">
+        <SectionHeader title="Plus menu items" eyebrow="Create menu" />
+        <p className="mb-4 text-sm text-ink/60">Toggle pages that appear when tapping the plus button.</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {ALL_PLUS_PAGES.map(({ href, label, Icon }) => {
+            const enabled = config.plusItems.includes(href);
+            return (
+              <button key={href} type="button" onClick={() => togglePlusItem(href)}
+                className={`flex items-center gap-3 rounded-lg border p-3 text-left transition ${enabled ? 'border-brand bg-brand/8 text-brand' : 'border-[#E0D4CA] bg-white text-ink/60 hover:border-brand/40'}`}>
+                <Icon className="h-4 w-4 shrink-0" /><span className="text-sm font-extrabold">{label}</span>
+                {enabled && <Check className="ml-auto h-4 w-4 shrink-0 text-brand" />}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
 }

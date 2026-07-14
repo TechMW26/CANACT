@@ -1,6 +1,7 @@
 import { get, ref, runTransaction, set, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { AttrKey, CardKey, POSITIVE_ATTRS, UserProfile } from '../types';
+import { calculateCanactScore } from '../canactScore';
 
 export const SIX_HOURS = 6 * 3600 * 1000;
 
@@ -67,13 +68,48 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
   }
 
   await runTransaction(ref(db, `users/${toUid}/attrs`), (a: any) => {
-    a = a ?? { behaviour: 0, action: 0, reliable: 0, rude: 0, inactive: 0, unreliable: 0 };
+    a = a ?? { behaviour: 0, reliability: 0, civic_sense: 0, rude: 0, unreliable: 0, uncivil: 0 };
     if (cur?.key) a[cur.key] = Math.max(0, (a[cur.key] ?? 0) - 1);
     a[attr] = (a[attr] ?? 0) + 1;
     return a;
   });
   await set(attrVoteRef, { key: attr, at: Date.now() });
+  await refreshCanactScore(toUid);
   return { ok: true };
+}
+
+/** Remove an attribute vote (take-back). Enforces the same 6-hour cooldown. */
+export async function removeAttribute(toUid: string, fromUid: string): Promise<{ ok: boolean; waitMs?: number }> {
+  const attrVoteRef = ref(db, `votes/${toUid}/${fromUid}/attr`);
+  const cur = (await get(attrVoteRef)).val() as { key: AttrKey; at: number } | null;
+  if (!cur) return { ok: true };
+  if (Date.now() - cur.at < SIX_HOURS) return { ok: false, waitMs: SIX_HOURS - (Date.now() - cur.at) };
+
+  await runTransaction(ref(db, `users/${toUid}/attrs`), (a: any) => {
+    if (a?.[cur.key]) a[cur.key] = Math.max(0, (a[cur.key] ?? 0) - 1);
+    return a;
+  });
+  await remove(attrVoteRef);
+  clearVoteCache(`${toUid}/${fromUid}/attr`);
+  await refreshCanactScore(toUid);
+  return { ok: true };
+}
+
+/** Recalculate and persist the Canact score for a user after attr changes. */
+async function refreshCanactScore(uid: string) {
+  try {
+    const snap = await get(ref(db, `users/${uid}`));
+    const profile = snap.val() as UserProfile | null;
+    if (!profile) return;
+    const { score } = calculateCanactScore(profile);
+    profile.rating = Math.round(score);
+    profile.ratingCount = profile.ratingCount ?? 0;
+    await set(ref(db, `users/${uid}/rating`), profile.rating);
+  } catch { /* non-critical */ }
+}
+
+function clearVoteCache(key: string) {
+  _voteCache.delete(key);
 }
 
 export async function giveCard(toUid: string, fromUid: string, card: CardKey) {

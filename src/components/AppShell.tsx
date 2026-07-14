@@ -1,10 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { onValue, ref as dbRef } from 'firebase/database';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Brand } from './Brand';
+import { Avatar } from './Avatar';
 import { PageTransition } from './PageTransition';
 import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
@@ -24,7 +27,7 @@ import type { ChatAttachment } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
-  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity,
+  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, X,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
@@ -88,8 +91,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
+  const [navbarHrefs, setNavbarHrefs] = useState<{ tabs: string[]; plusIcon?: string; plusItems?: string[] } | null>(null);
   const prefetchedRoutesRef = useRef(new Set<string>());
-  const liquidNav = useLiquidNavSlider(pathname, user?.uid, router);
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = false;
@@ -114,6 +117,31 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     window.addEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
     return () => window.removeEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
   }, []);
+
+  // Read navbar visibility config from Firebase
+  useEffect(() => {
+    return onValue(dbRef(db, 'config/navbar'), (snap) => {
+      const val = snap.val() as { tabs?: string[]; plusIcon?: string; plusItems?: string[] } | null;
+      if (val) setNavbarHrefs({ tabs: val.tabs ?? [], plusIcon: val.plusIcon, plusItems: val.plusItems });
+      else setNavbarHrefs(null);
+    });
+  }, []);
+
+  const visibleTabs = useMemo(() => {
+    if (!navbarHrefs) return TABS;
+    return TABS.filter((t) => navbarHrefs.tabs.includes(t.href));
+  }, [navbarHrefs]);
+
+  const plusIconName = navbarHrefs?.plusIcon ?? 'Plus';
+
+  const anyTabActive = useMemo(() => visibleTabs.some((t) => isNavLinkActive(pathname, t.href, user?.uid)), [pathname, visibleTabs, user?.uid]);
+
+  const navWidth = useMemo(() => Math.max(180, visibleTabs.length * 60 + (visibleTabs.length - 1) * 10 + 16), [visibleTabs]);
+  const BUTTON_SIZE = 76;
+  const BUTTON_GAP = 24;
+  const combinedWidth = navWidth + BUTTON_GAP + BUTTON_SIZE;
+
+  const liquidNav = useLiquidNavSlider(pathname, user?.uid, router, visibleTabs);
 
   useEffect(() => { setPageBlendChrome(false); setRadialCreateOpen(false); }, [pathname]);
 
@@ -324,54 +352,56 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </main>
       </div>{/* /canact-app-content */}
 
-      {/* Mobile bottom nav */}
-      <nav
-        data-canact-bottom-nav
-        className="canact-bottom-nav-shell lg:hidden fixed z-40"
-      >
-        <div
-          ref={liquidNav.navRef}
-          data-liquid-glass="surface"
-          data-liquid-radius="999"
-          data-liquid-blur="0"
-          data-liquid-tint="250,248,242"
-          data-liquid-tint-opacity="0.12"
-          className="canact-figma-bottom-nav"
+      {/* Mobile bottom nav group — centered, button on right */}
+      <div className="canact-bottom-group fixed bottom-0 z-40 flex items-end gap-[1.5em] lg:hidden"
+        style={{ left: `calc(50% - ${combinedWidth / 2}px)`, paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+        <nav
+          data-canact-bottom-nav
+          className="canact-bottom-nav-shell"
+          style={{ width: `${navWidth}px` }}
         >
-          <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-between">
-            <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
-            <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.08" className="canact-bottom-tab-indicator" aria-hidden="true" />
-            {TABS.map(({ href, label, Icon, isFab }, tabIndex) => {
-              const active = isNavLinkActive(pathname, href, user.uid);
-              const onTap = () => {
-                if (isFab) { haptic('strong'); setPlusOpen(true); return; }
-                if (!active) haptic('selection');
-              };
-              const cls = `canact-bottom-tab group relative flex h-16 w-16 items-center justify-center rounded-[22px] transition-colors duration-300 ${
-                active
-                  ? 'canact-bottom-tab-active bg-[#e7e1d1] text-[#1a4f3f]'
-                  : 'canact-bottom-tab-inactive text-[#707981] hover:text-ink'
-              }`;
-              if (isFab) {
+          <div
+            ref={liquidNav.navRef}
+            data-liquid-glass="surface"
+            data-liquid-radius="999"
+            data-liquid-blur="0"
+            data-liquid-tint="250,248,242"
+            data-liquid-tint-opacity="0.12"
+            className="canact-figma-bottom-nav"
+          >
+            <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-center"
+              style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 60px)`, gap: '10px' }}>
+              <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
+              <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.08" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
+              {visibleTabs.map(({ href, label, Icon, isFab }, tabIndex) => {
+                const active = isNavLinkActive(pathname, href, user.uid);
+                const onTap = () => {
+                  if (isFab) { haptic('strong'); setPlusOpen(true); return; }
+                  if (!active) haptic('selection');
+                };
+                const cls = `canact-bottom-tab group relative flex h-16 w-16 items-center justify-center rounded-[22px] transition-colors duration-300 ${
+                  active ? 'canact-bottom-tab-active bg-[#e7e1d1] text-[#1a4f3f]' : 'canact-bottom-tab-inactive text-[#707981] hover:text-ink'
+                }`;
+                if (isFab) {
+                  return (
+                    <button key={href} type="button" onPointerDown={(event) => liquidNav.begin(tabIndex, event)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} aria-label="Create" className={cls}>
+                      <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
+                    </button>
+                  );
+                }
                 return (
-                  <button key={href} type="button" onPointerDown={(event) => liquidNav.begin(tabIndex, event)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} aria-label="Create" className={cls}>
+                  <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
                     <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
-                  </button>
+                  </Link>
                 );
-              }
-              return (
-                <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
-                  <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
-                </Link>
-              );
-            })}
+              })}
+            </div>
           </div>
-        </div>
-      </nav>
-      <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} />
+        </nav>
+      </div>{/* /canact-bottom-group */}
       <button
         type="button"
-        aria-label={radialCreateOpen ? 'Close create menu' : 'Open create menu'}
+        aria-label={radialCreateOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={radialCreateOpen}
         aria-controls="canact-radial-create-menu"
         data-liquid-glass="surface"
@@ -384,24 +414,41 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         data-liquid-tint="31,107,85"
         data-liquid-tint-opacity="0.14"
         onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
-        className={`canact-create-nav-button fixed z-50 lg:hidden ${radialCreateOpen ? 'canact-create-nav-button-open' : ''}`}
+        className={`canact-create-nav-button fixed ${radialCreateOpen ? 'canact-create-nav-button-open' : ''} lg:hidden`}
+        style={{
+          left: `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP}px)`,
+          bottom: 'calc(12px + env(safe-area-inset-bottom))',
+        }}
       >
-        <Plus className="canact-adaptive-icon canact-create-nav-icon" size={29} strokeWidth={2.3} />
+        {radialCreateOpen ? <X className="canact-adaptive-icon" size={29} strokeWidth={2.3} style={{ color: '#1f6b55' }} /> : renderPlusIcon(plusIconName)}
       </button>
+      <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} plusItems={navbarHrefs?.plusItems} />
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
     </div>
   );
 }
 
-function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>) {
+function renderPlusIcon(name: string) {
+  const size = 29; const sw = 2.3;
+  const cls = 'canact-adaptive-icon canact-create-nav-icon';
+  switch (name) {
+    case 'Sparkles': return <Sparkles className={cls} size={size} strokeWidth={sw} />;
+    case 'Camera': return <Camera className={cls} size={size} strokeWidth={sw} />;
+    case 'Pencil': return <Pencil className={cls} size={size} strokeWidth={sw} />;
+    case 'Menu': return <AlignLeft className={cls} size={size} strokeWidth={sw} />;
+    default: return <Plus className={cls} size={size} strokeWidth={sw} />;
+  }
+}
+
+function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>, tabs: Tab[]) {
   const navRef = useRef<HTMLDivElement | null>(null);
   const indicatorRef = useRef<HTMLDivElement | null>(null);
   const glowRef = useRef<HTMLDivElement | null>(null);
   const suppressClickUntil = useRef(0);
   const finishTimer = useRef(0);
 
-  const activeIndex = useCallback(() => Math.max(0, TABS.findIndex((tab) => isNavLinkActive(pathname, tab.href, userId))), [pathname, userId]);
+  const activeIndex = useCallback(() => Math.max(0, tabs.findIndex((tab) => isNavLinkActive(pathname, tab.href, userId))), [pathname, userId, tabs]);
   const metrics = useCallback((index: number) => {
     const nav = navRef.current;
     const item = nav?.querySelectorAll<HTMLElement>('.canact-bottom-tab')[index];
@@ -461,7 +508,7 @@ function useLiquidNavSlider(pathname: string | null, userId: string | undefined,
     const nearest = (x: number) => {
       let result = 0;
       let distance = Number.POSITIVE_INFINITY;
-      TABS.forEach((_, index) => {
+      tabs.forEach((_, index) => {
         const nextDistance = Math.abs(x - metrics(index).center);
         if (nextDistance < distance) { distance = nextDistance; result = index; }
       });
@@ -489,7 +536,7 @@ function useLiquidNavSlider(pathname: string | null, userId: string | undefined,
       nav.classList.remove('dragging');
       snap(targetIndex, true);
       suppressClickUntil.current = performance.now() + 600;
-      const target = TABS[targetIndex];
+      const target = tabs[targetIndex];
       if (target && !isNavLinkActive(pathname, target.href, userId)) {
         haptic('selection');
         router.push(target.href);
@@ -604,23 +651,7 @@ function titleFor(path: string | null) {
 
 function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; leaderboard?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
-  const { user } = useAuth();
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    if (!user) { setPendingCount(0); return; }
-    let friends = 0, favs = 0;
-    const update = () => setPendingCount(friends + favs);
-    let off1: (() => void) | undefined;
-    let off2: (() => void) | undefined;
-    (async () => {
-      const friendsMod = await import('@/lib/services/friends');
-      const favMod = await import('@/lib/services/favourites');
-      off1 = friendsMod.listenIncomingRequests(user.uid, (items) => { friends = items.length; update(); });
-      off2 = favMod.listenFollowRequests(user.uid, (items) => { favs = items.length; update(); });
-    })();
-    return () => { off1?.(); off2?.(); };
-  }, [user?.uid]);
+  const { user, profile } = useAuth();
 
   const headerChromeClass = profileChrome ? 'canact-profile-header-chrome' : fadeChrome ? 'canact-fade-header-chrome' : '';
 
@@ -635,7 +666,7 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard 
         data-liquid-radius="999"
         data-liquid-blur="0"
         data-liquid-tint="250,248,242"
-        data-liquid-tint-opacity="0.12"
+        data-liquid-tint-opacity="0.26"
         className="canact-figma-header"
       >
         <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
@@ -644,16 +675,8 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard 
             {leaderboard
               ? <LeaderboardScopeDropdown blendChrome={profileChrome} />
               : <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />}
-            <Link href="/favourites" data-liquid-glass="none" aria-label="Friends and favourites" prefetch onClick={() => haptic('subtle')} className={`relative inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-              <Heart className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-extrabold leading-none text-white ring-2 ring-white">
-                  {pendingCount > 9 ? '9+' : pendingCount}
-                </span>
-              )}
-            </Link>
-            <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-              <SettingsIcon className="canact-adaptive-icon" size={25} strokeWidth={2.2} />
+            <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
+              <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={36} />
             </Link>
           </div>
         </div>

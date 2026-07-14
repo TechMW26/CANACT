@@ -17,7 +17,7 @@ import { listenUserWhaPosts } from '@/lib/services/wha';
 import { sendFriendRequest, listenFriendStatus, unfriend } from '@/lib/services/friends';
 import { requestFollow } from '@/lib/services/favourites';
 import type { UserProfile, WhaPost, FriendStatus, AttrKey } from '@/lib/types';
-import { POSITIVE_ATTRS, NEGATIVE_ATTRS } from '@/lib/types';
+import { POSITIVE_ATTRS, NEGATIVE_ATTRS, ATTR_LABELS } from '@/lib/types';
 import { formatDistance, haversineMeters } from '@/lib/utils';
 import { useGeo } from '@/lib/useGeo';
 import styles from './HomeScoreExperience.module.css';
@@ -1501,7 +1501,7 @@ function ExpandedCardModal({
                     className={`${styles.expandedAttrButton} ${selected ? styles.expandedAttrSelected : ''} ${disabled ? styles.expandedAttrDisabled : ''}`}
                     title={disabled ? `Available in ${Math.ceil(cooldownLeft / 3600000)}h` : undefined}
                   >
-                    <span className={styles.expandedAttrName}>{attr}</span>
+                    <span className={styles.expandedAttrName}>{ATTR_LABELS[attr]}</span>
                     <span className={styles.expandedAttrCount}>{count}</span>
                   </button>
                 );
@@ -1529,7 +1529,7 @@ function ExpandedCardModal({
                     className={`${styles.expandedAttrButton} ${selected ? styles.expandedAttrSelected : ''} ${disabled ? styles.expandedAttrDisabled : ''}`}
                     title={disabled ? `Available in ${Math.ceil(cooldownLeft / 3600000)}h` : undefined}
                   >
-                    <span className={styles.expandedAttrName}>{attr}</span>
+                    <span className={styles.expandedAttrName}>{ATTR_LABELS[attr]}</span>
                     <span className={styles.expandedAttrCount}>{count}</span>
                   </button>
                 );

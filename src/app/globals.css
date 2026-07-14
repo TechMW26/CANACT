@@ -348,9 +348,6 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 
 .canact-bottom-nav-shell {
-  left: max(10px, calc((100vw - 480px) / 2 + 10px));
-  right: max(98px, calc((100vw - 480px) / 2 + 98px));
-  bottom: calc(var(--canact-footer-offset, 12px) + env(safe-area-inset-bottom));
   height: 76px;
   overflow: visible;
 }
@@ -374,10 +371,9 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-bottom-dock-items {
   overflow: visible;
   display: grid !important;
-  grid-template-columns: repeat(4, minmax(0, 60px));
   align-items: center;
-  justify-content: space-between;
-  gap: 0;
+  justify-content: center;
+  gap: 8px;
   padding: 8px;
   border-radius: 9999px;
   background: transparent;
@@ -395,18 +391,18 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 .canact-bottom-tab-indicator {
   position: absolute;
-  left: 10px;
+  left: 8px;
   top: 8px;
   z-index: 1;
   width: 60px;
   height: 60px;
-  border-radius: 9999px;
+  border-radius: 50%;
   pointer-events: none;
   transform-origin: center;
-  will-change: left, width, transform;
+  will-change: left, transform;
   background: transparent;
   box-shadow: none;
-  transition: left .24s cubic-bezier(.2,.9,.22,1), width .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, background-color .25s ease, box-shadow .25s ease;
+  transition: left .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, background-color .25s ease, box-shadow .25s ease;
 }
 .canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); background: transparent; }
 .canact-figma-bottom-nav.dragging .canact-bottom-tab-indicator { transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease; }
@@ -442,8 +438,7 @@ input[type="time"]::-webkit-date-and-time-value {
 }
 
 .canact-create-nav-button {
-  right: max(10px, calc((100vw - 480px) / 2 + 10px));
-  bottom: calc(var(--canact-footer-offset, 12px) + env(safe-area-inset-bottom));
+  position: fixed;
   display: grid;
   width: 76px;
   height: 76px;
@@ -454,7 +449,10 @@ input[type="time"]::-webkit-date-and-time-value {
   background: transparent;
   color: #1f6b55;
   box-shadow: none;
-  transition: transform 320ms cubic-bezier(.22,.85,.3,1), background-color 180ms ease, box-shadow 180ms ease;
+  flex-shrink: 0;
+  z-index: 57;
+  transition: transform 320ms cubic-bezier(.22,.85,.3,1);
+  /* Positioned next to navbar via JS — see AppShell inline style */
 }
 .canact-create-button-glass { border-radius: 50%; box-shadow: none; }
 
@@ -462,6 +460,7 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-create-nav-button-open {
   background: transparent;
   box-shadow: none;
+  z-index: 65 !important;
 }
 .canact-create-nav-icon { transform-origin: center; transition: transform 320ms cubic-bezier(.22,.85,.3,1) !important; }
 .canact-create-nav-button-open .canact-create-nav-icon { transform: rotate(135deg); }
@@ -469,7 +468,7 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-radial-menu {
   position: fixed;
   inset: 0;
-  z-index: 44;
+  z-index: 60;
   visibility: hidden;
   pointer-events: none;
   transition: visibility 0s linear .58s;
@@ -519,7 +518,7 @@ input[type="time"]::-webkit-date-and-time-value {
     right 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.22s ease;
-  z-index: 46;
+  z-index: 61;
 }
 
 .canact-radial-menu-open .canact-radial-item {
@@ -667,6 +666,11 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-liquid-sheet-panel {
   background: transparent !important;
   box-shadow: none !important;
+}
+.canact-liquid-sheet-panel,
+.canact-sheet-slide[data-liquid-glass]:not([data-liquid-glass="none"]) {
+  --canact-glass-blur: 26px !important;
+  --canact-glass-tint-opacity: .34 !important;
 }
 .canact-sheet-panel {
   opacity: 0;
@@ -1067,4 +1071,29 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
     --canact-header-offset: 7px;
     --canact-footer-offset: 7px;
   }
+}
+
+/* ---- Bottom nav group ---- */
+.canact-bottom-group {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 1.5em;
+}
+
+/* ---- Radial menu labels ---- */
+.canact-radial-item {
+  position: relative;
+}
+.canact-radial-item-label {
+  position: absolute;
+  left: 50%;
+  bottom: -22px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,.4);
+  pointer-events: none;
 }

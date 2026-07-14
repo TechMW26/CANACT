@@ -8,7 +8,7 @@ import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, ATTR_LABELS, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
 import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
@@ -17,6 +17,7 @@ import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/service
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
+import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { requestFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest,
@@ -94,18 +95,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     return listenUserRateMe(uid, setRatemes);
   }, [uid]);
 
-  // Friends count (self only) — used in the redesigned clean hero stats
-  // card. Non-self profiles don't show a friend count to avoid the
-  // privacy concern of broadcasting your social graph size.
-  const [friendsCount, setFriendsCount] = useState(0);
-  useEffect(() => {
-    if (!isSelf) return;
-    return onValue(ref(db, `friends/${uid}`), (s) => {
-      let n = 0; s.forEach(() => { n += 1; });
-      setFriendsCount(n);
-    });
-  }, [uid, isSelf]);
-
   if (!u) {
     return (
       <div className="space-y-4">
@@ -167,10 +156,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     const a = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
     return a > 0 && a < 130 ? a : undefined;
   })();
-
-  const supportersCount = isSelf
-    ? Math.max(friendsCount, u.likesCount ?? 0)
-    : (u.likesCount ?? 0);
 
   const handleProfileSupport = async () => {
     if (isSelf || !user || !me) return;
@@ -238,7 +223,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       isVerified={isVerified}
       age={age}
       locationText={locationText}
-      supportersCount={supportersCount}
       tab={tab}
       setTab={setTab}
       posts={posts}
@@ -521,7 +505,6 @@ function CanactPagesProfileUI({
   isVerified,
   age,
   locationText,
-  supportersCount,
   tab,
   setTab,
   posts,
@@ -540,7 +523,6 @@ function CanactPagesProfileUI({
   isVerified: boolean;
   age?: number;
   locationText: string;
-  supportersCount: number;
   tab: ProfileTabKey;
   setTab: (tab: ProfileTabKey) => void;
   posts: WhaPost[];
@@ -620,11 +602,7 @@ function CanactPagesProfileUI({
         <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
         {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
 
-        <div className="mt-6 grid grid-cols-3 rounded-[24px] bg-white px-3 py-5">
-          <div className="border-r border-line"><strong className="block text-xl text-ink">{Math.round(userProfile.rating || 0)}</strong><span className="text-xs text-muted">Score</span></div>
-          <div className="border-r border-line"><strong className="block text-xl text-ink">{supportersCount}</strong><span className="text-xs text-muted">Connections</span></div>
-          <div><strong className="block text-xl text-ink">{posts.length + reels.length + polls.length}</strong><span className="text-xs text-muted">Good acts</span></div>
-        </div>
+        <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} />
 
         <div className="mt-4 flex gap-3">
           {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className="h-12 flex-1 rounded-full bg-brand font-bold text-white">{supportLabel}</button>}
@@ -707,7 +685,7 @@ function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { titl
           return (
             <button key={k} disabled={disabled} onClick={() => onPick(k)}
               className={`text-left text-sm rounded-full px-3 h-9 border ${selected ? 'bg-brand text-white border-brand' : 'bg-candy text-ink border-line'} disabled:opacity-60`}>
-              <span className="capitalize">{k}</span>
+              <span>{ATTR_LABELS[k]}</span>
               <span className="float-right text-xs opacity-80">{u.attrs?.[k] ?? 0}</span>
             </button>
           );

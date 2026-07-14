@@ -1,8 +1,17 @@
-export const POSITIVE_ATTRS = ['behaviour', 'action', 'reliable'] as const;
-export const NEGATIVE_ATTRS = ['rude', 'inactive', 'unreliable'] as const;
+export const POSITIVE_ATTRS = ['behaviour', 'reliability', 'civic_sense'] as const;
+export const NEGATIVE_ATTRS = ['rude', 'unreliable', 'uncivil'] as const;
 export type PositiveAttr = typeof POSITIVE_ATTRS[number];
 export type NegativeAttr = typeof NEGATIVE_ATTRS[number];
 export type AttrKey = PositiveAttr | NegativeAttr;
+
+export const ATTR_LABELS: Record<AttrKey, string> = {
+  behaviour: 'Behaviour',
+  reliability: 'Reliability',
+  civic_sense: 'Civic Sense',
+  rude: 'Rude',
+  unreliable: 'Unreliable',
+  uncivil: 'Uncivil',
+};
 
 export const CARD_KEYS = ['understanding', 'humour', 'goodVibes', 'confidence', 'intelligence', 'creativity', 'daring'] as const;
 export type CardKey = typeof CARD_KEYS[number];
@@ -15,6 +24,45 @@ export const CARD_LABELS: Record<CardKey, string> = {
   creativity: 'Creativity',
   daring: 'Daring',
 };
+
+/** One-time recognition cards. This domain is intentionally separate from
+ * profile vote cards: transfers are permanent and never affect Canact score. */
+export const LIFETIME_CARD_KINDS = ['life_saver', 'golden_person', 'custom'] as const;
+export type LifetimeCardKind = typeof LIFETIME_CARD_KINDS[number];
+export const LIFETIME_CARD_LABELS: Record<LifetimeCardKind, string> = {
+  life_saver: 'Life Saver',
+  golden_person: 'Golden Person',
+  custom: 'Your Words',
+};
+
+export interface LifetimeCardSlot {
+  kind: LifetimeCardKind;
+  status: 'available' | 'sent';
+  sentAt?: number;
+  recipientUid?: string;
+  recipientName?: string;
+}
+
+export interface LifetimeCardGift {
+  id: string;
+  kind: LifetimeCardKind;
+  fromUid: string;
+  fromName: string;
+  fromPhoto?: string;
+  toUid: string;
+  toName: string;
+  customText?: string;
+  sentAt: number;
+}
+
+export type GiftCandidateCategory = 'interacted' | 'nearby' | 'contacts' | 'favourites' | 'friends';
+export interface GiftCandidate {
+  uid: string;
+  name: string;
+  photoURL?: string;
+  city?: string;
+  categories: GiftCandidateCategory[];
+}
 
 export type HelpType = 'red' | 'orange' | 'yellow';
 export type HelpStatus = 'open' | 'inProcess' | 'closed';
@@ -316,7 +364,7 @@ export interface FriendEdge {
 
 export interface NotificationItem {
   id: string;
-  kind: 'help' | 'follow' | 'react' | 'comment' | 'system';
+  kind: 'help' | 'follow' | 'react' | 'comment' | 'gift' | 'system';
   title: string;
   body?: string;
   data?: any;
