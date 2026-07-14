@@ -18,9 +18,6 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     backgroundColor: '#FFF8F8',
-    webContentsDebuggingEnabled: false,
-    // Force GPU rendering for backdrop-blur / glass-morphism effects.
-    initialScale: 1,
   },
   plugins: {
     SplashScreen: {
