@@ -9,6 +9,7 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -20,6 +21,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AudioRouterPlugin.class);
         registerPlugin(CallPermissionsPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Force GPU-accelerated rendering for the WebView so backdrop-blur
+        // and glass-morphism effects render at 60fps without jank.
+        try {
+            WebView webView = getBridge().getWebView();
+            webView.setLayerType(WebView.LAYER_TYPE_HARDWARE, null);
+        } catch (Exception ignored) {}
+
         // Pre-create both notification channels at first launch so:
         //   * The FCM SDK has a real channel to attach auto-displayed
         //     `notification` payloads to (otherwise some Android versions

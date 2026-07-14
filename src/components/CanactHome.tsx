@@ -130,15 +130,18 @@ export function CanactHome() {
     if (transitioningRef.current) return;
     transitioningRef.current = true;
     const rect = mapWrapRef.current?.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     setTransitionOrigin({
-      '--map-transition-top': `${rect?.top ?? 0}px`,
-      '--map-transition-left': `${rect?.left ?? 0}px`,
-      '--map-transition-width': `${rect?.width ?? window.innerWidth}px`,
-      '--map-transition-height': `${rect?.height ?? window.innerHeight}px`,
+      '--map-clip-top': `${Math.max(0, rect?.top ?? 0)}px`,
+      '--map-clip-right': `${Math.max(0, viewportWidth - (rect?.right ?? viewportWidth))}px`,
+      '--map-clip-bottom': `${Math.max(0, viewportHeight - (rect?.bottom ?? viewportHeight))}px`,
+      '--map-clip-left': `${Math.max(0, rect?.left ?? 0)}px`,
     } as React.CSSProperties);
+    document.documentElement.setAttribute('data-canact-explore-handoff', 'true');
     setExploreTransition(true);
     haptic('selection');
-    transitionRouteTimerRef.current = window.setTimeout(() => router.push('/favourites'), 680);
+    transitionRouteTimerRef.current = window.setTimeout(() => router.push('/favourites'), 500);
     transitionResetTimerRef.current = window.setTimeout(() => {
       transitioningRef.current = false;
       pullRef.current = 0;
@@ -146,8 +149,9 @@ export function CanactHome() {
       atEndRef.current = false;
       setExploreTransition(false);
       setTransitionOrigin(undefined);
+      document.documentElement.removeAttribute('data-canact-explore-handoff');
       requestAnimationFrame(handleScroll);
-    }, 1200);
+    }, 1400);
   }, [handleScroll, router]);
 
   useEffect(() => {
@@ -158,6 +162,7 @@ export function CanactHome() {
       atEndRef.current = false;
       setExploreTransition(false);
       setTransitionOrigin(undefined);
+      document.documentElement.removeAttribute('data-canact-explore-handoff');
       requestAnimationFrame(handleScroll);
     };
     window.addEventListener('pageshow', rearm);
@@ -165,6 +170,7 @@ export function CanactHome() {
       window.removeEventListener('pageshow', rearm);
       if (transitionRouteTimerRef.current) clearTimeout(transitionRouteTimerRef.current);
       if (transitionResetTimerRef.current) clearTimeout(transitionResetTimerRef.current);
+      if (window.location.pathname !== '/favourites') document.documentElement.removeAttribute('data-canact-explore-handoff');
     };
   }, [handleScroll]);
 

@@ -47,6 +47,7 @@ export default function FavouritesPage() {
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendProfile | null>>({});
   const [favs, setFavs] = useState<FriendProfile[]>([]);
   const [favReqs, setFavReqs] = useState<FavouriteRequest[]>([]);
+  const homeMapHandoffRef = useRef(false);
   const knownProfiles = useMemo(() => [
     ...Object.values(friendProfiles).filter(isFriendProfile),
     ...favs,
@@ -61,6 +62,18 @@ export default function FavouritesPage() {
   useEffect(() => {
     document.documentElement.setAttribute('data-canact-fullscreen-page', 'true');
     return () => document.documentElement.removeAttribute('data-canact-fullscreen-page');
+  }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    const active = homeMapHandoffRef.current || root.hasAttribute('data-canact-explore-handoff');
+    homeMapHandoffRef.current = active;
+    if (!active) return;
+    root.setAttribute('data-canact-explore-handoff', 'true');
+    const timer = window.setTimeout(() => root.removeAttribute('data-canact-explore-handoff'), 720);
+    return () => {
+      window.clearTimeout(timer);
+      root.removeAttribute('data-canact-explore-handoff');
+    };
   }, []);
 
   const friendIds = useMemo(() => friends.map((friend) => friend.uid).sort().join('|'), [friends]);

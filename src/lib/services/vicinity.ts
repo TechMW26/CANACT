@@ -148,7 +148,7 @@ async function maybeFinalizeDeparted(myUid: string) {
         toUid: myUid,
         title: 'Rate your recent meet',
         body: `How was your interaction with ${otherName}?`,
-        url: '/feed',
+        url: '/',
         tag: `rate:${key}`,
       });
       await remove(ref(db, `encounters/${key}`));
@@ -225,7 +225,6 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
 
         // 2) Find people in vicinity right now.
         const me = { lat: lastFix.lat, lng: lastFix.lng };
-        const nowProximity = Date.now();
         for (const other of Object.values(presenceCache)) {
           if (!other || other.uid === uid) continue;
           if (!other.updatedAt || (now - other.updatedAt) > VICINITY.PRESENCE_STALE_MS) continue;
@@ -234,18 +233,18 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
           const slack = Math.min(VICINITY.ACC_SLACK, ((other.accuracy ?? 0) + (lastFix.accuracy ?? 0)) / 2);
           if (d <= VICINITY.RADIUS + slack) {
             await tickEncounter(uid, name, photo, other, d);
-            // Proximity push: notify when a contact / friend / interacted
-            // person comes within 15 m. Debounce: one push per user per hour.
+            // Proximity push: notify when someone enters 15 m range.
+            // Debounce: one push per user pair per hour.
             const lastNotifiedKey = `proximity:${other.uid}`;
             const lastNotifiedSnap = await get(ref(db, `proximityNotified/${uid}/${other.uid}`));
             const lastNotified = lastNotifiedSnap.val() as number | null;
-            if (!lastNotified || (nowProximity - lastNotified) > 3600_000) {
-              await set(ref(db, `proximityNotified/${uid}/${other.uid}`), nowProximity);
+            if (!lastNotified || (now - lastNotified) > 3600_000) {
+              await set(ref(db, `proximityNotified/${uid}/${other.uid}`), now);
               sendPush({
                 toUid: uid,
                 title: `${other.name || 'Someone'} is nearby`,
-                body: `Tap to see who's around you right now.`,
-                url: '/favourites?tab=friends',
+                body: 'Tap to see who\'s around you right now.',
+                url: '/favourites',
                 tag: lastNotifiedKey,
               }).catch(() => {});
             }

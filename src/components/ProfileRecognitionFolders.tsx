@@ -382,17 +382,16 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
       {communityLeadersHref ? (
         <div className="grid grid-cols-2 gap-3">
           <button type="button" className={styles.attributeAction} onClick={() => setAttributePopupOpen(true)}>
-            <span><strong>{isSelf ? 'Your attributes' : 'Know this person?'}</strong><small>Tap to view &amp; manage</small></span>
+            <span><strong>{isSelf ? 'Your attributes' : 'Know this person?'}</strong></span>
             <ChevronRight size={20} />
           </button>
           <Link href={communityLeadersHref} className={styles.attributeAction}>
-            <span><strong>Community leaders</strong><small>Top trusted people</small></span>
+            <span><strong>Community leaders</strong></span>
             <ChevronRight size={20} />
           </Link>
         </div>
       ) : (
         <button type="button" className={styles.attributeAction} onClick={() => setAttributePopupOpen(true)}>
-          <span className={styles.attributeActionIcon}>{isSelf ? <Sparkles size={21} /> : <Users size={21} />}</span>
           <span><strong>{isSelf ? 'How people know you' : 'Know this person?'}</strong><small>{isSelf ? 'Open your six community attributes' : `Add what stands out about ${profile.firstName || profile.fullName.split(' ')[0]}`}</small></span>
           <ChevronRight size={20} />
         </button>

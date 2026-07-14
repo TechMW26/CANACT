@@ -7,6 +7,10 @@
   animation: exploreMapIn 360ms cubic-bezier(.22,.85,.3,1);
 }
 
+:global(html[data-canact-explore-handoff="true"]) .exploreScreen {
+  animation: none;
+}
+
 .mapTopFade {
   position: fixed;
   right: 0;

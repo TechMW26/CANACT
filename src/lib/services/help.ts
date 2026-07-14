@@ -184,6 +184,13 @@ export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tr
         body: 'The seeker confirmed you tried with good intent. +10 CANACT score.',
         data: { helpId: id },
       });
+      sendPush({
+        toUid: helperUid,
+        title: 'Your help effort was appreciated',
+        body: 'The seeker confirmed you tried with good intent.',
+        url: `/help/${id}`,
+        tag: `help:${id}:tried-good`,
+      }).catch(() => {});
     }
     return;
   }
@@ -198,6 +205,13 @@ export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tr
         body: 'The seeker reported bad intent. −100 CANACT score.',
         data: { helpId: id },
       });
+      sendPush({
+        toUid: helperUid,
+        title: 'Negative outcome from a Help',
+        body: 'The seeker reported bad intent.',
+        url: `/help/${id}`,
+        tag: `help:${id}:tried-bad`,
+      }).catch(() => {});
     }
     return;
   }
@@ -219,6 +233,13 @@ export async function requesterCloseHelp(id: string, outcome: 'yes' | 'no' | 'tr
       body: help.text.slice(0, 80),
       data: { helpId: id },
     });
+    sendPush({
+      toUid: helperUid,
+      title: 'Help request resolved',
+      body: 'Your help was marked as successful.',
+      url: `/help/${id}`,
+      tag: `help:${id}:resolved`,
+    }).catch(() => {});
   }
 }
 

@@ -84,8 +84,12 @@ function FolderCardSVG({ title, subtitle, cardColors }: FolderProps) {
       </g>
 
       <g className="folder-copy">
-        <text className="folder-title" x="63" y="289">{title}</text>
-        <text className="folder-subtitle" x="63" y="356">{subtitle}</text>
+        <text className="folder-title" x="63" y="272">
+          {title.split(' ').map((word, i) => (
+            <tspan key={i} x="63" dy={i === 0 ? 0 : 76}>{word}</tspan>
+          ))}
+        </text>
+        <text className="folder-subtitle" x="63" y={272 + title.split(' ').length * 76 + 14}>{subtitle}</text>
       </g>
 
       <g filter={`url(#${btnShadowId})`}>

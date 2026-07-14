@@ -307,16 +307,15 @@
   pointer-events: none;
 }
 .exploreTransitionMap {
-  position: absolute;
-  top: var(--map-transition-top);
-  left: var(--map-transition-left);
-  width: var(--map-transition-width);
-  height: var(--map-transition-height);
+  position: fixed;
+  inset: 0;
   overflow: hidden;
-  border-radius: 24px 24px 0 0;
   background: #edf2e5;
-  animation: homeExploreMapExpand 680ms cubic-bezier(.2,.86,.2,1) both;
-  will-change: top, left, width, height, border-radius;
+  clip-path: inset(var(--map-clip-top) var(--map-clip-right) var(--map-clip-bottom) var(--map-clip-left) round 24px 24px 0 0);
+  animation: homeExploreMapExpand 520ms cubic-bezier(.2,.86,.2,1) both;
+  will-change: clip-path;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 .exploreTransitionMap > * { width: 100% !important; height: 100% !important; }
 
@@ -326,18 +325,10 @@
 }
 @keyframes homeExploreMapExpand {
   from {
-    top: var(--map-transition-top);
-    left: var(--map-transition-left);
-    width: var(--map-transition-width);
-    height: var(--map-transition-height);
-    border-radius: 24px 24px 0 0;
+    clip-path: inset(var(--map-clip-top) var(--map-clip-right) var(--map-clip-bottom) var(--map-clip-left) round 24px 24px 0 0);
   }
   to {
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: var(--canact-viewport-height);
-    border-radius: 0;
+    clip-path: inset(0 round 0);
   }
 }
 

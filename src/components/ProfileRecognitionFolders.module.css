@@ -66,15 +66,15 @@
 
 .folderCard :global(.folder-title) {
   fill: #123c2d;
-  font-size: 51px;
-  font-weight: 700;
-  letter-spacing: -2.45px;
+  font-size: 64px;
+  font-weight: 750;
+  letter-spacing: -2.8px;
 }
 .folderCard :global(.folder-subtitle) {
   fill: #61766d;
-  font-size: 35px;
+  font-size: 42px;
   font-weight: 600;
-  letter-spacing: -1.4px;
+  letter-spacing: -1.6px;
 }
 
 @media (max-width: 520px) {

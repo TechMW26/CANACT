@@ -198,6 +198,11 @@ input[type="time"]::-webkit-date-and-time-value {
 .canact-page-enter-back {
   animation: canactPageInBack 240ms cubic-bezier(.22,.85,.3,1);
 }
+html[data-canact-explore-handoff="true"] .canact-page-enter-forward,
+html[data-canact-explore-handoff="true"] .canact-page-enter-back {
+  animation: none;
+  opacity: 1;
+}
 @keyframes canactPageInForward {
   0%   { opacity: 0; }
   100% { opacity: 1; }
@@ -351,11 +356,13 @@ input[type="time"]::-webkit-date-and-time-value {
   top: 50%;
   left: 50%;
   z-index: 50;
-  transform: translate(-50%, -50%);
-  transform-origin: top center;
-  transition: opacity 140ms linear, transform 440ms cubic-bezier(.2,.9,.2,1);
+  display: grid;
+  width: min(310px, 78vw);
+  height: 36px;
+  place-items: start center;
+  transform: translate(-50%, -18px);
+  transition: opacity 140ms linear;
 }
-.canact-score-island-shell[data-expanded="true"] { transform: translate(-50%, -18px); }
 .canact-score-island-shell[data-home-hidden="true"] { pointer-events: none; }
 .canact-score-island {
   position: relative;
@@ -374,6 +381,8 @@ input[type="time"]::-webkit-date-and-time-value {
   transform-origin: top center;
   transition: width 440ms cubic-bezier(.2,.9,.2,1), height 440ms cubic-bezier(.2,.9,.2,1), border-radius 440ms cubic-bezier(.2,.9,.2,1), box-shadow 280ms ease;
   will-change: width, height, border-radius;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .canact-score-island[data-expanded="true"] {
   width: min(310px, 78vw);

@@ -23,6 +23,7 @@ import { ScrollRestoration } from './ScrollRestoration';
 import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
+import { IncomingCardEnvelope } from './IncomingCardEnvelope';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
@@ -268,6 +269,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         {postPopups}
         <HelpAlertManager />
+        <IncomingCardEnvelope uid={user.uid} />
         <IncomingCallRinger />
         <NativeCallDeepLinkRouter />
       </div>
@@ -349,6 +351,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
+        <IncomingCardEnvelope uid={user.uid} />
         <NativePermissionsBootstrapper />
         <NativeCallDeepLinkRouter />
       </main>

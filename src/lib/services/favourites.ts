@@ -2,10 +2,18 @@ import { onValue, push, ref, set, remove, get, update } from 'firebase/database'
 import { db } from '../firebase';
 import { ChatMessage } from '../types';
 import { pushNotification } from './notifications';
+import { sendPush } from './sendPush';
 
 export async function requestFollow(fromUid: string, fromName: string, toUid: string) {
   await set(ref(db, `followRequests/${toUid}/${fromUid}`), { fromUid, fromName, createdAt: Date.now() });
   await pushNotification(toUid, { kind: 'follow', title: `${fromName} wants to add you to favourites`, data: { fromUid } });
+  sendPush({
+    toUid,
+    title: `${fromName} wants to add you`,
+    body: 'You have a new favourite request.',
+    url: `/profile/${fromUid}`,
+    tag: `follow:${fromUid}`,
+  }).catch(() => {});
 }
 export async function acceptFollow(myUid: string, otherUid: string) {
   await set(ref(db, `favourites/${myUid}/${otherUid}`), Date.now());
