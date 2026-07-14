@@ -32,23 +32,21 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
     let lifetimeCards: LifetimeCardGift[] = [];
     let connectionReady = false;
     let lifetimeReady = false;
-    let initialized = false;
     let initialTimer = 0;
     const stored = window.localStorage.getItem(storageKey);
     try { seenRef.current = new Set(JSON.parse(stored || '[]') as string[]); } catch { seenRef.current = new Set(); }
 
-    const giftKey = (item: IncomingGift) => `${item.family}:${item.gift.id}`;
+    // A lifetime card keeps its identity when it is passed on. Include the
+    // transfer timestamp so every new ownership transfer gets its own reveal.
+    const giftKey = (item: IncomingGift) => `${item.family}:${item.gift.id}:${item.gift.sentAt}`;
     const flush = () => {
-      if (!connectionReady || !lifetimeReady) return;
+      // Do not let a delayed/failed secondary stream block lifetime delivery.
+      if (!connectionReady && !lifetimeReady) return;
       const gifts: IncomingGift[] = [
         ...connectionCards.map((gift): IncomingGift => ({ family: 'connection', gift })),
         ...lifetimeCards.map((gift): IncomingGift => ({ family: 'lifetime', gift })),
       ].sort((a, b) => b.gift.sentAt - a.gift.sentAt);
 
-      if (!initialized && stored === null && gifts.length > 1) {
-        gifts.slice(1).forEach((gift) => seenRef.current.add(giftKey(gift)));
-      }
-      initialized = true;
       gifts.forEach((gift) => {
         const key = giftKey(gift);
         if (seenRef.current.has(key) || queuedRef.current.has(key)) return;
@@ -83,7 +81,7 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
 
   const finish = useCallback(() => {
     if (!current) return;
-    const key = `${current.family}:${current.gift.id}`;
+    const key = `${current.family}:${current.gift.id}:${current.gift.sentAt}`;
     queuedRef.current.delete(key);
     seenRef.current.add(key);
     try { window.localStorage.setItem(storageKey, JSON.stringify([...seenRef.current].slice(-200))); } catch { /* storage can be unavailable */ }
@@ -94,11 +92,12 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
   const viewportWidth = window.innerWidth;
   const naturalWidth = 620;
   const naturalHeight = 196;
+  const displayWidth = Math.min(naturalWidth, viewportWidth - 32);
   const sourceRect = {
-    left: Math.max(16, (viewportWidth - Math.min(620, viewportWidth - 32)) / 2),
+    left: Math.max(16, (viewportWidth - displayWidth) / 2),
     top: 96,
-    width: Math.min(620, viewportWidth - 32),
-    height: naturalHeight,
+    width: displayWidth,
+    height: naturalHeight * (displayWidth / naturalWidth),
     naturalWidth,
     naturalHeight,
   };

@@ -261,6 +261,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   if (isFullScreen) {
     return (
       <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
+        <IncomingCardEnvelope uid={user.uid} />
         <ScrollRestoration />
         {/* Pull-to-refresh is intentionally NOT mounted on chat threads:
             those use their own scroll container and a downward swipe at the
@@ -269,7 +270,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         {postPopups}
         <HelpAlertManager />
-        <IncomingCardEnvelope uid={user.uid} />
         <IncomingCallRinger />
         <NativeCallDeepLinkRouter />
       </div>
@@ -278,6 +278,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
+      <IncomingCardEnvelope uid={user.uid} />
       <ScrollRestoration />
       {/* Global swipe-down-to-refresh — mounted once for the whole app so
           every page (feed, profile, leaderboard, etc.) gets the gesture
@@ -351,7 +352,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <VicinityTracker />
         <IncomingCallRinger />
         <HelpAlertManager />
-        <IncomingCardEnvelope uid={user.uid} />
         <NativePermissionsBootstrapper />
         <NativeCallDeepLinkRouter />
       </main>

@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { CANACT_SCORE_MIN, calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { useDistance } from '@/lib/distance';
 import { db } from '@/lib/firebase';
-import { setLikeDislike, setAttribute, SIX_HOURS } from '@/lib/services/votes';
+import { getAttributeCooldownMs, listenAttributeVotes, removeAttribute, setLikeDislike, setAttribute, type AttributeVoteMap } from '@/lib/services/votes';
 import { listenUserWhaPosts } from '@/lib/services/wha';
 import { sendFriendRequest, listenFriendStatus, unfriend } from '@/lib/services/friends';
 import { requestFollow } from '@/lib/services/favourites';
@@ -101,7 +101,7 @@ export function HomeScoreExperience() {
   const [expandedFriendStatus, setExpandedFriendStatus] = useState<FriendStatus | null>(null);
   const [expandedBusy, setExpandedBusy] = useState(false);
   const [expandedCardProfile, setExpandedCardProfile] = useState<UserProfile | null>(null);
-  const [expandedMyVoteAttr, setExpandedMyVoteAttr] = useState<{ key: AttrKey; at: number } | null>(null);
+  const [expandedMyAttrVotes, setExpandedMyAttrVotes] = useState<AttributeVoteMap>({});
   const [ratingUid, setRatingUid] = useState<string | null>(null);
   const [dragX, setDragX] = useState(0);
   const [liveProfile, setLiveProfile] = useState<UserProfile | null>(null);
@@ -791,24 +791,28 @@ export function HomeScoreExperience() {
 
   useEffect(() => {
     if (!expandedCardUid || !user?.uid) return;
-    return onValue(ref(db, `votes/${expandedCardUid}/${user.uid}`), (s) => {
-      const vote = s.val() ?? {};
-      setExpandedMyVoteAttr(vote?.attr ?? null);
-    });
+    return listenAttributeVotes(expandedCardUid, user.uid, setExpandedMyAttrVotes);
   }, [expandedCardUid, user?.uid]);
 
   const handleExpandedAttr = useCallback(async (k: AttrKey) => {
     if (!user?.uid || !expandedCardUid) return;
     try {
-      const result = await setAttribute(expandedCardUid, user.uid, k);
+      const current = expandedMyAttrVotes[k];
+      const cooldown = getAttributeCooldownMs(expandedMyAttrVotes, k);
+      if (current && cooldown > 0) {
+        toast(`You can update ${ATTR_LABELS[k]} in ${Math.ceil(cooldown / 3_600_000)}h`, 'error');
+        return;
+      }
+      const result = current
+        ? await removeAttribute(expandedCardUid, user.uid, k)
+        : await setAttribute(expandedCardUid, user.uid, k);
       if (!result.ok) {
-        const m = Math.ceil((result.waitMs ?? 0) / 60000);
-        toast(`Wait ${Math.ceil(m / 60)}h to vote attributes again`, 'error');
-      } else toast('Attribute updated', 'success');
+        toast(`Wait ${Math.max(1, Math.ceil((result.waitMs ?? 0) / 3_600_000))}h to update attributes`, 'error');
+      } else toast(current ? 'Attribute taken back' : 'Attribute updated', 'success');
     } catch (error: any) {
       toast(error?.message ?? 'Could not update attribute', 'error');
     }
-  }, [user?.uid, expandedCardUid]);
+  }, [user?.uid, expandedCardUid, expandedMyAttrVotes]);
 
   const deltaLabel = scoreSummary.delta === 0
     ? `${scoreSummary.baseline} baseline`
@@ -965,7 +969,7 @@ export function HomeScoreExperience() {
                 busy={expandedBusy}
                 dragX={dragX}
                 ratingUid={ratingUid}
-                myVoteAttr={expandedMyVoteAttr}
+                myAttrVotes={expandedMyAttrVotes}
                 isClosing={expandedCardClosing}
                 onPostIndexChange={setExpandedPostIndex}
                 onClose={handleCloseExpandedCard}
@@ -1266,7 +1270,7 @@ function ExpandedCardModal({
   busy,
   dragX,
   ratingUid,
-  myVoteAttr,
+  myAttrVotes,
   isClosing,
   onPostIndexChange,
   onClose,
@@ -1290,7 +1294,7 @@ function ExpandedCardModal({
   busy: boolean;
   dragX: number;
   ratingUid: string | null;
-  myVoteAttr: { key: AttrKey; at: number } | null;
+  myAttrVotes: AttributeVoteMap;
   isClosing: boolean;
   onPostIndexChange: (index: number) => void;
   onClose: () => void;
@@ -1487,12 +1491,8 @@ function ExpandedCardModal({
             <h3 className={styles.expandedAttrGroupTitle}>Positive Traits</h3>
             <div className={styles.expandedAttrs}>
               {POSITIVE_ATTRS.map((attr) => {
-                const selected = myVoteAttr?.key === attr;
-                const cooldownLeft = (() => {
-                  if (!myVoteAttr?.at || myVoteAttr.key !== attr) return 0;
-                  const left = SIX_HOURS - (Date.now() - myVoteAttr.at);
-                  return left > 0 ? left : 0;
-                })();
+                const selected = !!myAttrVotes[attr];
+                const cooldownLeft = getAttributeCooldownMs(myAttrVotes, attr);
                 const disabled = cooldownLeft > 0;
                 const count = personProfile?.attrs?.[attr] ?? 0;
                 return (
@@ -1515,12 +1515,8 @@ function ExpandedCardModal({
             <h3 className={styles.expandedAttrGroupTitle}>Concerns</h3>
             <div className={styles.expandedAttrs}>
               {NEGATIVE_ATTRS.map((attr) => {
-                const selected = myVoteAttr?.key === attr;
-                const cooldownLeft = (() => {
-                  if (!myVoteAttr?.at || myVoteAttr.key !== attr) return 0;
-                  const left = SIX_HOURS - (Date.now() - myVoteAttr.at);
-                  return left > 0 ? left : 0;
-                })();
+                const selected = !!myAttrVotes[attr];
+                const cooldownLeft = getAttributeCooldownMs(myAttrVotes, attr);
                 const disabled = cooldownLeft > 0;
                 const count = personProfile?.attrs?.[attr] ?? 0;
                 return (

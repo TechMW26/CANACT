@@ -6,18 +6,20 @@ import { createPortal } from 'react-dom';
 const STYLES = `
 .canact-launch-scene {
   position: fixed; inset: 0; overflow: hidden; background: transparent; isolation: isolate;
-  pointer-events: none; z-index: 2147483647;
+  pointer-events: none; z-index: 2147483647; contain: strict; transform: translateZ(0);
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
 .canact-launch-scene * { box-sizing: border-box; margin: 0; padding: 0; }
 
 .cl-rocket {
   position: absolute; left: 50%; top: 100%; width: 80px; height: 185px; z-index: 12;
-  transform: translate(-50%, 26vh);
+  transform: translate3d(-50%, 26vh, 0); will-change: transform, opacity;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
   animation: cl-rocketFlight 2.1s cubic-bezier(.22,.78,.18,1) .05s forwards;
 }
 .cl-rocket-body {
-  position: relative; width: 80px; height: 180px;
-  animation: cl-rocketShake 90ms linear 13;
+  position: relative; width: 80px; height: 180px; transform: translateZ(0);
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
 .cl-body {
   position: relative; width: 80px; height: 180px; background: #dadada;
@@ -51,7 +53,8 @@ const STYLES = `
   transform: translateX(-50%); transform-origin: top center; z-index: -3; opacity: .95;
   border-radius: 0 0 50% 50%;
   background: linear-gradient(to bottom, rgba(245,245,245,.98) 0%, rgba(245,245,245,.95) 18%, rgba(63,140,116,.35) 48%, rgba(245,245,245,0) 100%);
-  filter: blur(.3px) drop-shadow(0 8px 16px rgba(32,108,85,.15));
+  box-shadow: 0 8px 18px rgba(32,108,85,.12);
+  will-change: transform, opacity; backface-visibility: hidden; -webkit-backface-visibility: hidden;
   animation: cl-trailPulse 120ms ease-in-out infinite alternate;
 }
 .cl-trail::before {
@@ -63,7 +66,7 @@ const STYLES = `
   position: absolute; top: 170px; left: 50%; width: 54px; height: 240px;
   transform: translateX(-50%); border-radius: 50%; z-index: -4;
   background: radial-gradient(ellipse at top, rgba(63,140,116,.35) 0%, rgba(245,245,245,.28) 35%, rgba(245,245,245,0) 72%);
-  filter: blur(8px);
+  will-change: transform, opacity; backface-visibility: hidden; -webkit-backface-visibility: hidden;
   animation: cl-trailGlowPulse 150ms ease-in-out infinite alternate;
 }
 
@@ -83,18 +86,15 @@ const STYLES = `
 .cl-stars li:nth-child(6) { top:87px; left:-79px; animation: cl-twinkle .2s infinite alternate; }
 .cl-stars li:nth-child(7) { top:280px; left:-150px; animation: cl-twinkle .65s infinite alternate; }
 
-.cl-fog-overlay { position: fixed; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
+.cl-fog-overlay { position: fixed; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; contain: strict; transform: translateZ(0); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .cl-fog-veil {
-  position: absolute; inset: 0; background: rgba(245,245,245,0);
-  animation: cl-veilIn .45s cubic-bezier(.4,0,.2,1) .92s forwards, cl-veilOut .95s cubic-bezier(.22,.78,.18,1) 2.45s forwards;
+  position: absolute; inset: -8%; opacity: 0; transform: translate3d(0,10%,0) scale(1.04);
+  background: radial-gradient(ellipse at 50% 100%,rgba(245,245,245,.98) 0 34%,rgba(245,245,245,.86) 52%,rgba(245,245,245,0) 78%);
+  will-change: transform, opacity; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  animation: cl-veilLifecycle 2.35s cubic-bezier(.22,.78,.18,1) .72s both;
 }
 .cl-fog {
-  --cx:0px; --cy:-55vh; --cs:5.5;
-  position: absolute; bottom: -240px; width: 180px; height: 180px; border-radius: 50%;
-  background: #f5f5f5; opacity: 0;
-  box-shadow: 0 0 40px rgba(245,245,245,.9), 0 0 80px rgba(245,245,245,.45);
-  filter: blur(1px);
-  animation: cl-fogFill 1.15s cubic-bezier(.16,1,.3,1) forwards, cl-fogExit .95s cubic-bezier(.22,.78,.18,1) 2.45s forwards;
+  display: none;
 }
 .cl-fog.f1  { left:-8%;  width:230px; height:230px; --cx:40px;  --cy:-54vh; --cs:5.2; animation-delay:.80s, 2.45s; }
 .cl-fog.f2  { left:2%;   width:150px; height:150px; --cx:-20px; --cy:-84vh; --cs:6.2; animation-delay:.92s, 2.45s; }
@@ -114,7 +114,8 @@ const STYLES = `
 .cl-success {
   position: fixed; top: 50%; left: 50%; z-index: 30; width: min(92%, 560px); text-align: center;
   opacity: 0; visibility: hidden; transform: translate(-50%, -42%) scale(.92);
-  animation: cl-msgLifecycle 3.4s both;
+  animation: cl-msgLifecycle 3.4s both; will-change: transform, opacity;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
 .cl-mark {
   width: 72px; height: 72px; margin: 0 auto 22px; background: #206c55; border-radius: 50%;
@@ -132,16 +133,11 @@ const STYLES = `
 .cl-success p { color: rgba(37,51,48,.72); font-size: clamp(15px, 2vw, 18px); line-height: 1.6; }
 
 @keyframes cl-rocketFlight {
-  0% { opacity:1; transform: translate(-50%, 26vh) scale(.96); }
-  12% { transform: translate(-50%, 4vh) scale(1); }
-  28% { transform: translate(-50%, -32vh) scale(1); }
-  55% { opacity:1; transform: translate(-50%, -92vh) scale(.98); }
-  100% { opacity:0; transform: translate(-50%, -188vh) scale(.88); }
-}
-@keyframes cl-rocketShake {
-  0% { transform: translateX(-1px) rotate(-.22deg); }
-  50% { transform: translateX(1px) rotate(.22deg); }
-  100% { transform: translateX(-1px) rotate(-.22deg); }
+  0% { opacity:1; transform: translate3d(-50%,26vh,0) scale(.96); }
+  12% { transform: translate3d(-50%,4vh,0) scale(1); }
+  28% { transform: translate3d(-50%,-32vh,0) scale(1); }
+  55% { opacity:1; transform: translate3d(-50%,-92vh,0) scale(.98); }
+  100% { opacity:0; transform: translate3d(-50%,-188vh,0) scale(.88); }
 }
 @keyframes cl-trailPulse {
   from { opacity:.88; transform: translateX(-50%) scaleX(.88) scaleY(.95); }
@@ -156,19 +152,10 @@ const STYLES = `
   to { opacity:1; transform: scale(1.14); }
 }
 @keyframes cl-starsFade { to { opacity:0; } }
-@keyframes cl-fogFill {
-  0% { opacity:0; transform: translate3d(0,0,0) scale(.2); }
-  12% { opacity:1; }
-  100% { opacity:1; transform: translate3d(var(--cx),var(--cy),0) scale(var(--cs)); }
-}
-@keyframes cl-fogExit {
-  0% { opacity:1; }
-  100% { opacity:0; transform: translate3d(var(--cx),calc(var(--cy) - 58vh),0) scale(calc(var(--cs) * 1.03)); }
-}
-@keyframes cl-veilIn { to { background: rgba(245,245,245,.88); } }
-@keyframes cl-veilOut {
-  0% { opacity:1; transform: translateY(0); }
-  100% { opacity:0; transform: translateY(-36%); }
+@keyframes cl-veilLifecycle {
+  0% { opacity:0; transform:translate3d(0,10%,0) scale(1.04); }
+  28%,66% { opacity:1; transform:translate3d(0,-3%,0) scale(1.04); }
+  100% { opacity:0; transform:translate3d(0,-28%,0) scale(1.04); }
 }
 @keyframes cl-msgLifecycle {
   0%,36% { opacity:0; visibility:hidden; transform: translate(-50%,-42%) scale(.92); }
@@ -177,7 +164,7 @@ const STYLES = `
 }
 
 @media (max-width:600px) {
-  .cl-rocket { transform: translate(-50%, 30vh) scale(.88); }
+  .cl-rocket { transform: translate3d(-50%,30vh,0) scale(.88); }
   .cl-mark { width:64px; height:64px; margin-bottom:18px; }
   .cl-mark::before { top:17px; left:21px; width:14px; height:24px; }
   .cl-success { padding:0 18px; }
@@ -194,9 +181,7 @@ export function RocketLaunchOverlay({ label, kind, onDone }: { label: string; ki
 
   useEffect(() => {
     setMounted(true);
-    const t = setTimeout(onDone, 3500);
-    return () => clearTimeout(t);
-  }, [onDone]);
+  }, []);
 
   if (!mounted || typeof document === 'undefined') return null;
 
@@ -232,7 +217,9 @@ export function RocketLaunchOverlay({ label, kind, onDone }: { label: string; ki
         <span className="cl-fog f13" /><span className="cl-fog f14" />
       </div>
 
-      <section className="cl-success" role="status" aria-live="polite">
+      <section className="cl-success" role="status" aria-live="polite" onAnimationEnd={(event) => {
+        if (event.currentTarget === event.target && event.animationName === 'cl-msgLifecycle') onDone();
+      }}>
         <div className="cl-mark" />
         <h1>{label} {verb}!</h1>
         <p>{subtext}</p>

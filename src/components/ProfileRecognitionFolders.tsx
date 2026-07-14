@@ -233,12 +233,14 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     if (givenAttrKeys.has(key) && attributeCooldown(key) === 0) {
       setAttributeBusy(key);
       const label = ATTR_LABELS[key];
-      setLaunchKind('take');
-      setLaunchLabel(label);
       try {
         const r = await removeAttribute(profile.uid, user.uid, key);
         if (!r.ok) toast(`Wait before taking back ${label}`, 'error');
-        else toast(`${label} taken back`, 'success');
+        else {
+          setLaunchKind('take');
+          setLaunchLabel(label);
+          toast(`${label} taken back`, 'success');
+        }
       } catch (error: any) {
         toast(error?.message || 'Could not take back attribute', 'error');
       } finally {
@@ -258,12 +260,14 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     // applies if the exact same key was given already (handled by setAttribute).
     setAttributeBusy(key);
     const label = ATTR_LABELS[key];
-    setLaunchKind('give');
-    setLaunchLabel(label);
     try {
       const result = await setAttribute(profile.uid, user.uid, key);
       if (!result.ok) toast(`You already gave ${label} · available again in ${Math.ceil((result.waitMs ?? 0) / 3_600_000)}h`, 'error');
-      else toast(`${label} added`, 'success');
+      else {
+        setLaunchKind('give');
+        setLaunchLabel(label);
+        toast(`${label} added`, 'success');
+      }
     } catch (error: any) {
       toast(error?.message || 'Could not update attribute', 'error');
     } finally {

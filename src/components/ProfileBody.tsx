@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { AttrKey, ATTR_LABELS, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
-import { setAttribute, setLikeDislike, giveCard, takeBackCard, SIX_HOURS } from '@/lib/services/votes';
+import { getAttributeCooldownMs, removeAttribute, setAttribute, setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
 import { listenUserPolls, deletePoll } from '@/lib/services/poll';
@@ -54,7 +54,7 @@ import {
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const { user, profile: me } = useAuth();
   const [u, setU] = useState<UserProfile | null>(null);
-  const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attr?: { key: AttrKey; at: number }; cards?: Record<string, number> } | null>(null);
+  const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attrs?: AttributeVoteMap; cards?: Record<string, number> } | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
 
@@ -122,19 +122,19 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     );
   }
 
-  const cooldownLeft = (() => {
-    if (!myVote?.attr) return 0;
-    const left = SIX_HOURS - (Date.now() - myVote.attr.at);
-    return left > 0 ? left : 0;
-  })();
-
   const handleAttr = async (k: AttrKey) => {
     if (isSelf || !user) return;
-    const r = await setAttribute(uid, user.uid, k);
+    const votes = myVote?.attrs ?? {};
+    const current = votes[k];
+    const cooldown = getAttributeCooldownMs(votes, k);
+    if (current && cooldown > 0) {
+      toast(`Wait ${Math.ceil(cooldown / 3_600_000)}h to update this attribute`, 'error');
+      return;
+    }
+    const r = current ? await removeAttribute(uid, user.uid, k) : await setAttribute(uid, user.uid, k);
     if (!r.ok) {
-      const m = Math.ceil((r.waitMs ?? 0) / 60000);
-      toast(`Wait ${Math.ceil(m / 60)}h to vote attributes again`, 'error');
-    } else toast('Attribute updated', 'success');
+      toast(`Wait ${Math.max(1, Math.ceil((r.waitMs ?? 0) / 3_600_000))}h to update attributes`, 'error');
+    } else toast(current ? 'Attribute taken back' : 'Attribute updated', 'success');
   };
 
   const handleCard = async (c: CardKey) => {

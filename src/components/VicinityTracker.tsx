@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { startVicinity, listenPendingRatings, dismissPendingRating } from '@/lib/services/vicinity';
-import { setAttribute, setLikeDislike } from '@/lib/services/votes';
+import { getAttributeCooldownMs, listenAttributeVotes, removeAttribute, setAttribute, setLikeDislike, type AttributeVoteMap } from '@/lib/services/votes';
 import type { AttrKey, PendingRating } from '@/lib/types';
 import { POSITIVE_ATTRS, NEGATIVE_ATTRS, ATTR_LABELS } from '@/lib/types';
 import { Avatar } from './Avatar';
@@ -50,21 +50,29 @@ function ProximityRatingPrompt({
 }) {
   const [vote, setVote] = useState<'like' | 'dislike' | null>(null);
   const [attr, setAttr] = useState<AttrKey | null>(null);
+  const [attrVotes, setAttrVotes] = useState<AttributeVoteMap>({});
   const [busy, setBusy] = useState(false);
   const minutes = Math.max(1, Math.round(pending.durationMs / 60000));
 
   const isPositive = (key: AttrKey) => (POSITIVE_ATTRS as readonly string[]).includes(key);
 
+  useEffect(() => listenAttributeVotes(pending.otherUid, myUid, setAttrVotes), [pending.otherUid, myUid]);
+
   const handleSubmit = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      if (vote) await setLikeDislike(pending.otherUid, myUid, vote).catch(() => {});
-      if (attr) await setAttribute(pending.otherUid, myUid, attr).catch(() => {});
+      if (attr) {
+        const result = attrVotes[attr]
+          ? await removeAttribute(pending.otherUid, myUid, attr)
+          : await setAttribute(pending.otherUid, myUid, attr);
+        if (!result.ok) throw new Error(`This attribute is locked for ${Math.max(1, Math.ceil((result.waitMs ?? 0) / 3_600_000))}h`);
+      }
+      if (vote) await setLikeDislike(pending.otherUid, myUid, vote);
       toast('Rating submitted', 'success');
       await dismissPendingRating(myUid, pending.pairKey);
-    } catch {
-      toast('Could not submit rating', 'error');
+    } catch (error: any) {
+      toast(error?.message || 'Could not submit rating', 'error');
     } finally {
       setBusy(false);
     }
@@ -118,13 +126,23 @@ function ProximityRatingPrompt({
         {/* Attribute chips */}
         <div className="mt-3 grid grid-cols-3 gap-2">
           {ALL_ATTRS.map((key) => {
-            const selected = attr === key;
+            const given = !!attrVotes[key];
+            const cooldown = getAttributeCooldownMs(attrVotes, key);
+            const selected = attr === key || given;
             const pos = isPositive(key);
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => setAttr(selected ? null : key)}
+                aria-pressed={selected}
+                title={cooldown > 0 ? `Available in ${Math.ceil(cooldown / 3_600_000)}h` : given ? 'Tap to take back' : undefined}
+                onClick={() => {
+                  if (cooldown > 0) {
+                    toast(`You already gave ${ATTR_LABELS[key]} · available in ${Math.ceil(cooldown / 3_600_000)}h`, 'error');
+                    return;
+                  }
+                  setAttr(attr === key ? null : key);
+                }}
                 className={`rounded-lg py-2 text-[11px] font-extrabold transition ${
                   selected
                     ? pos ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-400' : 'bg-rose-100 text-rose-700 ring-2 ring-rose-400'

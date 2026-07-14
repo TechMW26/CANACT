@@ -33,6 +33,8 @@
 .speedTrails span:nth-child(4) { right: 33px; height: 130px; }
 .speedTrails span:nth-child(5) { right: 8px; height: 82px; }
 .confetti { position: fixed; inset: 0; z-index: 50; width: 100%; height: 100%; pointer-events: none; }
+.receiveClose { position: fixed; left: 50%; bottom: max(28px,calc(env(safe-area-inset-bottom) + 18px)); z-index: 70; min-width: 132px; min-height: 48px; padding: 0 28px; transform: translateX(-50%); border: 0; border-radius: 999px; background: #0f4538; color: #fff; font: inherit; font-weight: 800; box-shadow: 0 12px 32px rgb(15 69 56 / 28%); cursor: pointer; animation: receiveCloseIn .28s ease-out both; }
+.receiveClose:focus-visible { outline: 3px solid rgb(119 225 191 / 75%); outline-offset: 3px; }
 .overlay[data-tone="lifetime"] .envelopeBack { background: linear-gradient(135deg,#ffe884 0%,#c88a13 38%,#f7cf55 64%,#9e6207 100%); }
 .overlay[data-tone="lifetime"] .flap { background: linear-gradient(160deg,#fff2a8 0%,#d69a1f 45%,#8f5706 100%); filter: drop-shadow(0 5px 5px rgb(92 52 0 / 24%)); }
 .overlay[data-tone="lifetime"] .right { background: linear-gradient(145deg,#d99b1c,#8d5207 88%); }
@@ -42,4 +44,5 @@
 .overlay[data-tone="lifetime"] .groundShadow { background: rgb(132 83 5 / 24%); }
 .overlay[data-tone="lifetime"] .speedTrails span { background: linear-gradient(to bottom,rgb(255 217 85 / 82%),rgb(255 217 85 / 0%)); box-shadow: 0 0 10px rgb(255 205 42 / 58%); }
 @keyframes metallicSweep { from { background-position: 130% 0; } to { background-position: -90% 0; } }
+@keyframes receiveCloseIn { from { opacity: 0; transform: translate(-50%,10px); } to { opacity: 1; transform: translate(-50%,0); } }
 @media (prefers-reduced-motion:reduce) { .overlay { -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); } }

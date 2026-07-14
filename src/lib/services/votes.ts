@@ -1,4 +1,4 @@
-import { get, ref, runTransaction, set, remove } from 'firebase/database';
+import { get, onValue, ref, runTransaction, set, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { AttrKey, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile } from '../types';
 
@@ -15,6 +15,26 @@ const ATTR_OPPOSITES: Record<string, string> = {
 import { calculateCanactScore } from '../canactScore';
 
 export const SIX_HOURS = 6 * 3600 * 1000;
+
+export type AttributeVote = { at: number };
+export type AttributeVoteMap = Partial<Record<AttrKey, AttributeVote>>;
+export type AttributeMutationResult = {
+  ok: boolean;
+  action?: 'given' | 'replaced' | 'removed';
+  reason?: 'cooldown' | 'already-given';
+  waitMs?: number;
+};
+
+export function listenAttributeVotes(toUid: string, fromUid: string, callback: (votes: AttributeVoteMap) => void) {
+  return onValue(ref(db, `votes/${toUid}/${fromUid}/attrs`), (snapshot) => {
+    callback((snapshot.val() ?? {}) as AttributeVoteMap);
+  });
+}
+
+export function getAttributeCooldownMs(votes: AttributeVoteMap, attr: AttrKey, now = Date.now()) {
+  const at = Number(votes[attr]?.at || 0);
+  return at ? Math.max(0, SIX_HOURS - (now - at)) : 0;
+}
 
 // Local cache for vote lookups to avoid redundant get() calls
 const _voteCache = new Map<string, { vote: any; expiresAt: number }>();
@@ -69,56 +89,71 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
 
 /**
  * Give an attribute to a user. Each voter can give multiple different
- * attributes to the same person — they accumulate independently. Giving the
- * *same* attribute again is blocked by a per-attribute 6h cooldown. Giving
- * the *opposite* attribute (e.g. behaviour → rude) replaces the old one:
- * the positive is removed and the negative is added in a single atomic swap.
+ * attributes to the same person — they accumulate independently. An active
+ * attribute can never be counted twice. Removal/re-adding and opposite-trait
+ * replacement both obey the same six-hour ledger across every UI entry point.
  */
-export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<{ ok: boolean; waitMs?: number }> {
-  const specificRef = ref(db, `votes/${toUid}/${fromUid}/attrs/${attr}`);
-
-  // Check if the user already gave THIS exact attribute (cooldown per-attr).
-  const existingSnap = await get(specificRef);
-  const existing = existingSnap.val() as { at: number } | null;
-  if (existing && Date.now() - existing.at < SIX_HOURS) {
-    return { ok: false, waitMs: SIX_HOURS - (Date.now() - existing.at) };
-  }
-
-  // Check if the OPPOSITE attribute exists — if so, this is a shift.
-  const opposite = ATTR_OPPOSITES[attr];
-  const oppositeRef = opposite ? ref(db, `votes/${toUid}/${fromUid}/attrs/${opposite}`) : null;
-  const oppositeSnap = oppositeRef ? await get(oppositeRef) : null;
-  const oppositeExists = oppositeSnap?.exists();
-
-  // Ensure a main vote exists (auto-like for positive, auto-dislike for negative).
-  const mainRef = ref(db, `votes/${toUid}/${fromUid}/main`);
-  const mainSnap = await get(mainRef);
-  const main = mainSnap.val() as 'like' | 'dislike' | null;
-  if (!main) {
-    const auto = (POSITIVE_ATTRS as readonly string[]).includes(attr) ? 'like' : 'dislike';
-    await setLikeDislike(toUid, fromUid, auto);
-  }
-
+export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<AttributeMutationResult> {
+  if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid attribute recipient');
+  const pairRef = ref(db, `votes/${toUid}/${fromUid}`);
   const votedAt = Date.now();
+  const opposite = ATTR_OPPOSITES[attr] as AttrKey | undefined;
+  let removedOpposite: AttrKey | null = null;
+  let reason: AttributeMutationResult['reason'];
+  let waitMs = 0;
 
-  // Atomic: remove opposite if shifting, add the new attribute.
+  const result = await runTransaction(pairRef, (current: any) => {
+    const state = current ?? {};
+    const attrs: AttributeVoteMap = { ...(state.attrs ?? {}) };
+    const cooldowns: AttributeVoteMap = { ...(state.attrCooldowns ?? {}) };
+    const existing = attrs[attr];
+    if (existing) {
+      reason = 'already-given';
+      waitMs = getAttributeCooldownMs(attrs, attr, votedAt);
+      return;
+    }
+    const previousActionAt = Number(cooldowns[attr]?.at || 0);
+    if (previousActionAt && votedAt - previousActionAt < SIX_HOURS) {
+      reason = 'cooldown';
+      waitMs = SIX_HOURS - (votedAt - previousActionAt);
+      return;
+    }
+    if (opposite && attrs[opposite]) {
+      const oppositeWait = getAttributeCooldownMs(attrs, opposite, votedAt);
+      if (oppositeWait > 0) {
+        reason = 'cooldown';
+        waitMs = oppositeWait;
+        return;
+      }
+      delete attrs[opposite];
+      cooldowns[opposite] = { at: votedAt };
+      removedOpposite = opposite;
+    }
+    attrs[attr] = { at: votedAt };
+    cooldowns[attr] = { at: votedAt };
+    state.attrs = attrs;
+    state.attrCooldowns = cooldowns;
+    delete state.attr;
+    return state;
+  });
+
+  if (!result.committed) return { ok: false, reason: reason ?? 'cooldown', waitMs };
+
   await runTransaction(ref(db, `users/${toUid}/attrs`), (a: any) => {
     a = a ?? { behaviour: 0, reliability: 0, civic_sense: 0, rude: 0, unreliable: 0, uncivil: 0 };
-    if (oppositeExists) {
-      a[opposite!] = Math.max(0, (a[opposite!] ?? 0) - 1);
+    if (removedOpposite) {
+      a[removedOpposite] = Math.max(0, (a[removedOpposite] ?? 0) - 1);
     }
     a[attr] = (a[attr] ?? 0) + 1;
     return a;
   });
 
-  // Write the new attribute vote and remove the opposite if shifting.
-  await set(specificRef, { at: votedAt });
-  if (oppositeExists && oppositeRef) {
-    await remove(oppositeRef);
+  const mainRef = ref(db, `votes/${toUid}/${fromUid}/main`);
+  if (!(await get(mainRef)).exists()) {
+    await setLikeDislike(toUid, fromUid, (POSITIVE_ATTRS as readonly string[]).includes(attr) ? 'like' : 'dislike');
   }
-
   await refreshCanactScore(toUid);
-  return { ok: true };
+  return { ok: true, action: removedOpposite ? 'replaced' : 'given' };
 }
 
 /**
@@ -126,23 +161,32 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
  * has its own 6h cooldown — you must wait before taking back a freshly-given
  * one, but other previously-given attributes can be taken back independently.
  */
-export async function removeAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<{ ok: boolean; waitMs?: number }> {
-  const specificRef = ref(db, `votes/${toUid}/${fromUid}/attrs/${attr}`);
-  const curSnap = await get(specificRef);
-  const cur = curSnap.val() as { at: number } | null;
-  if (!cur) return { ok: true }; // already gone
+export async function removeAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<AttributeMutationResult> {
+  if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid attribute recipient');
+  const changedAt = Date.now();
+  let waitMs = 0;
+  let alreadyAbsent = false;
+  const result = await runTransaction(ref(db, `votes/${toUid}/${fromUid}`), (current: any) => {
+    if (!current?.attrs?.[attr]) { alreadyAbsent = true; return; }
+    const remaining = SIX_HOURS - (changedAt - Number(current.attrs[attr].at || 0));
+    if (remaining > 0) { waitMs = remaining; return; }
+    const attrs = { ...current.attrs };
+    delete attrs[attr];
+    return {
+      ...current,
+      attrs,
+      attrCooldowns: { ...(current.attrCooldowns ?? {}), [attr]: { at: changedAt } },
+    };
+  });
 
-  if (Date.now() - cur.at < SIX_HOURS) {
-    return { ok: false, waitMs: SIX_HOURS - (Date.now() - cur.at) };
-  }
+  if (!result.committed) return alreadyAbsent ? { ok: true } : { ok: false, reason: 'cooldown', waitMs };
 
   await runTransaction(ref(db, `users/${toUid}/attrs`), (a: any) => {
     if (a?.[attr]) a[attr] = Math.max(0, (a[attr] ?? 0) - 1);
     return a;
   });
-  await remove(specificRef);
   await refreshCanactScore(toUid);
-  return { ok: true };
+  return { ok: true, action: 'removed' };
 }
 
 /** Recalculate and persist the Canact score for a user after attr changes.

@@ -525,8 +525,6 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
         delete next[attr];
         return { ...prev, [person.uid]: next };
       });
-      setLaunchKind('take');
-      setLaunchLabel(label);
       try {
         const r = await removeAttribute(person.uid, user!.uid, attr);
         if (!r.ok) {
@@ -537,6 +535,8 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
           });
           toast('Wait before taking back attributes', 'error');
         } else {
+          setLaunchKind('take');
+          setLaunchLabel(label);
           toast(`${label} taken back`, 'success');
         }
       } catch (error: any) {
@@ -553,8 +553,6 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
         const next = { ...(prev[person.uid] ?? {}), [attr]: { at: Date.now() } };
         return { ...prev, [person.uid]: next };
       });
-      setLaunchKind('give');
-      setLaunchLabel(label);
       try {
         const r = await setAttribute(person.uid, user!.uid, attr);
         if (!r.ok) {
@@ -562,6 +560,8 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
           setAttrVotes((prev) => ({ ...prev, [person.uid]: rollbackAttrs }));
           toast(`You gave ${label} · available again in ${Math.ceil((r.waitMs ?? 0) / 3_600_000)}h`, 'error');
         } else {
+          setLaunchKind('give');
+          setLaunchLabel(label);
           toast(`${label} added`, 'success');
         }
       } catch (error: any) {

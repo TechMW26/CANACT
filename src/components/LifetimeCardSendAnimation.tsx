@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { gsap } from 'gsap';
 import styles from './LifetimeCardSendAnimation.module.css';
@@ -33,6 +33,8 @@ export function LifetimeCardSendAnimation({
   const raysRef = useRef<HTMLDivElement | null>(null);
   const shineRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const dismissReceiveRef = useRef<(() => void) | null>(null);
+  const [receiveReady, setReceiveReady] = useState(false);
 
   const geometry = useMemo(() => {
     const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
@@ -54,6 +56,7 @@ export function LifetimeCardSendAnimation({
   } satisfies CSSProperties;
 
   useEffect(() => {
+    setReceiveReady(false);
     const mailer = mailerRef.current;
     const envelope = envelopeRef.current;
     const flap = flapRef.current;
@@ -125,8 +128,8 @@ export function LifetimeCardSendAnimation({
       context?.clearRect(0, 0, window.innerWidth, window.innerHeight);
     }
 
-    function startConfetti() {
-      if (!context) return;
+    function startConfetti(onFinished?: () => void) {
+      if (!context) { onFinished?.(); return; }
       stopConfetti();
       particles = Array.from({ length: reducedMotion ? 45 : 145 }, (_, index) => createParticle(index));
       const startedAt = performance.now();
@@ -156,7 +159,7 @@ export function LifetimeCardSendAnimation({
           }
         });
         if (now - startedAt < 3000) confettiFrame = requestAnimationFrame(draw);
-        else stopConfetti();
+        else { stopConfetti(); onFinished?.(); }
       };
       confettiFrame = requestAnimationFrame(draw);
     }
@@ -200,7 +203,19 @@ export function LifetimeCardSendAnimation({
     gsap.set(rays, { opacity: 0, scale: .35, rotation: -12, force3D: true });
     gsap.set(shine, { opacity: direction === 'receive' ? 1 : 0 });
 
-    const timeline = gsap.timeline({ paused: true, defaults: { overwrite: 'auto' }, onComplete });
+    let motionFinished = false;
+    let confettiFinished = direction === 'receive';
+    const finishSendWhenComplete = () => {
+      if (direction === 'send' && motionFinished && confettiFinished) onComplete();
+    };
+    const timeline = gsap.timeline({
+      paused: true,
+      defaults: { overwrite: 'auto' },
+      onComplete: () => {
+        if (direction === 'receive') setReceiveReady(true);
+        else { motionFinished = true; finishSendWhenComplete(); }
+      },
+    });
     if (direction === 'receive') {
       const envelopeParts = [envelope.querySelector(`.${styles.envelopeBack}`), flap, envelope.querySelector(`.${styles.right}`), envelope.querySelector(`.${styles.bottom}`), envelope.querySelector(`.${styles.left}`), shine].filter(Boolean);
       gsap.set(mailer, { y: -launchHeight * .72, opacity: 0, scale: .82 });
@@ -213,11 +228,23 @@ export function LifetimeCardSendAnimation({
         .to(shine, { duration: duration(.12), opacity: 0, ease: 'power1.out' })
         .to(flap, { duration: duration(.36), rotateX: 180, zIndex: 2, ease: 'power2.inOut' })
         .set(cardBehind, { opacity: 1 })
-        .to(cardBehind, { duration: duration(.58), y: -142, scale: Math.min(1, 330 / sourceRect.naturalWidth), ease: 'power3.out' })
+        .to(cardBehind, { duration: duration(.58), y: -142, scale: sourceRect.width / sourceRect.naturalWidth, ease: 'power3.out' })
         .to(envelopeParts, { duration: duration(.24), y: 34, opacity: 0, ease: 'power2.in' }, '<.3')
         .to(groundShadow, { duration: duration(.24), opacity: 0, scaleX: .5, ease: 'power2.in' }, '<')
-        .to({}, { duration: duration(1.05) })
-        .to(cardBehind, { duration: duration(.28), y: -188, opacity: 0, ease: 'power2.in' });
+        .call(() => startConfetti());
+
+      dismissReceiveRef.current = () => {
+        setReceiveReady(false);
+        gsap.timeline({ defaults: { overwrite: 'auto' }, onComplete })
+          .to(envelopeParts, { duration: duration(.24), y: 0, opacity: 1, ease: 'power2.out' })
+          .to(cardBehind, { duration: duration(.42), y: 10, scale: insideScale, ease: 'power3.inOut' }, '<')
+          .to(flap, { duration: duration(.32), rotateX: 0, zIndex: 10, ease: 'power2.inOut' })
+          .set(cardBehind, { opacity: 0 })
+          .to(speedTrails, { duration: duration(.08), opacity: .8, scaleY: 1, y: 0, ease: 'power1.out' })
+          .call(playSwish)
+          .to(mailer, { duration: duration(.44), y: -launchHeight, scale: .8, opacity: 0, ease: 'power3.in' })
+          .to(speedTrails, { duration: duration(.2), opacity: 0, scaleY: 1.6, ease: 'power2.in' }, '<.12');
+      };
     } else {
       timeline
         .to({}, { duration: duration(.08) })
@@ -232,7 +259,10 @@ export function LifetimeCardSendAnimation({
         .set(cards, { opacity: 0 })
         .to(shine, { duration: duration(.16), opacity: 1, ease: 'power1.out' })
         .to(rays, { duration: duration(.28), opacity: tone === 'lifetime' ? .9 : .34, scale: 1, rotation: 4, ease: 'power2.out' }, '<')
-        .call(startConfetti)
+        .call(() => startConfetti(() => {
+          confettiFinished = true;
+          finishSendWhenComplete();
+        }))
         .call(playSwish)
         .to(speedTrails, { duration: duration(.08), opacity: .86, scaleY: 1, y: 0, ease: 'power1.out' })
         .to(mailer, { duration: duration(.46), y: -launchHeight, rotation: 0, scale: .78, opacity: 0, ease: 'power3.in' })
@@ -244,11 +274,14 @@ export function LifetimeCardSendAnimation({
 
     requestAnimationFrame(() => timeline.play(0));
     return () => {
+      dismissReceiveRef.current = null;
       timeline.kill();
       stopConfetti();
       gsap.killTweensOf([cards, mailer, envelope, flap, groundShadow, speedTrails, rays]);
     };
   }, [direction, onComplete, sourceRect, tone]);
+
+  const dismissReceive = useCallback(() => dismissReceiveRef.current?.(), []);
 
   if (typeof document === 'undefined') return null;
   return createPortal(
@@ -277,6 +310,9 @@ export function LifetimeCardSendAnimation({
           </div>
         </div>
       </div>
+      {direction === 'receive' && receiveReady ? (
+        <button type="button" className={styles.receiveClose} onClick={dismissReceive} aria-label="Close received card">Done</button>
+      ) : null}
     </div>,
     document.body,
   );

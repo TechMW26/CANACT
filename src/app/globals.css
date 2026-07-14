@@ -333,6 +333,8 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
 .canact-figma-header > .canact-header-inner {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
   height: 100%;
   border-radius: 9999px;
   background: transparent;
