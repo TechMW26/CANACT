@@ -91,13 +91,14 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
   if (!current || typeof window === 'undefined') return null;
   const viewportWidth = window.innerWidth;
   const naturalWidth = 620;
-  const naturalHeight = 196;
   const displayWidth = Math.min(naturalWidth, viewportWidth - 32);
+  const displayHeight = Math.max(196, displayWidth * .52);
+  const naturalHeight = displayHeight / (displayWidth / naturalWidth);
   const sourceRect = {
     left: Math.max(16, (viewportWidth - displayWidth) / 2),
     top: 96,
     width: displayWidth,
-    height: naturalHeight * (displayWidth / naturalWidth),
+    height: displayHeight,
     naturalWidth,
     naturalHeight,
   };

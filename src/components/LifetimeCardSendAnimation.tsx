@@ -77,7 +77,9 @@ export function LifetimeCardSendAnimation({
     const viewportWidth = window.innerWidth;
     const initialMailerY = Math.max(viewportHeight * .72, 520);
     const sourceCenterY = sourceRect.top + sourceRect.height / 2;
-    const targetEnvelopeCenterY = Math.min(viewportHeight * .62, sourceRect.top + sourceRect.height + 72);
+    const targetEnvelopeCenterY = direction === 'receive'
+      ? viewportHeight / 2
+      : Math.min(viewportHeight * .62, sourceRect.top + sourceRect.height + 72);
     const restingMailerY = targetEnvelopeCenterY - viewportHeight / 2;
     const cardRestingLocalY = sourceCenterY - targetEnvelopeCenterY;
     const sourceX = sourceRect.left + sourceRect.width / 2 - viewportWidth / 2;
@@ -228,9 +230,10 @@ export function LifetimeCardSendAnimation({
         .to(shine, { duration: duration(.12), opacity: 0, ease: 'power1.out' })
         .to(flap, { duration: duration(.36), rotateX: 180, zIndex: 2, ease: 'power2.inOut' })
         .set(cardBehind, { opacity: 1 })
-        .to(cardBehind, { duration: duration(.58), y: -142, scale: sourceRect.width / sourceRect.naturalWidth, ease: 'power3.out' })
+        .to(cardBehind, { duration: duration(.5), y: -132, scale: sourceRect.width / sourceRect.naturalWidth, ease: 'power3.out' })
         .to(envelopeParts, { duration: duration(.24), y: 34, opacity: 0, ease: 'power2.in' }, '<.3')
         .to(groundShadow, { duration: duration(.24), opacity: 0, scaleX: .5, ease: 'power2.in' }, '<')
+        .to(cardBehind, { duration: duration(.34), y: 0, ease: 'power2.inOut' }, '<.08')
         .call(() => startConfetti());
 
       dismissReceiveRef.current = () => {
