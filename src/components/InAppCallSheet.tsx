@@ -103,6 +103,16 @@ export function InAppCallSheet({
   // and the upgraded video tracks would never connect.
   const lastOfferSdpRef = useRef<string | null>(null);
   const lastAnswerSdpRef = useRef<string | null>(null);
+  // Prevents onnegotiationneeded from creating a duplicate offer during
+  // the initial call setup (addTrack schedules it, but we manually call
+  // createOffer — without this guard both can land in RTDB and the callee
+  // processes the wrong one). Set to true after the first manual offer is
+  // pushed. Reset on kind-flip renegotiation so the handler CAN fire.
+  const initialOfferDoneRef = useRef(false);
+  // Set while we are inside the onnegotiationneeded handler itself to
+  // prevent re-entrance (some browsers re-fire the event synchronously
+  // after setLocalDescription inside the handler).
+  const inRenegotiationRef = useRef(false);
   // Mirror of `callId` state in a ref so the cleanup closure (which is
   // captured at mount time) can always reach the latest id — critical for
   // the caller, whose id is only known after createCall() resolves.
@@ -249,17 +259,53 @@ export function InAppCallSheet({
         // NotAllowedError that browsers raise when no user gesture has
         // happened yet (the original sheet-open tap counts on most
         // platforms but not all).
+        //
+        // Additionally, some mobile browsers / WebViews require the audio
+        // element to be *muted first, then unmuted* after play() succeeds
+        // to fully unlock the audio pipeline — otherwise play() resolves
+        // but the audio output stays silent. We retry with this pattern.
         const kick = () => {
           const a = remoteAudioRef.current;
           const v = remoteVideoRef.current;
           if (a) {
             try { a.srcObject = remoteStream; } catch {}
-            try { a.muted = false; a.volume = 1; } catch {}
-            const p = a.play(); if (p && typeof p.catch === 'function') p.catch(() => {});
+            // Aggressive unmute-and-play for mobile WebViews: mute first
+            // so the autoplay guard lets play() through, then unmute
+            // once playback starts. On most platforms this is a no-op
+            // but on Capacitor Android it's the difference between
+            // "connected" and "I can actually hear them".
+            try { a.muted = true; } catch {}
+            const p = a.play();
+            if (p && typeof p.catch === 'function') {
+              p.then(() => {
+                try { a.muted = false; a.volume = 1; } catch {}
+              }).catch(() => {
+                // play() blocked — unmute so at least the user can tap
+                // the speaker button to trigger playback via gesture.
+                try { a.muted = false; } catch {}
+              });
+            } else {
+              try { a.muted = false; a.volume = 1; } catch {}
+            }
+            // Also listen for loadedmetadata as a fallback trigger
+            const onMeta = () => {
+              a.removeEventListener('loadedmetadata', onMeta);
+              try { a.muted = false; a.volume = 1; } catch {}
+              const p2 = a.play();
+              if (p2 && typeof p2.catch === 'function') p2.catch(() => {});
+            };
+            a.addEventListener('loadedmetadata', onMeta, { once: true });
           }
           if (v) {
             try { v.srcObject = remoteStream; } catch {}
-            const p = v.play(); if (p && typeof p.catch === 'function') p.catch(() => {});
+            // Same mute-then-unmute dance for video elements
+            try { v.muted = true; } catch {}
+            const pv = v.play();
+            if (pv && typeof pv.catch === 'function') {
+              pv.then(() => { try { v.muted = false; } catch {} }).catch(() => { try { v.muted = false; } catch {} });
+            } else {
+              try { v.muted = false; } catch {}
+            }
           }
         };
         kick();
@@ -273,6 +319,8 @@ export function InAppCallSheet({
             try { remoteStream.addTrack(ev.track); } catch {}
           }
           if (ev.track?.kind === 'video') setHasRemoteVideo(true);
+          // Re-bind after tracks were added — some WebViews need the
+          // srcObject re-set to pick up newly added tracks.
           kick();
         };
 
@@ -326,19 +374,29 @@ export function InAppCallSheet({
         };
 
         // Renegotiation — fired when caller adds/removes tracks (kind flip).
+        // Guarded by initialOfferDoneRef so we never race with the manual
+        // createOffer done below during initial setup.  inRenegotiationRef
+        // prevents re-entrance (some browsers re-fire the event synchronously
+        // after setLocalDescription inside the handler).
         pc.onnegotiationneeded = async () => {
           if (!isCaller) return;
+          if (!initialOfferDoneRef.current) return; // manual offer hasn't landed yet
+          if (inRenegotiationRef.current) return;
+          if (pc.signalingState !== 'stable') return; // only negotiate from stable
+          inRenegotiationRef.current = true;
           try {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             await setCallOffer(id, { type: offer.type, sdp: offer.sdp });
           } catch { /* noop */ }
+          finally { inRenegotiationRef.current = false; }
         };
 
         if (isCaller) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           await setCallOffer(id, { type: offer.type, sdp: offer.sdp });
+          initialOfferDoneRef.current = true; // allow renegotiation from now on
 
           const offCall = listenCall(id, async (rec) => {
             if (!rec) return;
@@ -370,8 +428,14 @@ export function InAppCallSheet({
             }
             if (rec.offer && rec.offer.sdp !== lastOfferSdpRef.current) {
               // First offer OR a renegotiated one — apply, answer, push back.
-              try {
-                if (pc.signalingState === 'stable' || !offerSetRef.current) {
+              // Accept the offer if we are in 'stable' (normal renegotiation)
+              // OR if we haven't processed any offer yet (initial connection).
+              // If we're mid-renegotiation (state is not stable and offerSetRef
+              // is already true), defer: the caller will re-send via onnegotiationneeded
+              // when their side stabilises.
+              const canProcess = pc.signalingState === 'stable' || !offerSetRef.current;
+              if (canProcess) {
+                try {
                   // Mid-call video upgrade hand-off: if we have a camera
                   // stream queued from acceptVideoRequest but no video
                   // sender yet, attach it BEFORE setRemoteDescription so
@@ -397,8 +461,8 @@ export function InAppCallSheet({
                   await pc.setLocalDescription(ans);
                   await setCallAnswer(id, { type: ans.type, sdp: ans.sdp });
                   setStatus('active');
-                }
-              } catch { /* skip duplicate offers */ }
+                } catch { /* skip duplicate / invalid offers */ }
+              }
             }
           });
           cleanup.push(offCall);
@@ -458,6 +522,18 @@ export function InAppCallSheet({
     if (!pc) return;
     const localComposite = localStreamRef.current;
     const hasVideo = (videoStreamRef.current?.getVideoTracks().length ?? 0) > 0;
+
+    // Mirror speaker state to kind: video → speaker on, audio → earpiece.
+    // Both sides run this so mid-call upgrades/downgrades route audio correctly.
+    // We set speaker unconditionally on kind change — the setState is idempotent
+    // so calling it every render when kind hasn't changed is harmless.
+    if (kind === 'video') {
+      setSpeakerOn(true);
+      setCallSpeaker(true).catch(() => {});
+    } else {
+      setSpeakerOn(false);
+      setCallSpeaker(false).catch(() => {});
+    }
 
     if (kind === 'video' && !hasVideo) {
       (async () => {

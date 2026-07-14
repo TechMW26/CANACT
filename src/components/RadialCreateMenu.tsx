@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { BarChart3, Bell, Camera, Eye, Film, Globe2, Grid3X3, Activity, HandHeart, MessageSquare, Search, ShieldAlert, Sparkles, Users } from './icons';
@@ -34,15 +35,20 @@ const DEFAULT_PLUS_ITEMS = ['/help', '/story/create', '/post/create', '/reel/cre
 const ITEM_SIZE = 56;
 
 export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; onClose: () => void; plusItems?: string[] }) {
+  const router = useRouter();
   const [center, setCenter] = useState<{ x: number; y: number } | null>(null);
   const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const closeTimer = useRef(0);
   const dragRef = useRef<{ startAngle: number; startRotation: number; lastAngle: number; ts: number } | null>(null);
   const velocityRef = useRef(0);
   const animRef = useRef(0);
+  const hasDragged = useRef(false);
 
   const items = useMemo(() => {
-    const hrefs = plusItems?.length ? plusItems : DEFAULT_PLUS_ITEMS;
+    const configured = plusItems?.length ? plusItems : DEFAULT_PLUS_ITEMS;
+    const hrefs = ['/help', ...configured.filter((href) => href !== '/help')];
     return hrefs.map((h) => ALL_RADIAL_ITEMS[h]).filter(Boolean);
   }, [plusItems]);
 
@@ -50,7 +56,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   const radius = useMemo(() => {
     if (items.length < 2) return 180;
     const minR = ITEM_SIZE / (2 * Math.sin(Math.PI / items.length)) + 8;
-    return Math.max(170, Math.ceil(minR * 1.4));
+    return Math.max(170, Math.ceil(minR * 1.8));
   }, [items.length]);
 
   // Lock body scroll when open
@@ -65,9 +71,26 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     };
   }, [open]);
 
-  // Capture center + start autoplay
+  const handleClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    setVisible(false);
+    cancelAnimationFrame(animRef.current);
+    clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, 450);
+  }, [closing, onClose]);
+
+  // Capture center + open sequence
   useLayoutEffect(() => {
-    if (!open) { setVisible(false); cancelAnimationFrame(animRef.current); return; }
+    if (!open) {
+      if (!closing) setVisible(false);
+      cancelAnimationFrame(animRef.current);
+      return;
+    }
+    setClosing(false);
     const btn = document.querySelector<HTMLElement>('.canact-create-nav-button');
     if (btn) {
       const r = btn.getBoundingClientRect();
@@ -75,10 +98,9 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     }
     const t = setTimeout(() => setVisible(true), 20);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, closing]);
 
   // Autoplay gentle rotation when not dragging
-  const hasDragged = useRef(false);
   useEffect(() => {
     if (!visible || !center) return;
     let frame: number;
@@ -95,7 +117,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   // Escape key
   useEffect(() => {
     if (!open) return;
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     document.addEventListener('keydown', k);
     return () => document.removeEventListener('keydown', k);
   }, [open, onClose]);
@@ -160,7 +182,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     });
   }, [center, rotation, radius, items.length]);
 
-  if (!open && !visible) return null;
+  if (!open && !closing) return null;
 
   const itemBase: React.CSSProperties = {
     position: 'fixed',
@@ -176,7 +198,8 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
     boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 68%), 0 4px 16px rgb(0 0 0 / .14)',
     transition: 'opacity 0.3s ease, transform 0.3s ease',
-    pointerEvents: visible ? 'auto' : 'none',
+    pointerEvents: 'none',
+    touchAction: 'none',
   };
 
   return (
@@ -196,7 +219,28 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
           } : {}),
           background: 'rgb(18 40 33 / 0%)',
         }}
-        onClick={onClose}
+        onClick={(e) => {
+          if (!center) { handleClose(); return; }
+          const cx = e.clientX - center.x;
+          const cy = e.clientY - center.y;
+          const dist = Math.sqrt(cx * cx + cy * cy);
+          if (dist < radius - ITEM_SIZE || dist > radius + ITEM_SIZE) { handleClose(); return; }
+          const clickAngle = ((Math.atan2(cy, cx) * 180 / Math.PI) + 360) % 360;
+          const step = items.length > 0 ? 360 / items.length : 0;
+          let bestIdx = 0; let bestDiff = Infinity;
+          items.forEach((_, i) => {
+            const itemAngle = ((rotation + i * step) % 360 + 360) % 360;
+            let diff = Math.abs(clickAngle - itemAngle);
+            if (diff > 180) diff = 360 - diff;
+            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+          });
+          if (bestDiff < step / 2) {
+            haptic('subtle');
+            const item = items[bestIdx];
+            if (item) router.push(item.href);
+          }
+          handleClose();
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -233,7 +277,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
                 e.preventDefault();
                 return;
               }
-              haptic('subtle'); onClose();
+              haptic('subtle'); handleClose();
             }}
             style={{
               ...itemBase,
@@ -243,7 +287,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
               transform: visible ? 'scale(1)' : 'scale(0.5)',
               borderColor: isHelp ? 'rgb(255 200 195 / 88%)' : undefined,
               background: isHelp ? 'rgb(204 59 53 / 68%)' : undefined,
-              transitionDelay: `${i * 25}ms`,
+              transitionDelay: visible ? `${i * 25}ms` : `${(items.length - 1 - i) * 25}ms`,
             }}
           >
             <span style={{ position: 'relative', zIndex: 3, display: 'grid', width: '100%', height: '100%', placeItems: 'center', color: isHelp ? '#fff' : '#1f6b55' }}>

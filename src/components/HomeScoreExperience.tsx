@@ -2,6 +2,7 @@
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { onValue, ref, get } from 'firebase/database';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/Avatar';
@@ -84,6 +85,7 @@ function buildTipGlyphs(text: string, phaseSeed: number, originGlyphs?: TipGlyph
 
 export function HomeScoreExperience() {
   const { user, profile } = useAuth();
+  const router = useRouter();
   const { coords } = useGeo();
   const { radius } = useDistance();
   const [stage, setStage] = useState<HomeStage>('score');
@@ -738,7 +740,7 @@ export function HomeScoreExperience() {
 
   const handleNavigateToProfile = useCallback(() => {
     if (!expandedCardUid) return;
-    window.location.href = `/profile/${expandedCardUid}`;
+    router.push(`/profile/${expandedCardUid}`);
   }, [expandedCardUid]);
 
   const handleAddFavourite = useCallback(async () => {
@@ -1304,6 +1306,7 @@ function ExpandedCardModal({
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerEnd: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
+  const router = useRouter();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const postGestureRef = useRef<{ postStartX: number; postStartY: number; active: boolean } | null>(null);
   const [postDragX, setPostDragX] = useState(0);
@@ -1388,11 +1391,11 @@ function ExpandedCardModal({
   }, [isClosing, onClose]);
 
   const handleMessageFriend = useCallback(() => {
-    window.location.href = `/inbox/${person.uid}`;
+    router.push(`/inbox/${person.uid}`);
   }, [person.uid]);
 
   const handleViewProfile = useCallback(() => {
-    window.location.href = `/profile/${person.uid}`;
+    router.push(`/profile/${person.uid}`);
   }, [person.uid]);
   
   return (

@@ -74,7 +74,7 @@ export function HelpRatingSheet({
           value={note}
           onChange={(e) => setNote(e.target.value.slice(0, 240))}
           placeholder={toRole === 'helper' ? 'Say thanks (optional)' : 'Add a quick note (optional)'}
-          className="mt-2 w-full rounded-2xl border border-ink/10 bg-brand-light/30 p-3 text-sm outline-none focus:border-brand"
+          className="mt-2 w-full rounded-3xl border border-ink/10 bg-brand-light/30 p-3 text-sm outline-none focus:border-brand"
           rows={3}
         />
         <Button onClick={submit} disabled={submitting} className="w-full mt-1">

@@ -78,7 +78,7 @@
         <!-- Default notification channel + small icon used by FCM notifications. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+            android:resource="@drawable/canact_notification_icon" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="canact_general_v1" />

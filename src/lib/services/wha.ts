@@ -2,6 +2,12 @@ import { onValue, push, ref, remove, runTransaction, set, update, get, query, or
 import { db } from '../firebase';
 import { WhaPost } from '../types';
 
+function notify(receiverUid: string, title: string, body: string, url: string) {
+  import('./sendPush').then(({ sendPush }) => {
+    sendPush({ toUid: receiverUid, title, body, url, tag: url }).catch(() => {});
+  }).catch(() => {});
+}
+
 /** Bump the post author's contentLikes or contentDislikes (T4). */
 async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
   await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
@@ -104,6 +110,12 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
       else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
     }
   }
+
+  // Notify the post author about the reaction.
+  if (authorUid && authorUid !== uid && cur !== kind) {
+    const emoji = { cool: '😎', love: '❤️', wow: '😮', sad: '😢', angry: '😡' }[kind];
+    notify(authorUid, `${emoji} Someone reacted to your post`, `Tap to see the reaction.`, `/post/${postId}`);
+  }
 }
 
 export async function addComment(postId: string, uid: string, name: string, text: string) {
@@ -111,12 +123,13 @@ export async function addComment(postId: string, uid: string, name: string, text
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
 
-  // T4: Comment counts as a like-equivalent for the post author
+  // T4 + notify the post author.
   try {
     const postSnap = await get(ref(db, `wha/${postId}`));
     const authorUid = (postSnap.val() as WhaPost | null)?.uid;
     if (authorUid && authorUid !== uid) {
       await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      notify(authorUid, `${name} commented on your post`, text.slice(0, 100), `/post/${postId}`);
     }
   } catch { /* non-fatal */ }
 }

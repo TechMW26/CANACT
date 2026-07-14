@@ -41,7 +41,15 @@ const MAP_TILE_CACHE_MAX = 900;
 const MAP_PREFETCH_MAX_URLS = 180;
 const MAP_PREFETCH_CONCURRENCY = 4;
 const MEDIA_HOSTS = ['public.blob.vercel-storage.com', 'googleusercontent.com'];
-const MAP_TILE_HOSTS = ['basemaps.cartocdn.com', 'tile.openstreetmap.org', 'server.arcgisonline.com'];
+// Every host used by the app's map renderers. OpenFreeMap serves the
+// MapLibre style, vector/raster tiles, sprites and glyphs from the same host,
+// so caching it makes a previously viewed area immediately reusable.
+const MAP_TILE_HOSTS = [
+  'tiles.openfreemap.org',
+  'basemaps.cartocdn.com',
+  'tile.openstreetmap.org',
+  'server.arcgisonline.com',
+];
 const PRECACHE_ASSETS = [
   '/manifest.json',
   '/favicon-32.png',

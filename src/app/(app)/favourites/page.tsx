@@ -80,7 +80,8 @@ export default function FavouritesPage() {
       const out: FriendProfile[] = [];
       await Promise.all(uids.map(async (uid) => {
         const s = await new Promise<FriendProfile | null>((res) => {
-          const off = onValue(ref(db, `users/${uid}`), (snap) => { off(); res(snap.val() as FriendProfile | null); }, { onlyOnce: true });
+          let off: () => void;
+          off = onValue(ref(db, `users/${uid}`), (snap) => { off(); res(snap.val() as FriendProfile | null); }, { onlyOnce: true });
         });
         if (s) out.push(s);
       }));
@@ -206,7 +207,7 @@ export default function FavouritesPage() {
           catch (error: any) { toast(error?.message ?? 'Could not rate this person', 'error'); }
         }}
         onAttr={async (person, attr) => {
-          try { const r = await setAttribute(person.uid, user.uid, attr); if (!r.ok) toast(`Wait before voting attributes again`, 'error'); else toast(`${ATTR_LABELS[attr]} updated`, 'success'); }
+          try { const r = await setAttribute(person.uid, user.uid, attr); if (!r.ok) toast(`You gave ${ATTR_LABELS[attr]} · available again in ${Math.ceil((r.waitMs ?? 0) / 3_600_000)}h`, 'error'); else toast(`${ATTR_LABELS[attr]} updated`, 'success'); }
           catch (error: any) { toast(error?.message ?? 'Could not update attribute', 'error'); }
         }}
       />
@@ -214,7 +215,7 @@ export default function FavouritesPage() {
   }
 
   return (
-    <div className="relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 bg-[#FAF8F2] px-5 pb-20 pt-5 lg:min-h-[calc(var(--canact-viewport-height)-3rem)] lg:px-8 overflow-hidden">
+    <div className="relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 bg-[#FAF8F2] px-5 pb-20 lg:min-h-[calc(var(--canact-viewport-height)-3rem)] lg:px-8 overflow-hidden" style={{ paddingTop: 'calc(var(--canact-header-top-inset, 0px) + var(--canact-header-offset, 0px) + 92px)' }}>
       {tab === 'requests' ? (
         <RequestsSurface
           friendReqs={friendReqs}
@@ -309,17 +310,18 @@ function ExploreMapSurface({
         currentLocation={currentLocation}
         activities={activities}
       />
-      <div className={styles.mapTopFade} aria-hidden="true" />
+      <div className={styles.mapTopFade} aria-hidden="true" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }} />
 
       <button
         type="button"
         className={styles.mapHeading}
+        style={{ opacity: sheetExpanded ? 0 : 1, pointerEvents: sheetExpanded ? 'none' : 'auto', transition: 'opacity .3s ease' }}
       >
         <small>Hey {firstName} <span aria-hidden="true">👋</span></small>
         <span>Explore <strong>Canact</strong><br />near you</span>
       </button>
 
-      <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.14" className={styles.legend} aria-label="Map legend">
+      <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.14" className={styles.legend} aria-label="Map legend" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }}>
         <span><i className={styles.heatDot} /> Activity</span>
         <span><i className={styles.postDot} /> Posts</span>
         <span><i className={styles.storyDot} /> Stories</span>
@@ -409,7 +411,7 @@ function RelationshipToggle({
 function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 'requests'>; people: PeoplePerson[]; view: PeopleView; onViewChange: (view: PeopleView) => void }) {
   const locatedCount = people.filter(hasLocation).length;
   return (
-    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.12" className="pointer-events-auto mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white/60 bg-transparent pl-6 pr-2 py-2 shadow-sm">
+    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.16" className="pointer-events-auto sticky top-[calc(var(--canact-header-top-inset,0px)+var(--canact-header-offset,0px)+92px)] z-10 mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white/60 bg-transparent pl-6 pr-2 py-2 shadow-sm backdrop-blur-xl">
       <div className="min-w-0">
         <h3 className="truncate text-base font-extrabold text-ink">{tab === 'friends' ? 'My friends' : 'My favourites'}</h3>
         <div className="mt-0.5 truncate text-xs font-semibold text-ink/50">{locatedCount} of {people.length} visible on map</div>
@@ -454,19 +456,20 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
   const [dragDelta, setDragDelta] = useState(0);
   const dragStart = useRef<{ x: number; baseIndex: number } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [attrVotes, setAttrVotes] = useState<Record<string, { key: AttrKey; at: number } | null>>({});
+  const [attrVotes, setAttrVotes] = useState<Record<string, Record<string, { at: number }>>>({});
   const [mainVotes, setMainVotes] = useState<Record<string, 'like' | 'dislike' | null>>({});
   const [launchLabel, setLaunchLabel] = useState<string | null>(null);
   const [launchKind, setLaunchKind] = useState<'give' | 'take' | null>(null);
 
-  // Listen for attr votes
+  // Listen for attr votes (multi-attribute — one entry per attr key).
   useEffect(() => {
     if (!user?.uid) return;
     const offs = people.map((person) => {
       if (!person.uid) return () => {};
-      return onValue(ref(db, `votes/${person.uid}/${user.uid}/attr`), (snap) => {
-        const val = snap.val() as { key: AttrKey; at: number } | null;
-        setAttrVotes((prev) => ({ ...prev, [person.uid]: val }));
+      return onValue(ref(db, `votes/${person.uid}/${user.uid}/attrs`), (snap) => {
+        const map: Record<string, { at: number }> = {};
+        snap.forEach((child) => { const v = child.val(); if (v) map[child.key!] = v; });
+        setAttrVotes((prev) => ({ ...prev, [person.uid]: map }));
       });
     });
     return () => offs.forEach((off) => off());
@@ -488,35 +491,76 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
   useEffect(() => { if (activeIndex >= people.length) setActiveIndex(0); }, [activeIndex, people.length]);
 
   const handleAttr = async (person: PeoplePerson, attr: AttrKey) => {
-    const currentVote = attrVotes[person.uid];
-    const isTakeBack = currentVote?.key === attr;
+    const myAttrs = attrVotes[person.uid] ?? {};
+    const hasAttr = attr in myAttrs;
+    const voteAt = myAttrs[attr]?.at ?? 0;
+    const cooldownRemaining = voteAt ? Math.max(0, SIX_HOURS - (Date.now() - voteAt)) : 0;
+    const isTakeBack = hasAttr && cooldownRemaining === 0;
     const label = ATTR_LABELS[attr];
 
+    // Already given and still in cooldown — block and explain.
+    if (hasAttr && cooldownRemaining > 0) {
+      const hrs = Math.ceil(cooldownRemaining / 3_600_000);
+      toast(`You gave ${label}. You can take it back in ${hrs}h.`, 'error');
+      return;
+    }
+
     if (isTakeBack) {
-      // Optimistic: clear the vote locally
-      setAttrVotes((prev) => ({ ...prev, [person.uid]: null }));
+      // Optimistic: remove attr locally
+      setAttrVotes((prev) => {
+        const next = { ...(prev[person.uid] ?? {}) };
+        delete next[attr];
+        return { ...prev, [person.uid]: next };
+      });
       setLaunchKind('take');
       setLaunchLabel(label);
       try {
-        const r = await removeAttribute(person.uid, user!.uid);
-        if (!r.ok) toast('Wait before taking back attributes', 'error');
-        else toast(`${label} taken back`, 'success');
+        const r = await removeAttribute(person.uid, user!.uid, attr);
+        if (!r.ok) {
+          // Revert on failure
+          setAttrVotes((prev) => {
+            const next = { ...(prev[person.uid] ?? {}), [attr]: { at: voteAt } };
+            return { ...prev, [person.uid]: next };
+          });
+          toast('Wait before taking back attributes', 'error');
+        } else {
+          toast(`${label} taken back`, 'success');
+        }
       } catch (error: any) {
-        // Revert on failure
-        setAttrVotes((prev) => ({ ...prev, [person.uid]: currentVote }));
+        setAttrVotes((prev) => {
+          const next = { ...(prev[person.uid] ?? {}), [attr]: { at: voteAt } };
+          return { ...prev, [person.uid]: next };
+        });
         toast(error?.message ?? 'Could not take back attribute', 'error');
       }
     } else {
-      // Optimistic: set the vote locally
-      setAttrVotes((prev) => ({ ...prev, [person.uid]: { key: attr, at: Date.now() } }));
+      // Giving a new attribute — optimistic add, revert if server rejects.
+      const rollbackAttrs = { ...(attrVotes[person.uid] ?? {}) };
+      setAttrVotes((prev) => {
+        const next = { ...(prev[person.uid] ?? {}), [attr]: { at: Date.now() } };
+        return { ...prev, [person.uid]: next };
+      });
       setLaunchKind('give');
       setLaunchLabel(label);
-      await onAttr(person, attr);
+      try {
+        const r = await setAttribute(person.uid, user!.uid, attr);
+        if (!r.ok) {
+          // Server rejected — revert optimistic update.
+          setAttrVotes((prev) => ({ ...prev, [person.uid]: rollbackAttrs }));
+          toast(`You gave ${label} · available again in ${Math.ceil((r.waitMs ?? 0) / 3_600_000)}h`, 'error');
+        } else {
+          toast(`${label} added`, 'success');
+        }
+      } catch (error: any) {
+        setAttrVotes((prev) => ({ ...prev, [person.uid]: rollbackAttrs }));
+        toast(error?.message ?? 'Could not update attribute', 'error');
+      }
     }
   };
 
-  const getCooldownMs = (personUid: string) => {
-    const vote = attrVotes[personUid];
+  const getCooldownMs = (personUid: string, attr: AttrKey): number => {
+    const myAttrs = attrVotes[personUid] ?? {};
+    const vote = myAttrs[attr];
     if (!vote?.at) return 0;
     const remaining = SIX_HOURS - (Date.now() - vote.at);
     return remaining > 0 ? remaining : 0;
@@ -583,9 +627,7 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
           const x = distance === 0 ? dragShift : direction * (distance === 1 ? 170 : 280);
           const scale = distance === 0 ? 1 : distance === 1 ? .88 : .74;
           const y = distance === 0 ? 0 : distance === 1 ? 24 : 42;
-          const myVote = attrVotes[person.uid] ?? null;
-          const myAttr = myVote?.key ?? null;
-          const cooldownMs = getCooldownMs(person.uid);
+          const myAttrs = attrVotes[person.uid] ?? {};
           const myMainVote = mainVotes[person.uid] ?? null;
           return (
             <article
@@ -610,8 +652,9 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
                   <div className={styles.personAttrGrid}>
                     {ALL_ATTRS.map((attr) => {
                       const isPositive = (POSITIVE_ATTRS as readonly string[]).includes(attr);
-                      const selected = myAttr === attr;
-                      const locked = cooldownMs > 0 && !selected;
+                      const selected = attr in myAttrs;
+                      const cooldownMs = getCooldownMs(person.uid, attr);
+                      const locked = cooldownMs > 0;
                       let btnClass = styles.personAttrBtnDefault;
                       if (selected && isPositive) btnClass = styles.personAttrBtnPositive;
                       else if (selected && !isPositive) btnClass = styles.personAttrBtnNegative;
@@ -623,7 +666,7 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
                           onClick={() => handleAttr(person, attr)}
                           className={`${styles.personAttrBtn} ${btnClass}`}
                           aria-label={`${ATTR_LABELS[attr]}: ${person.name}`}
-                          title={locked ? `Cooldown: ${Math.ceil(cooldownMs / 3600000)}h remaining` : selected ? 'Tap to take back' : undefined}
+                          title={locked ? `Cooldown: ${Math.ceil(cooldownMs / 3600000)}h` : selected ? 'Tap to take back' : undefined}
                         >
                           {ATTR_LABELS[attr]}
                         </button>

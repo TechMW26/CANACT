@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, MapGeoJSONFeature } from 'maplibre-gl';
 import type { FeatureCollection, Point as GeoJSONPoint } from 'geojson';
@@ -28,19 +29,27 @@ export function ExploreMap({
   currentLocation,
   activities = [],
   onInteraction,
+  preview = false,
 }: {
   people: FriendMapPerson[];
   currentLocation: Point | null;
   activities?: ExploreActivity[];
   onInteraction?: () => void;
+  preview?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const libraryRef = useRef<typeof import('maplibre-gl') | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const interactionRef = useRef(onInteraction);
+  const locationRef = useRef(currentLocation);
+  const router = useRouter();
+  const routerRef = useRef(router);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   interactionRef.current = onInteraction;
+  locationRef.current = currentLocation;
+  routerRef.current = router;
 
   const activityGeoJSON = useMemo<FeatureCollection<GeoJSONPoint, ActivityProperties>>(() => ({
     type: 'FeatureCollection',
@@ -71,15 +80,29 @@ export function ExploreMap({
         zoom: currentLocation ? 16 : 13,
         attributionControl: false,
         cooperativeGestures: false,
+        interactive: !preview,
       });
-      map.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
-      map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
-      map.on('dragstart', () => interactionRef.current?.());
-      map.on('zoomstart', () => interactionRef.current?.());
-      map.on('rotatestart', () => interactionRef.current?.());
+      if (!preview) {
+        map.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
+        map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
+        map.on('dragstart', () => interactionRef.current?.());
+        map.on('zoomstart', () => interactionRef.current?.());
+        map.on('rotatestart', () => interactionRef.current?.());
+        // Always re-center on the user's pin after they finish panning.
+        map.on('dragend', () => {
+          const loc = locationRef.current;
+          if (loc) {
+            map.easeTo({ center: [loc.lng, loc.lat], duration: 600, padding: { top: 140, bottom: 220, left: 32, right: 32 } });
+          }
+        });
+      }
       mapRef.current = map;
-      map.once('load', () => setReady(true));
-    }).catch(() => undefined);
+      const resizeObserver = new ResizeObserver(() => map.resize());
+      resizeObserver.observe(containerRef.current);
+      map.once('load', () => { map.resize(); setReady(true); });
+      map.once('error', () => { if (!map.loaded()) setLoadError(true); });
+      map.once('remove', () => resizeObserver.disconnect());
+    }).catch(() => setLoadError(true));
     return () => {
       disposed = true;
       markersRef.current.forEach((marker) => marker.remove());
@@ -87,12 +110,20 @@ export function ExploreMap({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [preview]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !currentLocation) return;
-    map.easeTo({ center: [currentLocation.lng, currentLocation.lat], zoom: Math.max(map.getZoom(), 16), duration: 850 });
+    // Padding offsets the center so the pin lands in the visual middle
+    // of the screen, not the geometric center of the map div (which sits
+    // behind the header greeting and the bottom people sheet).
+    map.easeTo({
+      center: [currentLocation.lng, currentLocation.lat],
+      zoom: Math.max(map.getZoom(), 16),
+      duration: 850,
+      padding: { top: 140, bottom: 220, left: 32, right: 32 },
+    });
   }, [currentLocation?.lat, currentLocation?.lng, ready]);
 
   useEffect(() => {
@@ -136,7 +167,7 @@ export function ExploreMap({
       });
       const openContent = (event: maplibregl.MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
         const href = event.features?.[0]?.properties?.href;
-        if (typeof href === 'string' && href) window.location.href = href;
+        if (typeof href === 'string' && href) routerRef.current.push(href);
       };
       map.on('click', 'canact-content-pins', openContent);
       map.on('mouseenter', 'canact-content-pins', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -167,10 +198,11 @@ export function ExploreMap({
       marker.setAttribute('aria-label', `Open ${person.name}`);
       if (person.photoURL) marker.style.backgroundImage = `url(${JSON.stringify(person.photoURL).slice(1, -1)})`;
       else marker.textContent = person.name.slice(0, 1).toUpperCase();
-      marker.onclick = () => { window.location.href = `/profile/${encodeURIComponent(person.uid)}`; };
+      if (!preview) marker.onclick = () => { routerRef.current.push(`/profile/${encodeURIComponent(person.uid)}`); };
+      else marker.tabIndex = -1;
       markersRef.current.push(new library.Marker({ element: marker, anchor: 'bottom' }).setLngLat([person.lng, person.lat]).addTo(map));
     }
   }, [currentLocation?.lat, currentLocation?.lng, people, ready]);
 
-  return <div className={styles.frame} data-canact-map="true"><div ref={containerRef} className={styles.map} /><div className={styles.tint} aria-hidden="true" /></div>;
+  return <div className={styles.frame} data-canact-map="true" data-ready={ready}><div ref={containerRef} className={styles.map} /><div className={styles.tint} aria-hidden="true" />{!ready && !loadError ? <div className={styles.mapStatus}>Loading nearby map…</div> : null}{loadError ? <div className={styles.mapStatus}>Map preview unavailable</div> : null}</div>;
 }

@@ -9,7 +9,7 @@ import { sendPush } from './sendPush';
 /* Tunable thresholds — chosen for accurate "they were really together" detection. */
 export const VICINITY = {
   /** Effective max distance to count as "in vicinity" (meters). */
-  RADIUS: 50,
+  RADIUS: 15,
   /** Hard ceiling: any sample whose accuracy is worse than this is discarded. */
   MAX_ACCURACY: 80,
   /** Extra slack we allow on top of the radius based on combined GPS accuracy. */
@@ -225,6 +225,7 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
 
         // 2) Find people in vicinity right now.
         const me = { lat: lastFix.lat, lng: lastFix.lng };
+        const nowProximity = Date.now();
         for (const other of Object.values(presenceCache)) {
           if (!other || other.uid === uid) continue;
           if (!other.updatedAt || (now - other.updatedAt) > VICINITY.PRESENCE_STALE_MS) continue;
@@ -233,6 +234,21 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
           const slack = Math.min(VICINITY.ACC_SLACK, ((other.accuracy ?? 0) + (lastFix.accuracy ?? 0)) / 2);
           if (d <= VICINITY.RADIUS + slack) {
             await tickEncounter(uid, name, photo, other, d);
+            // Proximity push: notify when a contact / friend / interacted
+            // person comes within 15 m. Debounce: one push per user per hour.
+            const lastNotifiedKey = `proximity:${other.uid}`;
+            const lastNotifiedSnap = await get(ref(db, `proximityNotified/${uid}/${other.uid}`));
+            const lastNotified = lastNotifiedSnap.val() as number | null;
+            if (!lastNotified || (nowProximity - lastNotified) > 3600_000) {
+              await set(ref(db, `proximityNotified/${uid}/${other.uid}`), nowProximity);
+              sendPush({
+                toUid: uid,
+                title: `${other.name || 'Someone'} is nearby`,
+                body: `Tap to see who's around you right now.`,
+                url: '/favourites?tab=friends',
+                tag: lastNotifiedKey,
+              }).catch(() => {});
+            }
           }
         }
       }

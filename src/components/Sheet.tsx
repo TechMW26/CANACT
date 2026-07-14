@@ -19,13 +19,23 @@ const ANIM_MS = 320;
 export function Sheet({
   open,
   onClose,
+  onExited,
   title,
+  hideTitle = false,
+  hideClose = false,
   children,
   topmost,
 }: {
   open: boolean;
   onClose: () => void;
+  onExited?: () => void;
   title?: string;
+  /** Keeps the dialog title available to assistive technology without
+   * rendering it behind content that already carries its own heading. */
+  hideTitle?: boolean;
+  /** Omits the visible close control while retaining backdrop, swipe and
+   * Escape dismissal. */
+  hideClose?: boolean;
   children: React.ReactNode;
   /** When true, renders ABOVE every other overlay including the
    *  fullscreen incoming-call ringer (z-[200]) and the splash screen.
@@ -37,6 +47,7 @@ export function Sheet({
   const [mounted, setMounted] = useState(open);
   const [entered, setEntered] = useState(false);
   const onCloseRef = useRef(onClose);
+  const onExitedRef = useRef(onExited);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number[]>([]);
   const closeTimerRef = useRef<number | null>(null);
@@ -46,6 +57,7 @@ export function Sheet({
     getScrollElement: () => scrollRef.current,
   });
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => { onExitedRef.current = onExited; }, [onExited]);
 
   useEffect(() => {
     const clearAnimationTimers = () => {
@@ -55,28 +67,45 @@ export function Sheet({
       closeTimerRef.current = null;
     };
     clearAnimationTimers();
+
     if (open) {
+      // Mount the portal first, leave entered=false so it paints off-screen.
       setMounted(true);
-      setEntered(false);
-      // Double rAF so the initial off-screen styles paint before we flip
-      // `entered` — guarantees the transition fires on first open.
-      const raf1 = requestAnimationFrame(() => {
-        const raf2 = requestAnimationFrame(() => {
-          rafRef.current = [];
-          setEntered(true);
-        });
-        rafRef.current.push(raf2);
-      });
-      rafRef.current.push(raf1);
+      // Cleanup if open flips before the enter animation completes.
       return clearAnimationTimers;
     }
+
+    if (!mounted) return clearAnimationTimers;
+
+    // Close: flip entered → false to trigger the exit transition, then
+    // unmount after the transition duration so the slide-out is visible.
     setEntered(false);
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       setMounted(false);
+      onExitedRef.current?.();
     }, ANIM_MS);
     return clearAnimationTimers;
   }, [open]);
+
+  // Separate effect: once mounted, trigger the enter animation. Keeping
+  // this decoupled from the open/mount effect prevents React from batching
+  // setMounted(true) + setEntered(true) into a single paint, which would
+  // skip the off-screen frame and make the enter transition invisible.
+  useEffect(() => {
+    if (!mounted) return;
+    // Always start off-screen — handles reopen after a quick close where
+    // entered might still be true from a previous cycle.
+    setEntered(false);
+    const frame = requestAnimationFrame(() => {
+      // Force the browser to commit the off-screen layout before we flip
+      // to on-screen. Without this reflow, some mobile WebViews optimise
+      // away the intermediate frame and the transition never fires.
+      void document.body.offsetHeight;
+      setEntered(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -114,10 +143,12 @@ export function Sheet({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 bg-transparent transition-opacity duration-300 ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-[320ms] ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         {...swipeDismissHandlers}
+        data-canact-sheet-panel="true"
+        data-entered={entered}
         data-liquid-glass="surface"
         data-liquid-radius="32"
         data-liquid-blur="0"
@@ -134,15 +165,19 @@ export function Sheet({
         className={`canact-liquid-sheet-panel relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-transparent pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
-        {title !== undefined && (
-          <div className="mb-3 flex shrink-0 items-center justify-between px-4">
-            <h2 className="text-xl font-black tracking-tight text-ink">{title}</h2>
-            <button type="button" onClick={onClose} aria-label="Close" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.1" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-brand">
-              <X size={16} />
-            </button>
+        {title !== undefined && hideTitle && hideClose ? (
+          <h2 className="sr-only">{title}</h2>
+        ) : title !== undefined ? (
+          <div className={`mb-3 flex shrink-0 items-center px-4 ${hideTitle ? 'justify-end' : 'justify-between'}`}>
+            <h2 className={hideTitle ? 'sr-only' : 'text-xl font-black tracking-tight text-ink'}>{title}</h2>
+            {!hideClose ? (
+              <button type="button" onClick={onClose} aria-label="Close" data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.1" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-brand">
+                <X size={16} />
+              </button>
+            ) : null}
           </div>
-        )}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-2 [-webkit-overflow-scrolling:touch]">
+        ) : null}
+        <div ref={scrollRef} className="no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-2 [-webkit-overflow-scrolling:touch]">
           {children}
         </div>
       </div>

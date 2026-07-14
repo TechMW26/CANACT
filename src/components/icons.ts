@@ -50,6 +50,7 @@ export {
   Pencil,
   UserPlus,
   UserMinus,
+  Minus,
   Users,
   MapPin,
   Mail,

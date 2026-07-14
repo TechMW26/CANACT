@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { Crown } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
+import { calculateCanactScore } from '@/lib/canactScore';
 import { LeaderScope, listenLeaderboard } from '@/lib/services/leaderboard';
 import { UserProfile } from '@/lib/types';
 import styles from './Leaderboard.module.css';
@@ -41,10 +42,12 @@ export default function LeaderboardPage() {
   }, [scope, profile]);
 
   const podium = useMemo(() => [rows[1], rows[0], rows[2]], [rows]);
-  const visibleRows = rows.slice(3, 6);
   const currentIndex = rows.findIndex((entry) => entry.uid === user?.uid);
   const currentUser = currentIndex >= 0 ? rows[currentIndex] : profile;
-  const showCurrentUser = !!currentUser && currentIndex >= 6;
+  const showCurrentUser = !!currentUser && currentIndex >= 3;
+  const visibleRows = useMemo(() => rows
+    .map((entry, index) => ({ entry, rank: index + 1 }))
+    .filter(({ entry, rank }) => rank > 3 && entry.uid !== user?.uid), [rows, user?.uid]);
 
   return (
     <main className={styles.page} aria-label="Leaderboard">
@@ -77,8 +80,8 @@ export default function LeaderboardPage() {
         ) : (
           <>
             <ol className={styles.rows} start={4}>
-              {visibleRows.map((entry, index) => (
-                <RankRow key={entry.uid} profile={entry} rank={index + 4} />
+              {visibleRows.map(({ entry, rank }) => (
+                <RankRow key={entry.uid} profile={entry} rank={rank} />
               ))}
             </ol>
             {showCurrentUser && currentUser ? (
@@ -89,6 +92,7 @@ export default function LeaderboardPage() {
                   <strong>{currentUser.firstName || currentUser.fullName} <small>(You)</small></strong>
                   <em><i /> Currently Active</em>
                 </span>
+                <b>{canactScoreDisplay(currentUser)}</b>
               </Link>
             ) : null}
           </>
@@ -96,6 +100,11 @@ export default function LeaderboardPage() {
       </section>
     </main>
   );
+}
+
+function canactScoreDisplay(profile: UserProfile) {
+  const s = calculateCanactScore(profile);
+  return `${s.score} ${s.label}`;
 }
 
 function RankRow({ profile, rank }: { profile: UserProfile; rank: number }) {
@@ -109,6 +118,7 @@ function RankRow({ profile, rank }: { profile: UserProfile; rank: number }) {
           <strong>{profile.firstName || profile.fullName}</strong>
           <em className={styles[movement.direction]}>{movement.direction === 'up' ? '↑' : movement.direction === 'down' ? '↓' : '•'} {movement.label}</em>
         </span>
+        <b>{canactScoreDisplay(profile)}</b>
       </Link>
     </li>
   );

@@ -22,6 +22,15 @@
   display: none !important;
 }
 
+.canact-header-shell, .canact-profile-menu-popup{
+  backdrop-filter: blur(18px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.18) !important;
+}
+
+.canact-header-shell{
+  border-radius: 9999px !important;
+}
+
 .CanactHome_scroller__AsB0C{
   padding-top: 6.5em;
 }
@@ -179,28 +188,23 @@ input[type="time"]::-webkit-date-and-time-value {
 /* utility focus ring in the Canact green */
 .focus-ring:focus-visible { outline: 2px solid #1F6B55; outline-offset: 2px; }
 
-/* ---------- Page entrance: slide-in from right (forward) or left (back) + fade.
-   Fires on every route change via <PageTransition key={pathname}>.
-   Duration 320ms — snappy like a native iOS push/pop. */
+/* Route entrances must not transform this wrapper: a transformed ancestor
+   temporarily re-anchors fixed children and makes maps, sheets, and sticky
+   rows jump. Fade the complete page instead and let page-owned chrome add
+   its own safe, local motion. */
 .canact-page-enter-forward {
-  opacity: 0;
-  animation: canactPageInForward 320ms cubic-bezier(.22,.85,.3,1) both;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
+  animation: canactPageInForward 280ms cubic-bezier(.22,.85,.3,1);
 }
 .canact-page-enter-back {
-  opacity: 0;
-  animation: canactPageInBack 320ms cubic-bezier(.22,.85,.3,1) both;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
+  animation: canactPageInBack 240ms cubic-bezier(.22,.85,.3,1);
 }
 @keyframes canactPageInForward {
-  0%   { opacity: 0; transform: translate3d(8%, 0, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes canactPageInBack {
-  0%   { opacity: 0; transform: translate3d(-6%, 0, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* Legacy fade-in kept for non-navigation entrances */
@@ -313,7 +317,9 @@ input[type="time"]::-webkit-date-and-time-value {
   overflow: visible;
   border: 1px solid rgb(255 255 255 / 52%);
   border-radius: 9999px;
-  background: transparent;
+  background: rgb(250 248 242 / 24%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+  backdrop-filter: blur(18px) saturate(1.18);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .canact-figma-header.engaged { transform: scale(1.03); }
@@ -338,6 +344,129 @@ input[type="time"]::-webkit-date-and-time-value {
   padding-inline: 14px;
 }
 
+/* Header score island: an opaque, content-aware surface that expands for
+   real-time score/like moments and can also be opened manually. */
+.canact-score-island-shell {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 50;
+  transform: translate(-50%, -50%);
+  transform-origin: top center;
+  transition: opacity 140ms linear, transform 440ms cubic-bezier(.2,.9,.2,1);
+}
+.canact-score-island-shell[data-expanded="true"] { transform: translate(-50%, -18px); }
+.canact-score-island-shell[data-home-hidden="true"] { pointer-events: none; }
+.canact-score-island {
+  position: relative;
+  display: block;
+  width: 98px;
+  height: 36px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #050706;
+  padding: 0;
+  color: #fff;
+  text-align: left;
+  box-shadow: 0 9px 24px rgb(0 0 0 / 25%), inset 0 0 0 1px rgb(255 255 255 / 8%), inset 0 -8px 16px rgb(0 0 0 / 36%);
+  transform: translateZ(0);
+  transform-origin: top center;
+  transition: width 440ms cubic-bezier(.2,.9,.2,1), height 440ms cubic-bezier(.2,.9,.2,1), border-radius 440ms cubic-bezier(.2,.9,.2,1), box-shadow 280ms ease;
+  will-change: width, height, border-radius;
+}
+.canact-score-island[data-expanded="true"] {
+  width: min(310px, 78vw);
+  height: 158px;
+  border-radius: 32px;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 34%), inset 0 0 0 1px rgb(255 255 255 / 9%), inset 0 -18px 28px rgb(0 0 0 / 42%);
+}
+.canact-score-island:focus-visible { outline: 3px solid rgb(140 226 176 / 48%); outline-offset: 3px; }
+.canact-score-island::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(70% 80% at 18% 0%,rgb(255 255 255 / 10%),transparent 70%); }
+.canact-score-island-compact {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 130ms ease, transform 300ms cubic-bezier(.2,.9,.2,1);
+}
+.canact-score-island[data-expanded="true"] .canact-score-island-compact { opacity: 0; transform: scale(.72); }
+.canact-score-island-compact > i { width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 9px #8ce2b0; animation: canactIslandLive 1.8s ease-in-out infinite; }
+.canact-score-island-compact strong { font-size: 13px; font-weight: 900; letter-spacing: -.02em; }
+.canact-score-island-compact small { color: rgb(255 255 255 / 52%); font-size: 7px; font-weight: 900; letter-spacing: .13em; }
+.canact-score-island-panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  grid-template-rows: auto 4px auto auto;
+  gap: 8px 12px;
+  padding: 15px 16px 12px;
+  opacity: 0;
+  transform: translateY(9px) scale(.94);
+  transition: opacity 180ms ease 90ms, transform 360ms cubic-bezier(.2,.9,.2,1) 60ms;
+}
+.canact-score-island[data-expanded="true"] .canact-score-island-panel { opacity: 1; transform: translateY(0) scale(1); }
+.canact-score-island-event { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.canact-score-island-event > i { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border-radius: 50%; background: rgb(140 226 176 / 14%); color: #8ce2b0; font-size: 15px; font-style: normal; animation: canactIslandMoment 520ms cubic-bezier(.2,1.4,.3,1) both; }
+.canact-score-island[data-tone="negative"] .canact-score-island-event > i { background: rgb(248 113 113 / 14%); color: #fca5a5; }
+.canact-score-island-event span { min-width: 0; }
+.canact-score-island-event small, .canact-score-island-event strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canact-score-island-event small { color: rgb(255 255 255 / 44%); font-size: 7px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
+.canact-score-island-event strong { margin-top: 3px; font-size: 10px; font-weight: 800; }
+.canact-score-island-value { display: flex; align-items: baseline; gap: 4px; }
+.canact-score-island-value b { font-size: 25px; font-weight: 950; letter-spacing: -.06em; line-height: 1; }
+.canact-score-island-value em { color: #8ce2b0; font-size: 8px; font-style: normal; font-weight: 900; }
+.canact-score-island-value em[data-positive="false"] { color: #fca5a5; }
+.canact-score-island-meter { grid-column: 1 / -1; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 9%); }
+.canact-score-island-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#4eaf8d,#9ce8ba); box-shadow: 0 0 12px rgb(140 226 176 / 36%); transition: width 700ms cubic-bezier(.2,.8,.2,1); }
+.canact-score-island-meta { grid-column: 1 / -1; display: flex; justify-content: space-between; color: rgb(255 255 255 / 42%); font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.canact-score-island-attributes {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.canact-score-island-attributes > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(140 226 176 / 10%);
+  padding: 5px 6px;
+  color: #a7e9c2;
+}
+.canact-score-island-attributes > span[data-positive="false"] {
+  background: rgb(248 113 113 / 9%);
+  color: #f8b4b4;
+}
+.canact-score-island-attributes small {
+  overflow: hidden;
+  color: rgb(255 255 255 / 60%);
+  font-size: 6.5px;
+  font-weight: 750;
+  letter-spacing: -.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canact-score-island-attributes b {
+  flex: none;
+  font-size: 9px;
+  font-weight: 900;
+}
+@keyframes canactIslandLive { 50% { opacity: .55; transform: scale(.72); } }
+@keyframes canactIslandMoment { from { opacity: 0; transform: scale(.45); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .canact-score-island-shell, .canact-score-island, .canact-score-island-compact, .canact-score-island-panel { transition-duration: 1ms !important; }
+  .canact-score-island-compact > i, .canact-score-island-event > i { animation: none !important; }
+}
+
 .canact-glass-dropdown {
   background: transparent !important;
   box-shadow: 0 12px 32px rgb(20 54 42 / 10%);
@@ -345,6 +474,12 @@ input[type="time"]::-webkit-date-and-time-value {
 
 .canact-glass-dropdown [role="option"] {
   text-shadow: 0 1px 0 rgb(255 255 255 / 80%);
+}
+
+.canact-profile-menu-popup {
+  background: rgb(250 248 242 / 76%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
 }
 
 .canact-bottom-nav-shell {
@@ -733,6 +868,23 @@ body.canact-story-open {
   transition: transform 320ms cubic-bezier(.22,.85,.3,1), filter 320ms ease-out, border-radius 320ms ease-out;
   transform-origin: 50% 0%;
 }
+
+.ExplorePage_peopleSheet__Y8R8V, .ExplorePage_peopleSheetExpanded__TnADW{
+  box-shadow: 0 12px 32px rgb(20 54 42 / 10%) !important;
+}
+
+.Leaderboard_currentRow__zxjzl, .CanactHome_nearbyPill__5gcaU{
+  margin-bottom: -1.5em !important;
+}
+
+.CanactHome_nearbyPill__5gcaU{
+  padding: 0.5em 2em !important;
+}
+
+.CanactHome_nearbyPill__5gcaU span{
+  padding-left: 1em !important;
+}
+
 .canact-sheet-zoom-out {
   transform: scale(0.9);
   border-radius: 24px;
@@ -1028,6 +1180,8 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 
 @media (update: slow) {
   .canact-fade-in,
+  .canact-page-enter-forward,
+  .canact-page-enter-back,
   .canact-splash-pulse,
   .canact-glow-border,
   .canact-profile-header-chrome,
@@ -1063,6 +1217,13 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 @keyframes canactBorderMove {
   0% { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
+}
+
+/* Pill emoji pop-in animation */
+@keyframes pillEmoji {
+  0% { opacity: 0; transform: scale(0.5) translateY(4px); }
+  60% { opacity: 1; transform: scale(1.2) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* iOS: reduce header/footer offset by 40% (notch/home-indicator already handled by safe-area-inset) */

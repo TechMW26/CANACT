@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 const STYLES = `
 .canact-launch-scene {
   position: fixed; inset: 0; overflow: hidden; background: transparent; isolation: isolate;
-  pointer-events: none; z-index: 9999;
+  pointer-events: none; z-index: 2147483647;
 }
 .canact-launch-scene * { box-sizing: border-box; margin: 0; padding: 0; }
 

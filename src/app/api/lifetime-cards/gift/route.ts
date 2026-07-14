@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { getDatabase } from 'firebase-admin/database';
-import { getFirebaseAdminApp } from '@/lib/server/firebaseAdmin';
+import { getFirebaseAdminApp, readAdminRtdb, runUserRtdbTransaction, verifyUserRequest, writeUserRtdb } from '@/lib/server/firebaseAdmin';
 import { LIFETIME_CARD_KINDS, LIFETIME_CARD_LABELS, type LifetimeCardKind } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -12,59 +10,61 @@ function defaultInventory() {
 
 export async function POST(request: Request) {
   const app = getFirebaseAdminApp();
-  if (!app) return NextResponse.json({ ok: false, reason: 'card-service-unavailable' }, { status: 503 });
-
-  const authorization = request.headers.get('authorization') || '';
-  const idToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  if (!idToken) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
-
-  let fromUid: string;
-  try {
-    fromUid = (await getAuth(app).verifyIdToken(idToken)).uid;
-  } catch {
+  const verified = await verifyUserRequest(request, app);
+  if (!verified) {
     return NextResponse.json({ ok: false, reason: 'invalid-token' }, { status: 401 });
   }
+  const { uid: fromUid, idToken } = verified;
 
-  let body: { toUid?: string; kind?: LifetimeCardKind; customText?: string };
+  let body: { toUid?: string; kind?: LifetimeCardKind; customText?: string; sourceGiftId?: string };
   try { body = await request.json(); } catch {
     return NextResponse.json({ ok: false, reason: 'bad-json' }, { status: 400 });
   }
   const toUid = String(body.toUid || '').trim();
   const kind = body.kind;
   const customText = String(body.customText || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+  const sourceGiftId = String(body.sourceGiftId || '').trim();
   if (!toUid || !kind || !LIFETIME_CARD_KINDS.includes(kind)) {
     return NextResponse.json({ ok: false, reason: 'missing-fields' }, { status: 400 });
   }
   if (toUid === fromUid) return NextResponse.json({ ok: false, reason: 'cannot-gift-yourself' }, { status: 400 });
-  if (kind === 'custom' && !customText) return NextResponse.json({ ok: false, reason: 'custom-text-required' }, { status: 400 });
-  if (kind === 'custom' && customText.split(/\s+/).length > 24) return NextResponse.json({ ok: false, reason: 'custom-text-too-long' }, { status: 400 });
+  if (sourceGiftId && (sourceGiftId.length > 300 || /[.#$/\[\]]/.test(sourceGiftId))) return NextResponse.json({ ok: false, reason: 'invalid-card-id' }, { status: 400 });
+  if (!sourceGiftId && kind === 'custom' && !customText) return NextResponse.json({ ok: false, reason: 'custom-text-required' }, { status: 400 });
+  if (!sourceGiftId && kind === 'custom' && customText.split(/\s+/).length > 24) return NextResponse.json({ ok: false, reason: 'custom-text-too-long' }, { status: 400 });
 
-  const database = getDatabase(app);
-  const [fromSnap, toSnap] = await Promise.all([
-    database.ref(`users/${fromUid}`).get(),
-    database.ref(`users/${toUid}`).get(),
+  const [from, to] = await Promise.all([
+    readAdminRtdb<{ fullName?: string; photoURL?: string }>(`users/${fromUid}`, app, idToken),
+    readAdminRtdb<{ fullName?: string }>(`users/${toUid}`, app, idToken),
   ]);
-  if (!fromSnap.exists() || !toSnap.exists()) return NextResponse.json({ ok: false, reason: 'user-not-found' }, { status: 404 });
-  const from = fromSnap.val() as { fullName?: string; photoURL?: string };
-  const to = toSnap.val() as { fullName?: string };
+  if (!from || !to) return NextResponse.json({ ok: false, reason: 'user-not-found' }, { status: 404 });
   const fromName = String(from.fullName || 'Someone');
   const toName = String(to.fullName || 'Canact user');
   const sentAt = Date.now();
-  const giftId = `${fromUid}__${kind}`;
-  let abortReason = 'card-already-sent';
+  const giftId = sourceGiftId || `${fromUid}__${kind}`;
+  let deliveredCustomText = customText;
+  let abortReason = sourceGiftId ? 'card-not-owned' : 'card-already-sent';
 
-  const result = await database.ref('lifetimeCards').transaction((current: any) => {
+  const result = await runUserRtdbTransaction<any>('lifetimeCards', app, idToken, (current) => {
     const state = current ?? {};
     state.inventory = state.inventory ?? {};
     state.received = state.received ?? {};
     state.sent = state.sent ?? {};
-    const inventory = state.inventory[fromUid] ?? defaultInventory();
-    const slot = inventory[kind];
-    if (!slot || slot.status === 'sent' || state.sent[fromUid]?.[giftId]) return;
+    const ownedGift = sourceGiftId ? state.received[fromUid]?.[sourceGiftId] : null;
+    if (sourceGiftId && (!ownedGift || ownedGift.kind !== kind)) return;
 
-    inventory[kind] = { kind, status: 'sent', sentAt, recipientUid: toUid, recipientName: toName };
-    state.inventory[fromUid] = inventory;
+    if (!sourceGiftId) {
+      const inventory = state.inventory[fromUid] ?? defaultInventory();
+      const slot = inventory[kind];
+      if (!slot || slot.status === 'sent' || state.sent[fromUid]?.[giftId]) return;
+      inventory[kind] = { kind, status: 'sent', sentAt, recipientUid: toUid, recipientName: toName };
+      state.inventory[fromUid] = inventory;
+    } else {
+      deliveredCustomText = String(ownedGift.customText || '');
+      delete state.received[fromUid][sourceGiftId];
+    }
+
     const gift = {
+      ...(ownedGift ?? {}),
       id: giftId,
       kind,
       fromUid,
@@ -72,29 +72,35 @@ export async function POST(request: Request) {
       ...(from.photoURL ? { fromPhoto: from.photoURL } : {}),
       toUid,
       toName,
-      ...(kind === 'custom' ? { customText } : {}),
+      ...(kind === 'custom' && deliveredCustomText ? { customText: deliveredCustomText } : {}),
       sentAt,
+      transferCount: Number(ownedGift?.transferCount || 0) + (sourceGiftId ? 1 : 0),
     };
     state.received[toUid] = state.received[toUid] ?? {};
     state.received[toUid][giftId] = gift;
     state.sent[fromUid] = state.sent[fromUid] ?? {};
-    state.sent[fromUid][giftId] = gift;
+    state.sent[fromUid][sourceGiftId ? `${giftId}__${sentAt}` : giftId] = gift;
     abortReason = '';
     return state;
-  }, undefined, false);
+  });
 
   if (!result.committed) return NextResponse.json({ ok: false, reason: abortReason }, { status: 409 });
 
-  const notification = database.ref(`notifications/${toUid}`).push();
-  await notification.set({
-    id: notification.key,
-    kind: 'gift',
-    title: `${fromName} gave you ${LIFETIME_CARD_LABELS[kind]}`,
-    body: kind === 'custom' ? customText : 'A permanent lifetime recognition card was added to your profile.',
-    data: { fromUid, giftId },
-    read: false,
-    createdAt: sentAt,
-  });
+  try {
+    const notificationId = crypto.randomUUID();
+    await writeUserRtdb(`notifications/${toUid}/${notificationId}`, {
+      id: notificationId,
+      kind: 'gift',
+      title: `${fromName} gave you ${LIFETIME_CARD_LABELS[kind]}`,
+      body: kind === 'custom' ? deliveredCustomText : 'A lifetime recognition card was added to your profile.',
+      data: { fromUid, giftId },
+      read: false,
+      createdAt: sentAt,
+    }, app, idToken);
+  } catch {
+    // Ownership transfer has already committed. Notification delivery must
+    // never make the client treat a successful permanent transfer as failed.
+  }
 
   return NextResponse.json({ ok: true, giftId });
 }

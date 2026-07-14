@@ -185,8 +185,15 @@ export default function InboxThreadPage() {
 
   return (
     <div className="flex h-[100dvh] flex-col bg-candy">
-      {/* Header */}
-      <header className="safe-top sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-white/95 px-3 py-2 backdrop-blur">
+      {/* Header — floating pill */}
+      <header
+        data-liquid-glass="surface"
+        data-liquid-radius="999"
+        data-liquid-blur="0"
+        data-liquid-tint="250,248,242"
+        data-liquid-tint-opacity="0.22"
+        className="safe-top sticky top-3 z-20 mx-3 flex items-center gap-3 rounded-[100px] border border-white/60 bg-transparent px-2 py-2 shadow-[0_4px_16px_rgba(0,0,0,.06)]"
+      >
         <button
           type="button"
           onClick={() => router.push('/inbox')}
@@ -293,56 +300,41 @@ export default function InboxThreadPage() {
         </div>
       </div>
 
-      {/* Composer */}
-      <div className="safe-bottom border-t border-line bg-white/95 px-3 py-2 backdrop-blur">
+      {/* Composer — floating pill */}
+      <div className="safe-bottom px-3 pb-[1em] pt-2" style={{ paddingBottom: 'calc(1em + env(safe-area-inset-bottom, 0px))' }}>
         {pendingAttachment && (
-          <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-candy px-2 py-1.5 text-xs">
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-white/90 px-2 py-1.5 text-xs backdrop-blur">
             <span className="font-extrabold text-brand">
               {pendingAttachment.kind === 'post' ? '📎 Sharing a post' : '🎬 Sharing a reel'}
             </span>
-            <button
-              type="button"
-              onClick={() => setPendingAttachment(null)}
-              className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"
-            >
-              <X size={14} />
-            </button>
+            <button type="button" onClick={() => setPendingAttachment(null)} className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"><X size={14} /></button>
           </div>
         )}
         {replyTo && (
-          <div className="mb-2 flex items-start gap-2 rounded-xl border-l-2 border-brand bg-brand-light/40 px-2 py-1.5 text-xs">
+          <div className="mb-2 flex items-start gap-2 rounded-xl border-l-2 border-brand bg-brand-light/40 px-2 py-1.5 text-xs backdrop-blur">
             <CornerUpLeft size={14} className="mt-0.5 text-brand" />
-            <div className="min-w-0 flex-1">
-              <div className="font-extrabold text-brand">
-                Replying to {replyTo.fromUid === user.uid ? 'yourself' : other?.fullName ?? 'them'}
-              </div>
-              <div className="line-clamp-2 text-ink/70">{replyTo.text || 'Attachment'}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setReplyTo(null)}
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"
-            >
-              <X size={14} />
-            </button>
+            <div className="min-w-0 flex-1"><div className="font-extrabold text-brand">Replying to {replyTo.fromUid === user.uid ? 'yourself' : other?.fullName ?? 'them'}</div><div className="line-clamp-2 text-ink/70">{replyTo.text || 'Attachment'}</div></div>
+            <button type="button" onClick={() => setReplyTo(null)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"><X size={14} /></button>
           </div>
         )}
-        <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
-          <textarea
-            ref={inputRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={canSend ? 'Message…' : 'Awaiting acceptance'}
-            disabled={!canSend || busy}
-            rows={1}
-            className="max-h-32 flex-1 resize-none rounded-3xl border border-line bg-candy px-4 py-2.5 text-sm outline-none focus:border-brand"
-          />
+        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <div className="flex-1 flex items-center rounded-[100px] border border-[#D4D9D2] bg-white/90 px-1 py-1 shadow-[0_2px_12px_rgba(0,0,0,.04)] backdrop-blur">
+            <textarea
+              ref={inputRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={canSend ? 'Message…' : 'Awaiting acceptance'}
+              disabled={!canSend || busy}
+              rows={1}
+              className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] font-medium text-ink outline-none placeholder:text-ink/30"
+            />
+          </div>
           <button
             type="submit"
             disabled={!canSend || busy || (!text.trim() && !pendingAttachment)}
             aria-label="Send"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-brand text-white disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1f6b55] text-white shadow-[0_4px_14px_rgba(31,107,85,.3)] disabled:opacity-30 transition-transform active:scale-95"
           >
             <Send size={18} />
           </button>

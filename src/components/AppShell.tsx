@@ -2,9 +2,11 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { onValue, ref as dbRef } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
+import { calculateCanactScore } from '@/lib/canactScore';
 import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
 import { Brand } from './Brand';
 import { Avatar } from './Avatar';
@@ -23,7 +25,7 @@ import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
-import type { ChatAttachment } from '@/lib/types';
+import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
@@ -339,7 +341,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderTopInset} />
+        <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderTopInset} />
         <div
           className={`canact-col ${routeFeed ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 92px)` : '92px' } : undefined}
@@ -649,11 +651,122 @@ function titleFor(path: string | null) {
   return '';
 }
 
-function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard = false, topInset }: { profileChrome?: boolean; fadeChrome?: boolean; leaderboard?: boolean; topInset?: string | null }) {
+function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false, leaderboard = false, topInset }: { home?: boolean; profileChrome?: boolean; fadeChrome?: boolean; leaderboard?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user, profile } = useAuth();
+  const [avatarPopup, setAvatarPopup] = useState(false);
+  const [sidebarMounted, setSidebarMounted] = useState(false);
+  const [sidebarEntered, setSidebarEntered] = useState(false);
+  const [islandOpen, setIslandOpen] = useState(false);
+  const islandRef = useRef<HTMLDivElement | null>(null);
+  const [liveScore, setLiveScore] = useState(0);
+  const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
+  const prevScoreRef = useRef(0);
+  const prevLikesRef = useRef<number | null>(null);
+  const [scoreDelta, setScoreDelta] = useState(0);
+  const [islandMoment, setIslandMoment] = useState<{ icon: string; label: string; tone: 'positive' | 'negative' | 'neutral' } | null>(null);
+  const islandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deltaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [homePillOpacity, setHomePillOpacity] = useState(home ? 0 : 1);
+
+  const triggerIslandMoment = useCallback((icon: string, label: string, tone: 'positive' | 'negative' | 'neutral' = 'neutral') => {
+    setIslandMoment({ icon, label, tone });
+    if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+    islandTimerRef.current = setTimeout(() => { islandTimerRef.current = null; setIslandMoment(null); }, 2800);
+  }, []);
+
+  // Listen for homepage scroll to control pill fade
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const opacity = (e as CustomEvent<{ pillOpacity: number }>).detail?.pillOpacity;
+      if (typeof opacity === 'number') setHomePillOpacity(opacity);
+    };
+    window.addEventListener('canact:home-scroll', handler);
+    return () => window.removeEventListener('canact:home-scroll', handler);
+  }, []);
+
+  useEffect(() => {
+    setHomePillOpacity(home ? 0 : 1);
+  }, [home]);
+
+  // Real-time score listener with delta tracking
+  useEffect(() => {
+    if (!user) return;
+    prevScoreRef.current = 0;
+    prevLikesRef.current = null;
+    return onValue(dbRef(db, `users/${user.uid}`), (snap) => {
+      const p = snap.val() as UserProfile | null;
+      if (p) {
+        const s = calculateCanactScore(p);
+        const prev = prevScoreRef.current;
+        const previousLikes = prevLikesRef.current;
+        const likeDelta = previousLikes === null ? 0 : Math.max(0, (p.likesCount || 0) - previousLikes);
+        if (prev !== 0 && s.score !== prev) {
+          const diff = s.score - prev;
+          setScoreDelta(diff);
+          if (deltaTimerRef.current) clearTimeout(deltaTimerRef.current);
+          deltaTimerRef.current = setTimeout(() => { deltaTimerRef.current = null; setScoreDelta(0); }, 2400);
+          if (!likeDelta) triggerIslandMoment(diff > 0 ? '↗' : '↘', `Score ${diff > 0 ? 'increased' : 'changed'} by ${Math.abs(diff)}`, diff > 0 ? 'positive' : 'negative');
+        }
+        if (likeDelta > 0) triggerIslandMoment('♥', `${likeDelta} new positive signal${likeDelta === 1 ? '' : 's'}`, 'positive');
+        prevScoreRef.current = s.score;
+        prevLikesRef.current = p.likesCount || 0;
+        setLiveScore(s.score);
+        setLiveSummary(s);
+      }
+    });
+  }, [triggerIslandMoment, user?.uid]);
+
+  useEffect(() => () => {
+    if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+    if (deltaTimerRef.current) clearTimeout(deltaTimerRef.current);
+  }, []);
+
+  // Listen for micro-events from other components
+  useEffect(() => {
+    const onMicroEvent = (e: Event) => {
+      const detail = (e as CustomEvent<{ emoji: string }>).detail;
+      if (detail?.emoji) triggerIslandMoment(detail.emoji, 'New activity on Canact');
+    };
+    window.addEventListener('canact:pill-emoji', onMicroEvent);
+    return () => window.removeEventListener('canact:pill-emoji', onMicroEvent);
+  }, [triggerIslandMoment]);
+
+  // Close island on outside click
+  useEffect(() => {
+    if (!islandOpen) return;
+    const close = (e: PointerEvent) => { if (e.target instanceof Node && !islandRef.current?.contains(e.target)) setIslandOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setIslandOpen(false); };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', esc); };
+  }, [islandOpen]);
+
+  // Sidebar enter/exit animation lifecycle
+  useEffect(() => {
+    if (avatarPopup) {
+      setSidebarMounted(true);
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setSidebarEntered(true));
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    setSidebarEntered(false);
+    const t = setTimeout(() => setSidebarMounted(false), 300);
+    return () => clearTimeout(t);
+  }, [avatarPopup]);
 
   const headerChromeClass = profileChrome ? 'canact-profile-header-chrome' : fadeChrome ? 'canact-fade-header-chrome' : '';
+
+  const attrs = [...POSITIVE_ATTRS, ...NEGATIVE_ATTRS].map((key) => ({
+    key,
+    label: ATTR_LABELS[key],
+    count: profile?.attrs?.[key] || 0,
+    positive: POSITIVE_ATTRS.includes(key as (typeof POSITIVE_ATTRS)[number]),
+  }));
+  const islandExpanded = islandOpen || !!islandMoment;
+  const scoreSummary = liveSummary ?? calculateCanactScore(profile);
+  const scorePercent = Math.max(4, Math.min(100, (liveScore / Math.max(scoreSummary.max, 1)) * 100));
 
   return (
     <header
@@ -669,15 +782,137 @@ function UnifiedHeader({ profileChrome = false, fadeChrome = false, leaderboard 
         data-liquid-tint-opacity="0.26"
         className="canact-figma-header"
       >
-        <div className={`canact-header-inner flex items-center gap-2 px-4 ${profileChrome ? 'canact-profile-header-content' : ''}`}>
+        <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
           <Brand size={38} href="/" />
-          <div className="ml-auto inline-flex items-center gap-4">
-            {leaderboard
-              ? <LeaderboardScopeDropdown blendChrome={profileChrome} />
-              : <DistanceDropdown radiusIdx={radiusIdx} setRadiusIdx={setRadiusIdx} blendChrome={profileChrome} />}
-            <Link href="/profile" data-liquid-glass="none" aria-label="Open profile" prefetch onClick={() => haptic('subtle')} className={`inline-flex h-9 w-9 shrink-0 aspect-square items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}>
-              <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={36} />
-            </Link>
+
+          {/* Dynamic Island score pill */}
+          <div
+            ref={islandRef}
+            className="canact-score-island-shell"
+            data-expanded={islandExpanded}
+            data-home-hidden={home && homePillOpacity <= 0.01}
+            style={{ opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity }}
+          >
+            <button
+              type="button"
+              onClick={() => { haptic('subtle'); setIslandOpen((v) => !v); }}
+              aria-label={`Canact score ${liveScore}`}
+              aria-expanded={islandExpanded}
+              tabIndex={home && homePillOpacity <= 0.01 ? -1 : undefined}
+              className="canact-score-island"
+              data-expanded={islandExpanded}
+              data-tone={islandMoment?.tone ?? 'neutral'}
+            >
+              <span className="canact-score-island-compact" aria-hidden={islandExpanded}>
+                <i />
+                <strong>{liveScore}</strong>
+                <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
+              </span>
+              <span className="canact-score-island-panel" aria-hidden={!islandExpanded}>
+                <span className="canact-score-island-event">
+                  <i>{islandMoment?.icon ?? <Activity size={16} />}</i>
+                  <span><small>{islandMoment ? 'Live update' : 'Canact score'}</small><strong>{islandMoment?.label ?? `${scoreSummary.club} club`}</strong></span>
+                </span>
+                <span className="canact-score-island-value"><b>{liveScore}</b>{scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)}</em> : null}</span>
+                <span className="canact-score-island-meter"><i style={{ width: `${scorePercent}%` }} /></span>
+                <span className="canact-score-island-meta"><small>{scoreSummary.club} club</small><small>{attrs.reduce((sum, attr) => sum + attr.count, 0)} attribute signals</small></span>
+                <span className="canact-score-island-attributes">
+                  {attrs.map((attr) => (
+                    <span key={attr.key} data-positive={attr.positive}>
+                      <small>{attr.label}</small>
+                      <b>{attr.count}</b>
+                    </span>
+                  ))}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div className="ml-auto inline-flex items-center gap-3">
+            {/* Avatar — opens sidebar with range selector + profile link */}
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Open profile menu"
+                onClick={() => { haptic('subtle'); setAvatarPopup((v) => !v); }}
+                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}
+              >
+                <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={36} />
+              </button>
+              {sidebarMounted && createPortal(
+                <>
+                  {/* Backdrop — fades in/out */}
+                  <div
+                    className={`fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarEntered ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
+                    aria-hidden="true"
+                  />
+                  {/* Sidebar panel — slides in from right, 80% width */}
+                  <aside
+                    className={`fixed inset-y-0 right-0 z-[131] flex w-[80%] max-w-[400px] flex-col bg-[#faf8f2] shadow-2xl rounded-l-[32px] transition-transform duration-300 ease-out ${sidebarEntered ? 'translate-x-0' : 'translate-x-full'}`}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Profile menu"
+                  >
+                    {/* Close button */}
+                    <div className="flex items-center justify-end px-4 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink/5 text-ink/60 hover:bg-ink/10"
+                        aria-label="Close menu"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {/* User info */}
+                    <div className="flex items-center gap-3 px-5 pt-2 pb-4 border-b border-ink/6">
+                      <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={48} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-base font-extrabold text-ink">{profile?.firstName || profile?.fullName || 'You'}</div>
+                        {profile && (
+                          <div className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-bold text-brand">
+                            {liveScore} {scoreSummary.label}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Discovery range */}
+                    <div className="flex-1 overflow-y-auto px-5 py-4">
+                      <p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-ink/40 mb-3">Discovery range</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {RADIUS_OPTIONS.map((option) => (
+                          <button
+                            key={option.index}
+                            type="button"
+                            onClick={() => { setRadiusIdx(option.index); haptic('selection'); }}
+                            className={`rounded-xl py-3 text-sm font-extrabold transition-colors ${option.index === radiusIdx ? 'bg-brand text-white' : 'bg-ink/5 text-ink/60 hover:bg-ink/10'}`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* View Profile button */}
+                    <div className="border-t border-ink/6 px-5 py-4">
+                      <Link
+                        href="/profile"
+                        prefetch
+                        onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
+                        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand py-3 text-sm font-bold text-white transition active:scale-[0.98]"
+                      >
+                        <UserIcon size={18} />
+                        <span>View Profile</span>
+                      </Link>
+                    </div>
+                  </aside>
+                </>,
+                document.body,
+              )}
+            </div>
           </div>
         </div>
       </div>

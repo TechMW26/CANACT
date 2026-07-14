@@ -32,19 +32,20 @@ export function listenReceivedLifetimeCards(uid: string, callback: (cards: Lifet
   });
 }
 
-export async function sendLifetimeCard(toUid: string, kind: LifetimeCardKind, customText?: string) {
+export async function sendLifetimeCard(toUid: string, kind: LifetimeCardKind, customText?: string, sourceGiftId?: string) {
   const currentUser = getFirebaseAuth().currentUser;
   if (!currentUser) throw new Error('Sign in to send a card');
   const idToken = await currentUser.getIdToken();
   const response = await fetch('/api/lifetime-cards/gift', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-    body: JSON.stringify({ toUid, kind, customText }),
+    body: JSON.stringify({ toUid, kind, customText, sourceGiftId }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const messages: Record<string, string> = {
       'card-already-sent': 'This lifetime card has already been given.',
+      'card-not-owned': 'This lifetime card is no longer in your collection.',
       'custom-text-required': 'Add your message before sending this card.',
       'cannot-gift-yourself': 'Choose someone else for this card.',
       'card-service-unavailable': 'Lifetime cards are temporarily unavailable.',

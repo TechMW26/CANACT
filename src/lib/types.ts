@@ -13,17 +13,31 @@ export const ATTR_LABELS: Record<AttrKey, string> = {
   uncivil: 'Uncivil',
 };
 
-export const CARD_KEYS = ['understanding', 'humour', 'goodVibes', 'confidence', 'intelligence', 'creativity', 'daring'] as const;
+export const CARD_KEYS = ['understanding', 'humour', 'goodVibes', 'confidence', 'cooperative', 'intelligence', 'creativity', 'daring'] as const;
 export type CardKey = typeof CARD_KEYS[number];
 export const CARD_LABELS: Record<CardKey, string> = {
   understanding: 'Understanding',
   humour: 'Humour',
   goodVibes: 'Good Vibes',
   confidence: 'Confidence',
+  cooperative: 'Cooperative',
   intelligence: 'Intelligence',
   creativity: 'Creativity',
   daring: 'Daring',
 };
+
+/** A standalone social recognition card. These are intentionally independent
+ * from profile vote counters and never affect the Canact score. */
+export interface ConnectionCardGift {
+  id: string;
+  kind: CardKey;
+  fromUid: string;
+  fromName: string;
+  fromPhoto?: string;
+  toUid: string;
+  toName: string;
+  sentAt: number;
+}
 
 /** One-time recognition cards. This domain is intentionally separate from
  * profile vote cards: transfers are permanent and never affect Canact score. */
@@ -53,6 +67,7 @@ export interface LifetimeCardGift {
   toName: string;
   customText?: string;
   sentAt: number;
+  transferCount?: number;
 }
 
 export type GiftCandidateCategory = 'interacted' | 'nearby' | 'contacts' | 'favourites' | 'friends';

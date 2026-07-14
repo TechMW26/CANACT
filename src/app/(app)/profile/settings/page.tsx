@@ -2,43 +2,42 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import { Avatar } from '@/components/Avatar';
 import { useAuth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { toast } from '@/components/Toaster';
 import {
-  ArrowLeft, CheckCircle2, Lock, Sparkles, ShieldAlert, Eye, Pencil, Star,
+  ArrowLeft, CheckCircle2, ChevronRight, Eye, Loader2, Lock, Pencil, Sparkles, Star,
 } from '@/components/icons';
 import type { UserProfile } from '@/lib/types';
+import styles from './Settings.module.css';
 
 export default function ProfileSettingsPage() {
   const { user } = useAuth();
-  const [u, setU] = useState<UserProfile | null>(null);
-  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [aadhaar, setAadhaar] = useState('');
   const [requestId, setRequestId] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
-  const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [busy, setBusy] = useState<'otp' | 'verify' | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    return onValue(ref(db, `users/${user.uid}`), (s) => setU(s.val()));
+    return onValue(ref(db, `users/${user.uid}`), (s) => setProfile(s.val()));
   }, [user?.uid]);
 
-  if (!user) return null;
-  const isVerified = !!u?.profileVerified;
+  if (!user || !profile) return null;
+
+  const isVerified = !!profile.profileVerified;
 
   const sendOtp = async () => {
-    if (!aadhaarNumber.trim()) { toast('Enter your Aadhaar number to continue.', 'error'); return; }
-    setSendingOtp(true);
+    if (!aadhaar.trim()) return toast('Enter your Aadhaar number.', 'error');
+    setBusy('otp');
     try {
       const res = await fetch('/api/verify/digilocker/send-otp', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ aadhaarNumber, uid: user.uid }),
+        body: JSON.stringify({ aadhaarNumber: aadhaar, uid: user.uid }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -47,12 +46,12 @@ export default function ProfileSettingsPage() {
       toast(data?.message ?? 'OTP sent', 'success');
     } catch (e: any) {
       toast(e?.message ?? 'Could not send OTP', 'error');
-    } finally { setSendingOtp(false); }
+    } finally { setBusy(null); }
   };
 
-  const completeVerification = async () => {
-    if (!otp.trim() || !requestId) { toast('Enter the OTP first.', 'error'); return; }
-    setVerifying(true);
+  const verify = async () => {
+    if (!otp.trim() || !requestId) return toast('Enter the OTP.', 'error');
+    setBusy('verify');
     try {
       const res = await fetch('/api/verify/digilocker/complete', {
         method: 'POST',
@@ -61,117 +60,132 @@ export default function ProfileSettingsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setOtp(''); setOtpSent(false); setRequestId(''); setAadhaarNumber('');
+      setOtp(''); setOtpSent(false); setRequestId(''); setAadhaar('');
       toast('Profile verified.', 'success');
     } catch (e: any) {
-      toast(e?.message ?? 'Could not verify profile', 'error');
-    } finally { setVerifying(false); }
+      toast(e?.message ?? 'Could not verify', 'error');
+    } finally { setBusy(null); }
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Link href="/profile" prefetch aria-label="Back" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white ring-1 ring-line text-ink hover:bg-brand-light/40">
+    <div className={styles.page}>
+      {/* Header */}
+      <div className={styles.header}>
+        <Link href="/profile" prefetch className={styles.backBtn} aria-label="Back">
           <ArrowLeft size={18} />
         </Link>
-        <h2 className="text-lg font-extrabold tracking-tight">Profile settings</h2>
+        <div className={styles.headerTitle}>
+          <h1>Profile settings</h1>
+          {profile.city ? <span>{profile.city}</span> : null}
+        </div>
+        <Avatar src={profile.photoURL} name={profile.fullName} size={40} className={styles.headerAvatar} />
       </div>
 
-      <Card>
-        <h3 className="font-bold">Quick actions</h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/edit-profile" prefetch>
-            <Button size="sm" variant="outline" icon={<Pencil size={14} />}>Edit profile</Button>
+      {/* Quick Actions */}
+      <div className={styles.section}>
+        <span className={styles.sectionLabel}>Quick actions</span>
+        <div className={styles.quickActions}>
+          <Link href="/edit-profile" prefetch className={styles.quickAction}>
+            <span className={`${styles.quickActionIcon} ${styles.edit}`}><Pencil size={18} /></span>
+            <span className={styles.quickActionLabel}>Edit profile</span>
           </Link>
-          <Link href="/rateme/start" prefetch>
-            <Button size="sm" variant="subtle" icon={<Star size={14} />}>Start Rate Me</Button>
+          <Link href="/rateme/start" prefetch className={styles.quickAction}>
+            <span className={`${styles.quickActionIcon} ${styles.rateme}`}><Star size={18} /></span>
+            <span className={styles.quickActionLabel}>Rate Me</span>
           </Link>
-          <Link href="/underground" prefetch>
-            <Button size="sm" variant="ghost" icon={<Eye size={14} />}>Underground</Button>
+          <Link href="/underground" prefetch className={styles.quickAction}>
+            <span className={`${styles.quickActionIcon} ${styles.underground}`}><Eye size={18} /></span>
+            <span className={styles.quickActionLabel}>Underground</span>
           </Link>
         </div>
-      </Card>
+      </div>
 
-      <Card className="overflow-hidden border border-[#EFD9DD] bg-white">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
-              <Sparkles size={12} /> Verify Profile
-            </div>
-            <h3 className="mt-3 text-xl font-black tracking-tight text-ink">DigiLocker identity lock</h3>
-            <p className="mt-1 text-sm text-ink/65">
-              Verify via OTP and Canact will auto-lock your name, DOB, and address so others can trust the profile.
-            </p>
+      {/* DigiLocker Identity Lock */}
+      <div className={styles.section}>
+        <span className={styles.sectionLabel}>Identity verification</span>
+        <div className={styles.digiCard}>
+          <div className={styles.digiBadge}>
+            <Sparkles size={11} /> Verify Profile
           </div>
+          <h2 className={styles.digiTitle}>DigiLocker identity lock</h2>
+          <p className={styles.digiDesc}>
+            Verify via OTP and Canact will lock your name, DOB, and address — so others know they can trust this profile.
+          </p>
+
           {isVerified ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
-              <CheckCircle2 size={12} /> Verified
-            </span>
+            <div className={styles.verifiedPanel}>
+              <div className={styles.verifiedBadge}>
+                <CheckCircle2 size={12} /> Verified via DigiLocker
+              </div>
+              <div className={styles.verifiedFields}>
+                <div className={styles.verifiedField}>
+                  <span className={styles.verifiedFieldLabel}>Full name</span>
+                  <p className={styles.verifiedFieldValue}>{profile.fullName || '—'}</p>
+                </div>
+                <div className={styles.verifiedField}>
+                  <span className={styles.verifiedFieldLabel}>Date of birth</span>
+                  <p className={styles.verifiedFieldValue}>{profile.dateOfBirth || 'Not available'}</p>
+                </div>
+                <div className={`${styles.verifiedField} ${styles.full}`}>
+                  <span className={styles.verifiedFieldLabel}>Address</span>
+                  <p className={styles.verifiedFieldValue}>{profile.address || 'Not available'}</p>
+                </div>
+              </div>
+              <div className={styles.verifiedLock}>
+                <Lock size={11} /> These fields are permanently locked
+              </div>
+            </div>
           ) : (
-            <ShieldAlert size={20} className="shrink-0 text-brand" />
+            <div className={styles.steps}>
+              <div className={styles.step}>
+                <span className={styles.stepNum}>Step 1</span>
+                <input
+                  className={styles.stepInput}
+                  value={aadhaar}
+                  onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  placeholder="12-digit Aadhaar"
+                  inputMode="numeric"
+                />
+                <button
+                  className={`${styles.stepBtn} ${styles.stepBtnPrimary}`}
+                  onClick={sendOtp}
+                  disabled={busy !== null}
+                >
+                  {busy === 'otp' ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Send OTP
+                </button>
+              </div>
+              <div className={styles.step}>
+                <span className={styles.stepNum}>Step 2</span>
+                <input
+                  className={styles.stepInput}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter OTP"
+                  inputMode="numeric"
+                  disabled={!otpSent}
+                />
+                <button
+                  className={`${styles.stepBtn} ${styles.stepBtnOutline}`}
+                  onClick={verify}
+                  disabled={!otpSent || busy !== null}
+                >
+                  {busy === 'verify' ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Verify via DigiLocker
+                </button>
+              </div>
+            </div>
           )}
         </div>
+      </div>
 
-        {isVerified ? (
-          <div className="mt-4 rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <div className="flex items-center gap-2 font-bold"><CheckCircle2 size={16} /> Verified via DigiLocker</div>
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
-              <LockedField label="Name" value={u?.fullName ?? ''} />
-              <LockedField label="DOB" value={u?.dateOfBirth || 'Not available'} />
-              <LockedField label="Address" value={u?.address || 'Not available'} className="md:col-span-2" />
-            </div>
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-800">
-              <Lock size={13} /> These fields are locked after verification
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-3xl border border-[#F2DADF] bg-[linear-gradient(135deg,rgba(255,248,248,1),rgba(255,216,221,0.38))] p-4">
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 1</div>
-              <Input
-                label="Aadhaar number"
-                value={aadhaarNumber}
-                onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                placeholder="Enter 12-digit Aadhaar"
-                className="mt-2"
-                inputMode="numeric"
-              />
-              <Button size="sm" className="mt-3" loading={sendingOtp} onClick={sendOtp}>Send OTP</Button>
-            </div>
-            <div className="rounded-3xl border border-[#F2DADF] bg-white p-4">
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-ink/55">Step 2</div>
-              <Input
-                label="OTP"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Enter OTP"
-                className="mt-2"
-                inputMode="numeric"
-                disabled={!otpSent}
-              />
-              <Button size="sm" className="mt-3" variant="outline" loading={verifying} onClick={completeVerification} disabled={!otpSent}>Verify with DigiLocker</Button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <h3 className="font-bold">More</h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/settings" prefetch>
-            <Button size="sm" variant="outline">App settings</Button>
-          </Link>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function LockedField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
-  return (
-    <div className={`rounded-2xl border border-emerald-200 bg-white px-3 py-3 ${className}`}>
-      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-ink">{value}</div>
+      {/* More */}
+      <div className={styles.section}>
+        <Link href="/settings" prefetch className={styles.moreLink}>
+          <span>App settings</span>
+          <ChevronRight size={16} />
+        </Link>
+      </div>
     </div>
   );
 }

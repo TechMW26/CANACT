@@ -12,7 +12,7 @@ import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
-import { Camera, Lock, Trash2, UserIcon, MapPin, Phone, Sparkles } from '@/components/icons';
+import { Camera, Lock, Trash2 } from '@/components/icons';
 
 const MAX_BIO = 300;
 type CountryCityApi = typeof import('country-state-city');
@@ -215,7 +215,7 @@ export default function EditProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 pb-10">
+    <div className="mx-auto max-w-2xl space-y-4 px-4 pb-10" style={{ paddingTop: 'calc(var(--canact-header-top-inset, 0px) + var(--canact-header-offset, 0px) + 92px)' }}>
       {/* Photo */}
       <Card className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
         <div className="relative">
@@ -280,8 +280,7 @@ export default function EditProfilePage() {
 
       {/* Identity */}
       <Card>
-        <SectionHeading icon={<UserIcon size={14} />}>Identity</SectionHeading>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={locked} />
           <Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={locked} />
         </div>
@@ -294,9 +293,8 @@ export default function EditProfilePage() {
 
       {/* About */}
       <Card>
-        <SectionHeading icon={<Sparkles size={14} />}>About</SectionHeading>
         <Textarea
-          className="mt-3"
+          className=""
           label={`Bio (${bio.length}/${MAX_BIO})`}
           value={bio}
           onChange={(e) => setBio(e.target.value.slice(0, MAX_BIO))}
@@ -306,8 +304,7 @@ export default function EditProfilePage() {
 
       {/* Contact */}
       <Card>
-        <SectionHeading icon={<Phone size={14} />}>Contact</SectionHeading>
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           <PhoneInput
             label="Mobile number"
             country={phoneCountry}
@@ -321,8 +318,7 @@ export default function EditProfilePage() {
 
       {/* Location */}
       <Card>
-        <SectionHeading icon={<MapPin size={14} />}>Location</SectionHeading>
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           <Combobox
             label="Country"
             value={countryCode}
@@ -365,15 +361,6 @@ export default function EditProfilePage() {
         onClose={() => { setPhotoEditorOpen(false); setPhotoEditorFile(null); }}
         onApply={saveEditedPhoto}
       />
-    </div>
-  );
-}
-
-function SectionHeading({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full bg-brand-light px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
-      {icon}
-      {children}
     </div>
   );
 }

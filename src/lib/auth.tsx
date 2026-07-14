@@ -126,7 +126,7 @@ function registrationProfile(u: FbUser): UserProfile {
     likesCount: 0,
     dislikesCount: 0,
     attrs: { behaviour: 0, reliability: 0, civic_sense: 0, rude: 0, unreliable: 0, uncivil: 0 },
-    cardsReceived: { understanding: 0, humour: 0, goodVibes: 0, confidence: 0, intelligence: 0, creativity: 0, daring: 0 },
+    cardsReceived: { understanding: 0, humour: 0, goodVibes: 0, confidence: 0, cooperative: 0, intelligence: 0, creativity: 0, daring: 0 },
     badges: [],
     tags: ['New User', 'Unverified Profile'],
     notificationSound: true,

@@ -36,6 +36,31 @@ export type VerifiedAdmin = {
   idToken: string;
 };
 
+export type VerifiedUser = {
+  uid: string;
+  email: string | null;
+  idToken: string;
+};
+
+export async function verifyUserRequest(request: Request, app: App | null): Promise<VerifiedUser | null> {
+  const authHeader = request.headers.get('authorization') || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!idToken) return null;
+
+  try {
+    const decoded = app
+      ? await getAuth(app).verifyIdToken(idToken)
+      : await verifyIdTokenWithRest(idToken);
+    return {
+      uid: decoded.uid,
+      email: typeof decoded.email === 'string' ? decoded.email.toLowerCase() : null,
+      idToken,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyAdminRequest(request: Request, app: App | null): Promise<VerifiedAdmin | null> {
   const authHeader = request.headers.get('authorization') || '';
   const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -68,6 +93,58 @@ export async function readAdminRtdb<T = any>(path: string, app: App | null, idTo
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`RTDB ${path} failed: ${response.status}`);
   return (await response.json()) as T | null;
+}
+
+export async function runUserRtdbTransaction<T = any>(
+  path: string,
+  app: App | null,
+  idToken: string,
+  update: (current: T | null) => T | undefined,
+): Promise<{ committed: boolean; value: T | null }> {
+  if (app) {
+    const result = await getDatabase(app).ref(path).transaction(update, undefined, false);
+    return { committed: result.committed, value: result.snapshot.val() as T | null };
+  }
+
+  const url = new URL(`${RTDB_BASE}/${path}.json`);
+  url.searchParams.set('auth', idToken);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const read = await fetch(url, {
+      cache: 'no-store',
+      headers: { 'X-Firebase-ETag': 'true' },
+    });
+    if (!read.ok) throw new Error(`RTDB transaction read failed: ${read.status}`);
+    const current = (await read.json()) as T | null;
+    const next = update(current);
+    if (typeof next === 'undefined') return { committed: false, value: current };
+    const etag = read.headers.get('etag');
+    if (!etag) throw new Error('RTDB transaction ETag missing');
+    const write = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'if-match': etag },
+      body: JSON.stringify(next),
+      cache: 'no-store',
+    });
+    if (write.ok) return { committed: true, value: (await write.json()) as T };
+    if (write.status !== 412) throw new Error(`RTDB transaction write failed: ${write.status}`);
+  }
+  throw new Error('RTDB transaction contention');
+}
+
+export async function writeUserRtdb(path: string, value: unknown, app: App | null, idToken: string): Promise<void> {
+  if (app) {
+    await getDatabase(app).ref(path).set(value);
+    return;
+  }
+  const url = new URL(`${RTDB_BASE}/${path}.json`);
+  url.searchParams.set('auth', idToken);
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`RTDB write failed: ${response.status}`);
 }
 
 async function verifyIdTokenWithRest(idToken: string): Promise<{ uid: string; email?: string | null }> {

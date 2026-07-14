@@ -581,7 +581,7 @@ function CanactPagesProfileUI({
   return (
     <div className="-mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className="relative h-[320px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
-        {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-top opacity-55 mix-blend-luminosity" /> : null}
+        {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-center opacity-55 mix-blend-luminosity" /> : null}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
         {!isSelf ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} /> : null}
         {isSelf ? (

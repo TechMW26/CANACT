@@ -35,21 +35,11 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
     prevPathname.current = pathname;
   }, [pathname]);
 
-  // Full-screen fixed surfaces must remain rooted to the viewport. A
-  // transformed transition wrapper becomes their containing block and breaks
-  // bottom-sheet/header positioning. We skip transform-based transitions
-  // for those pages — they still get an opacity fade via the else branch.
-  const isFixedSurface = !!pathname && (
-    pathname === '/favourites'
-    || pathname === '/profile'
-    || (pathname.startsWith('/profile/') && !pathname.startsWith('/profile/settings'))
-  );
-
-  const cls = isFixedSurface
-    ? 'canact-fade-in'
-    : directionRef.current === 'back'
-      ? 'canact-page-enter-back'
-      : 'canact-page-enter-forward';
+  // Direction only tunes fade duration. The wrapper deliberately never
+  // transforms because it contains viewport-fixed maps, sheets and rows.
+  const cls = directionRef.current === 'back'
+    ? 'canact-page-enter-back'
+    : 'canact-page-enter-forward';
 
   return (
     <div key={pathname} className={cls}>
