@@ -45,14 +45,31 @@ type SendAnimationRect = { left: number; top: number; width: number; height: num
 
 function useCardSwipe() {
   const [dragY, setDragY] = useState(0);
+  const dragYRef = useRef(0);
+  const launchPendingRef = useRef(false);
   const launchRef = useRef<(() => void) | null>(null);
   const onDrag = useCallback((dy: number, phase: 'move' | 'end') => {
     const next = Math.max(-180, Math.min(0, dy));
-    if (phase === 'move') return setDragY(next);
+    if (phase === 'move') {
+      if (launchPendingRef.current) return;
+      dragYRef.current = next;
+      setDragY(next);
+      return;
+    }
+    const shouldLaunch = next <= -54 && !launchPendingRef.current;
+    dragYRef.current = 0;
     setDragY(0);
-    if (next <= -54) launchRef.current?.();
+    if (!shouldLaunch) return;
+    launchPendingRef.current = true;
+    launchRef.current?.();
+    requestAnimationFrame(() => { launchPendingRef.current = false; });
   }, []);
-  return { dragY, launchRef, onDrag };
+  const reset = useCallback(() => {
+    dragYRef.current = 0;
+    launchPendingRef.current = false;
+    setDragY(0);
+  }, []);
+  return { dragY, launchRef, onDrag, reset };
 }
 
 function getSendAnimationRect(sourceKey: string): SendAnimationRect {
@@ -155,6 +172,12 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     if (user?.uid) return listenLifetimeInventory(user.uid, setInventory);
   }, [isSelf, profile.uid, user?.uid]);
   useEffect(() => { setSlide(0); }, [folder, mode, connectionMode]);
+  useEffect(() => {
+    if (pickerOpen || closingGift) rewardSwipe.reset();
+  }, [closingGift, pickerOpen, rewardSwipe.reset]);
+  useEffect(() => {
+    if (connectionPickerOpen || closingConnection) connectionSwipe.reset();
+  }, [closingConnection, connectionPickerOpen, connectionSwipe.reset]);
   useEffect(() => {
     if (!user || isSelf) { setMyAttrVotes({}); return; }
     return onValue(ref(db, `votes/${profile.uid}/${user.uid}/attrs`), (snapshot) => {
@@ -563,7 +586,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
 
 function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { items: T[]; index: number; setIndex: (index: number) => void; empty: string; render: (item: T) => React.ReactNode; onDragY?: (dy: number, phase: 'move' | 'end') => void }) {
   const safeIndex = Math.min(index, Math.max(items.length - 1, 0));
-  const dragRef = useRef<{ startX: number; startY: number; idx: number; dir: 'h' | 'v' | null } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; idx: number; dir: 'h' | 'v' | null } | null>(null);
   const dragXRef = useRef(0);
   const dragYRef = useRef(0);
   const [dragX, setDragX] = useState(0);
@@ -572,7 +595,8 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
   useEffect(() => { setAnimDir(null); setDragX(0); dragXRef.current = 0; }, [safeIndex]);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    dragRef.current = { startX: e.clientX, startY: e.clientY, idx: safeIndex, dir: null };
+    if (!e.isPrimary || dragRef.current) return;
+    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, idx: safeIndex, dir: null };
     dragXRef.current = 0;
     dragYRef.current = 0;
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -594,17 +618,21 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
       onDragY(dy, 'move');
     }
   };
-  const finishPointer = (cancelled = false) => {
-    if (!dragRef.current) return;
-    if (dragRef.current.dir === 'h') {
+  const finishPointer = (cancelled = false, pointerId?: number) => {
+    const drag = dragRef.current;
+    if (!drag || (pointerId !== undefined && drag.pointerId !== pointerId)) return;
+    dragRef.current = null;
+    if (drag.dir === 'h') {
       const x = dragXRef.current;
       const threshold = 60;
       if (x < -threshold && safeIndex < items.length - 1) { setAnimDir('left'); setIndex(safeIndex + 1); }
       else if (x > threshold && safeIndex > 0) { setAnimDir('right'); setIndex(safeIndex - 1); }
-    } else if (dragRef.current.dir === 'v' && onDragY) {
+    } else if (drag.dir === 'v' && onDragY) {
       onDragY(cancelled ? 0 : dragYRef.current, 'end');
+    } else if (onDragY) {
+      onDragY(0, 'end');
     }
-    dragRef.current = null; setDragX(0); dragXRef.current = 0; dragYRef.current = 0;
+    setDragX(0); dragXRef.current = 0; dragYRef.current = 0;
   };
 
   if (!items.length) return <div className={styles.empty}>{empty}</div>;
@@ -612,7 +640,9 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
     <div className={styles.gallery}>
       <div className={styles.slider}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-        onPointerUp={() => finishPointer()} onPointerCancel={() => finishPointer(true)}>
+        onPointerUp={(event) => finishPointer(false, event.pointerId)}
+        onPointerCancel={(event) => finishPointer(true, event.pointerId)}
+        onLostPointerCapture={(event) => finishPointer(true, event.pointerId)}>
         <div className={`${styles.cardWrap} ${animDir ? styles[`slide${animDir === 'left' ? 'Out' : 'In'}Left`] : ''}`}
           style={{ transform: dragX ? `translateX(${dragX * 0.6}px)` : undefined }}>
           {render(items[safeIndex]!)}
@@ -786,9 +816,16 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
     let panel: HTMLElement | null = null;
     const resizeObserver = new ResizeObserver(() => syncPanel());
     const syncPanel = () => {
-      const nextPanel = Array.from(document.querySelectorAll<HTMLElement>('[data-canact-sheet-panel="true"]')).at(-1) ?? null;
-      if (!nextPanel) return;
+      const ownerPanel = placeholderRef.current?.closest<HTMLElement>('[data-canact-sheet-panel="true"]') ?? null;
+      const nextPanel = Array.from(document.querySelectorAll<HTMLElement>('[data-canact-sheet-panel="true"]'))
+        .reverse()
+        .find((candidate) => candidate !== ownerPanel) ?? null;
+      if (!nextPanel) {
+        setPopupBounds(null);
+        return;
+      }
       if (panel !== nextPanel) {
+        panel?.style.removeProperty('--canact-lifted-card-clearance');
         resizeObserver.disconnect();
         resizeObserver.observe(nextPanel);
         panel = nextPanel;
@@ -800,6 +837,11 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
         width: nextPanel.offsetWidth || rect.width,
         height: nextPanel.offsetHeight || rect.height,
       };
+      if (bounds?.width && bounds.height) {
+        const availableWidth = Math.min(620, window.innerWidth - 32, next.width - 32);
+        const scale = Math.max(.68, Math.min(1.16, availableWidth / bounds.width));
+        nextPanel.style.setProperty('--canact-lifted-card-clearance', `${Math.ceil(24 + bounds.height * scale + 16)}px`);
+      }
       setPopupBounds((current) => current
         && Math.abs(current.left - next.left) < .5
         && Math.abs(current.top - next.top) < .5
@@ -814,11 +856,12 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
     window.addEventListener('resize', syncPanel);
     return () => {
       cancelAnimationFrame(frame);
+      panel?.style.removeProperty('--canact-lifted-card-clearance');
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       window.removeEventListener('resize', syncPanel);
     };
-  }, [active, exiting]);
+  }, [active, bounds, exiting]);
 
   const isDragging = dragY !== 0;
   const viewportWidth = typeof window === 'undefined' ? 430 : window.innerWidth;
@@ -834,11 +877,13 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
   const liftY = bounds ? liftTop - bounds.top - scaleTopOffset : 0;
   const dragProgress = Math.min(1, Math.max(0, -dragY / 110));
   const dragScale = 1 + dragProgress * .055;
-  const lifted = active;
+  const lifted = active && !!popupBounds;
   const floating = isDragging || lifted || exiting || sending;
   const cardTransform = lifted
       ? `translate3d(${liftX}px, ${liftY}px, 0) scale(${liftScale}) rotateX(-1.5deg)`
-      : `translate3d(0, ${dragY}px, 0) scale(${dragScale}) rotateX(${-dragProgress * 2.5}deg)`;
+      : active
+        ? 'translate3d(0, -54px, 0) scale(1.025) rotateX(-1deg)'
+        : `translate3d(0, ${dragY}px, 0) scale(${dragScale}) rotateX(${-dragProgress * 2.5}deg)`;
 
   const card = (
     <article
@@ -850,7 +895,7 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
       data-sending={sending}
       data-reward="true"
       data-dragging={isDragging}
-      data-lifted={lifted}
+      data-lifted={active}
       data-exiting={exiting}
       style={{
         ...(floating && bounds ? {

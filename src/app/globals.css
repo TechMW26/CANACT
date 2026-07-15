@@ -61,6 +61,7 @@
   --canact-popup-bottom-inset: 1.5em;
   --canact-popup-max-height: 90svh;
   --canact-map-header-fade-start: 55px;
+  --canact-ios-bottom-shift: 0px;
 }
 
 @supports (height: 100dvh) {
@@ -1242,6 +1243,7 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
   :root {
     --canact-header-offset: 7px;
     --canact-footer-offset: 7px;
+    --canact-ios-bottom-shift: 19px;
   }
 }
 

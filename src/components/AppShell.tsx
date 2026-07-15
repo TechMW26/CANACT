@@ -24,6 +24,7 @@ import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { IncomingCardEnvelope } from './IncomingCardEnvelope';
+import { OnboardingTaskGuide } from './OnboardingTaskGuide';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
@@ -267,6 +268,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             those use their own scroll container and a downward swipe at the
             top of a conversation should never reload the page mid-message. */}
         <PageTransition>{children}</PageTransition>
+        <OnboardingTaskGuide />
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         {postPopups}
         <HelpAlertManager />
@@ -285,6 +287,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           without having to wrap its own root. Pages that maintain client
           subscriptions can listen for the `canact:pull-refresh` event. */}
       <PullToRefresh disabled={pathname !== '/feed'} />
+      <OnboardingTaskGuide />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
           stays anchored to the viewport and never disappears during sheet
@@ -359,7 +362,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav group — centered, button on right */}
       <div className="canact-bottom-group fixed bottom-0 z-40 flex items-end gap-[1.5em] lg:hidden"
-        style={{ left: `calc(50% - ${combinedWidth / 2}px)`, paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+        style={{ left: `calc(50% - ${combinedWidth / 2}px)`, paddingBottom: 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))' }}>
         <nav
           data-canact-bottom-nav
           className="canact-bottom-nav-shell"
@@ -422,7 +425,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         className={`canact-create-nav-button fixed ${radialCreateOpen ? 'canact-create-nav-button-open' : ''} lg:hidden`}
         style={{
           left: `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP}px)`,
-          bottom: 'calc(12px + env(safe-area-inset-bottom))',
+          bottom: 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))',
         }}
       >
         {radialCreateOpen ? <X className="canact-adaptive-icon" size={29} strokeWidth={2.3} style={{ color: '#1f6b55' }} /> : renderPlusIcon(plusIconName)}

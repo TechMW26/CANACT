@@ -122,6 +122,16 @@ export interface UserProfile {
   rateMeUntil?: number;
   /** True once the user has filled the post-Google-signin onboarding form. */
   profileComplete?: boolean;
+  /** Versioned first-run progression. Version 1 is awarded sequentially and
+   * totals exactly 300 points; legacy profiles intentionally omit it. */
+  onboarding?: {
+    version: 1;
+    points: number;
+    startedAt: number;
+    completedAt?: number;
+    completed?: Record<string, { at: number; points: number }>;
+    signals?: Record<string, number>;
+  };
   /** Aggregate help statistics shown on profile + help cards. */
   helpStats?: {
     offered?: number;   // offers extended by this user

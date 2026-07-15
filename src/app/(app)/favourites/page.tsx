@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import { onValue, ref, remove as fbRemove, set as fbSet } from 'firebase/database';
+import { get, onValue, ref, remove as fbRemove, set as fbSet } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { Avatar } from '@/components/Avatar';
@@ -92,10 +92,8 @@ export default function FavouritesPage() {
     return listenFavourites(user.uid, async (uids) => {
       const out: FriendProfile[] = [];
       await Promise.all(uids.map(async (uid) => {
-        const s = await new Promise<FriendProfile | null>((res) => {
-          let off: () => void;
-          off = onValue(ref(db, `users/${uid}`), (snap) => { off(); res(snap.val() as FriendProfile | null); }, { onlyOnce: true });
-        });
+        const snap = await get(ref(db, `users/${uid}`));
+        const s = snap.val() as FriendProfile | null;
         if (s) out.push(s);
       }));
       setFavs(out);
@@ -107,10 +105,8 @@ export default function FavouritesPage() {
     return listenFollowRequests(user.uid, async (rs) => {
       const out: FavouriteRequest[] = [];
       await Promise.all(rs.map(async (r) => {
-        const s = await new Promise<UserProfile | null>((res) => {
-          const off = onValue(ref(db, `users/${r.fromUid}`), (snap) => { off(); res(snap.val()); }, { onlyOnce: true });
-        });
-        out.push({ ...r, profile: s });
+        const snap = await get(ref(db, `users/${r.fromUid}`));
+        out.push({ ...r, profile: snap.val() as UserProfile | null });
       }));
       setFavReqs(out);
     });

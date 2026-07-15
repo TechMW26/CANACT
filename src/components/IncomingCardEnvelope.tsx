@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { listenReceivedConnectionCards } from '@/lib/services/connectionCards';
 import { listenReceivedLifetimeCards } from '@/lib/services/lifetimeCards';
 import { CARD_LABELS, LIFETIME_CARD_LABELS, type ConnectionCardGift, type LifetimeCardGift } from '@/lib/types';
-import { Crown, Heart, MessageSquare, Sparkles } from './icons';
+import { Check, Crown, Heart, Sparkles } from './icons';
 import { LifetimeCardSendAnimation } from './LifetimeCardSendAnimation';
 import cardStyles from './ProfileRecognitionFolders.module.css';
 
@@ -90,17 +90,15 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
 
   if (!current || typeof window === 'undefined') return null;
   const viewportWidth = window.innerWidth;
-  const naturalWidth = 620;
-  const displayWidth = Math.min(naturalWidth, viewportWidth - 32);
+  const displayWidth = Math.min(620, viewportWidth - 32);
   const displayHeight = Math.max(196, displayWidth * .52);
-  const naturalHeight = displayHeight / (displayWidth / naturalWidth);
   const sourceRect = {
     left: Math.max(16, (viewportWidth - displayWidth) / 2),
     top: 96,
     width: displayWidth,
     height: displayHeight,
-    naturalWidth,
-    naturalHeight,
+    naturalWidth: displayWidth,
+    naturalHeight: displayHeight,
   };
   const isLifetime = current.family === 'lifetime';
   const title = isLifetime ? LIFETIME_CARD_LABELS[current.gift.kind] : CARD_LABELS[current.gift.kind];
@@ -126,15 +124,18 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
         >
           <span className={cardStyles.cardIcon}>
             {isLifetime
-              ? current.gift.kind === 'life_saver' ? <Heart size={28} fill="currentColor" /> : current.gift.kind === 'golden_person' ? <Crown size={29} /> : <MessageSquare size={28} />
+              ? current.gift.kind === 'life_saver' ? <Heart size={28} fill="currentColor" /> : current.gift.kind === 'golden_person' ? <Crown size={29} /> : <Sparkles size={28} />
               : <Sparkles size={29} />}
           </span>
           <div className={cardStyles.cardCopy}>
-            <small>{isLifetime ? 'Lifetime gift' : 'Connection card'} from {current.gift.fromName}</small>
+            <small>{isLifetime ? 'Given forever by' : 'Connection card from'} {current.gift.fromName}</small>
             <h3>{title}</h3>
             <p>{copy}</p>
           </div>
-          <div className={cardStyles.giftHint}><span>Now part of your collection</span></div>
+          <div className={cardStyles.giftHint}>
+            <span>{isLifetime ? `Received ${new Date(current.gift.sentAt).toLocaleDateString()}` : 'Now part of your collection'}</span>
+            {isLifetime ? <Check size={18} /> : null}
+          </div>
         </article>
       )}
     />

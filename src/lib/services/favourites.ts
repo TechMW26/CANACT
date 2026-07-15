@@ -3,9 +3,11 @@ import { db } from '../firebase';
 import { ChatMessage } from '../types';
 import { pushNotification } from './notifications';
 import { sendPush } from './sendPush';
+import { recordOnboardingSignal } from './onboarding';
 
 export async function requestFollow(fromUid: string, fromName: string, toUid: string) {
   await set(ref(db, `followRequests/${toUid}/${fromUid}`), { fromUid, fromName, createdAt: Date.now() });
+  await recordOnboardingSignal(fromUid, 'add-favourite');
   await pushNotification(toUid, { kind: 'follow', title: `${fromName} wants to add you to favourites`, data: { fromUid } });
   sendPush({
     toUid,

@@ -1,8 +1,9 @@
 import { CARD_KEYS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type UserProfile } from './types';
 
-export const CANACT_SCORE_MIN = 250;
+export const CANACT_SCORE_MIN = 0;
 export const CANACT_SCORE_BASELINE = 700;
 export const CANACT_SCORE_MAX = 950;
+const CANACT_LEGACY_SCORE_MIN = 250;
 
 export type CanactScoreSummary = {
   score: number;
@@ -14,7 +15,12 @@ export type CanactScoreSummary = {
 };
 
 export function calculateCanactScore(profile?: UserProfile | null): CanactScoreSummary {
-  if (!profile) return makeSummary(CANACT_SCORE_BASELINE);
+  if (!profile) return makeSummary(0, 0);
+
+  const isOnboardingAccount = profile.onboarding?.version === 1;
+  const startingScore = isOnboardingAccount
+    ? Math.max(0, Math.min(300, Number(profile.onboarding?.points || 0)))
+    : CANACT_SCORE_BASELINE;
 
   let adjustment = 0;
 
@@ -141,11 +147,12 @@ export function calculateCanactScore(profile?: UserProfile | null): CanactScoreS
   // ===================================================================
   // T5 — VERIFICATION & BADGES
   // ===================================================================
-  if (profile.profileVerified) adjustment += 15;
+  // KYC is already one of the 300 onboarding points for versioned accounts.
+  if (profile.profileVerified && !isOnboardingAccount) adjustment += 15;
   const nonVerificationBadges = (profile.badges ?? []).filter((badge) => badge.toLowerCase() !== 'verified').length;
   if (nonVerificationBadges > 0) adjustment += Math.min(10, nonVerificationBadges * 2);
 
-  return makeSummary(CANACT_SCORE_BASELINE + adjustment);
+  return makeSummary(startingScore + adjustment, startingScore, isOnboardingAccount ? CANACT_SCORE_MIN : CANACT_LEGACY_SCORE_MIN);
 }
 
 export function getCanactScoreLabel(score: number): CanactScoreSummary['label'] {
@@ -155,15 +162,15 @@ export function getCanactScoreLabel(score: number): CanactScoreSummary['label'] 
   return 'LOW';
 }
 
-function makeSummary(rawScore: number): CanactScoreSummary {
-  const score = Math.round(clampNumber(rawScore, CANACT_SCORE_MIN, CANACT_SCORE_MAX));
+function makeSummary(rawScore: number, baseline = CANACT_SCORE_BASELINE, min = CANACT_SCORE_MIN): CanactScoreSummary {
+  const score = Math.round(clampNumber(rawScore, min, CANACT_SCORE_MAX));
   return {
     score,
-    baseline: CANACT_SCORE_BASELINE,
+    baseline,
     max: CANACT_SCORE_MAX,
-    delta: score - CANACT_SCORE_BASELINE,
+    delta: score - baseline,
     label: getCanactScoreLabel(score),
-    club: Math.max(CANACT_SCORE_MIN, Math.floor(score / 50) * 50),
+    club: Math.max(min, Math.floor(score / 50) * 50),
   };
 }
 

@@ -13,6 +13,7 @@ const ATTR_OPPOSITES: Record<string, string> = {
   uncivil: 'civic_sense',
 };
 import { calculateCanactScore } from '../canactScore';
+import { recordOnboardingSignal } from './onboarding';
 
 export const SIX_HOURS = 6 * 3600 * 1000;
 
@@ -63,7 +64,10 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
     prev = (await get(myVoteRef)).val() as 'like' | 'dislike' | null;
     cacheVote(cacheKey, prev);
   }
-  if (prev === kind) return;
+  if (prev === kind) {
+    await recordOnboardingSignal(fromUid, 'rate-profile');
+    return;
+  }
   await runTransaction(ref(db, `users/${toUid}`), (u: UserProfile | null) => {
     if (!u) return u;
     u.likesCount = u.likesCount ?? 0; u.dislikesCount = u.dislikesCount ?? 0;
@@ -74,6 +78,7 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
     return u;
   });
   await set(myVoteRef, kind);
+  await recordOnboardingSignal(fromUid, 'rate-profile');
 
   // Notify the recipient that someone liked/disliked them.
   import('./sendPush').then(({ sendPush }) => {
@@ -147,6 +152,7 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
     a[attr] = (a[attr] ?? 0) + 1;
     return a;
   });
+  await recordOnboardingSignal(fromUid, 'rate-profile');
 
   const mainRef = ref(db, `votes/${toUid}/${fromUid}/main`);
   if (!(await get(mainRef)).exists()) {

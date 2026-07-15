@@ -26,8 +26,6 @@ export function LifetimeCardSendAnimation({
   const envelopeRef = useRef<HTMLDivElement | null>(null);
   const flapRef = useRef<HTMLDivElement | null>(null);
   const cardBehindRef = useRef<HTMLDivElement | null>(null);
-  const cardFrontRef = useRef<HTMLDivElement | null>(null);
-  const frontWindowRef = useRef<HTMLDivElement | null>(null);
   const shadowRef = useRef<HTMLDivElement | null>(null);
   const trailsRef = useRef<HTMLDivElement | null>(null);
   const raysRef = useRef<HTMLDivElement | null>(null);
@@ -40,10 +38,14 @@ export function LifetimeCardSendAnimation({
     const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
     const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
     const initialMailerY = Math.max(viewportHeight * .72, 520);
+    const envelopeWidth = Math.min(Math.max(240, sourceRect.width), Math.max(240, viewportWidth - 32));
+    const envelopeHeight = sourceRect.height * (envelopeWidth / Math.max(sourceRect.width, 1));
     const sourceCenterX = sourceRect.left + sourceRect.width / 2;
     const sourceCenterY = sourceRect.top + sourceRect.height / 2;
     return {
       initialMailerY,
+      envelopeWidth,
+      envelopeHeight,
       sourceX: sourceCenterX - viewportWidth / 2,
       sourceY: sourceCenterY - viewportHeight / 2 - initialMailerY,
     };
@@ -61,16 +63,14 @@ export function LifetimeCardSendAnimation({
     const envelope = envelopeRef.current;
     const flap = flapRef.current;
     const cardBehind = cardBehindRef.current?.firstElementChild as HTMLElement | null;
-    const cardFront = cardFrontRef.current?.firstElementChild as HTMLElement | null;
-    const frontWindow = frontWindowRef.current;
     const groundShadow = shadowRef.current;
     const speedTrails = trailsRef.current;
     const rays = raysRef.current;
     const shine = shineRef.current;
     const canvas = canvasRef.current;
-    if (!mailer || !envelope || !flap || !cardBehind || !cardFront || !frontWindow || !groundShadow || !speedTrails || !rays || !shine || !canvas) return;
+    if (!mailer || !envelope || !flap || !cardBehind || !groundShadow || !speedTrails || !rays || !shine || !canvas) return;
 
-    const cards = [cardBehind, cardFront];
+    const cards = [cardBehind];
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const duration = (normal: number) => reducedMotion ? .01 : normal;
     const viewportHeight = window.innerHeight;
@@ -85,7 +85,9 @@ export function LifetimeCardSendAnimation({
     const sourceX = sourceRect.left + sourceRect.width / 2 - viewportWidth / 2;
     const sourceY = sourceCenterY - viewportHeight / 2 - initialMailerY;
     const sourceScale = sourceRect.width / sourceRect.naturalWidth;
-    const insideScale = Math.min(.92, 280 / sourceRect.naturalWidth);
+    const fullScale = geometry.envelopeWidth / sourceRect.naturalWidth;
+    const insideScale = fullScale * .94;
+    const revealLift = Math.max(108, geometry.envelopeHeight * .62);
     const launchHeight = Math.max(viewportHeight, 720);
     let confettiFrame = 0;
     let particles: Array<{ x: number; y: number; width: number; height: number; vx: number; vy: number; gravity: number; rotation: number; rotationSpeed: number; sway: number; swayOffset: number; color: string; circle: boolean; opacity: number }> = [];
@@ -196,8 +198,7 @@ export function LifetimeCardSendAnimation({
     resizeCanvas();
     gsap.set(mailer, { xPercent: -50, yPercent: -50, x: 0, y: initialMailerY, rotation: 0, scale: 1, opacity: 1, visibility: 'visible', force3D: true });
     gsap.set(cards, { xPercent: -50, yPercent: -50, x: sourceX, y: sourceY, scale: sourceScale, rotation: 0, opacity: 1, visibility: 'visible', force3D: true });
-    gsap.set(cardBehind, { opacity: 0 });
-    gsap.set(frontWindow, { overflow: 'visible' });
+    gsap.set(cardBehind, { opacity: direction === 'receive' ? 0 : 1 });
     gsap.set(envelope, { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, force3D: true });
     gsap.set(flap, { rotateX: 180, transformOrigin: 'top center', zIndex: 2, force3D: true });
     gsap.set(groundShadow, { xPercent: -50, scaleX: .42, scaleY: .7, opacity: 0, force3D: true });
@@ -223,14 +224,13 @@ export function LifetimeCardSendAnimation({
       gsap.set(mailer, { y: -launchHeight * .72, opacity: 0, scale: .82 });
       gsap.set(cards, { x: 0, y: 12, scale: insideScale, opacity: 0 });
       gsap.set(flap, { rotateX: 0, zIndex: 10 });
-      gsap.set(frontWindow, { overflow: 'hidden' });
       timeline
         .to(mailer, { duration: duration(.42), y: restingMailerY, opacity: 1, scale: 1, rotation: 0, ease: 'power3.out' })
         .to(groundShadow, { duration: duration(.3), opacity: 1, scaleX: 1, scaleY: 1, ease: 'power2.out' }, '<.08')
         .to(shine, { duration: duration(.12), opacity: 0, ease: 'power1.out' })
         .to(flap, { duration: duration(.36), rotateX: 180, zIndex: 2, ease: 'power2.inOut' })
         .set(cardBehind, { opacity: 1 })
-        .to(cardBehind, { duration: duration(.5), y: -132, scale: sourceRect.width / sourceRect.naturalWidth, ease: 'power3.out' })
+        .to(cardBehind, { duration: duration(.5), y: -revealLift, scale: fullScale, ease: 'power3.out' })
         .to(envelopeParts, { duration: duration(.24), y: 34, opacity: 0, ease: 'power2.in' }, '<.3')
         .to(groundShadow, { duration: duration(.24), opacity: 0, scaleX: .5, ease: 'power2.in' }, '<')
         .to(cardBehind, { duration: duration(.34), y: 0, ease: 'power2.inOut' }, '<.08')
@@ -255,7 +255,6 @@ export function LifetimeCardSendAnimation({
         .to(cards, { duration: duration(.56), y: cardRestingLocalY, ease: 'power3.out' }, '<')
         .to(groundShadow, { duration: duration(.38), opacity: 1, scaleX: 1, scaleY: 1, ease: 'power2.out' }, '<.1')
         .set(cardBehind, { opacity: 1 })
-        .set(frontWindow, { overflow: 'hidden' })
         .to(cards, { duration: duration(.2), y: cardRestingLocalY - 20, scale: Math.min(sourceScale, insideScale), ease: 'power2.out' })
         .to(cards, { duration: duration(.48), y: 10, scale: insideScale, ease: 'power3.inOut' })
         .to(flap, { duration: duration(.36), rotateX: 0, zIndex: 10, ease: 'power2.inOut' })
@@ -282,7 +281,7 @@ export function LifetimeCardSendAnimation({
       stopConfetti();
       gsap.killTweensOf([cards, mailer, envelope, flap, groundShadow, speedTrails, rays]);
     };
-  }, [direction, onComplete, sourceRect, tone]);
+  }, [direction, geometry.envelopeHeight, geometry.envelopeWidth, onComplete, sourceRect, tone]);
 
   const dismissReceive = useCallback(() => dismissReceiveRef.current?.(), []);
 
@@ -295,17 +294,18 @@ export function LifetimeCardSendAnimation({
         <div
           ref={mailerRef}
           className={styles.mailer}
-          style={{ transform: `translate(-50%, -50%) translate3d(0, ${geometry.initialMailerY}px, 0)` }}
+          style={{
+            width: geometry.envelopeWidth,
+            height: geometry.envelopeHeight,
+            transform: `translate(-50%, -50%) translate3d(0, ${geometry.initialMailerY}px, 0)`,
+          }}
         >
-          <div ref={raysRef} className={styles.rays} aria-hidden="true" />
+          <div ref={raysRef} className={styles.rays} aria-hidden="true" style={{ width: Math.max(520, geometry.envelopeWidth * 1.3), height: Math.max(520, geometry.envelopeWidth * 1.3) }} />
           <div ref={trailsRef} className={styles.speedTrails} aria-hidden="true"><span /><span /><span /><span /><span /></div>
           <div ref={envelopeRef} className={styles.envelope}>
             <div className={styles.envelopeBack} />
             <div ref={flapRef} className={styles.flap} />
             <div ref={cardBehindRef}>{renderCard(`${styles.cardLayer} ${styles.cardBehind}`, initialCardStyle)}</div>
-            <div ref={frontWindowRef} className={styles.cardFrontWindow} aria-hidden="true">
-              <div ref={cardFrontRef}>{renderCard(`${styles.cardLayer} ${styles.cardFront}`, initialCardStyle)}</div>
-            </div>
             <div className={styles.right} />
             <div className={styles.bottom} />
             <div className={styles.left} />

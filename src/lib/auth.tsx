@@ -120,6 +120,7 @@ function registrationProfile(u: FbUser): UserProfile {
     email: u.email ?? undefined,
     photoURL: u.photoURL ?? undefined,
     profileComplete: false,
+    onboarding: { version: 1, points: 0, startedAt: Date.now(), completed: {}, signals: {} },
     profileVerified: false,
     rating: 0,
     ratingCount: 0,
