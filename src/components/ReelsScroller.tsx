@@ -351,7 +351,7 @@ function CommentsSheet({
         </div>
         <form
           onSubmit={(e) => { e.preventDefault(); send(); }}
-          className="flex items-center gap-2 bg-white px-3 pb-2 pt-2"
+          className="flex items-center gap-2 rounded-[999px] bg-white p-2"
         >
           <Avatar src={myPhoto ?? null} name={myName} size={28} />
           <input
@@ -360,7 +360,7 @@ function CommentsSheet({
             onFocus={() => setExpanded(true)}
             placeholder={myUid ? 'Add a comment…' : 'Sign in to comment'}
             disabled={!myUid || busy}
-            className="h-10 flex-1 rounded-full border border-line bg-brand-light/40 px-4 text-sm outline-none focus:border-brand"
+            className="h-10 flex-1 rounded-full border border-line bg-brand-light/40 p-2.5 text-sm outline-none focus:border-brand"
           />
           <button
             type="submit"

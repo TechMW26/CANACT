@@ -9,10 +9,9 @@ import { ExploreMap } from '@/components/ExploreMap';
 import { useAuth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { useGeo } from '@/lib/useGeo';
-import { listenFriends } from '@/lib/services/friends';
 import { calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { haptic } from '@/lib/haptics';
-import type { FriendEdge, UserProfile } from '@/lib/types';
+import type { UserProfile } from '@/lib/types';
 import type { FriendMapPerson } from '@/components/FriendsWorldMap';
 import styles from './CanactHome.module.css';
 
@@ -36,7 +35,6 @@ export function CanactHome() {
   const transitionResetTimerRef = useRef<number | null>(null);
   const transitioningRef = useRef(false);
   const [progress, setProgress] = useState(0);
-  const [atEnd, setAtEnd] = useState(false);
   const [exploreTransition, setExploreTransition] = useState(false);
   const [transitionOrigin, setTransitionOrigin] = useState<React.CSSProperties>();
   const [people, setPeople] = useState<FriendMapPerson[]>([]);
@@ -54,29 +52,26 @@ export function CanactHome() {
       ? { lat: storedLocation.lat, lng: storedLocation.lng }
       : null;
 
-  // Load friends with location data for the map
+  // Load map-visible profiles. Distance styling in ExploreMap keeps the
+  // immediate 15 m vicinity clear and de-emphasises everyone farther away.
   useEffect(() => {
-    if (!user) return;
-    return listenFriends(user.uid, (edges: FriendEdge[]) => {
-      const uids = edges.map((e) => e.uid);
-      if (!uids.length) { setPeople([]); return; }
-      const unsubs = uids.map((uid) => onValue(ref(db, `users/${uid}`), (snap) => {
-        const p = snap.val() as (UserProfile & { lastLocation?: { lat?: number; lng?: number } }) | null;
-        setPeople((prev) => {
-          const loc = p?.lastLocation;
-          if (!p || typeof loc?.lat !== 'number' || typeof loc?.lng !== 'number') {
-            return prev.filter((x) => x.uid !== uid);
-          }
-          const entry: FriendMapPerson = {
-            uid, name: p.fullName || 'User', photoURL: p.photoURL || null,
-            lat: loc.lat, lng: loc.lng, city: p.city, country: p.country,
-          };
-          const existing = prev.find((x) => x.uid === uid);
-          if (existing) return prev.map((x) => x.uid === uid ? entry : x);
-          return [...prev, entry];
-        });
-      }));
-      return () => unsubs.forEach((u) => u());
+    if (!user) { setPeople([]); return; }
+    return onValue(ref(db, 'users'), (snapshot) => {
+      const profiles = snapshot.val() as Record<string, UserProfile & { lastLocation?: { lat?: number; lng?: number } }> | null;
+      const located = Object.entries(profiles ?? {}).flatMap<FriendMapPerson>(([uid, candidate]) => {
+        const location = candidate?.lastLocation;
+        if (uid === user.uid || typeof location?.lat !== 'number' || typeof location?.lng !== 'number') return [];
+        return [{
+          uid,
+          name: candidate.fullName || candidate.firstName || 'Canact user',
+          photoURL: candidate.photoURL || null,
+          lat: location.lat,
+          lng: location.lng,
+          city: candidate.city,
+          country: candidate.country,
+        }];
+      });
+      setPeople(located);
     });
   }, [user?.uid]);
 
@@ -90,7 +85,6 @@ export function CanactHome() {
       if (reachedEnd && !atEndRef.current) endReachedAtRef.current = performance.now();
       if (!reachedEnd) endReachedAtRef.current = 0;
       atEndRef.current = reachedEnd;
-      setAtEnd(reachedEnd);
       if (!reachedEnd) pullRef.current = 0;
       setProgress(Math.min(Math.max(st / 180, 0), 1));
     });
@@ -233,7 +227,7 @@ export function CanactHome() {
         </div>
 
         <div className={styles.scoreDock}>
-          <div ref={scoreRef} className={styles.scoreCircle}>
+          <div ref={scoreRef} className={styles.scoreCircle} data-onboarding="score">
             <svg className={styles.scoreRing} viewBox="0 0 240 240" aria-hidden="true">
               <circle cx="120" cy="120" r="108" pathLength="100" />
               <circle className={styles.scoreArc} cx="120" cy="120" r="108" pathLength="100" style={{ strokeDashoffset: 100 - Math.max(4, Math.min(100, (score / Math.max(summary.max, 1)) * 100)) }} />
@@ -254,7 +248,7 @@ export function CanactHome() {
           <div className={styles.statItem}><span><Sparkles /></span><b>{goodActs}</b><small>Good acts</small></div>
         </div>
 
-        {profile ? <ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" /> : null}
+        {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" /></div> : null}
 
         <div className={styles.insight}>
           <span><Activity /></span>
@@ -265,6 +259,7 @@ export function CanactHome() {
         <div className={styles.mapStage}>
           <div
             ref={mapWrapRef}
+            data-onboarding="home-map"
             className={styles.mapWrap}
             role="link"
             tabIndex={0}
@@ -277,29 +272,24 @@ export function CanactHome() {
                 people={people}
                 currentLocation={currentLocation}
                 preview
+                myPhotoURL={profile?.photoURL}
               />
             </div>
             <div className={styles.mapFade} />
           </div>
 
-          <button type="button" className={styles.exploreCue} data-visible={atEnd} onClick={openExplore} aria-label="Continue to the Explore map">
+          <button type="button" data-onboarding="nearby-action" onClick={openExplore} className={styles.nearbyPill} aria-label="Swipe up for nearby people">
             <ArrowUp aria-hidden="true" />
-            <span>Swipe up to explore</span>
+            <span>Swipe up for nearby people</span>
           </button>
         </div>
         </div>
       </div>
 
-      <button type="button" onClick={openExplore} className={styles.nearbyPill} aria-label="Explore active people near you">
-        <i aria-hidden="true" />
-        <span>People near you</span>
-        <strong>→</strong>
-      </button>
-
       {exploreTransition ? (
         <div className={styles.exploreTransition} style={transitionOrigin} role="status" aria-label="Opening Explore map">
           <div className={styles.exploreTransitionMap}>
-            <ExploreMap people={people} currentLocation={currentLocation} preview />
+            <ExploreMap people={people} currentLocation={currentLocation} preview myPhotoURL={profile?.photoURL} />
           </div>
         </div>
       ) : null}

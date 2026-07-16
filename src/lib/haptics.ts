@@ -7,6 +7,7 @@ type HapticKind = 'subtle' | 'strong' | 'success' | 'selection';
 function vibrate(pattern: number | number[]) {
   if (typeof window === 'undefined') return;
   const nav = window.navigator as Navigator & { vibrate?: (p: number | number[]) => boolean };
+  if (nav.userActivation && !nav.userActivation.hasBeenActive) return;
   try { nav.vibrate?.(pattern); } catch { /* ignore */ }
 }
 

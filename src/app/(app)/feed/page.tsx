@@ -176,9 +176,9 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#E6EEE9" highlightColor="#F3F1EB">
-    <div className="canact-figma-feed pt-3 pb-4 md:pb-6">
+    <div className="canact-figma-feed pt-3 pb-4 md:pb-6" data-onboarding="feed">
 
-      <section className="canact-stories-strip flex items-center gap-2 pb-2">
+      <section className="canact-stories-strip flex items-center gap-2 pb-2" data-onboarding="feed-stories">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
           <div className="flex min-w-max items-center gap-3 pr-2">
             {/* Own story tile. The avatar fills the rounded square; a
@@ -538,6 +538,7 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
     : 0;
   const cover = post.mediaUrls?.[0];
   const coverPoster = post.mediaPosters?.[0] || undefined;
+  const coverLqip = post.mediaLqips?.[0] || undefined;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
     <article className="overflow-hidden rounded-[34px] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
@@ -546,7 +547,7 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
           <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
         ) : cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+          <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover lqip-img" style={coverLqip ? { backgroundImage: `url(${coverLqip})`, backgroundSize: 'cover' } : undefined} />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#dcece5] via-[#f0eee5] to-white p-8 text-center">
             <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
@@ -639,7 +640,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
     >
       {poll.photoURL ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={poll.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        <img src={poll.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover lqip-img" style={poll.lqip ? { backgroundImage: `url(${poll.lqip})`, backgroundSize: 'cover' } : undefined} />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#F0F5F1] via-[#E4E7E2] to-white p-5 text-center">
           <span className="line-clamp-5 text-lg font-black leading-tight text-[#2E8068]/80">{poll.question}</span>
@@ -721,7 +722,7 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
     >
       {sess.photoURL ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        <img src={sess.photoURL} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover lqip-img" style={sess.lqip ? { backgroundImage: `url(${sess.lqip})`, backgroundSize: 'cover' } : undefined} />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#F0F5F1] via-[#E4E7E2] to-white p-5 text-center">
           <span className="text-lg font-black leading-tight text-[#2E8068]/80">Rate Me</span>

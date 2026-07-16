@@ -1076,7 +1076,7 @@ export function HomeScoreExperience() {
         <div className={styles.pillAura} ref={pillAuraRef} />
         <div className={styles.scoreCirclePulse} ref={scorePulseRef} />
 
-        <button type="button" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={() => { if (stage === 'nearby' || progressRef.current > 0.6) showScore(); }} aria-label="Canact score">
+        <button type="button" data-onboarding="score" className={`${styles.scoreCircle} ${styles[getScoreClass(scoreSummary.score)]}`} ref={circleRef} style={scoreMeterStyle} onClick={() => { if (stage === 'nearby' || progressRef.current > 0.6) showScore(); }} aria-label="Canact score">
           <div className={styles.scoreMeterCanvas} aria-hidden="true">
             <svg className={styles.scoreMeterSvg} viewBox="0 0 340 340">
               <defs>

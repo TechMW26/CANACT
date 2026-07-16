@@ -46,14 +46,16 @@ export function PostMenu({
 
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         aria-label="More"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setOpen((v) => !v); } }}
         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen((v) => !v); }}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${trigger} active:scale-95 transition`}
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${trigger} active:scale-95 transition cursor-pointer`}
       >
         <MoreVertical size={18} />
-      </button>
+      </div>
 
       {open && (
         <div
@@ -61,10 +63,18 @@ export function PostMenu({
           onClick={(e) => e.stopPropagation()}
         >
           {isOwner && onDelete && (
-            <button
-              type="button"
-              disabled={busy}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-disabled={busy}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+                e.preventDefault();
+                if (!confirm('Delete this? This cannot be undone.')) return;
+                setBusy(true);
+                onDelete().then(() => { toast('Deleted', 'success'); setOpen(false); }).catch((err: any) => toast(err?.message ?? 'Could not delete', 'error')).finally(() => setBusy(false));
+              }}}
               onClick={async () => {
+                if (busy) return;
                 if (!confirm('Delete this? This cannot be undone.')) return;
                 try {
                   setBusy(true);
@@ -75,16 +85,23 @@ export function PostMenu({
                   toast(e?.message ?? 'Could not delete', 'error');
                 } finally { setBusy(false); }
               }}
-              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50 cursor-pointer"
             >
               <Trash2 size={16} /> Delete
-            </button>
+            </div>
           )}
           {!isOwner && onReport && (
-            <button
-              type="button"
-              disabled={busy}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-disabled={busy}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+                e.preventDefault();
+                setBusy(true);
+                onReport().then(() => { toast('Reported', 'success'); setOpen(false); }).catch((err: any) => toast(err?.message ?? 'Could not report', 'error')).finally(() => setBusy(false));
+              }}}
               onClick={async () => {
+                if (busy) return;
                 try {
                   setBusy(true);
                   await onReport();
@@ -94,10 +111,10 @@ export function PostMenu({
                   toast(e?.message ?? 'Could not report', 'error');
                 } finally { setBusy(false); }
               }}
-              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-brand-light/40 disabled:opacity-60"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-brand-light/40 cursor-pointer"
             >
               <Flag size={16} /> Report
-            </button>
+            </div>
           )}
           {!isOwner && !onReport && (
             <div className="px-4 py-3 text-xs text-muted">No actions</div>

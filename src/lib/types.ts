@@ -122,8 +122,8 @@ export interface UserProfile {
   rateMeUntil?: number;
   /** True once the user has filled the post-Google-signin onboarding form. */
   profileComplete?: boolean;
-  /** Versioned first-run progression. Version 1 is awarded sequentially and
-   * totals exactly 300 points; legacy profiles intentionally omit it. */
+  /** Versioned first-run progression. Version 1 uses contextual, paced tasks
+   * that total exactly 300 points; legacy profiles intentionally omit it. */
   onboarding?: {
     version: 1;
     points: number;
@@ -131,6 +131,10 @@ export interface UserProfile {
     completedAt?: number;
     completed?: Record<string, { at: number; points: number }>;
     signals?: Record<string, number>;
+    reminders?: Record<string, { shownAt?: number; skippedAt?: number; nextEligibleAt?: number; showCount?: number }>;
+    lastPromptAt?: number;
+    activity?: { lastActiveAt?: number; routeViews?: Record<string, number> };
+    tours?: Record<string, { completedAt?: number; skippedAt?: number }>;
   };
   /** Aggregate help statistics shown on profile + help cards. */
   helpStats?: {
@@ -176,10 +180,16 @@ export interface WhaPost {
    *  download the video. Sparse array — index `i` may be missing if poster
    *  generation failed for that item. */
   mediaPosters?: string[];
+  /** Tiny (~20px) base64 blur placeholders, 1:1 with `mediaUrls`.
+   *  Rendered as an instant background-image behind the full-res media
+   *  so feed tiles show a blur-up transition instead of a blank tile. */
+  mediaLqips?: string[];
   lat?: number;
   lng?: number;
   createdAt: number;
-  expiresAt: number;
+  /** Legacy field retained for older records. Feed posts no longer expire;
+   * map discovery derives its 24-hour window from `createdAt`. */
+  expiresAt?: number;
   reactions?: Record<'cool' | 'love' | 'wow' | 'sad' | 'angry', number>;
   reactionVoters?: Record<string, string>;
   commentCount?: number;
@@ -192,6 +202,8 @@ export interface Poll {
   authorName: string;
   question: string;
   photoURL?: string;
+  /** Tiny base64 blur placeholder for the poll photo. */
+  lqip?: string;
   options: PollOption[];
   openEnded: boolean;
   createdAt: number;
@@ -210,6 +222,8 @@ export interface RateMeSession {
   uid: string;
   authorName: string;
   photoURL?: string;
+  /** Tiny base64 blur placeholder for the session photo. */
+  lqip?: string;
   startedAt: number;
   endsAt: number;
   votes?: Record<string, 'like' | 'dislike'>;
@@ -253,6 +267,8 @@ export interface StoryItem {
   authorName: string;
   authorPhoto?: string;
   mediaUrl: string;
+  /** Tiny base64 blur placeholder for the story media. */
+  lqip?: string;
   caption?: string;
   /** Location at publish time, used for map-bound story discovery. */
   lat?: number;
@@ -345,6 +361,11 @@ export type ChatAttachment =
       sessionId: string;
       authorName?: string;
       thumbUrl?: string;
+    }
+  | {
+      kind: 'voice';
+      audioUrl: string;
+      durationSec: number;
     };
 
 export type ChatThreadStatus = 'pending' | 'accepted' | 'declined';
@@ -367,8 +388,14 @@ export interface ReelItem {
   authorName: string;
   authorPhoto?: string;
   videoUrl: string;
+  /** Tiny base64 blur placeholder for the reel thumbnail. */
+  lqip?: string;
   posterUrl?: string;
   caption?: string;
+  /** Location captured when the reel was published. Map discovery only
+   * exposes it for the first 24 hours; the reel itself remains in the feed. */
+  lat?: number;
+  lng?: number;
   /** CSS filter id from MEDIA_FILTERS (e.g. 'vivid', 'mono'). */
   filter?: string;
   music?: { id: string; title: string; artist: string; url: string };

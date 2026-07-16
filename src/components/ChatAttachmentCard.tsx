@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
 import type { ChatAttachment } from '@/lib/types';
+import { Pause, Play } from './icons';
 
 /** True for URLs whose extension (or path) clearly indicates a video. We
  *  use it to decide whether to render the thumbnail as an <img> or as a
@@ -119,6 +120,9 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
     : authorUid ? `/profile/${authorUid}` : '/feed';
   const label = attachment.kind === 'post' ? 'Post' : attachment.kind === 'poll' ? 'Poll' : attachment.kind === 'reel' ? 'Reel' : 'Rate Me';
 
+  // ── Voice message ──
+  if (attachment.kind === 'voice') return <VoiceMessageBubble audioUrl={attachment.audioUrl} durationSec={attachment.durationSec} />;
+
   return (
     <Link
       href={href}
@@ -162,5 +166,77 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
         </div>
       </div>
     </Link>
+  );
+}
+
+/** Inline voice message player with waveform bars and duration. */
+function VoiceMessageBubble({ audioUrl, durationSec }: { audioUrl: string; durationSec: number }) {
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const animRef = useRef<number>(0);
+
+  useEffect(() => {
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, []);
+
+  const toggle = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) {
+      a.play().catch(() => {});
+      setPlaying(true);
+      const update = () => {
+        setCurrentTime(a.currentTime);
+        if (!a.paused) animRef.current = requestAnimationFrame(update);
+      };
+      update();
+    } else {
+      a.pause();
+      setPlaying(false);
+    }
+  };
+
+  const progress = durationSec ? currentTime / durationSec : 0;
+  const bars = 14;
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="inline-flex items-center gap-2 rounded-2xl bg-brand/8 px-3 py-2 min-w-[180px]">
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        preload="metadata"
+        onEnded={() => { setPlaying(false); setCurrentTime(0); }}
+        onPause={() => setPlaying(false)}
+      />
+      <button type="button" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+        {playing ? <Pause size={15} /> : <Play size={15} fill="currentColor" />}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-end gap-[2px] h-8">
+          {Array.from({ length: bars }).map((_, i) => {
+            const barProgress = i / bars;
+            const active = barProgress <= progress;
+            const h = 6 + Math.sin((i / bars) * Math.PI) * 18 + Math.random() * 4;
+            return (
+              <div
+                key={i}
+                className="flex-1 rounded-full transition-colors"
+                style={{ height: `${h}px`, background: active ? '#1f6b55' : '#c4d4cc' }}
+              />
+            );
+          })}
+        </div>
+        <div className="mt-1 flex items-center justify-between text-[10px] font-bold text-brand/60">
+          <span>{playing ? fmt(currentTime) : fmt(durationSec)}</span>
+          {playing && <span className="animate-pulse text-red-400">● REC</span>}
+        </div>
+      </div>
+    </div>
   );
 }

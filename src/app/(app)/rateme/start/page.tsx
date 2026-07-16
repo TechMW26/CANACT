@@ -9,6 +9,7 @@ import { VideoPreview } from '@/components/VideoPreview';
 import { ArrowLeft, Clock, Eye, Timer } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { startRateMe } from '@/lib/services/rateme';
+import { uploadMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
 
 const HOURS = [1, 2, 4, 8, 12, 24];
@@ -114,10 +115,19 @@ export default function RateMeStartPage() {
               if (!photo) return toast('Take a selfie to start', 'error');
               setBusy(true);
               try {
+                // Upload to Vercel Blob first — never store raw data URLs in RTDB.
+                const { url: photoURL, lqip } = await uploadMedia(photo, {
+                  kind: 'post',
+                  uid: user.uid,
+                  maxWidth: 720,
+                  maxHeight: 720,
+                  quality: 0.80,
+                });
                 await startRateMe({
                   uid: user.uid,
                   authorName: profile.fullName,
-                  photoURL: photo,
+                  photoURL,
+                  lqip,
                   hours,
                 });
                 router.replace('/feed');

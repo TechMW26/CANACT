@@ -297,10 +297,18 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   color: #173f34 !important;
 }
 
+.AuthFlow-module__TmloDW__progressWrap{
+  margin-top: 2em !important;
+}
+
 .canact-figma-bottom-nav .canact-adaptive-icon,
 .canact-create-nav-button .canact-adaptive-icon,
 .canact-radial-item .canact-adaptive-icon {
   color: #173f34 !important;
+}
+
+.ExplorePage-module__AzdfAW__legend{
+  display: none !important;
 }
 
 .canact-radial-item-help .canact-adaptive-icon {
@@ -313,19 +321,19 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   left: max(10px, calc((100vw - 480px) / 2 + 10px));
   right: max(10px, calc((100vw - 480px) / 2 + 10px));
   height: 76px;
-  overflow: visible;
+  border: 1px solid rgb(255 255 255 / 52%);
+  border-radius: 999px !important;
+  background: rgb(250 248 242 / 20%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.14) !important;
+  backdrop-filter: blur(18px) saturate(1.14) !important;
+  overflow: hidden;
 }
 
 .canact-figma-header {
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: visible;
-  border: 1px solid rgb(255 255 255 / 52%);
-  border-radius: 9999px;
-  background: rgb(250 248 242 / 24%);
-  -webkit-backdrop-filter: blur(18px) saturate(1.18);
-  backdrop-filter: blur(18px) saturate(1.18);
+  overflow: hidden;
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .canact-figma-header.engaged { transform: scale(1.03); }
@@ -338,14 +346,14 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   align-items: center;
   height: 100%;
   border-radius: 9999px;
-  background: transparent;
   box-shadow: none;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 .canact-figma-header .canact-distance-pill {
   height: 38px;
   border: 0;
-  background: transparent;
   color: #242424;
   font-size: 14px;
   font-weight: 750;
@@ -367,6 +375,22 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   transition: opacity 140ms linear;
 }
 .canact-score-island-shell[data-home-hidden="true"] { pointer-events: none; }
+.canact-score-island-portal {
+  position: fixed;
+  z-index: 2147482500;
+  width: min(310px, calc(100vw - 24px));
+  height: 158px;
+  transform: translateX(-50%);
+  transform-origin: top center;
+  isolation: isolate;
+  animation: canactIslandPortalIn 360ms cubic-bezier(.2,.9,.2,1) both;
+}
+.canact-score-island-portal > .canact-score-island[data-expanded="true"] { width: 100%; }
+.canact-score-island-portal[data-closing="true"] {
+  pointer-events: none;
+  animation-name: canactIslandPortalOut;
+  animation-duration: 300ms;
+}
 .canact-score-island {
   position: relative;
   display: block;
@@ -474,8 +498,16 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
 }
 @keyframes canactIslandLive { 50% { opacity: .55; transform: scale(.72); } }
 @keyframes canactIslandMoment { from { opacity: 0; transform: scale(.45); } to { opacity: 1; transform: scale(1); } }
+@keyframes canactIslandPortalIn {
+  from { opacity: 0; transform: translateX(-50%) scale(.42, .28); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+@keyframes canactIslandPortalOut {
+  from { opacity: 1; transform: translateX(-50%) scale(1); }
+  to { opacity: 0; transform: translateX(-50%) scale(.42, .28); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .canact-score-island-shell, .canact-score-island, .canact-score-island-compact, .canact-score-island-panel { transition-duration: 1ms !important; }
+  .canact-score-island-shell, .canact-score-island-portal, .canact-score-island, .canact-score-island-compact, .canact-score-island-panel { transition-duration: 1ms !important; animation-duration: 1ms !important; }
   .canact-score-island-compact > i, .canact-score-island-event > i { animation: none !important; }
 }
 
@@ -505,7 +537,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   height: 100%;
   border-radius: 9999px;
   overflow: visible;
-  background: transparent;
+  background: rgba(255,255,255,0.72);
   border: 1px solid rgb(255 255 255 / 52%);
   box-shadow: none;
   --gx: 50%;
@@ -1270,4 +1302,24 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
   color: #fff;
   text-shadow: 0 1px 3px rgba(0,0,0,.4);
   pointer-events: none;
+}
+
+/* ── LQIP blur-up ──────────────────────────────────────────────────────
+ * Instagram-style progressive image loading: a tiny (~20px) base64
+ * placeholder paints instantly as a blurred CSS background-image behind
+ * the <img>. Once the full-resolution image decodes the browser
+ * transitions opacity from 0→1, creating a smooth blur-to-sharp reveal.
+ * The lqip-img class is applied on every feed-tile, detail-view and
+ * profile-grid <img> that has a corresponding lqip in the data model. */
+.lqip-img {
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Start fully transparent so only the background (blurry LQIP) shows */
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22, 0.85, 0.3, 1);
+}
+/* Explicit loaded state: add this class via JS onload for older browsers
+ * that don't reliably transition opacity on <img> src changes. */
+.lqip-img.lqip-loaded {
+  opacity: 1;
 }

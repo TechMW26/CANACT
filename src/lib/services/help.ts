@@ -4,6 +4,7 @@ import { HelpRequest, HelpStatus, HelpType } from '../types';
 import { pushNotification } from './notifications';
 import { sendPush, notifyHelpVicinity } from './sendPush';
 import { startOrGetThread, threadIdFor, sendChatMessage } from './chat';
+import { recordOnboardingSignal } from './onboarding';
 
 /** Recursively drop undefined fields — Firebase RTDB rejects them. */
 function stripUndefined<T>(value: T): T {
@@ -92,6 +93,7 @@ export async function acceptHelp(id: string, helper: { uid: string; name: string
   const helpSnap = await get(ref(db, `help/${id}`)); const help = helpSnap.val() as HelpRequest;
   await update(ref(db, `help/${id}/acceptedBy/${helper.uid}`), { name: helper.name, photoURL: helper.photoURL ?? null, at: Date.now() });
   await bumpStat(helper.uid, 'offered', 1);
+  await recordOnboardingSignal(helper.uid, 'offer-help');
   await pushNotification(help.uid, { kind: 'help', title: `${helper.name} offered to help`, body: help.text.slice(0, 80), data: { helpId: id } });
   sendPush({
     toUid: help.uid,

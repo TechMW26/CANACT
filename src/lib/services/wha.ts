@@ -1,6 +1,7 @@
 import { onValue, push, ref, remove, runTransaction, set, update, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { WhaPost } from '../types';
+import { recordOnboardingSignal } from './onboarding';
 
 function notify(receiverUid: string, title: string, body: string, url: string) {
   import('./sendPush').then(({ sendPush }) => {
@@ -19,11 +20,11 @@ export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'e
     ...input,
     id: node.key!,
     createdAt: Date.now(),
-    expiresAt: Date.now() + 24 * 3600 * 1000,
     reactions: { cool: 0, love: 0, wow: 0, sad: 0, angry: 0 },
   };
   await set(node, post);
   await set(ref(db, `userPosts/${input.uid}/${post.id}`), post.createdAt);
+  await recordOnboardingSignal(input.uid, 'create-post');
   return post;
 }
 
@@ -33,7 +34,9 @@ export function listenWhaFeed(cb: (items: WhaPost[]) => void) {
   const r = query(ref(db, 'wha'), orderByChild('createdAt'), limitToLast(60));
   return onValue(r, (snap) => {
     const out: WhaPost[] = [];
-    snap.forEach((c) => { const v = c.val() as WhaPost; if (v.expiresAt > Date.now()) out.push(v); });
+    // Posts remain part of the feed permanently. Map surfaces apply their
+    // own 24-hour discovery window from `createdAt`.
+    snap.forEach((c) => { const v = c.val() as WhaPost; if (v) out.push(v); });
     out.sort((a, b) => b.createdAt - a.createdAt);
     cb(out);
   });
@@ -116,12 +119,14 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
     const emoji = { cool: '😎', love: '❤️', wow: '😮', sad: '😢', angry: '😡' }[kind];
     notify(authorUid, `${emoji} Someone reacted to your post`, `Tap to see the reaction.`, `/post/${postId}`);
   }
+  if (cur !== kind) await recordOnboardingSignal(uid, 'engage-post');
 }
 
 export async function addComment(postId: string, uid: string, name: string, text: string) {
   const node = push(ref(db, `whaComments/${postId}`));
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
+  await recordOnboardingSignal(uid, 'engage-post');
 
   // T4 + notify the post author.
   try {

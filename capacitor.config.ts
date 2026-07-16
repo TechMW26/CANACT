@@ -31,10 +31,10 @@ const config: CapacitorConfig = {
       androidSplashResourceName: 'splash',
     },
     FirebaseAuthentication: {
-      // Native Google Sign-In is the only provider we use natively. Email-link
-      // and other flows continue to run through the web SDK in the WebView.
+      // Phone auth must be loaded natively so Android/iOS can use Firebase's
+      // device verification instead of browser reCAPTCHA inside the WebView.
       skipNativeAuth: false,
-      providers: ['google.com'],
+      providers: ['google.com', 'phone'],
     },
   },
 };

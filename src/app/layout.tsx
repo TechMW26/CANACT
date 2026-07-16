@@ -7,6 +7,8 @@ import EarlyPermissionsPrompt from '@/components/EarlyPermissionsPrompt';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import ViewportHeightManager from '@/components/ViewportHeightManager';
 import { GlassMorphismRuntime } from '@/components/GlassMorphismRuntime';
+import { LqipObserver } from '@/components/LqipObserver';
+import { PageViewTracker } from '@/components/PageViewTracker';
 
 export const metadata: Metadata = {
   title: 'Canact',
@@ -42,6 +44,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <EarlyPermissionsPrompt />
           <ServiceWorkerRegister />
+          <LqipObserver />
+          <PageViewTracker />
           <div className="mx-auto max-w-screen-md md:max-w-screen-lg">
             {children}
           </div>

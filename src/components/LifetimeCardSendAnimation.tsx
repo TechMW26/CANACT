@@ -39,7 +39,7 @@ export function LifetimeCardSendAnimation({
     const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
     const initialMailerY = Math.max(viewportHeight * .72, 520);
     const envelopeWidth = Math.min(Math.max(240, sourceRect.width), Math.max(240, viewportWidth - 32));
-    const envelopeHeight = sourceRect.height * (envelopeWidth / Math.max(sourceRect.width, 1));
+    const envelopeHeight = sourceRect.height * (envelopeWidth / Math.max(sourceRect.width, 1)) * 1.2;
     const sourceCenterX = sourceRect.left + sourceRect.width / 2;
     const sourceCenterY = sourceRect.top + sourceRect.height / 2;
     return {
@@ -200,8 +200,9 @@ export function LifetimeCardSendAnimation({
     gsap.set(cards, { xPercent: -50, yPercent: -50, x: sourceX, y: sourceY, scale: sourceScale, rotation: 0, opacity: 1, visibility: 'visible', force3D: true });
     gsap.set(cardBehind, { opacity: direction === 'receive' ? 0 : 1 });
     gsap.set(envelope, { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, force3D: true });
-    gsap.set(flap, { rotateX: 180, transformOrigin: 'top center', zIndex: 2, force3D: true });
-    gsap.set(groundShadow, { xPercent: -50, scaleX: .42, scaleY: .7, opacity: 0, force3D: true });
+    gsap.set(flap, { rotateX: 180, transformOrigin: 'top center', zIndex: 10, force3D: true });
+    // Position ground shadow below the envelope at its resting spot
+    gsap.set(groundShadow, { xPercent: -50, yPercent: -50, x: 0, y: geometry.envelopeHeight / 2 + 16, scaleX: .42, scaleY: .7, opacity: 0, force3D: true });
     gsap.set(speedTrails, { opacity: 0, scaleY: .4, y: 20, force3D: true });
     gsap.set(rays, { opacity: 0, scale: .35, rotation: -12, force3D: true });
     gsap.set(shine, { opacity: direction === 'receive' ? 1 : 0 });
@@ -211,6 +212,15 @@ export function LifetimeCardSendAnimation({
     const finishSendWhenComplete = () => {
       if (direction === 'send' && motionFinished && confettiFinished) onComplete();
     };
+
+    // Play card sound on animation start
+    if (direction === 'receive') {
+      const audioSrc = tone === 'lifetime' ? '/sounds/lifetime-card.mp3' : '/sounds/connection-card.mp3';
+      const audio = new Audio(audioSrc);
+      audio.volume = 0.7;
+      audio.play().catch(() => { /* user may not have interacted yet */ });
+    }
+
     const timeline = gsap.timeline({
       paused: true,
       defaults: { overwrite: 'auto' },

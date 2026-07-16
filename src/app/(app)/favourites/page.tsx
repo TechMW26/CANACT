@@ -23,7 +23,9 @@ import { toast } from '@/components/Toaster';
 import { RocketLaunchOverlay } from '@/components/RocketLaunchOverlay';
 import { listenWhaFeed } from '@/lib/services/wha';
 import { listenActiveStories } from '@/lib/services/stories';
-import type { StoryItem, WhaPost } from '@/lib/types';
+import { listenPollFeed } from '@/lib/services/poll';
+import { listenReels } from '@/lib/services/reels';
+import type { Poll, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import styles from './ExplorePage.module.css';
 
 type Tab = 'friends' | 'favourites' | 'requests';
@@ -42,6 +44,8 @@ export default function FavouritesPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [posts, setPosts] = useState<WhaPost[]>([]);
   const [stories, setStories] = useState<StoryItem[]>([]);
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [reels, setReels] = useState<ReelItem[]>([]);
   const [friends, setFriends] = useState<FriendEdge[]>([]);
   const [friendReqs, setFriendReqs] = useState<FriendEdge[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendProfile | null>>({});
@@ -59,6 +63,8 @@ export default function FavouritesPage() {
   useEffect(() => { if (user) return listenIncomingRequests(user.uid, setFriendReqs); }, [user?.uid]);
   useEffect(() => listenWhaFeed(setPosts), []);
   useEffect(() => listenActiveStories(setStories), []);
+  useEffect(() => listenPollFeed(setPolls), []);
+  useEffect(() => listenReels(setReels), []);
   useEffect(() => {
     document.documentElement.setAttribute('data-canact-fullscreen-page', 'true');
     return () => document.documentElement.removeAttribute('data-canact-fullscreen-page');
@@ -174,24 +180,50 @@ export default function FavouritesPage() {
       weight: 1 + Math.min(1.2, Math.max(0, (person.rating ?? 0) / 1000)),
       href: `/profile/${encodeURIComponent(person.uid)}`,
     }));
+    const isMapFresh = (createdAt: number) => Number.isFinite(createdAt) && now - createdAt <= 24 * 3600 * 1000;
     const postActivity: ExploreActivity[] = posts.flatMap((post) => {
+      if (!isMapFresh(post.createdAt)) return [];
       if (typeof post.lat !== 'number' || typeof post.lng !== 'number') return [];
       const reactionCount = Object.values(post.reactions ?? {}).reduce((sum, value) => sum + (value ?? 0), 0);
       const freshness = Math.max(.25, 1 - (now - post.createdAt) / (24 * 3600 * 1000));
-      return [{ id: `post-${post.id}`, kind: 'post' as const, lat: post.lat, lng: post.lng, weight: .9 + freshness + Math.min(1, reactionCount / 12), href: `/post/${post.id}` }];
+      const thumbUrl = post.mediaPosters?.[0] || post.mediaUrls?.[0] || undefined;
+      const isVideo = thumbUrl ? /\.(mp4|mov|webm|mkv)/i.test(thumbUrl) : false;
+      return [{
+        id: `post-${post.id}`,
+        kind: 'post' as const,
+        lat: post.lat,
+        lng: post.lng,
+        weight: .9 + freshness + Math.min(1, reactionCount / 12),
+        href: `/post/${post.id}`,
+        authorUid: post.uid,
+        authorName: post.authorName,
+        label: post.text || 'Post',
+        createdAt: post.createdAt,
+        thumbUrl: isVideo ? undefined : thumbUrl,
+        color: '#1f6b55',  // brand green for regular posts
+      }];
     });
     const seenStoryAuthors = new Set<string>();
     const storyActivity: ExploreActivity[] = stories.flatMap((story) => {
+      if (!isMapFresh(story.createdAt)) return [];
       if (seenStoryAuthors.has(story.uid)) return [];
       const person = personByUid.get(story.uid);
       const lat = typeof story.lat === 'number' ? story.lat : person?.lat;
       const lng = typeof story.lng === 'number' ? story.lng : person?.lng;
       if (typeof lat !== 'number' || typeof lng !== 'number') return [];
       seenStoryAuthors.add(story.uid);
-      return [{ id: `story-${story.id}`, kind: 'story' as const, lat, lng, weight: 1.25, href: '/feed' }];
+      return [{ id: `story-${story.id}`, kind: 'story' as const, lat, lng, weight: 1.25, href: '/feed', authorUid: story.uid, authorName: story.authorName, label: story.caption || 'Story', createdAt: story.createdAt, thumbUrl: story.mediaUrl }];
     });
-    return [...peopleActivity, ...postActivity, ...storyActivity];
-  }, [friendPeople, favouritePeople, posts, stories]);
+    const pollActivity: ExploreActivity[] = polls.flatMap((poll) => {
+      if (!isMapFresh(poll.createdAt) || typeof poll.lat !== 'number' || typeof poll.lng !== 'number') return [];
+      return [{ id: `poll-${poll.id}`, kind: 'poll' as const, lat: poll.lat, lng: poll.lng, weight: 1.1, href: `/poll/${poll.id}`, authorUid: poll.uid, authorName: poll.authorName, label: poll.question, createdAt: poll.createdAt, thumbUrl: poll.photoURL, color: '#5f7fce' }];
+    });
+    const reelActivity: ExploreActivity[] = reels.flatMap((reel) => {
+      if (!isMapFresh(reel.createdAt) || typeof reel.lat !== 'number' || typeof reel.lng !== 'number') return [];
+      return [{ id: `reel-${reel.id}`, kind: 'reel' as const, lat: reel.lat, lng: reel.lng, weight: 1.15, href: `/reel/${reel.id}`, authorUid: reel.uid, authorName: reel.authorName, label: reel.caption || 'Reel', createdAt: reel.createdAt, thumbUrl: reel.posterUrl, color: '#8c62b7' }];
+    });
+    return [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
+  }, [friendPeople, favouritePeople, posts, stories, polls, reels]);
   if (!user) return null;
 
   // Map view renders outside the transformed container so position:fixed works correctly.
@@ -219,6 +251,7 @@ export default function FavouritesPage() {
           try { const r = await setAttribute(person.uid, user.uid, attr); if (!r.ok) toast(`You gave ${ATTR_LABELS[attr]} · available again in ${Math.ceil((r.waitMs ?? 0) / 3_600_000)}h`, 'error'); else toast(`${ATTR_LABELS[attr]} updated`, 'success'); }
           catch (error: any) { toast(error?.message ?? 'Could not update attribute', 'error'); }
         }}
+        myPhotoURL={profile?.photoURL}
       />
     );
   }
@@ -272,6 +305,7 @@ function ExploreMapSurface({
   onSeeAll,
   onVote,
   onAttr,
+  myPhotoURL,
 }: {
   firstName: string;
   people: PeoplePerson[];
@@ -288,6 +322,7 @@ function ExploreMapSurface({
   onSeeAll: () => void;
   onVote: (person: PeoplePerson, kind: 'like' | 'dislike') => Promise<void> | void;
   onAttr: (person: PeoplePerson, attr: AttrKey) => Promise<void> | void;
+  myPhotoURL?: string | null;
 }) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -318,6 +353,7 @@ function ExploreMapSurface({
         people={people}
         currentLocation={currentLocation}
         activities={activities}
+        myPhotoURL={myPhotoURL}
       />
       <div className={styles.mapTopFade} aria-hidden="true" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }} />
 
@@ -327,7 +363,7 @@ function ExploreMapSurface({
         style={{ opacity: sheetExpanded ? 0 : 1, pointerEvents: sheetExpanded ? 'none' : 'auto', transition: 'opacity .3s ease' }}
       >
         <small>Hey {firstName} <span aria-hidden="true">👋</span></small>
-        <span>Explore <strong>Canact</strong><br />near you</span>
+        <span>Explore <strong>Canactors</strong><br />near you</span>
       </button>
 
       <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-blur="0" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.14" className={styles.legend} aria-label="Map legend" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }}>
@@ -339,6 +375,7 @@ function ExploreMapSurface({
       {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}><span>Enable location to center the map around you.</span></div> : null}
 
       <aside
+        data-onboarding="people-nearby"
         data-liquid-glass="surface"
         data-liquid-radius="30"
         data-liquid-blur="0"

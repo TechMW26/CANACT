@@ -1,22 +1,21 @@
 'use client';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getDatabase, Database } from 'firebase/database';
-import { getAuth, GoogleAuthProvider, browserLocalPersistence, indexedDBLocalPersistence, type Auth } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, indexedDBLocalPersistence, type Auth } from 'firebase/auth';
 
 // authDomain controls where Google sign-in is served from. We prefer the
 // CURRENT origin (e.g. canact.vercel.app) so popups/redirects stay on the same
 // domain as the app — eliminating third-party cookie / iframe storage problems
 // that cause sessions to silently drop after sign-in. The /__/auth/* requests
 // the SDK makes are proxied by next.config.js back to the real Firebase host.
-const browserAuthDomain =
-  typeof window !== 'undefined' && window.location?.host
-    ? window.location.host
-    : undefined;
+const currentHost = typeof window !== 'undefined' ? window.location?.host : undefined;
+const isLocalHost = !!currentHost && /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(currentHost);
+const browserAuthDomain = currentHost && !isLocalHost ? currentHost : undefined;
 
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain:
-    browserAuthDomain ??
+    (isLocalHost ? 'canact-94ad6.firebaseapp.com' : browserAuthDomain) ??
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ??
     'canact-94ad6.firebaseapp.com',
   databaseURL:
@@ -46,12 +45,3 @@ export function getFirebaseAuth(): Auth {
   });
   return _auth;
 }
-
-let _googleProvider: GoogleAuthProvider | null = null;
-export function getGoogleProvider(): GoogleAuthProvider {
-  if (_googleProvider) return _googleProvider;
-  _googleProvider = new GoogleAuthProvider();
-  _googleProvider.setCustomParameters({ prompt: 'select_account' });
-  return _googleProvider;
-}
-

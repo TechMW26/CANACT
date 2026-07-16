@@ -10,140 +10,100 @@ import { Card } from '@/components/Card';
 import { Brand } from '@/components/Brand';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
-import { BarChart3, Bell, Camera, CloudUpload, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil } from '@/components/icons';
+import { BarChart3, Bell, Camera, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil, TrendingUp, Navigation, Zap } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
 
-type BackupItem = {
-  id: string;
-  name: string;
-  size: number;
-  contentType: string;
-  createdAt: number;
-  access: 'public' | 'private';
-  downloadPath: string;
-};
+// ── Heatzones types ──
 
-type BackupUser = {
-  uid: string;
-  user: {
-    uid: string;
-    fullName: string;
-    email: string | null;
-    mobile: string | null;
-    city: string | null;
-    country: string | null;
-    photoURL: string | null;
-    createdAt: number | null;
-    profileComplete: boolean | null;
-    profileVerified: boolean | null;
-    rating: number | null;
-    ratingCount: number | null;
-  };
-  itemCount: number;
-  totalBytes: number;
-  latestBackupAt: number;
-  items: BackupItem[];
-};
-
-type BackupResponse = {
+type HeatzoneResponse = {
   ok: boolean;
   reason?: string;
   fetchedAt?: number;
-  totals?: { users: number; usersWithBackups: number; files: number; bytes: number };
-  users?: BackupUser[];
+  totals?: { pageViews: number; featureClicks: number; uniquePages: number };
+  pageLeaderboard?: Array<{ pageId: string; views: number }>;
+  pageHeatmaps?: Array<{ pageId: string; views: number; jumps: Array<{ from: string; count: number; pct: number }> }>;
+  featureLeaderboard?: Record<string, Array<{ featureId: string; clicks: number }>>;
 };
 
-type AdminView = 'overview' | 'backups' | 'users' | 'analytics' | 'navigation';
-type BackupItemWithOwner = BackupItem & { owner: BackupUser };
+type AdminView = 'overview' | 'users' | 'heatzones' | 'navigation';
 
 const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Icon: LucideIcon }> = [
   { id: 'overview', label: 'Overview', description: 'Command center', Icon: ShieldAlert },
-  { id: 'backups', label: 'User backups', description: 'Files by account', Icon: CloudUpload },
   { id: 'users', label: 'Users', description: 'Profiles and status', Icon: Users },
-  { id: 'analytics', label: 'Analytics', description: 'Storage and growth', Icon: BarChart3 },
+  { id: 'heatzones', label: 'Heatzones', description: 'Page & feature analytics', Icon: TrendingUp },
   { id: 'navigation', label: 'Navigation', description: 'App navbar config', Icon: Compass },
 ];
 
 export default function AdminDashboardPage() {
   const { user, loading } = useAuth();
   const [activeView, setActiveView] = useState<AdminView>('overview');
-  const [data, setData] = useState<BackupResponse | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [heatData, setHeatData] = useState<HeatzoneResponse | null>(null);
+  const [heatBusy, setHeatBusy] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedUid, setSelectedUid] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedPage, setSelectedPage] = useState<string | null>(null);
 
-  const refresh = async () => {
-    setBusy(true);
+  // ── Users live listener (kept from original) ──
+  const [usersSnapshot, setUsersSnapshot] = useState<Record<string, any> | null>(null);
+  useEffect(() => {
+    return onValue(dbRef(db, 'users'), (snap) => setUsersSnapshot(snap.val() ?? {}));
+  }, []);
+
+  const fetchHeatzones = async () => {
+    setHeatBusy(true);
     try {
       const token = await getFirebaseAuth().currentUser?.getIdToken();
       if (!token) throw new Error('Not signed in');
-      const res = await fetch('/api/admin/backups', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      const json = (await res.json()) as BackupResponse;
-      if (!res.ok || !json.ok) throw new Error(json.reason || 'Could not load admin data');
-      setData(json);
-      setSelectedUid((current) => current ?? json.users?.[0]?.uid ?? null);
+      const res = await fetch('/api/admin/heatzones', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const json = (await res.json()) as HeatzoneResponse;
+      if (!res.ok || !json.ok) throw new Error(json.reason || 'Could not load heatzones');
+      setHeatData(json);
+      setSelectedPage((current) => current ?? json.pageLeaderboard?.[0]?.pageId ?? null);
     } catch (error: any) {
-      setData({ ok: false, reason: error?.message ?? 'Could not load admin data' });
+      setHeatData({ ok: false, reason: error?.message ?? 'Could not load heatzones' });
     } finally {
-      setBusy(false);
+      setHeatBusy(false);
     }
   };
 
   useEffect(() => {
     if (loading) return;
-    if (!user) {
-      window.location.replace('/welcome');
-      return;
-    }
-    refresh();
+    if (!user) { window.location.replace('/welcome'); return; }
+    fetchHeatzones();
   }, [loading, user?.uid]);
 
-  const users = data?.users ?? [];
-  const totals = data?.totals ?? { users: users.length, usersWithBackups: 0, files: 0, bytes: 0 };
+  // Derive user stats from RTDB snapshot
+  const userList = useMemo(() => {
+    if (!usersSnapshot) return [];
+    return Object.entries(usersSnapshot).map(([uid, val]: [string, any]) => ({
+      uid,
+      fullName: val?.fullName || 'Unknown',
+      email: val?.email || null,
+      mobile: val?.mobile || null,
+      city: val?.city || null,
+      country: val?.country || null,
+      photoURL: val?.photoURL || null,
+      createdAt: val?.createdAt || null,
+      profileVerified: !!val?.profileVerified,
+      profileComplete: !!(val?.fullName && val?.dateOfBirth),
+      rating: val?.rating ?? null,
+      ratingCount: val?.ratingCount ?? null,
+      canactScore: val?.canactScore ?? null,
+    }));
+  }, [usersSnapshot]);
+
   const filteredUsers = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((row) => {
-      const haystack = [row.user.fullName, row.user.email, row.user.mobile, row.uid, row.user.city, row.user.country]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+    if (!needle) return userList;
+    return userList.filter((row) => {
+      const haystack = [row.fullName, row.email, row.mobile, row.uid, row.city, row.country].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(needle);
     });
-  }, [query, users]);
-  const selected = filteredUsers.find((row) => row.uid === selectedUid) ?? filteredUsers[0] ?? users[0] ?? null;
-  const allItems = useMemo<BackupItemWithOwner[]>(() => {
-    return users.flatMap((owner) => owner.items.map((item) => ({ ...item, owner })));
-  }, [users]);
-  const analytics = useMemo(() => buildAnalytics(users, allItems), [users, allItems]);
+  }, [query, userList]);
 
-  const downloadItem = async (owner: BackupUser, item: BackupItem) => {
-    setDownloadingId(item.id);
-    try {
-      const token = await getFirebaseAuth().currentUser?.getIdToken();
-      if (!token) throw new Error('Not signed in');
-      const res = await fetch(item.downloadPath, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('Download failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = item.name || `${owner.uid}-${item.id}`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    } catch (error: any) {
-      toast(error?.message ?? 'Download failed', 'error');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  const heatTotals = heatData?.totals ?? { pageViews: 0, featureClicks: 0, uniquePages: 0 };
+  const selectedHeatmap = heatData?.pageHeatmaps?.find((p) => p.pageId === selectedPage);
+  const selectedFeatures = heatData?.featureLeaderboard?.[selectedPage ?? ''] ?? [];
 
   if (loading) return <Splash message="Loading admin..." />;
   if (!user) return null;
@@ -209,46 +169,40 @@ export default function AdminDashboardPage() {
                     className="h-11 w-full rounded-lg border border-[#E0D4CA] bg-white pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                   />
                 </label>
-                <Button onClick={refresh} loading={busy}>Refresh</Button>
+                <Button onClick={fetchHeatzones} loading={heatBusy}>Refresh</Button>
               </div>
             </div>
           </header>
 
           <div className="space-y-6 px-4 py-5 sm:px-6 lg:px-8">
-            {data?.ok === false && (
+            {heatData?.ok === false && activeView === 'heatzones' && (
               <Card className="rounded-lg border-brand-light bg-brand-light/60 text-brand">
-                <div className="font-extrabold">Admin access unavailable</div>
-                <p className="mt-1 text-sm">{data.reason === 'unauthorized' ? 'Your signed-in account is not configured as an admin.' : data.reason}</p>
+                <div className="font-extrabold">Heatzones unavailable</div>
+                <p className="mt-1 text-sm">{heatData.reason === 'unauthorized' ? 'Your signed-in account is not configured as an admin.' : heatData.reason}</p>
               </Card>
             )}
 
             {activeView === 'overview' && (
               <OverviewPage
-                totals={totals}
-                users={users}
-                latestItems={analytics.latestItems}
-                storageLeaders={analytics.storageLeaders}
-                completionRate={analytics.completionRate}
-                backupCoverage={analytics.backupCoverage}
-                verifiedRate={analytics.verifiedRate}
-                onOpenBackups={() => setActiveView('backups')}
+                userCount={userList.length}
+                heatTotals={heatTotals}
+                onOpenUsers={() => setActiveView('users')}
+                onOpenHeatzones={() => setActiveView('heatzones')}
               />
             )}
 
-            {activeView === 'backups' && (
-              <BackupsPage
-                users={filteredUsers}
-                selected={selected}
-                selectedUid={selectedUid}
-                setSelectedUid={setSelectedUid}
-                downloadItem={downloadItem}
-                downloadingId={downloadingId}
+            {activeView === 'users' && <UsersPage users={filteredUsers} />}
+
+            {activeView === 'heatzones' && (
+              <HeatzonesPage
+                data={heatData}
+                busy={heatBusy}
+                selectedPage={selectedPage}
+                setSelectedPage={setSelectedPage}
+                selectedHeatmap={selectedHeatmap}
+                selectedFeatures={selectedFeatures}
               />
             )}
-
-            {activeView === 'users' && <UsersPage users={filteredUsers} setActiveView={setActiveView} setSelectedUid={setSelectedUid} />}
-
-            {activeView === 'analytics' && <AnalyticsPage analytics={analytics} totals={totals} />}
 
             {activeView === 'navigation' && <NavbarConfigPage />}
           </div>
@@ -258,177 +212,87 @@ export default function AdminDashboardPage() {
   );
 }
 
+// ── OVERVIEW PAGE ──
+
 function OverviewPage({
-  totals,
-  users,
-  latestItems,
-  storageLeaders,
-  completionRate,
-  backupCoverage,
-  verifiedRate,
-  onOpenBackups,
+  userCount,
+  heatTotals,
+  onOpenUsers,
+  onOpenHeatzones,
 }: {
-  totals: NonNullable<BackupResponse['totals']>;
-  users: BackupUser[];
-  latestItems: BackupItemWithOwner[];
-  storageLeaders: BackupUser[];
-  completionRate: number;
-  backupCoverage: number;
-  verifiedRate: number;
-  onOpenBackups: () => void;
+  userCount: number;
+  heatTotals: { pageViews: number; featureClicks: number; uniquePages: number };
+  onOpenUsers: () => void;
+  onOpenHeatzones: () => void;
 }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total users" value={totals.users} detail={`${formatPercent(completionRate)} profile completion`} Icon={Users} />
-        <MetricCard label="Backup users" value={totals.usersWithBackups} detail={`${formatPercent(backupCoverage)} of accounts`} Icon={CloudUpload} />
-        <MetricCard label="Backed up files" value={totals.files} detail={`${latestItems.length} recent files indexed`} Icon={Clock} />
-        <MetricCard label="Storage tracked" value={formatBytes(totals.bytes)} detail={`${formatPercent(verifiedRate)} verified users`} Icon={BarChart3} />
+        <MetricCard label="Total users" value={userCount} detail="Registered accounts" Icon={Users} />
+        <MetricCard label="Page views" value={heatTotals.pageViews} detail="Total tracked visits" Icon={TrendingUp} />
+        <MetricCard label="Feature clicks" value={heatTotals.featureClicks} detail="Total interactions" Icon={Zap} />
+        <MetricCard label="Active pages" value={heatTotals.uniquePages} detail="Pages with traffic" Icon={Navigation} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+      <div className="grid gap-6 md:grid-cols-2">
         <Card className="rounded-lg bg-white">
-          <SectionHeader title="Recent backup activity" eyebrow="Operations" action={<Button variant="outline" size="sm" onClick={onOpenBackups}>Open backups</Button>} />
-          <div className="mt-4 divide-y divide-line">
-            {latestItems.slice(0, 8).map((item) => (
-              <div key={`${item.owner.uid}-${item.id}`} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_110px_150px] sm:items-center">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold text-ink">{item.name}</div>
-                  <div className="truncate text-xs text-ink/60">{item.owner.user.fullName} / {item.contentType}</div>
-                </div>
-                <div className="text-xs font-bold text-ink/60">{formatBytes(item.size)}</div>
-                <div className="text-xs text-ink/60">{formatDate(item.createdAt)}</div>
-              </div>
-            ))}
-            {!latestItems.length && <EmptyState title="No backups yet" detail="Backed up media will appear here as users opt in and upload." />}
+          <SectionHeader title="User directory" eyebrow="Manage" action={<Button variant="outline" size="sm" onClick={onOpenUsers}>View users</Button>} />
+          <p className="mt-2 text-sm text-ink/60">Browse, search, and view all registered user profiles and their account status.</p>
+          <div className="mt-4 rounded-lg bg-brand-light/50 p-4 text-center">
+            <div className="text-4xl font-extrabold text-brand">{userCount}</div>
+            <div className="mt-1 text-xs font-bold uppercase tracking-wide text-brand/60">Registered users</div>
           </div>
         </Card>
 
         <Card className="rounded-lg bg-[#201A17] text-white">
-          <SectionHeader title="Account readiness" eyebrow="Health" dark />
-          <div className="mt-5 space-y-4">
-            <ProgressRow label="Backup coverage" value={backupCoverage} dark />
-            <ProgressRow label="Profile completion" value={completionRate} dark />
-            <ProgressRow label="Verified profiles" value={verifiedRate} dark />
-          </div>
-          <div className="mt-6 rounded-lg border border-white/10 bg-white/5 p-4">
-            <div className="text-xs font-bold uppercase text-white/50">Audience</div>
-            <div className="mt-1 text-3xl font-extrabold">{users.length}</div>
-            <div className="text-sm text-white/60">registered accounts tracked in the admin console</div>
+          <SectionHeader title="Heatzones" eyebrow="Analytics" dark action={<Button variant="outline" size="sm" onClick={onOpenHeatzones} className="!border-white/30 !text-white/80 hover:!bg-white/10">Open heatzones</Button>} />
+          <p className="mt-2 text-sm text-white/60">Page-level and feature-level heatmaps showing where users go and what they tap.</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-white/10 p-3 text-center">
+              <div className="text-2xl font-extrabold">{heatTotals.pageViews}</div>
+              <div className="text-[10px] font-bold uppercase text-white/50">Page views</div>
+            </div>
+            <div className="rounded-lg bg-white/10 p-3 text-center">
+              <div className="text-2xl font-extrabold">{heatTotals.featureClicks}</div>
+              <div className="text-[10px] font-bold uppercase text-white/50">Feature clicks</div>
+            </div>
           </div>
         </Card>
       </div>
-
-      <Card className="rounded-lg bg-white">
-        <SectionHeader title="Top storage accounts" eyebrow="Storage" />
-        <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-          {storageLeaders.map((row) => (
-            <div key={row.uid} className="rounded-lg border border-line p-3">
-              <div className="flex items-center gap-3">
-                <Avatar src={row.user.photoURL} name={row.user.fullName} size={40} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-extrabold text-ink">{row.user.fullName}</div>
-                  <div className="truncate text-xs text-ink/60">{row.user.email || row.uid}</div>
-                </div>
-                <div className="text-right text-sm font-extrabold text-brand">{formatBytes(row.totalBytes)}</div>
-              </div>
-            </div>
-          ))}
-          {!storageLeaders.length && <EmptyState title="No storage leaders" detail="Users with backups will be ranked here." />}
-        </div>
-      </Card>
     </div>
   );
 }
 
-function BackupsPage({
-  users,
-  selected,
-  selectedUid,
-  setSelectedUid,
-  downloadItem,
-  downloadingId,
-}: {
-  users: BackupUser[];
-  selected: BackupUser | null;
-  selectedUid: string | null;
-  setSelectedUid: (uid: string) => void;
-  downloadItem: (owner: BackupUser, item: BackupItem) => void;
-  downloadingId: string | null;
-}) {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[440px_minmax(0,1fr)]">
-      <Card className="rounded-lg bg-white">
-        <SectionHeader title="User backup data" eyebrow="Files" />
-        <div className="mt-4 grid max-h-[calc(var(--canact-viewport-height)-220px)] grid-cols-1 gap-2 overflow-auto pr-1 md:grid-cols-2 xl:grid-cols-1">
-          {users.map((row) => {
-            const active = (selected?.uid ?? selectedUid) === row.uid;
-            return <UserBackupCard key={row.uid} row={row} active={active} onClick={() => setSelectedUid(row.uid)} />;
-          })}
-          {!users.length && <EmptyState title="No users found" detail="Try another search term." />}
-        </div>
-      </Card>
+// ── USERS PAGE ──
 
-      <Card className="min-h-[640px] rounded-lg bg-white">
-        {selected ? (
-          <SelectedUserPanel selected={selected} downloadItem={downloadItem} downloadingId={downloadingId} />
-        ) : (
-          <EmptyState title="Select a user" detail="Choose any user to view profile data and backed up files." />
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function UsersPage({
-  users,
-  setActiveView,
-  setSelectedUid,
-}: {
-  users: BackupUser[];
-  setActiveView: (view: AdminView) => void;
-  setSelectedUid: (uid: string) => void;
-}) {
+function UsersPage({ users }: { users: Array<{ uid: string; fullName: string; email: string | null; mobile: string | null; city: string | null; country: string | null; photoURL: string | null; createdAt: number | null; profileVerified: boolean; profileComplete: boolean; rating: number | null; ratingCount: number | null }> }) {
   return (
     <Card className="rounded-lg bg-white">
       <SectionHeader title="Users" eyebrow="Directory" />
       <div className="mt-4 overflow-x-auto">
         <div className="min-w-[860px] divide-y divide-line">
-          <div className="grid grid-cols-[minmax(240px,1fr)_150px_150px_120px_130px_110px] gap-3 px-3 py-2 text-xs font-extrabold uppercase text-ink/50">
+          <div className="grid grid-cols-[minmax(240px,1fr)_150px_150px_120px_130px] gap-3 px-3 py-2 text-xs font-extrabold uppercase text-ink/50">
             <span>User</span>
             <span>Phone</span>
             <span>Location</span>
             <span>Status</span>
-            <span>Backup</span>
-            <span className="text-right">Action</span>
+            <span>Rating</span>
           </div>
           {users.map((row) => (
-            <div key={row.uid} className="grid grid-cols-[minmax(240px,1fr)_150px_150px_120px_130px_110px] items-center gap-3 px-3 py-3 text-sm">
+            <div key={row.uid} className="grid grid-cols-[minmax(240px,1fr)_150px_150px_120px_130px] items-center gap-3 px-3 py-3 text-sm">
               <div className="flex min-w-0 items-center gap-3">
-                <Avatar src={row.user.photoURL} name={row.user.fullName} size={38} />
+                <Avatar src={row.photoURL} name={row.fullName} size={38} />
                 <div className="min-w-0">
-                  <div className="truncate font-extrabold text-ink">{row.user.fullName}</div>
-                  <div className="truncate text-xs text-ink/60">{row.user.email || row.uid}</div>
+                  <div className="truncate font-extrabold text-ink">{row.fullName}</div>
+                  <div className="truncate text-xs text-ink/60">{row.email || row.uid}</div>
                 </div>
               </div>
-              <span className="truncate text-ink/60">{row.user.mobile || 'Not set'}</span>
-              <span className="truncate text-ink/60">{[row.user.city, row.user.country].filter(Boolean).join(', ') || 'Not set'}</span>
-              <StatusPill tone={row.user.profileVerified ? 'green' : row.user.profileComplete ? 'amber' : 'gray'}>
-                {row.user.profileVerified ? 'Verified' : row.user.profileComplete ? 'Complete' : 'Incomplete'}
+              <span className="truncate text-ink/60">{row.mobile || 'Not set'}</span>
+              <span className="truncate text-ink/60">{[row.city, row.country].filter(Boolean).join(', ') || 'Not set'}</span>
+              <StatusPill tone={row.profileVerified ? 'green' : row.profileComplete ? 'amber' : 'gray'}>
+                {row.profileVerified ? 'Verified' : row.profileComplete ? 'Complete' : 'Incomplete'}
               </StatusPill>
-              <span className="font-bold text-ink/70">{row.itemCount} files / {formatBytes(row.totalBytes)}</span>
-              <div className="text-right">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedUid(row.uid);
-                    setActiveView('backups');
-                  }}
-                >
-                  View
-                </Button>
-              </div>
+              <span className="font-bold text-ink/70">{row.rating !== null ? `${row.rating.toFixed(1)} (${row.ratingCount ?? 0})` : 'Not rated'}</span>
             </div>
           ))}
           {!users.length && <EmptyState title="No users found" detail="Try another search term." />}
@@ -438,148 +302,120 @@ function UsersPage({
   );
 }
 
-function AnalyticsPage({ analytics, totals }: { analytics: ReturnType<typeof buildAnalytics>; totals: NonNullable<BackupResponse['totals']> }) {
+// ── HEATZONES PAGE ──
+
+function HeatzonesPage({
+  data,
+  busy,
+  selectedPage,
+  setSelectedPage,
+  selectedHeatmap,
+  selectedFeatures,
+}: {
+  data: HeatzoneResponse | null;
+  busy: boolean;
+  selectedPage: string | null;
+  setSelectedPage: (page: string) => void;
+  selectedHeatmap: HeatzoneResponse['pageHeatmaps'] extends Array<infer T> ? T | undefined : any;
+  selectedFeatures: Array<{ featureId: string; clicks: number }>;
+}) {
+  const leaderboard = data?.pageLeaderboard ?? [];
+  const heatmaps = data?.pageHeatmaps ?? [];
+  const totalViews = data?.totals?.pageViews ?? 0;
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard label="Backup coverage" value={formatPercent(analytics.backupCoverage)} detail={`${totals.usersWithBackups} of ${totals.users} users`} Icon={CloudUpload} />
-        <MetricCard label="Avg files per backup user" value={analytics.averageFilesPerBackupUser.toFixed(1)} detail={`${totals.files} files total`} Icon={BarChart3} />
-        <MetricCard label="Avg storage per backup user" value={formatBytes(analytics.averageBytesPerBackupUser)} detail={`${formatBytes(totals.bytes)} total`} Icon={Users} />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
+      {/* Page Leaderboard */}
+      <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card className="rounded-lg bg-white">
-          <SectionHeader title="Storage by user" eyebrow="Analytics" />
-          <div className="mt-5 space-y-4">
-            {analytics.storageLeaders.map((row) => (
-              <ProgressRow key={row.uid} label={row.user.fullName} sublabel={formatBytes(row.totalBytes)} value={percentOf(row.totalBytes, analytics.maxUserBytes)} />
-            ))}
-            {!analytics.storageLeaders.length && <EmptyState title="No storage data" detail="Backup uploads will create this chart." />}
+          <SectionHeader title="Page leaderboard" eyebrow={`${leaderboard.length} pages`} />
+          <div className="mt-4 max-h-[calc(var(--canact-viewport-height)-280px)] space-y-1 overflow-auto pr-1">
+            {leaderboard.map((page, i) => {
+              const active = selectedPage === page.pageId;
+              const pct = totalViews ? Math.round((page.views / totalViews) * 100) : 0;
+              return (
+                <button
+                  key={page.pageId}
+                  type="button"
+                  onClick={() => setSelectedPage(page.pageId)}
+                  className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:border-brand/40'}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-extrabold text-ink">{page.pageId}</div>
+                      <div className="text-xs text-ink/60">{page.views} views · {pct}%</div>
+                    </div>
+                    <span className="shrink-0 text-lg font-extrabold text-brand">#{i + 1}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#EFE5DE]">
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              );
+            })}
+            {!leaderboard.length && <EmptyState title={busy ? 'Loading...' : 'No page view data yet'} detail="Page visits will appear here as users navigate the app." />}
           </div>
         </Card>
 
-        <Card className="rounded-lg bg-white">
-          <SectionHeader title="File type mix" eyebrow="Analytics" />
-          <div className="mt-5 space-y-4">
-            {analytics.fileTypes.map((row) => (
-              <ProgressRow key={row.label} label={row.label} sublabel={`${row.count} files`} value={percentOf(row.count, analytics.maxTypeCount)} />
-            ))}
-            {!analytics.fileTypes.length && <EmptyState title="No file types yet" detail="Photo and video backup types will be grouped here." />}
-          </div>
-        </Card>
-
-        <Card className="rounded-lg bg-white xl:col-span-2">
-          <SectionHeader title="Geography" eyebrow="Users" />
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {analytics.countryCounts.map((row) => (
-              <div key={row.label} className="rounded-lg border border-line p-4">
-                <div className="flex items-center gap-2 text-xs font-extrabold uppercase text-ink/50">
-                  <Globe2 className="h-4 w-4" />
-                  Country
+        {/* Per-page heatmap */}
+        <div className="space-y-6">
+          {selectedHeatmap ? (
+            <>
+              {/* Jumps heatmap */}
+              <Card className="rounded-lg bg-white">
+                <SectionHeader title={`${selectedHeatmap.pageId} · User jumps`} eyebrow={`${selectedHeatmap.views} total views`} />
+                <div className="mt-4 space-y-3">
+                  {selectedHeatmap.jumps.map((jump: { from: string; count: number; pct: number }) => (
+                    <div key={jump.from}>
+                      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate font-bold text-ink/70">← {jump.from}</span>
+                        <span className="shrink-0 text-xs font-extrabold text-ink/50">{jump.count} · {jump.pct}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[#EFE5DE]">
+                        <div className="h-full rounded-full bg-amber-400/70" style={{ width: `${Math.max(jump.pct, 2)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                  {!selectedHeatmap.jumps.length && <p className="text-sm text-ink/50">No jump data for this page yet.</p>}
                 </div>
-                <div className="mt-2 text-lg font-extrabold text-ink">{row.label}</div>
-                <div className="text-sm text-ink/60">{row.count} users</div>
-              </div>
-            ))}
-            {!analytics.countryCounts.length && <EmptyState title="No locations yet" detail="User profile countries will appear here." />}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
+              </Card>
 
-function SelectedUserPanel({ selected, downloadItem, downloadingId }: { selected: BackupUser; downloadItem: (owner: BackupUser, item: BackupItem) => void; downloadingId: string | null }) {
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-5">
-        <div className="flex min-w-0 items-center gap-4">
-          <Avatar src={selected.user.photoURL} name={selected.user.fullName} size={64} />
-          <div className="min-w-0">
-            <h2 className="truncate text-3xl font-extrabold text-ink">{selected.user.fullName}</h2>
-            <p className="truncate text-sm text-ink/60">{selected.user.email || selected.uid}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <StatusPill tone={selected.user.profileVerified ? 'green' : 'amber'}>{selected.user.profileVerified ? 'Verified' : 'Unverified'}</StatusPill>
-              <StatusPill tone={selected.itemCount ? 'green' : 'gray'}>{selected.itemCount ? 'Backup active' : 'No backups'}</StatusPill>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-line p-3 text-right">
-          <div className="text-2xl font-extrabold text-ink">{selected.itemCount}</div>
-          <div className="text-xs text-ink/60">files / {formatBytes(selected.totalBytes)}</div>
-          <div className="text-xs text-ink/60">Latest {formatDate(selected.latestBackupAt)}</div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        <ProfileField icon={Mail} label="Email" value={selected.user.email || 'Not set'} />
-        <ProfileField icon={Phone} label="Mobile" value={selected.user.mobile || 'Not set'} />
-        <ProfileField icon={MapPin} label="Location" value={[selected.user.city, selected.user.country].filter(Boolean).join(', ') || 'Not set'} />
-        <ProfileField icon={Clock} label="Joined" value={formatDate(selected.user.createdAt ?? 0)} />
-        <ProfileField icon={Users} label="UID" value={selected.uid} />
-        <ProfileField icon={ShieldAlert} label="Profile" value={selected.user.profileComplete ? 'Complete' : 'Incomplete'} />
-        <ProfileField icon={BarChart3} label="Rating" value={selected.user.rating === null ? 'Not rated' : `${selected.user.rating.toFixed(1)} (${selected.user.ratingCount ?? 0})`} />
-        <ProfileField icon={CloudUpload} label="Storage" value={formatBytes(selected.totalBytes)} />
-      </div>
-
-      <BackupFileTable selected={selected} downloadItem={downloadItem} downloadingId={downloadingId} />
-    </div>
-  );
-}
-
-function BackupFileTable({ selected, downloadItem, downloadingId }: { selected: BackupUser; downloadItem: (owner: BackupUser, item: BackupItem) => void; downloadingId: string | null }) {
-  return (
-    <div>
-      <SectionHeader title="Backed up files" eyebrow="Private storage" />
-      <div className="mt-3 overflow-x-auto rounded-lg border border-line">
-        <div className="min-w-[720px] divide-y divide-line bg-white">
-          <div className="grid grid-cols-[minmax(260px,1fr)_110px_160px_120px] gap-3 px-3 py-2 text-xs font-extrabold uppercase text-ink/50">
-            <span>File</span>
-            <span>Size</span>
-            <span>Uploaded</span>
-            <span className="text-right">Action</span>
-          </div>
-          {selected.items.map((item) => (
-            <div key={item.id} className="grid grid-cols-[minmax(260px,1fr)_110px_160px_120px] items-center gap-3 px-3 py-3 text-sm">
-              <div className="min-w-0">
-                <div className="truncate font-bold text-ink">{item.name}</div>
-                <div className="truncate text-xs text-ink/50">{item.contentType}</div>
-              </div>
-              <div className="text-xs text-ink/60">{formatBytes(item.size)}</div>
-              <div className="text-xs text-ink/60">{formatDate(item.createdAt)}</div>
-              <div className="text-right">
-                <Button size="sm" variant="outline" loading={downloadingId === item.id} onClick={() => downloadItem(selected, item)}>Download</Button>
-              </div>
-            </div>
-          ))}
-          {!selected.items.length && <EmptyState title="No files backed up" detail="This user has not backed up any files yet." />}
+              {/* Feature leaderboard */}
+              <Card className="rounded-lg bg-[#201A17] text-white">
+                <SectionHeader title={`${selectedHeatmap.pageId} · Features`} eyebrow={`${selectedFeatures.length} features`} dark />
+                <div className="mt-4 space-y-3">
+                  {selectedFeatures.map((feat: { featureId: string; clicks: number }, i: number) => {
+                    const maxClicks = selectedFeatures[0]?.clicks ?? 1;
+                    const pct = Math.round((feat.clicks / maxClicks) * 100);
+                    return (
+                      <div key={feat.featureId}>
+                        <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                          <span className="truncate font-bold text-white/75">{feat.featureId}</span>
+                          <span className="shrink-0 text-xs font-extrabold text-white/50">{feat.clicks} clicks</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(pct, 3)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!selectedFeatures.length && <p className="text-sm text-white/50">No feature interactions recorded for this page yet.</p>}
+                </div>
+              </Card>
+            </>
+          ) : (
+            <Card className="rounded-lg bg-white">
+              <EmptyState title="Select a page" detail="Choose a page from the leaderboard to view its heatmap and feature breakdown." />
+            </Card>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function UserBackupCard({ row, active, onClick }: { row: BackupUser; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-brand bg-brand-light' : 'border-line bg-white hover:border-brand/40 hover:bg-[#FAF8F2]'}`}
-    >
-      <div className="flex items-start gap-3">
-        <Avatar src={row.user.photoURL} name={row.user.fullName} size={42} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-extrabold text-ink">{row.user.fullName}</div>
-          <div className="truncate text-xs text-ink/60">{row.user.email || row.uid}</div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <StatusPill tone={row.itemCount ? 'green' : 'gray'}>{row.itemCount} files</StatusPill>
-            <StatusPill tone="gray">{formatBytes(row.totalBytes)}</StatusPill>
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
+// ── SHARED COMPONENTS ──
 
 function MetricCard({ label, value, detail, Icon }: { label: string; value: string | number; detail: string; Icon: LucideIcon }) {
   return (
@@ -653,52 +489,6 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
       <div className="mt-1 text-xs text-ink/60">{detail}</div>
     </div>
   );
-}
-
-function buildAnalytics(users: BackupUser[], allItems: BackupItemWithOwner[]) {
-  const latestItems = [...allItems].sort((a, b) => b.createdAt - a.createdAt);
-  const storageLeaders = [...users]
-    .filter((row) => row.totalBytes > 0 || row.itemCount > 0)
-    .sort((a, b) => b.totalBytes - a.totalBytes)
-    .slice(0, 8);
-  const maxUserBytes = Math.max(...storageLeaders.map((row) => row.totalBytes), 0);
-  const usersWithBackups = users.filter((row) => row.itemCount > 0).length;
-  const completedUsers = users.filter((row) => row.user.profileComplete).length;
-  const verifiedUsers = users.filter((row) => row.user.profileVerified).length;
-  const fileTypeCounts = countBy(allItems, (item) => item.contentType.split('/')[0] || 'unknown');
-  const countryCounts = countBy(users, (row) => row.user.country || 'Not set');
-  const fileTypes = Object.entries(fileTypeCounts)
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
-  return {
-    latestItems,
-    storageLeaders,
-    maxUserBytes,
-    fileTypes,
-    maxTypeCount: Math.max(...fileTypes.map((row) => row.count), 0),
-    countryCounts: Object.entries(countryCounts)
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 12),
-    backupCoverage: percentOf(usersWithBackups, users.length),
-    completionRate: percentOf(completedUsers, users.length),
-    verifiedRate: percentOf(verifiedUsers, users.length),
-    averageFilesPerBackupUser: usersWithBackups ? allItems.length / usersWithBackups : 0,
-    averageBytesPerBackupUser: usersWithBackups ? users.reduce((sum, row) => sum + row.totalBytes, 0) / usersWithBackups : 0,
-  };
-}
-
-function countBy<T>(items: T[], getKey: (item: T) => string): Record<string, number> {
-  return items.reduce<Record<string, number>>((acc, item) => {
-    const key = getKey(item).trim() || 'Unknown';
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
-}
-
-function percentOf(value: number, total: number): number {
-  if (!total) return 0;
-  return Math.round((value / total) * 100);
 }
 
 function clampPercent(value: number): number {

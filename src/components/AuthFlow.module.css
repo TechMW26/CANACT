@@ -1,5 +1,7 @@
 .page {
-  min-height: var(--canact-viewport-height);
+  min-height: max(var(--canact-viewport-height), 100dvh);
+  display: grid;
+  place-items: center;
   background: #faf8f2;
   color: #112822;
   position: relative;
@@ -241,12 +243,23 @@
 
 .registerPage {
   width: min(100%, 560px);
-  min-height: var(--canact-viewport-height);
+  min-height: max(var(--canact-viewport-height), 100dvh);
   margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 38px calc(126px + env(safe-area-inset-bottom));
+  padding: max(18px, env(safe-area-inset-top)) 38px;
   background: #faf8f2;
   text-align: center;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.authCenter {
+  width: 100%;
+  margin-block: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .registerBrand { width: 150px; height: 170px; margin: -10px auto 0; object-fit: contain; }
@@ -260,11 +273,41 @@
 .registerOrbitCompact { height: min(32vh, 292px); }
 .eyebrow { margin: -12px 0 18px; color: #287156; font-weight: 650; }
 .registerPage .progressWrap { margin-top: 0; gap: 13px; }
+.registerPage .registerBody > .progressWrap { margin-top: 24px; }
 .registerBody { margin-top: 28px; }
 .registerBody .title { font-size: clamp(1.9rem, 7.4vw, 2.35rem); margin-top: 0; }
 .registerBody .subtitle { font-size: 1rem; }
 .registerFields { display: grid; gap: 16px; margin-top: 30px; }
 .registerFields .field { margin: 0; }
+
+.otpGrid {
+  width: min(100%, 344px);
+  margin: 32px auto 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(5px, 2vw, 8px);
+}
+
+.otpInput {
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  border: 2px solid #e5e7e6;
+  border-radius: 14px;
+  outline: none;
+  background: #fff;
+  color: #112822;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.otpInput[data-filled="true"] { border-color: #1f6b55; }
+.otpInput[data-error="true"] { border-color: #ef4444; }
+.otpInput:focus { border-color: #1f6b55; box-shadow: 0 0 0 3px rgb(31 107 85 / 12%); }
+.otpError { margin-top: 12px; color: #ef4444; font-size: .875rem; font-weight: 600; }
+.otpResend { margin-top: 24px; color: rgb(17 40 34 / 54%); font-size: .875rem; }
+.otpResend button { color: #1f6b55; font-weight: 700; }
 
 .registerScreen_name .registerBody,
 .registerScreen_gender .registerBody,

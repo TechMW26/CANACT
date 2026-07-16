@@ -108,12 +108,19 @@ export default function PollCreatePage() {
           if (!openEnded && options.filter(Boolean).length < 2) return toast('Add at least two options', 'error');
           setBusy(true);
           try {
-            const photoURL = photo ? (await uploadMedia(photo.file, { kind: 'poll', uid: user.uid })).url : undefined;
+            let photoURL = '';
+            let pollLqip: string | undefined;
+            if (photo) {
+              const result = await uploadMedia(photo.file, { kind: 'poll', uid: user.uid, maxWidth: 800, maxHeight: 600, quality: 0.82 });
+              photoURL = result.url;
+              pollLqip = result.lqip;
+            }
             const created = await createPoll({
               uid: user.uid,
               authorName: profile.fullName,
               question: q.trim(),
               photoURL,
+              lqip: pollLqip,
               options: openEnded ? [] : options.filter(Boolean),
               openEnded,
               endsAt: Date.now() + hours * 3600 * 1000,

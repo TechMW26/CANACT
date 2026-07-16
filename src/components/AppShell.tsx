@@ -101,7 +101,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { total: inboxTotal } = useInboxBadges();
   const routeProfileHero = false;
   const routeFadeChrome = !!pathname && pathname === '/favourites';
-  const routeFeed = pathname === '/feed';
   const routeLeaderboard = pathname === '/leaderboard';
   const headerOverContent = pathname === '/' || pathname === '/favourites' || !!pathname?.startsWith('/profile');
   const profileChrome = routeProfileHero;
@@ -196,6 +195,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     setGlobalDetailItem(item);
     router.replace('/feed', { scroll: false });
   }, [pathname, router]);
+
+  useEffect(() => {
+    const openDetailPopup = (event: Event) => {
+      const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+      const item = detailPopupItemFromPath(path ?? null);
+      if (!item) return;
+      event.preventDefault();
+      haptic('subtle');
+      setGlobalDetailItem(item);
+    };
+    window.addEventListener('canact:open-detail', openDetailPopup);
+    return () => window.removeEventListener('canact:open-detail', openDetailPopup);
+  }, []);
 
   useEffect(() => {
     const openDetailPopupFromLink = (event: MouseEvent) => {
@@ -349,7 +361,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
         <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderTopInset} />
         <div
-          className={`canact-col ${routeFeed ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
+          className={`canact-col ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 92px)` : '92px' } : undefined}
         ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
@@ -409,6 +421,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </div>{/* /canact-bottom-group */}
       <button
         type="button"
+        data-canact-create-button
         aria-label={radialCreateOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={radialCreateOpen}
         aria-controls="canact-radial-create-menu"
@@ -665,6 +678,11 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [sidebarEntered, setSidebarEntered] = useState(false);
   const [islandOpen, setIslandOpen] = useState(false);
   const islandRef = useRef<HTMLDivElement | null>(null);
+  const islandButtonRef = useRef<HTMLButtonElement | null>(null);
+  const islandPortalRef = useRef<HTMLDivElement | null>(null);
+  const [islandAnchor, setIslandAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [islandPortalMounted, setIslandPortalMounted] = useState(false);
+  const [islandPortalClosing, setIslandPortalClosing] = useState(false);
   const [liveScore, setLiveScore] = useState(0);
   const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
   const prevScoreRef = useRef(0);
@@ -741,7 +759,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   // Close island on outside click
   useEffect(() => {
     if (!islandOpen) return;
-    const close = (e: PointerEvent) => { if (e.target instanceof Node && !islandRef.current?.contains(e.target)) setIslandOpen(false); };
+    const close = (e: PointerEvent) => {
+      if (!(e.target instanceof Node)) return;
+      if (!islandRef.current?.contains(e.target) && !islandPortalRef.current?.contains(e.target)) setIslandOpen(false);
+    };
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setIslandOpen(false); };
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', esc);
@@ -774,8 +795,50 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const scoreSummary = liveSummary ?? calculateCanactScore(profile);
   const scorePercent = Math.max(4, Math.min(100, (liveScore / Math.max(scoreSummary.max, 1)) * 100));
 
+  useLayoutEffect(() => {
+    if (islandExpanded) {
+      setIslandPortalMounted(true);
+      setIslandPortalClosing(false);
+    } else if (islandPortalMounted) {
+      setIslandPortalClosing(true);
+    }
+  }, [islandExpanded, islandPortalMounted]);
+
+  useLayoutEffect(() => {
+    if (!islandPortalMounted) return;
+
+    let frame = 0;
+    const updateAnchor = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const trigger = islandButtonRef.current;
+        if (!trigger) return;
+        const rect = trigger.getBoundingClientRect();
+        const popupWidth = Math.min(310, window.innerWidth - 24);
+        const halfWidth = popupWidth / 2;
+        const left = Math.min(window.innerWidth - 12 - halfWidth, Math.max(12 + halfWidth, rect.left + rect.width / 2));
+        const top = Math.min(window.innerHeight - 170, Math.max(12, rect.top));
+        setIslandAnchor((current) => current?.top === top && current.left === left ? current : { top, left });
+      });
+    };
+
+    updateAnchor();
+    window.addEventListener('resize', updateAnchor);
+    window.addEventListener('scroll', updateAnchor, true);
+    window.visualViewport?.addEventListener('resize', updateAnchor);
+    window.visualViewport?.addEventListener('scroll', updateAnchor);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateAnchor);
+      window.removeEventListener('scroll', updateAnchor, true);
+      window.visualViewport?.removeEventListener('resize', updateAnchor);
+      window.visualViewport?.removeEventListener('scroll', updateAnchor);
+    };
+  }, [islandPortalMounted]);
+
   return (
-    <header
+    <>
+      <header
       data-canact-header
       className={`canact-header-shell fixed z-30 lg:hidden ${headerChromeClass}`}
       style={{ top: topInset ? `calc(${topInset} + var(--canact-header-offset, 0px))` : 'var(--canact-header-offset, 0px)' }}
@@ -783,9 +846,9 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
       <div
         data-liquid-glass="surface"
         data-liquid-radius="999"
-        data-liquid-blur="0"
+        data-liquid-blur="18"
         data-liquid-tint="250,248,242"
-        data-liquid-tint-opacity="0.26"
+        data-liquid-tint-opacity="0.48"
         className="canact-figma-header"
       >
         <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
@@ -795,41 +858,26 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           <div
             ref={islandRef}
             className="canact-score-island-shell"
-            data-expanded={islandExpanded}
+            data-expanded="false"
             data-home-hidden={home && homePillOpacity <= 0.01}
             style={{ opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity }}
           >
             <button
+              ref={islandButtonRef}
               type="button"
               onClick={() => { haptic('subtle'); setIslandOpen((v) => !v); }}
+              data-canact-score-target
               aria-label={`Canact score ${liveScore}`}
               aria-expanded={islandExpanded}
               tabIndex={home && homePillOpacity <= 0.01 ? -1 : undefined}
               className="canact-score-island"
-              data-expanded={islandExpanded}
+              data-expanded="false"
               data-tone={islandMoment?.tone ?? 'neutral'}
             >
-              <span className="canact-score-island-compact" aria-hidden={islandExpanded}>
+              <span className="canact-score-island-compact">
                 <i />
                 <strong>{liveScore}</strong>
                 <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
-              </span>
-              <span className="canact-score-island-panel" aria-hidden={!islandExpanded}>
-                <span className="canact-score-island-event">
-                  <i>{islandMoment?.icon ?? <Activity size={16} />}</i>
-                  <span><small>{islandMoment ? 'Live update' : 'Canact score'}</small><strong>{islandMoment?.label ?? `${scoreSummary.club} club`}</strong></span>
-                </span>
-                <span className="canact-score-island-value"><b>{liveScore}</b>{scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)}</em> : null}</span>
-                <span className="canact-score-island-meter"><i style={{ width: `${scorePercent}%` }} /></span>
-                <span className="canact-score-island-meta"><small>{scoreSummary.club} club</small><small>{attrs.reduce((sum, attr) => sum + attr.count, 0)} attribute signals</small></span>
-                <span className="canact-score-island-attributes">
-                  {attrs.map((attr) => (
-                    <span key={attr.key} data-positive={attr.positive}>
-                      <small>{attr.label}</small>
-                      <b>{attr.count}</b>
-                    </span>
-                  ))}
-                </span>
               </span>
             </button>
           </div>
@@ -922,7 +970,57 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           </div>
         </div>
       </div>
-    </header>
+      </header>
+      {islandPortalMounted && islandAnchor && createPortal(
+        <div
+          ref={islandPortalRef}
+          className="canact-score-island-portal"
+          data-closing={islandPortalClosing}
+          style={{ top: islandAnchor.top, left: islandAnchor.left }}
+          role="dialog"
+          aria-label="Canact score details"
+          onAnimationEnd={(event) => {
+            if (event.target !== event.currentTarget || !islandPortalClosing) return;
+            setIslandPortalMounted(false);
+            setIslandPortalClosing(false);
+            setIslandAnchor(null);
+          }}
+        >
+          <button
+            type="button"
+            className="canact-score-island"
+            data-expanded="true"
+            data-tone={islandMoment?.tone ?? 'neutral'}
+            aria-label="Close Canact score details"
+            onClick={() => {
+              haptic('subtle');
+              setIslandOpen(false);
+              setIslandMoment(null);
+              if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+            }}
+          >
+            <span className="canact-score-island-panel">
+              <span className="canact-score-island-event">
+                <i>{islandMoment?.icon ?? <Activity size={16} />}</i>
+                <span><small>{islandMoment ? 'Live update' : 'Canact score'}</small><strong>{islandMoment?.label ?? `${scoreSummary.club} club`}</strong></span>
+              </span>
+              <span className="canact-score-island-value"><b>{liveScore}</b>{scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)}</em> : null}</span>
+              <span className="canact-score-island-meter"><i style={{ width: `${scorePercent}%` }} /></span>
+              <span className="canact-score-island-meta"><small>{scoreSummary.club} club</small><small>{attrs.reduce((sum, attr) => sum + attr.count, 0)} attribute signals</small></span>
+              <span className="canact-score-island-attributes">
+                {attrs.map((attr) => (
+                  <span key={attr.key} data-positive={attr.positive}>
+                    <small>{attr.label}</small>
+                    <b>{attr.count}</b>
+                  </span>
+                ))}
+              </span>
+            </span>
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

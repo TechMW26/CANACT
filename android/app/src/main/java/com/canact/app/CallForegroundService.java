@@ -256,7 +256,7 @@ public class CallForegroundService extends Service {
         ensureChannel();
 
         return new NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification)
             .setContentTitle("Incoming call")
             .setContentText(fromName + " is calling")
             .setPriority(NotificationCompat.PRIORITY_MAX)

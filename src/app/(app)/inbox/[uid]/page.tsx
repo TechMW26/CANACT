@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, Fragment } from 'react';
 import { Avatar } from '@/components/Avatar';
-import { ArrowLeft, Send, X, CornerUpLeft, Trash2, Pencil, Copy, Phone, Video } from '@/components/icons';
+import { ArrowLeft, Send, X, CornerUpLeft, Trash2, Pencil, Copy, Phone, Video, Mic } from '@/components/icons';
 import { Sheet } from '@/components/Sheet';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { get, ref } from 'firebase/database';
 import { haptic } from '@/lib/haptics';
+import { uploadMedia } from '@/lib/uploadMedia';
 import {
   deleteChatMessage,
   editChatMessage,
@@ -45,6 +46,17 @@ export default function InboxThreadPage() {
   const [editText, setEditText] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState<ChatAttachment | null>(null);
   const [callKind, setCallKind] = useState<CallKind | null>(null);
+  // Voice recording state
+  const [recording, setRecording] = useState(false);
+  const [recordingSec, setRecordingSec] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Press-and-hold voice recording
+  const micBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [holdingMic, setHoldingMic] = useState(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdStartRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -183,6 +195,79 @@ export default function InboxThreadPage() {
     setActionMsg(null);
   }
 
+  // ── Voice recording (WhatsApp-style press-and-hold) ──
+
+  const handleMicDown = (e: React.PointerEvent) => {
+    if (!canSend || busy) return;
+    e.preventDefault();
+    micBtnRef.current?.setPointerCapture(e.pointerId);
+    setHoldingMic(true);
+    holdStartRef.current = Date.now();
+    // Start recording after 200ms hold (to avoid accidental taps)
+    holdTimerRef.current = setTimeout(() => startRecording(), 200);
+  };
+
+  const handleMicUp = (e: React.PointerEvent) => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    setHoldingMic(false);
+    const heldMs = Date.now() - holdStartRef.current;
+    if (recording) {
+      // Stop and send if held long enough (> 1s total)
+      stopRecording(heldMs > 1000);
+    }
+  };
+
+  async function startRecording() {
+    if (!canSend) { toast('Cannot send messages yet', 'error'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+      setRecordingSec(0);
+      recordTimerRef.current = setInterval(() => setRecordingSec((s) => s + 1), 1000);
+    } catch {
+      toast('Microphone access denied', 'error');
+    }
+  }
+
+  async function stopRecording(send: boolean) {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    return new Promise<void>((resolve) => {
+      recorder.onstop = async () => {
+        recorder.stream.getTracks().forEach((t) => t.stop());
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+        setRecording(false);
+        mediaRecorderRef.current = null;
+        if (send && audioChunksRef.current.length > 0 && thread && user) {
+          setBusy(true);
+          try {
+            const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+            const { url } = await uploadMedia(blob, { kind: 'post', uid: user.uid });
+            const voiceAttachment: ChatAttachment = { kind: 'voice', audioUrl: url, durationSec: recordingSec };
+            await sendChatMessage(thread.id, user.uid, otherUid, '', { attachment: voiceAttachment });
+          } catch (err: any) {
+            toast(err?.message || 'Failed to send voice message', 'error');
+          } finally { setBusy(false); }
+        }
+        resolve();
+      };
+      recorder.stop();
+    });
+  }
+
+  function cancelRecording() {
+    stopRecording(false);
+  }
+
+  function sendRecording() {
+    stopRecording(true);
+  }
+
   return (
     <div className="flex h-[100dvh] flex-col bg-candy">
       {/* Header — floating pill */}
@@ -318,26 +403,50 @@ export default function InboxThreadPage() {
           </div>
         )}
         <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
-          <div className="flex-1 flex items-center rounded-[100px] border border-[#D4D9D2] bg-white/90 px-1 py-1 shadow-[0_2px_12px_rgba(0,0,0,.04)] backdrop-blur">
-            <textarea
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={canSend ? 'Message…' : 'Awaiting acceptance'}
+          {recording ? (
+            <div className="flex-1 flex items-center gap-3 rounded-[100px] border-2 border-red-400 bg-red-50/90 px-4 py-2.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+              <span className="flex-1 text-sm font-extrabold text-red-600">Recording {recordingSec}s — release to send</span>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center rounded-[100px] border border-[#D4D9D2] bg-white/90 px-1 py-1 shadow-[0_2px_12px_rgba(0,0,0,.04)] backdrop-blur">
+              <textarea
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder={canSend ? 'Message…' : 'Awaiting acceptance'}
+                disabled={!canSend || busy}
+                rows={1}
+                className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] font-medium text-ink outline-none placeholder:text-ink/30"
+              />
+            </div>
+          )}
+          {text.trim() || pendingAttachment ? (
+            <button
+              type="submit"
               disabled={!canSend || busy}
-              rows={1}
-              className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] font-medium text-ink outline-none placeholder:text-ink/30"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={!canSend || busy || (!text.trim() && !pendingAttachment)}
-            aria-label="Send"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1f6b55] text-white shadow-[0_4px_14px_rgba(31,107,85,.3)] disabled:opacity-30 transition-transform active:scale-95"
-          >
-            <Send size={18} />
-          </button>
+              aria-label="Send"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1f6b55] text-white shadow-[0_4px_14px_rgba(31,107,85,.3)] disabled:opacity-30 transition-transform active:scale-95"
+            >
+              <Send size={18} />
+            </button>
+          ) : (
+            <button
+              ref={micBtnRef}
+              type="button"
+              disabled={!canSend || busy}
+              onPointerDown={handleMicDown}
+              onPointerUp={handleMicUp}
+              onPointerLeave={handleMicUp}
+              aria-label="Hold to record voice message"
+              className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all active:scale-95 ${
+                holdingMic ? 'bg-red-500 text-white shadow-[0_4px_14px_rgba(239,68,68,.35)] scale-110' : 'bg-brand text-white shadow-[0_4px_14px_rgba(31,107,85,.2)]'
+              }`}
+            >
+              <Mic size={20} />
+            </button>
+          )}
         </form>
       </div>
 

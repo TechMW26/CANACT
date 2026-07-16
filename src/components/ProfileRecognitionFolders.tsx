@@ -146,18 +146,6 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   const [closingConnection, setClosingConnection] = useState(false);
   const [sendingConnection, setSendingConnection] = useState<CardKey | null>(null);
   const connectionSwipe = useCardSwipe();
-  const [directConnectionKind, setDirectConnectionKind] = useState<CardKey | null>(null);
-  const [directConnectionSending, setDirectConnectionSending] = useState(false);
-  const [directGiftKind, setDirectGiftKind] = useState<LifetimeCardKind | null>(null);
-  const [directGiftCustomText, setDirectGiftCustomText] = useState('');
-  const [directGiftPhase, setDirectGiftPhase] = useState<'message' | 'confirm'>('message');
-  const [directGiftSending, setDirectGiftSending] = useState(false);
-  const [directSendAnimation, setDirectSendAnimation] = useState<
-    | { family: 'connection'; kind: CardKey; rect: SendAnimationRect }
-    | { family: 'lifetime'; kind: LifetimeCardKind; customText: string; rect: SendAnimationRect }
-    | null
-  >(null);
-  const directAnimationResolveRef = useRef<(() => void) | null>(null);
   const [attributePopupOpen, setAttributePopupOpen] = useState(false);
   const [myAttrVotes, setMyAttrVotes] = useState<Record<string, { at: number }>>({});
   const [attributeBusy, setAttributeBusy] = useState<AttrKey | null>(null);
@@ -205,6 +193,13 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   const connectionCards = CARD_KEYS.map((key) => ({ key }));
   const connectionCount = receivedConnections.length;
   const giftSourceKey = receivedGift ? `received:${receivedGift.id}` : giftKind ? `inventory:${giftKind}` : null;
+  const profileRecipient = useMemo<GiftCandidate>(() => ({
+    uid: profile.uid,
+    name: profile.fullName || profile.firstName || 'Canact user',
+    photoURL: profile.photoURL,
+    city: profile.city,
+    categories: [],
+  }), [profile.city, profile.firstName, profile.fullName, profile.photoURL, profile.uid]);
   const attributeCooldown = (key: AttrKey): number => {
     const v = myAttrVotes[key];
     if (!v?.at) return 0;
@@ -219,21 +214,6 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   }, [myAttrVotes, clock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const givenAttrKeys = useMemo(() => new Set(Object.keys(myAttrVotes)), [myAttrVotes]);
-
-  const finishDirectAnimation = useCallback(() => {
-    directAnimationResolveRef.current?.();
-    directAnimationResolveRef.current = null;
-    setDirectSendAnimation(null);
-  }, []);
-
-  useEffect(() => () => directAnimationResolveRef.current?.(), []);
-
-  function startDirectAnimation(animation: NonNullable<typeof directSendAnimation>) {
-    return new Promise<void>((resolve) => {
-      directAnimationResolveRef.current = resolve;
-      setDirectSendAnimation(animation);
-    });
-  }
 
   function openFolder(next: Folder) {
     setPickerOpen(false); setClosingGift(false); setGiftKind(null); setReceivedGift(null);
@@ -299,7 +279,6 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   }
 
   function openGiftPicker(kind: LifetimeCardKind, gift: LifetimeCardGift | null = null) {
-    if (!isSelf) { setDirectGiftKind(kind); setDirectGiftPhase(kind === 'custom' ? 'message' : 'confirm'); return; }
     setClosingGift(false);
     setReceivedGift(gift);
     setGiftKind(kind);
@@ -328,7 +307,6 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   }
 
   function openConnectionPicker(kind: CardKey) {
-    if (!isSelf) { setDirectConnectionKind(kind); return; }
     setClosingConnection(false);
     setConnectionKind(kind);
     setConnectionPickerOpen(true);
@@ -353,51 +331,9 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     setConnectionMode('send');
   }
 
-  async function sendDirectConnection() {
-    if (!directConnectionKind || !user || directConnectionSending) return;
-    const kind = directConnectionKind;
-    const animationDone = startDirectAnimation({ family: 'connection', kind, rect: getSendAnimationRect(`connection:${kind}`) });
-    setDirectConnectionSending(true);
-    setSendingConnection(kind);
-    try {
-      await Promise.all([sendConnectionCard(profile.uid, kind), animationDone]);
-      toast(`${CARD_LABELS[kind]} sent to ${profile.firstName || profile.fullName}`, 'success');
-      setDirectConnectionKind(null);
-    } catch (error: any) {
-      finishDirectAnimation();
-      toast(error?.message || 'Could not send connection card', 'error');
-    } finally {
-      setDirectConnectionSending(false);
-      setSendingConnection(null);
-    }
-  }
-
-  async function sendDirectGift() {
-    if (!directGiftKind || !user || directGiftSending) return;
-    if (directGiftKind === 'custom' && !directGiftCustomText.trim()) return;
-    const kind = directGiftKind;
-    const customText = directGiftCustomText.trim();
-    const animationDone = startDirectAnimation({ family: 'lifetime', kind, customText, rect: getSendAnimationRect(`inventory:${kind}`) });
-    setDirectGiftSending(true);
-    setSendingSource(`inventory:${kind}`);
-    try {
-      await Promise.all([sendLifetimeCard(profile.uid, kind, customText || undefined), animationDone]);
-      toast(`${LIFETIME_CARD_LABELS[kind]} given to ${profile.firstName || profile.fullName}`, 'success');
-      setDirectGiftKind(null);
-      setDirectGiftCustomText('');
-      setDirectGiftPhase('message');
-    } catch (error: any) {
-      finishDirectAnimation();
-      toast(error?.message || 'Could not send lifetime card', 'error');
-    } finally {
-      setDirectGiftSending(false);
-      setSendingSource(null);
-    }
-  }
-
   return (
     <>
-      <div className={styles.folderGrid}>
+      <div className={styles.folderGrid} data-onboarding="recognition-folders">
         <button type="button" className={styles.folderCard} aria-label="Open connection cards" onClick={() => openFolder('connections')}>
           <ConnectionCardsFolderSVG count={connectionCount} />
         </button>
@@ -437,7 +373,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
               <CardGallery items={connectionCards} index={slide} setIndex={setSlide} empty="No connection cards available." onDragY={connectionSwipe.onDrag} render={(item) => (
                 <SendableConnectionCard
                   cardKey={item.key}
-                  active={(connectionPickerOpen && connectionKind === item.key) || directConnectionKind === item.key}
+                  active={connectionPickerOpen && connectionKind === item.key}
                   exiting={closingConnection && connectionKind === item.key}
                   sending={sendingConnection === item.key}
                   dragY={connectionSwipe.dragY}
@@ -468,7 +404,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
                 ) : <LifetimeCard card={gift} />
               )} />
             ) : (
-              <CardGallery items={rewardCards} index={slide} setIndex={setSlide} empty="All three lifetime cards have been given." onDragY={rewardSwipe.onDrag} render={(slot) => <RewardCard slot={slot} active={(pickerOpen && !receivedGift && giftKind === slot.kind) || directGiftKind === slot.kind} exiting={closingGift && !receivedGift && giftKind === slot.kind} sending={sendingSource === `inventory:${slot.kind}`} dragY={rewardSwipe.dragY} launchRef={rewardSwipe.launchRef} onGift={() => { if (slot.status === 'available') openGiftPicker(slot.kind); }} />} />
+              <CardGallery items={rewardCards} index={slide} setIndex={setSlide} empty="All three lifetime cards have been given." onDragY={rewardSwipe.onDrag} render={(slot) => <RewardCard slot={slot} active={pickerOpen && !receivedGift && giftKind === slot.kind} exiting={closingGift && !receivedGift && giftKind === slot.kind} sending={sendingSource === `inventory:${slot.kind}`} dragY={rewardSwipe.dragY} launchRef={rewardSwipe.launchRef} onGift={() => { if (slot.status === 'available') openGiftPicker(slot.kind); }} />} />
             )}
           </div>
         ) : null}
@@ -479,6 +415,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         kind={giftKind}
         sourceGift={receivedGift}
         profile={profile}
+        fixedRecipient={isSelf ? null : profileRecipient}
         onClose={closeGiftPicker}
         onExited={finishGiftClose}
         onSendingChange={(sending) => setSendingSource(sending ? giftSourceKey : null)}
@@ -489,6 +426,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         open={connectionPickerOpen}
         kind={connectionKind}
         profile={profile}
+        fixedRecipient={isSelf ? null : profileRecipient}
         onClose={closeConnectionPicker}
         onExited={finishConnectionClose}
         onSendingChange={(sending) => setSendingConnection(sending ? connectionKind : null)}
@@ -502,82 +440,6 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
           <AttributePickerGroup title="Concerns" items={negativeAttrs} selected={givenAttrKeys} isSelf={isSelf} disabled={!!attributeBusy} busy={attributeBusy} onPick={addAttribute} />
         </div>
       </Sheet>
-
-      {/* Direct send — connection card to profile owner (non-self profiles) */}
-      <Sheet open={directConnectionKind !== null} onClose={() => setDirectConnectionKind(null)} title="Send connection card" hideClose topmost>
-        {directConnectionKind && (
-          <div className={styles.picker}>
-            <div className={styles.connectionNote}>Connection cards celebrate a quality you genuinely experienced. This card will be sent to <strong>{profile.firstName || profile.fullName}</strong>.</div>
-            <div className="flex items-center gap-4 rounded-2xl bg-brand-light/40 p-4">
-              <Avatar src={profile.photoURL} name={profile.fullName} size={48} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-extrabold text-ink">{profile.fullName}</div>
-                <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-bold text-brand">{CARD_LABELS[directConnectionKind]}</div>
-              </div>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-ink/55">{CONNECTION_CARD_DESCRIPTIONS[directConnectionKind]}</p>
-            <button type="button" className={styles.sendButton} disabled={directConnectionSending} onClick={sendDirectConnection}>
-              {directConnectionSending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} Send to {profile.firstName || profile.fullName}
-            </button>
-          </div>
-        )}
-      </Sheet>
-
-      {/* Direct send — lifetime card to profile owner (non-self profiles) */}
-      <Sheet open={directGiftKind !== null} onClose={() => { setDirectGiftKind(null); setDirectGiftCustomText(''); setDirectGiftPhase('message'); }} title={directGiftKind === 'custom' && directGiftPhase === 'message' ? 'Write your card' : `Give ${directGiftKind ? LIFETIME_CARD_LABELS[directGiftKind] : 'card'}`} hideClose topmost>
-        {directGiftKind && (
-          <div className={styles.picker}>
-            <div className={styles.warning}>This lifetime card will be sent to <strong>{profile.firstName || profile.fullName}</strong>. Once given, it leaves your collection forever.</div>
-            {directGiftKind === 'custom' && directGiftPhase === 'message' ? (
-              <div className={styles.messageStep}>
-                <textarea className={styles.message} maxLength={140} value={directGiftCustomText} onChange={(e) => setDirectGiftCustomText(e.target.value)} placeholder="Write the words they should keep forever…" autoFocus />
-                <div className={styles.wordCount} data-invalid={(directGiftCustomText.trim() ? directGiftCustomText.trim().split(/\s+/).length : 0) > 24}><span>Keep it meaningful and concise.</span><strong>{(directGiftCustomText.trim() ? directGiftCustomText.trim().split(/\s+/).length : 0)}/24 words</strong></div>
-                <button type="button" className={styles.sendButton} disabled={!directGiftCustomText.trim() || (directGiftCustomText.trim().split(/\s+/).length > 24)} onClick={() => setDirectGiftPhase('confirm')}>Next <ChevronRight size={18} /></button>
-              </div>
-            ) : (
-              <>
-                {directGiftKind === 'custom' ? <button type="button" className={styles.editMessage} onClick={() => setDirectGiftPhase('message')}><ChevronLeft size={16} /> Edit message</button> : null}
-                <div className="flex items-center gap-4 rounded-2xl bg-brand-light/40 p-4">
-                  <Avatar src={profile.photoURL} name={profile.fullName} size={48} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-extrabold text-ink">{profile.fullName}</div>
-                    <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-bold text-brand">{LIFETIME_CARD_LABELS[directGiftKind]}</div>
-                  </div>
-                </div>
-                {directGiftKind === 'custom' && directGiftCustomText.trim() ? <p className="mt-3 rounded-xl bg-brand-light/40 px-3 py-2 text-sm italic text-ink/70">"{directGiftCustomText.trim()}"</p> : null}
-                <p className="mt-3 text-xs leading-relaxed text-ink/55">{CARD_DESCRIPTIONS[directGiftKind]}</p>
-                <button type="button" className={styles.sendButton} disabled={directGiftSending} onClick={sendDirectGift}>
-                  {directGiftSending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} Give to {profile.firstName || profile.fullName}
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </Sheet>
-
-      {directSendAnimation ? (
-        <LifetimeCardSendAnimation
-          sourceRect={directSendAnimation.rect}
-          tone={directSendAnimation.family}
-          onComplete={finishDirectAnimation}
-          ariaLabel={directSendAnimation.family === 'lifetime' ? 'Sending lifetime card' : 'Sending connection card'}
-          renderCard={(layerClassName, style) => directSendAnimation.family === 'connection' ? (
-            <article className={`${styles.card} ${styles.connectionCard} ${layerClassName}`} data-connection-kind={directSendAnimation.kind} style={style} aria-hidden="true">
-              <ConnectionCardContent cardKey={directSendAnimation.kind} eyebrow="Connection card" footer="Sending with appreciation" trailing={null} />
-            </article>
-          ) : (
-            <article className={`${styles.card} ${layerClassName}`} data-kind={directSendAnimation.kind} style={style} aria-hidden="true">
-              <span className={styles.cardIcon}><CardIcon kind={directSendAnimation.kind} /></span>
-              <div className={styles.cardCopy}>
-                <small>One of your three lifetime gifts</small>
-                <h3>{LIFETIME_CARD_LABELS[directSendAnimation.kind]}</h3>
-                <p>{directSendAnimation.kind === 'custom' && directSendAnimation.customText ? directSendAnimation.customText : CARD_DESCRIPTIONS[directSendAnimation.kind]}</p>
-              </div>
-              <div className={styles.giftHint}><span>Sending forever</span></div>
-            </article>
-          )}
-        />
-      ) : null}
 
       {launchLabel && launchKind ? <RocketLaunchOverlay label={launchLabel} kind={launchKind} onDone={() => { setLaunchLabel(null); setLaunchKind(null); }} /> : null}
     </>
@@ -924,7 +786,7 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
   );
 }
 
-function RecipientPicker({ open, kind, sourceGift, profile, onClose, onExited, onSendingChange, onSent }: { open: boolean; kind: LifetimeCardKind | null; sourceGift: LifetimeCardGift | null; profile: UserProfile; onClose: () => void; onExited: () => void; onSendingChange: (sending: boolean) => void; onSent: () => void }) {
+function RecipientPicker({ open, kind, sourceGift, profile, fixedRecipient, onClose, onExited, onSendingChange, onSent }: { open: boolean; kind: LifetimeCardKind | null; sourceGift: LifetimeCardGift | null; profile: UserProfile; fixedRecipient?: GiftCandidate | null; onClose: () => void; onExited: () => void; onSendingChange: (sending: boolean) => void; onSent: () => void }) {
   const [candidates, setCandidates] = useState<GiftCandidate[]>([]);
   const [filter, setFilter] = useState<CandidateFilter>('all');
   const [query, setQuery] = useState('');
@@ -940,9 +802,15 @@ function RecipientPicker({ open, kind, sourceGift, profile, onClose, onExited, o
     if (!open) { setSelected(null); setQuery(''); setFilter('all'); setCustomText(''); setPhase('people'); return; }
     setCustomText(sourceGift?.customText ?? '');
     setPhase(kind === 'custom' && !sourceGift ? 'message' : 'people');
+    if (fixedRecipient) {
+      setCandidates([fixedRecipient]);
+      setSelected(fixedRecipient);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     loadGiftCandidates(profile).then(setCandidates).catch(() => toast('Could not load people', 'error')).finally(() => setLoading(false));
-  }, [kind, open, profile, sourceGift?.customText, sourceGift?.id]);
+  }, [fixedRecipient, kind, open, profile, sourceGift?.customText, sourceGift?.id]);
 
   const wordCount = customText.trim() ? customText.trim().split(/\s+/).length : 0;
   const messageValid = wordCount > 0 && wordCount <= 24;
@@ -1003,8 +871,8 @@ function RecipientPicker({ open, kind, sourceGift, profile, onClose, onExited, o
           ) : (
             <>
               {kind === 'custom' && !sourceGift ? <button type="button" className={styles.editMessage} onClick={() => setPhase('message')}><ChevronLeft size={16} /> Edit message</button> : null}
-              <div className={styles.filters}>{FILTERS.map((item) => <button key={item.id} type="button" className={filter === item.id ? styles.activeFilter : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div>
-              <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label>
+              {!fixedRecipient ? <div className={styles.filters}>{FILTERS.map((item) => <button key={item.id} type="button" className={filter === item.id ? styles.activeFilter : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div> : null}
+              {!fixedRecipient ? <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label> : null}
               <div className={styles.people}>
                 {loading ? <div className={styles.empty}><Loader2 className="animate-spin" /></div> : visible.length ? visible.map((candidate, i) => (
                   <button key={`${candidate.uid}-${i}`} type="button" className={styles.person} data-selected={selected?.uid === candidate.uid} onClick={() => setSelected(candidate)}>
@@ -1041,7 +909,7 @@ function RecipientPicker({ open, kind, sourceGift, profile, onClose, onExited, o
   );
 }
 
-function ConnectionRecipientPicker({ open, kind, profile, onClose, onExited, onSendingChange, onSent }: { open: boolean; kind: CardKey | null; profile: UserProfile; onClose: () => void; onExited: () => void; onSendingChange: (sending: boolean) => void; onSent: () => void }) {
+function ConnectionRecipientPicker({ open, kind, profile, fixedRecipient, onClose, onExited, onSendingChange, onSent }: { open: boolean; kind: CardKey | null; profile: UserProfile; fixedRecipient?: GiftCandidate | null; onClose: () => void; onExited: () => void; onSendingChange: (sending: boolean) => void; onSent: () => void }) {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<GiftCandidate[]>([]);
   const [filter, setFilter] = useState<CandidateFilter>('all');
@@ -1054,9 +922,15 @@ function ConnectionRecipientPicker({ open, kind, profile, onClose, onExited, onS
 
   useEffect(() => {
     if (!open) { setSelected(null); setQuery(''); setFilter('all'); return; }
+    if (fixedRecipient) {
+      setCandidates([fixedRecipient]);
+      setSelected(fixedRecipient);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     loadGiftCandidates(profile).then(setCandidates).catch(() => toast('Could not load people', 'error')).finally(() => setLoading(false));
-  }, [kind, open, profile]);
+  }, [fixedRecipient, kind, open, profile]);
 
   const visible = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -1102,8 +976,8 @@ function ConnectionRecipientPicker({ open, kind, profile, onClose, onExited, onS
       <Sheet open={open} onClose={sending ? () => {} : onClose} onExited={onExited} title={kind ? `Send ${CARD_LABELS[kind]}` : 'Send connection card'} hideTitle hideClose topmost>
         <div className={`${styles.picker} ${kind ? styles.pickerWithCard : ''}`}>
           <div className={styles.connectionNote}>Connection cards celebrate a quality you genuinely experienced. Each card type can be sent once to the same person.</div>
-          <div className={styles.filters}>{FILTERS.map((item) => <button key={item.id} type="button" className={filter === item.id ? styles.activeFilter : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div>
-          <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label>
+          {!fixedRecipient ? <div className={styles.filters}>{FILTERS.map((item) => <button key={item.id} type="button" className={filter === item.id ? styles.activeFilter : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div> : null}
+          {!fixedRecipient ? <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label> : null}
           <div className={styles.people}>
             {loading ? <div className={styles.empty}><Loader2 className="animate-spin" /></div> : visible.length ? visible.map((candidate, i) => (
               <button key={`${candidate.uid}-${i}`} type="button" className={styles.person} data-selected={selected?.uid === candidate.uid} onClick={() => setSelected(candidate)}>

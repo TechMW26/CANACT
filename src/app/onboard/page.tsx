@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CountryCode } from 'libphonenumber-js';
 import {
-  ArrowLeft, ArrowRight, Check, LockKeyhole, Mail, Phone, ShieldCheck,
+  ArrowLeft, ArrowRight, Check, Eye, LockKeyhole, Mail, Phone, ShieldCheck,
   Sparkles, UserRound, UsersRound,
 } from 'lucide-react';
-import { CameraCapture } from '@/components/CameraCapture';
+import { SelfieVerifier } from '@/components/SelfieVerifier';
 import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
@@ -169,7 +169,7 @@ export default function OnboardPage() {
     try {
       if (screen === 'details') {
         const storedMobile = toE164(phoneCountry, mobile);
-        await updateMyProfile({ email: user.email || profile.email, mobile: storedMobile });
+        await updateMyProfile({ mobile: storedMobile });
         sessionStorage.setItem('canact:registration-mobile', storedMobile);
       } else if (screen === 'name') {
         const cleanFirst = firstName.trim();
@@ -224,7 +224,6 @@ export default function OnboardPage() {
               <h1 className={styles.title}>Your details</h1>
               <p className={styles.subtitle}>We&apos;ll use these to create and secure your account.</p>
               <div className={styles.registerFields}>
-                <AuthField icon={<Mail />} label="Email address"><input value={user.email || ''} readOnly aria-label="Email address" /></AuthField>
                 <div className={styles.phoneWrap}><PhoneInput country={phoneCountry} onCountryChange={setPhoneCountry} value={mobile} onChange={setMobile} required error={mobile && !isPhoneValid(phoneCountry, mobile) ? 'Enter a valid mobile number' : undefined} /></div>
               </div>
             </div>
@@ -302,13 +301,17 @@ export default function OnboardPage() {
           <>
             <RegistrationArt compact />
             <div className={styles.registerBody}>
-              <h1 className={styles.title}>Verify with a selfie</h1>
-              <p className={styles.subtitle}>This helps keep Canact safe, genuine,<br />and free from fake profiles.</p>
-              <button type="button" className={styles.selfieScan} onClick={() => setCameraOpen(true)} aria-label={selfieSrc ? 'Retake selfie' : 'Take a selfie'}>
-                {selfieSrc ? <img src={selfieSrc} alt="Your selfie" /> : <><UserRound /><span>Tap to open camera</span></>}
+              <h1 className={styles.title}>Verify it&apos;s really you</h1>
+              <p className={styles.subtitle}>Take a live photo to verify a real person is creating this profile.<br />This helps keep Canact safer from fake profiles.</p>
+              <button type="button" className={styles.selfieScan} onClick={() => setCameraOpen(true)} aria-label={selfieSrc ? 'Retake verification' : 'Start verification'}>
+                {selfieSrc ? <img src={selfieSrc} alt="Your verified selfie" /> : <><UserRound /><span>Tap to verify</span></>}
                 <i className={styles.scanCornerA} /><i className={styles.scanCornerB} /><i className={styles.scanCornerC} /><i className={styles.scanCornerD} />
               </button>
-              <div className={styles.trustPills}><span><ShieldCheck /> Private and secure</span><span><LockKeyhole /> Only used for verification</span><span><Sparkles /> Takes less than a minute</span></div>
+              <div className={styles.trustPills}>
+                <span><Eye size={14} /> Live camera capture</span>
+                <span><ShieldCheck size={14} /> Saved as your profile photo</span>
+                <span><Sparkles size={14} /> Blink &amp; liveness check</span>
+              </div>
               <RegistrationProgress screen={screen} />
             </div>
           </>
@@ -332,11 +335,11 @@ export default function OnboardPage() {
 
         <footer className={styles.registerFooter}>
           <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void goNext()}>
-            <span>{busy ? 'Saving…' : screen === 'complete' ? 'Continue' : screen === 'selfie' && !selfieSrc ? 'Take selfie' : 'Continue'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
+            <span>{busy ? 'Saving…' : screen === 'complete' ? 'Continue' : screen === 'selfie' && !selfieSrc ? 'Verify identity' : 'Continue'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
           </button>
         </footer>
       </section>
-      {cameraOpen ? <CameraCapture defaultFacing="user" allowVideo={false} allowPhoto initialMode="photo" onCancel={() => setCameraOpen(false)} onCapture={(urls) => { setSelfieData(urls[0] || ''); setCameraOpen(false); }} /> : null}
+      {cameraOpen ? <SelfieVerifier onCancel={() => setCameraOpen(false)} onCapture={(dataUrl) => { setSelfieData(dataUrl); setCameraOpen(false); }} /> : null}
     </main>
   );
 }

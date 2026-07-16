@@ -1,4 +1,4 @@
-import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
+import { applicationDefault, cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 
@@ -15,17 +15,28 @@ export function getFirebaseAdminApp(): App | null {
     return adminApp;
   }
 
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!json) return null;
   try {
+    const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const credential = json
+      ? cert(JSON.parse(json))
+      : clientEmail && privateKey && projectId
+        ? cert({ projectId, clientEmail, privateKey })
+        : process.env.GOOGLE_APPLICATION_CREDENTIALS
+          ? applicationDefault()
+          : null;
+    if (!credential) return null;
     adminApp = initializeApp({
-      credential: cert(JSON.parse(json)),
+      credential,
       databaseURL:
         process.env.NEXT_PUBLIC_FIREBASE_DB_URL ??
         'https://canact-94ad6-default-rtdb.asia-southeast1.firebasedatabase.app',
     });
     return adminApp;
-  } catch {
+  } catch (error) {
+    console.error('[firebase-admin] initialization failed', error instanceof Error ? error.message : 'unknown');
     return null;
   }
 }

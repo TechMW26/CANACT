@@ -46,7 +46,7 @@ export default function PostCreatePage() {
       const drafts: DraftShot[] = [];
       for (const source of urls) {
         const blob = await dataUrlToBlob(source);
-        const prepared = await prepareMedia(blob);
+        const prepared = await prepareMedia(blob, { maxWidth: 1080, maxHeight: 1350, quality: 0.82 });
         const previewUrl = URL.createObjectURL(prepared.blob);
         drafts.push({
           id: `${Date.now()}-${drafts.length}-${Math.random().toString(36).slice(2)}`,
@@ -178,26 +178,34 @@ export default function PostCreatePage() {
             if (!text.trim() && shots.length === 0) return toast('Add a photo or caption', 'error');
             setBusy(true);
             try {
-              // Upload each captured shot to Vercel Blob and persist only the
-              // returned public URLs in RTDB (data URLs would blow up the DB).
-              const hostedUrls: string[] = [];
-              const hostedPosters: string[] = [];
-              for (const shot of shots) {
-                const { url, posterUrl, prepared } = await uploadMedia(shot.prepared ?? shot.src, { kind: 'post', uid: user.uid });
-                hostedUrls.push(url);
-                // Images: reuse the image as its own thumbnail. Videos: use
-                // the uploaded first-frame JPEG. Empty string = poster gen
-                // failed; consumers fall back to the media URL itself.
-                const isVideo = prepared.mime.startsWith('video/');
-                hostedPosters.push(isVideo ? (posterUrl ?? '') : url);
-              }
-              const created = await createWhaPost({
-                uid: user.uid,
-                authorName: profile.fullName,
-                authorPhoto: profile.photoURL,
-                text: text.trim(),
-                mediaUrls: hostedUrls,
-                mediaPosters: hostedPosters.some(Boolean) ? hostedPosters : undefined,
+              // Upload all shots to Vercel Blob in parallel (Instagram-style:
+              // chunked concurrent uploads). Each shot is independently
+              // uploaded; failures are surfaced collectively.
+              const results = await Promise.all(
+                shots.map((shot) =>
+                  uploadMedia(shot.prepared ?? shot.src, {
+                    kind: 'post',
+                    uid: user.uid,
+                    maxWidth: 1080,
+                    maxHeight: 1350,
+                    quality: 0.82,
+                  }),
+                ),
+              );
+              const hostedUrls = results.map((r) => r.url);
+              const hostedPosters = results.map((r, i) => {
+                const isVideo = r.prepared.mime.startsWith('video/');
+                return isVideo ? (r.posterUrl ?? '') : r.url;
+              });
+            const hostedLqips = results.map((r) => r.lqip ?? '');
+            const created = await createWhaPost({
+              uid: user.uid,
+              authorName: profile.fullName,
+              authorPhoto: profile.photoURL,
+              text: text.trim(),
+              mediaUrls: hostedUrls,
+              mediaPosters: hostedPosters.some(Boolean) ? hostedPosters : undefined,
+              mediaLqips: hostedLqips.some(Boolean) ? hostedLqips : undefined,
                 lat: coords?.lat,
                 lng: coords?.lng,
               });

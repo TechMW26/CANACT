@@ -80,6 +80,9 @@
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_notification" />
         <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/canactNotification" />
+        <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="canact_general_v1" />
 
@@ -204,4 +207,3 @@
     <!-- TURN_SCREEN_ON (declared on Android 8.1+ via window flags only
          needs WAKE_LOCK in the manifest — already declared above). -->
 </manifest>
-

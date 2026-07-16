@@ -7,7 +7,7 @@ import { VideoPreview } from './VideoPreview';
  * Full-card-width image/video carousel with snap-scroll, page indicator pill
  * (e.g. "2/4"), and an animated dot bar. Used by feed cards and post detail.
  */
-export function MediaSlider({ urls, posters, aspect = '4/5', rounded = true }: { urls: string[]; posters?: string[]; aspect?: string; rounded?: boolean }) {
+export function MediaSlider({ urls, posters, lqips, aspect = '4/5', rounded = true }: { urls: string[]; posters?: string[]; lqips?: string[]; aspect?: string; rounded?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [idx, setIdx] = useState(0);
 
@@ -21,13 +21,14 @@ export function MediaSlider({ urls, posters, aspect = '4/5', rounded = true }: {
   if (urls.length === 1) {
     const u = urls[0];
     const p = posters?.[0] || undefined;
+    const lq = lqips?.[0] || undefined;
     return (
       <div className={rounded ? 'overflow-hidden rounded-[24px]' : 'overflow-hidden'} style={{ aspectRatio: aspect }}>
         {isVideoUrl(u) ? (
           <VideoPreview src={u} poster={p} className="h-full w-full" fit="cover" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />
+          <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light lqip-img" style={lq ? { backgroundImage: `url(${lq})`, backgroundSize: 'cover' } : undefined} />
         )}
       </div>
     );
@@ -50,7 +51,7 @@ export function MediaSlider({ urls, posters, aspect = '4/5', rounded = true }: {
               <VideoPreview src={u} poster={posters?.[i] || undefined} className="h-full w-full" fit="cover" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light" />
+              <img src={u} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover bg-brand-light lqip-img" style={lqips?.[i] ? { backgroundImage: `url(${lqips[i]})`, backgroundSize: 'cover' } : undefined} />
             )}
           </div>
         ))}

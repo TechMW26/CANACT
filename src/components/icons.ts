@@ -92,6 +92,7 @@ export {
   VideoOff,
   Navigation,
   RotateCcw,
+  RefreshCw,
   CornerUpLeft,
   Copy,
   MoreVertical,
@@ -101,4 +102,5 @@ export {
   CloudUpload,
   Grid3X3,
   Activity,
+  TrendingUp,
 } from 'lucide-react';

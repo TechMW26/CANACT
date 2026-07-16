@@ -93,12 +93,13 @@ export default function StoryCreatePage() {
           onClick={async () => {
             setBusy(true);
             try {
-              const { url: hostedUrl } = await uploadMedia(shot, { kind: 'story', uid: user.uid });
+              const { url: hostedUrl, lqip } = await uploadMedia(shot, { kind: 'story', uid: user.uid, maxWidth: 720, maxHeight: 1280, quality: 0.82 });
               await upsertStory({
                 uid: user.uid,
                 authorName: profile.fullName,
                 authorPhoto: profile.photoURL,
                 mediaUrl: hostedUrl,
+                lqip,
                 caption: videoCaption.trim() || undefined,
                 lat: coords?.lat,
                 lng: coords?.lng,
@@ -126,12 +127,13 @@ export default function StoryCreatePage() {
       onCancel={() => setShot(null)}
       onShare={async (overlays, caption, filter) => {
         try {
-          const { url: hostedUrl } = await uploadMedia(shot, { kind: 'story', uid: user.uid });
+          const { url: hostedUrl, lqip } = await uploadMedia(shot, { kind: 'story', uid: user.uid, maxWidth: 720, maxHeight: 1280, quality: 0.82 });
           await upsertStory({
             uid: user.uid,
             authorName: profile.fullName,
             authorPhoto: profile.photoURL,
             mediaUrl: hostedUrl,
+            lqip,
             caption,
             lat: coords?.lat,
             lng: coords?.lng,

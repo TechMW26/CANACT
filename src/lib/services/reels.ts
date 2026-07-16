@@ -1,6 +1,7 @@
 import { onValue, push, ref, remove, set, update, query, orderByChild, limitToLast, runTransaction } from 'firebase/database';
 import { db } from '../firebase';
 import type { ReelItem } from '../types';
+import { recordOnboardingSignal } from './onboarding';
 
 function stripUndef<T>(v: T): T {
   if (Array.isArray(v)) return v.map(stripUndef).filter((x) => x !== undefined) as unknown as T;
@@ -26,6 +27,7 @@ export async function createReel(input: Omit<ReelItem, 'id' | 'createdAt' | 'lik
   });
   await set(node, reel);
   await set(ref(db, `userReels/${input.uid}/${reel.id}`), reel.createdAt);
+  await recordOnboardingSignal(input.uid, 'create-post');
   return reel;
 }
 
@@ -57,6 +59,7 @@ export function listenUserReels(uid: string, cb: (items: ReelItem[]) => void) {
 export async function toggleReelLike(reelId: string, uid: string) {
   const r = ref(db, `reels/${reelId}/likes/${uid}`);
   await runTransaction(r, (cur) => (cur ? null : Date.now()));
+  await recordOnboardingSignal(uid, 'engage-post');
 }
 
 export async function bumpReelView(reelId: string) {
@@ -75,6 +78,7 @@ export async function addReelComment(reelId: string, uid: string, name: string, 
   const node = push(ref(db, `reelComments/${reelId}`));
   await set(node, stripUndef({ id: node.key, uid, name, photoURL, text, createdAt: Date.now() }));
   await runTransaction(ref(db, `reels/${reelId}/commentCount`), (c: number) => (c ?? 0) + 1);
+  await recordOnboardingSignal(uid, 'engage-post');
 }
 
 export function listenReelComments(reelId: string, cb: (items: any[]) => void) {

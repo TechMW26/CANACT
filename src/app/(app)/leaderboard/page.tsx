@@ -55,8 +55,9 @@ export default function LeaderboardPage() {
         <Crown className={styles.crown} aria-hidden="true" />
         {podium.map((entry, visualIndex) => {
           const rank = visualIndex === 0 ? 2 : visualIndex === 1 ? 1 : 3;
+          const podiumKey = entry?.uid ? `podium-${entry.uid}` : `empty-${rank}`;
           return (
-            <div key={entry?.uid || `empty-${rank}`} className={`${styles.place} ${styles[`place${rank}`]}`}>
+            <div key={podiumKey} className={`${styles.place} ${styles[`place${rank}`]}`}>
               {entry ? (
                 <Link href={`/profile/${entry.uid}`} aria-label={`${entry.fullName}, rank ${rank}`} className={styles.podiumAvatar}>
                   <Avatar src={entry.photoURL} name={entry.fullName} size={rank === 1 ? 96 : 72} />
@@ -81,7 +82,7 @@ export default function LeaderboardPage() {
           <>
             <ol className={styles.rows} start={4}>
               {visibleRows.map(({ entry, rank }) => (
-                <RankRow key={entry.uid} profile={entry} rank={rank} />
+                <RankRow key={entry.uid || `rank-${rank}`} profile={entry} rank={rank} />
               ))}
             </ol>
             {showCurrentUser && currentUser ? (

@@ -21,6 +21,7 @@ import {
 } from '@/components/icons';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
+import { useGeo } from '@/lib/useGeo';
 import { createReel } from '@/lib/services/reels';
 import { uploadMedia } from '@/lib/uploadMedia';
 import type { MusicTrack } from '@/lib/musicLibrary';
@@ -32,6 +33,7 @@ type Step = 'capture' | 'preview' | 'compose';
 
 export default function ReelCreatePage() {
   const { user, profile } = useAuth();
+  const { coords } = useGeo();
   const router = useRouter();
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
@@ -261,14 +263,17 @@ export default function ReelCreatePage() {
             try {
               // Process the recorded/picked video on-device, then upload the
               // final blob to Vercel Blob. Only the public URL is stored in RTDB.
-              const { url: hostedUrl, posterUrl } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
-              await createReel({
-                uid: user.uid,
-                authorName: profile.fullName,
-                authorPhoto: profile.photoURL,
-                videoUrl: hostedUrl,
-                posterUrl: posterUrl,
+            const { url: hostedUrl, posterUrl, lqip } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
+            await createReel({
+              uid: user.uid,
+              authorName: profile.fullName,
+              authorPhoto: profile.photoURL,
+              videoUrl: hostedUrl,
+              posterUrl: posterUrl,
+              lqip,
                 caption: caption.trim() || undefined,
+                lat: coords?.lat,
+                lng: coords?.lng,
                 filter: filter === 'none' ? undefined : filter,
                 music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url } : undefined,
               });

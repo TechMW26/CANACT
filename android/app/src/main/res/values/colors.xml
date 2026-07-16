@@ -4,6 +4,7 @@
     <color name="colorPrimaryDark">#9B0B23</color>
     <color name="colorAccent">#C8102E</color>
     <color name="splashBackground">#FFF8F8</color>
+    <color name="canactNotification">#1F6B55</color>
     <!-- Status / nav bar tint \u2014 matches the web app's pale pink-cream
          background so the system bars blend seamlessly with the UI. -->
     <color name="statusBarBackground">#FFF8F8</color>

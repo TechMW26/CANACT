@@ -241,7 +241,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         PendingIntent declinePi = PendingIntent.getBroadcast(ctx, declineRc, decline, piFlags);
 
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification)
             .setContentTitle("Incoming call")
             .setContentText(fromName + " is calling")
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -319,7 +319,7 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         PendingIntent pi = PendingIntent.getActivity(ctx, rc, open, piFlags);
 
         Notification notif = new NotificationCompat.Builder(ctx, GENERAL_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_notification)
             .setContentTitle(title != null ? title : "Canact")
             .setContentText(body != null ? body : "")
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))

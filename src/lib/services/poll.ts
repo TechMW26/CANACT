@@ -2,6 +2,7 @@ import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limi
 import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
 import { uid as rid, dayKey } from '../utils';
+import { recordOnboardingSignal } from './onboarding';
 
 /** Bump the poll author's contentLikes or contentDislikes (T4). */
 async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
@@ -54,6 +55,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
     authorName: input.authorName,
     question: input.question,
     photoURL: input.photoURL,
+    lqip: input.lqip,
     options,
     openEnded: input.openEnded,
     createdAt: Date.now(),
@@ -63,6 +65,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
   };
   await set(node, poll);
   await set(ref(db, `userPolls/${input.uid}/${poll.id}`), poll.createdAt);
+  await recordOnboardingSignal(input.uid, 'create-post');
   return poll;
 }
 
@@ -99,6 +102,7 @@ export async function votePoll(pollId: string, uid: string, optionId: string) {
     return poll;
   });
   if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
+  await recordOnboardingSignal(uid, 'engage-post');
 
   // T4: Vote counts as a like-equivalent for the poll author
   try {
@@ -156,12 +160,14 @@ export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dis
 
   // T4: Voter engagement reward
   if (uid !== authorUid) await bumpVoterEngagement(uid);
+  if (prev !== kind) await recordOnboardingSignal(uid, 'engage-post');
 }
 
 export async function commentPoll(pollId: string, uid: string, name: string, text: string) {
   const n = push(ref(db, `pollComments/${pollId}`));
   await set(n, { id: n.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `polls/${pollId}/commentCount`), (c: number) => (c ?? 0) + 1);
+  await recordOnboardingSignal(uid, 'engage-post');
 
   // T4: Comment counts as like-equivalent for poll author + voter engagement
   try {

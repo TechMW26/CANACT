@@ -18,7 +18,7 @@ import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
-import { requestFollow } from '@/lib/services/favourites';
+import { listenFavourites, requestFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -27,6 +27,7 @@ import {
   sendFriendRequest,
   unfriend,
 } from '@/lib/services/friends';
+import { calculateCanactScore } from '@/lib/canactScore';
 import {
   Award,
   CheckCircle2,
@@ -56,6 +57,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [u, setU] = useState<UserProfile | null>(null);
   const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attrs?: AttributeVoteMap; cards?: Record<string, number> } | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
+  const [isFavourite, setIsFavourite] = useState(false);
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
 
   useEffect(() => {
@@ -70,6 +72,12 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   useEffect(() => {
     if (!user || isSelf) return;
     return listenFriendStatus(user.uid, uid, setFriendStatus);
+  }, [uid, user?.uid, isSelf]);
+
+  // Detect whether this profile is in the viewer's favourites (gold ring).
+  useEffect(() => {
+    if (!user || isSelf) return;
+    return listenFavourites(user.uid, (uids) => setIsFavourite(uids.includes(uid)));
   }, [uid, user?.uid, isSelf]);
 
   // Instagram-style posts grid (user's authored WHA posts).
@@ -176,7 +184,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
           { uid: u.uid, name: u.fullName, photoURL: u.photoURL },
         );
         await setLikeDislike(uid, user.uid, 'like');
-        toast('Support sent', 'success');
+        toast('Friend request sent', 'success');
         return;
       }
       if (friendStatus === 'friends') {
@@ -184,9 +192,13 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
         toast('Added to favourites', 'success');
         return;
       }
-      toast('Request already sent', 'success');
+      if (friendStatus === 'requested') {
+        await cancelFriendRequest(user.uid, uid);
+        toast('Request cancelled', 'success');
+        return;
+      }
     } catch (error: any) {
-      toast(error?.message ?? 'Could not support profile', 'error');
+      toast(error?.message ?? 'Could not update', 'error');
     }
   };
 
@@ -216,6 +228,8 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     }
   };
 
+  const score = calculateCanactScore(u);
+
   return (
     <CanactPagesProfileUI
       userProfile={u}
@@ -223,6 +237,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       isVerified={isVerified}
       age={age}
       locationText={locationText}
+      canactScore={score}
       tab={tab}
       setTab={setTab}
       posts={posts}
@@ -235,6 +250,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       profileVote={myVote?.main}
       profileVoteBusy={profileVoteBusy}
       friendStatus={friendStatus}
+      isFavourite={isFavourite}
     />
   );
 }
@@ -505,6 +521,7 @@ function CanactPagesProfileUI({
   isVerified,
   age,
   locationText,
+  canactScore,
   tab,
   setTab,
   posts,
@@ -517,12 +534,14 @@ function CanactPagesProfileUI({
   profileVote,
   profileVoteBusy,
   friendStatus,
+  isFavourite,
 }: {
   userProfile: UserProfile;
   isSelf: boolean;
   isVerified: boolean;
   age?: number;
   locationText: string;
+  canactScore: ReturnType<typeof calculateCanactScore>;
   tab: ProfileTabKey;
   setTab: (tab: ProfileTabKey) => void;
   posts: WhaPost[];
@@ -535,6 +554,7 @@ function CanactPagesProfileUI({
   profileVote?: 'like' | 'dislike';
   profileVoteBusy: boolean;
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
+  isFavourite: boolean;
 }) {
   const { updateMyProfile } = useAuth();
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -547,13 +567,17 @@ function CanactPagesProfileUI({
   const role = userProfile.tags?.[0] || locationText || `${(userProfile.rating ?? 0).toFixed(1)} rating`;
   const supportLabel = isSelf
     ? 'Edit'
-    : friendStatus === 'friends'
-      ? 'Friends'
-      : friendStatus === 'requested'
-        ? 'Requested'
-        : friendStatus === 'incoming'
-          ? 'Accept'
-          : 'Support';
+    : isFavourite
+      ? '★ Favourited'
+      : friendStatus === 'friends'
+        ? 'Add to Favourites'
+        : friendStatus === 'requested'
+          ? 'Requested'
+          : friendStatus === 'incoming'
+            ? 'Accept'
+            : 'Add Friend';
+  // Gold button for favourite-related states
+  const isGoldButton = !isSelf && (isFavourite || friendStatus === 'friends');
   const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
 
   const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -595,17 +619,26 @@ function CanactPagesProfileUI({
       </div>
 
       <section className="relative px-5 pb-5 text-center">
-        <div className="mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] border-[#faf8f2] bg-white">
+        {/* Avatar with optional golden favourite ring */}
+        <div className={`mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] bg-white ${isFavourite ? 'border-[#E8B830] shadow-[0_0_18px_rgba(232,184,48,0.35)]' : 'border-[#faf8f2]'}`}>
           <Avatar src={userProfile.photoURL} name={displayName} size={110} />
         </div>
-        <h1 className="mt-3 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
+
+        {/* Canact score badge — visible to everyone */}
+        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-black/85 px-3 py-1.5 text-xs font-extrabold text-white shadow-lg">
+          <span className={`h-2 w-2 rounded-full ${canactScore.label === 'TRUST' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : canactScore.label === 'GOOD' ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : canactScore.label === 'FAIR' ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'}`} />
+          <span>{canactScore.score}</span>
+          <span className={`font-black ${canactScore.label === 'TRUST' ? 'text-emerald-400' : canactScore.label === 'GOOD' ? 'text-green-400' : canactScore.label === 'FAIR' ? 'text-amber-400' : 'text-red-400'}`}>{canactScore.label}</span>
+        </div>
+
+        <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
         <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
         {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
 
         <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} />
 
         <div className="mt-4 flex gap-3">
-          {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className="h-12 flex-1 rounded-full bg-brand font-bold text-white">{supportLabel}</button>}
+          {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className={`h-12 flex-1 rounded-full font-bold text-white transition ${isGoldButton ? 'bg-[#E8B830] shadow-[0_4px_16px_rgba(232,184,48,0.3)]' : 'bg-brand'}`}>{supportLabel}</button>}
           <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">{isSelf ? 'Settings' : 'Message'}</Link>
         </div>
 

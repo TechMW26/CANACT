@@ -10,6 +10,19 @@ export type PreparedMedia = {
   width?: number;
   height?: number;
   posterDataUrl?: string;
+  /** Tiny (~20px) base64 blur placeholder for instant LQIP rendering.
+   *  Generated during prepareMedia for images; undefined for videos. */
+  lqip?: string;
+};
+
+/** Options for media preparation. */
+export type PrepareOptions = {
+  /** Max width in pixels — image is downscaled if wider. Default 1080. */
+  maxWidth?: number;
+  /** Max height in pixels — image is downscaled if taller. Default 1080. */
+  maxHeight?: number;
+  /** WebP quality (0-1). Default 0.82 for feed items, 0.92 for avatars/covers. */
+  quality?: number;
 };
 
 /** Maximum on-device size the upload pipeline accepts (matches the route). */
@@ -28,11 +41,10 @@ const SUPPORTED_VIDEO = new Set([
 ]);
 const SUPPORTED_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-/** Re-encode a still image to WebP at near-lossless quality.
+/** Re-encode a still image to WebP at the requested quality.
  *  WebP is roughly 30-50% smaller than JPEG / PNG at perceptually equivalent
  *  quality, which is the cheapest way to make the wall feel snappy without
- *  touching the original capture pipeline. We deliberately keep the source
- *  pixel dimensions intact so camera quality is preserved. If anything goes
+ *  touching the original capture pipeline. If anything goes
  *  wrong (e.g. browser without WebP encoder, OffscreenCanvas blocked,
  *  decode failure) we fall back to the original blob unchanged. */
 async function transcodeImageToWebp(blob: Blob, quality = 0.92): Promise<{ blob: Blob; mime: string } | null> {
@@ -63,6 +75,91 @@ async function transcodeImageToWebp(blob: Blob, quality = 0.92): Promise<{ blob:
       // keep the original — no point shipping a bigger file.
       if (out.size >= blob.size) return null;
       return { blob: out, mime: 'image/webp' };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Resize an image blob to fit within maxWidth × maxHeight, output as WebP.
+ *  Instagram-style: downscale on-device before upload so CDN/feed never
+ *  serves a 12MP camera shot at 4000×3000 for a 400px feed tile.
+ *  Falls back to original blob on any failure. */
+async function resizeImageBlob(
+  blob: Blob,
+  maxWidth: number,
+  maxHeight: number,
+  quality: number,
+): Promise<{ blob: Blob; mime: string; width: number; height: number } | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error('image decode failed'));
+        el.src = url;
+      });
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      if (!srcW || !srcH) return null;
+
+      // Only downscale — never upscale
+      let w = srcW;
+      let h = srcH;
+      if (w > maxWidth) { h = Math.round(h * (maxWidth / w)); w = maxWidth; }
+      if (h > maxHeight) { w = Math.round(w * (maxHeight / h)); h = maxHeight; }
+      if (w === srcW && h === srcH && blob.type === 'image/webp') return null; // already optimal
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const out = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/webp', quality);
+      });
+      if (!out || out.size === 0) return null;
+      if (out.size >= blob.size && w === srcW && h === srcH) return null; // no benefit
+      return { blob: out, mime: 'image/webp', width: w, height: h };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Generate a tiny (~20px wide) blur-up LQIP data URL from an image blob.
+ *  Instagram shows a blurry placeholder instantly while the full image
+ *  streams in — we replicate that with a 20px thumbnail encoded to a tiny
+ *  base64 data URL. Returns null on any failure. */
+async function generateLqip(blob: Blob): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error('lqip decode failed'));
+        el.src = url;
+      });
+      const aspect = img.naturalHeight / img.naturalWidth;
+      const tw = 20;
+      const th = Math.round(tw * aspect);
+      const canvas = document.createElement('canvas');
+      canvas.width = tw;
+      canvas.height = th || 20;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, tw, th || 20);
+      return canvas.toDataURL('image/jpeg', 0.3);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -131,8 +228,13 @@ export async function probeVideo(blob: Blob): Promise<{ durationSec: number; wid
 }
 
 /** Prepare an image or video Blob for upload: validate, normalise MIME,
- * grab dimensions/poster. Throws with a user-friendly message on failure. */
-export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
+ * grab dimensions/poster, optionally downscale images to target size,
+ * generate LQIP placeholder. Throws with a user-friendly message on failure. */
+export async function prepareMedia(input: Blob | File, opts?: PrepareOptions): Promise<PreparedMedia> {
+  const maxWidth = opts?.maxWidth ?? 1080;
+  const maxHeight = opts?.maxHeight ?? 1080;
+  const quality = opts?.quality ?? 0.82;
+
   let blob: Blob = input;
   let mime = (input.type || '').toLowerCase();
   // Normalise MediaRecorder MIME like `video/webm;codecs=vp9,opus` → `video/webm`.
@@ -148,16 +250,33 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
     mime = 'image/jpeg';
     blob = blob.slice(0, blob.size, mime);
   }
-  // Re-encode JPEG / PNG stills as WebP at high quality so the upload, the
-  // CDN response, and every subsequent feed paint move less data without
-  // visibly degrading the camera capture. WebP-in / WebP-out is a no-op.
-  if (isImage && mime !== 'image/webp') {
-    const webp = await transcodeImageToWebp(blob);
-    if (webp) {
-      blob = webp.blob;
-      mime = webp.mime;
+
+  // ── Image path: resize + WebP transcode + LQIP ──
+  let lqip: string | undefined;
+  let lqipPromise: Promise<string | null> | undefined;
+  let finalWidth: number | undefined;
+  let finalHeight: number | undefined;
+
+  if (isImage) {
+    // Step 1: downscale to target dimensions (Instagram-style on-device resize)
+    const resized = await resizeImageBlob(blob, maxWidth, maxHeight, quality);
+    if (resized) {
+      blob = resized.blob;
+      mime = resized.mime;
+      finalWidth = resized.width;
+      finalHeight = resized.height;
+    } else if (mime !== 'image/webp') {
+      // Step 2: if no resize needed (already small), still transcode to WebP
+      const webp = await transcodeImageToWebp(blob, quality);
+      if (webp) {
+        blob = webp.blob;
+        mime = webp.mime;
+      }
     }
+    // Step 3: generate LQIP from final blob (runs in parallel with next checks)
+    lqipPromise = generateLqip(blob);
   }
+
   if (blob.size > MAX_UPLOAD_BYTES) {
     throw new Error(`File too large (${(blob.size / 1024 / 1024).toFixed(1)} MB). Limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
   }
@@ -179,9 +298,17 @@ export async function prepareMedia(input: Blob | File): Promise<PreparedMedia> {
       result.height = probe.height;
       result.posterDataUrl = probe.posterDataUrl;
     } catch (err) {
-      // Re-throw size/duration errors verbatim; swallow probe failures so a
-      // healthy file still uploads even if the probe canvas misbehaves.
       if (err instanceof Error && /too long|too large/i.test(err.message)) throw err;
+    }
+  } else {
+    // Use post-resize dimensions if available, otherwise probe from source
+    if (finalWidth && finalHeight) {
+      result.width = finalWidth;
+      result.height = finalHeight;
+    }
+    // Await LQIP — it was kicked off in parallel with size checks
+    if (isImage) {
+      try { result.lqip = await lqipPromise ?? undefined; } catch { /* best-effort */ }
     }
   }
 
@@ -229,23 +356,27 @@ async function uploadPoster(posterDataUrl: string, opts: { kind: 'story' | 'reel
  *  first-frame poster as a separate JPEG so consumers can render an instant
  *  thumbnail without having to download the whole video for its first frame
  *  — critical for feed grid tiles, reels rail and chat attachments on slow
- *  networks. */
-export async function uploadMedia(input: Blob | File | string | PreparedMedia, opts: { kind: UploadMediaKind; uid: string }): Promise<{ url: string; posterUrl?: string; prepared: PreparedMedia }> {
+ *  networks. Accepts optional PrepareOptions for resize/quality. */
+export async function uploadMedia(
+  input: Blob | File | string | PreparedMedia,
+  opts: { kind: UploadMediaKind; uid: string } & PrepareOptions,
+): Promise<{ url: string; posterUrl?: string; lqip?: string; prepared: PreparedMedia }> {
+  const { kind, uid, maxWidth, maxHeight, quality } = opts;
   const prepared = isPreparedMedia(input)
     ? input
-    : await prepareMedia(typeof input === 'string' ? await dataUrlToBlob(input) : input);
+    : await prepareMedia(typeof input === 'string' ? await dataUrlToBlob(input) : input, { maxWidth, maxHeight, quality });
   // Run the main upload + poster upload in parallel for videos so the user
   // doesn't pay the latency twice.
   const isVideo = prepared.mime.startsWith('video/');
-  if (isVideo && prepared.posterDataUrl && opts.kind !== 'avatar' && opts.kind !== 'cover') {
+  if (isVideo && prepared.posterDataUrl && kind !== 'avatar' && kind !== 'cover') {
     const [url, posterUrl] = await Promise.all([
       uploadPreparedMedia(prepared, opts),
       uploadPoster(prepared.posterDataUrl, opts as { kind: 'story' | 'reel' | 'post' | 'poll'; uid: string }),
     ]);
-    return { url, posterUrl: posterUrl ?? undefined, prepared };
+    return { url, posterUrl: posterUrl ?? undefined, lqip: prepared.lqip, prepared };
   }
   const url = await uploadPreparedMedia(prepared, opts);
-  return { url, prepared };
+  return { url, lqip: prepared.lqip, prepared };
 }
 
 function isPreparedMedia(input: Blob | File | string | PreparedMedia): input is PreparedMedia {

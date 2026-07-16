@@ -1,20 +1,23 @@
 import { get, onValue, push, ref, remove, runTransaction, set, update, query, orderByChild, limitToLast } from 'firebase/database';
 import { db } from '../firebase';
 import { RateMeSession } from '../types';
+import { recordOnboardingSignal } from './onboarding';
 
-export async function startRateMe(input: { uid: string; authorName: string; photoURL?: string; hours: number }) {
+export async function startRateMe(input: { uid: string; authorName: string; photoURL?: string; lqip?: string; hours: number }) {
   const node = push(ref(db, 'ratemeSessions'));
   const session: RateMeSession = {
     id: node.key!,
     uid: input.uid,
     authorName: input.authorName,
     photoURL: input.photoURL,
+    lqip: input.lqip,
     startedAt: Date.now(),
     endsAt: Date.now() + Math.min(24, Math.max(1, input.hours)) * 3600 * 1000,
     likes: 0, dislikes: 0,
   };
   await set(node, session);
   await update(ref(db, `users/${input.uid}`), { rateMeOn: true, rateMeUntil: session.endsAt });
+  await recordOnboardingSignal(input.uid, 'create-post');
   return session;
 }
 

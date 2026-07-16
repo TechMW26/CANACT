@@ -2,7 +2,7 @@
   position: relative;
   left: 50%;
   width: 100vw;
-  height: calc(var(--canact-viewport-height) - 70px);
+  height: var(--canact-viewport-height);
   transform: translateX(-50%);
   overflow: hidden;
   background: #faf8f2;
@@ -10,7 +10,7 @@
 }
 
 .scroller {
-  --home-bottom-clearance: calc(var(--canact-bottom-nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 1em + 42px + 20px);
+  --home-bottom-clearance: calc(var(--canact-bottom-nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 8px);
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -155,7 +155,7 @@
 
 /* Below-fold wrapper — ensures scrollability for pill morph */
 .belowFold {
-  min-height: 70vh;
+  min-height: 50vh;
 }
 
 /* Stats */
@@ -236,7 +236,7 @@
 /* Explore Map preview */
 .mapStage {
   position: relative;
-  height: calc(260px + var(--home-bottom-clearance));
+  height: calc(230px + var(--home-bottom-clearance));
   margin: 18px -24px calc(-1 * var(--home-bottom-clearance));
 }
 .mapWrap {
@@ -275,30 +275,6 @@
   pointer-events: none;
 }
 
-.exploreCue {
-  position: absolute;
-  right: 0;
-  bottom: calc(var(--canact-bottom-nav-height, 70px) + env(safe-area-inset-bottom, 0px) + 1em + 50px);
-  left: 0;
-  z-index: 2;
-  display: grid;
-  width: 100%;
-  height: 76px;
-  justify-items: center;
-  align-content: center;
-  gap: 4px;
-  padding: 10px 0;
-  color: #1f6b55;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px);
-  visibility: hidden;
-  transition: opacity 220ms ease, transform 380ms cubic-bezier(.2,.85,.2,1), visibility 0s linear 380ms;
-}
-.exploreCue[data-visible="true"] { opacity: 1; pointer-events: auto; transform: translateY(0); visibility: visible; transition-delay: 0s; }
-.exploreCue svg { width: 22px; height: 22px; animation: homeExploreArrow 1.25s cubic-bezier(.2,.75,.25,1) infinite; }
-.exploreCue span { color: rgba(17,40,34,.55); font-size: 10px; font-weight: 850; letter-spacing: .04em; }
-
 .exploreTransition {
   position: fixed;
   inset: 0;
@@ -333,16 +309,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .exploreCue, .exploreTransitionMap { transition-duration: 1ms !important; animation-duration: 1ms !important; }
-  .exploreCue svg { animation: none !important; }
+  .exploreTransitionMap { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+  .nearbyPill svg { animation: none !important; }
 }
 
 /* Nearby Pill */
 .nearbyPill {
-  position: fixed;
+  position: absolute;
   left: 50%;
-  bottom: calc(var(--canact-bottom-nav-height) + env(safe-area-inset-bottom) + 1em);
-  z-index: 39;
+  bottom: calc(var(--canact-bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
+  z-index: 3;
   display: flex;
   width: max-content;
   min-height: 42px;
@@ -366,7 +342,7 @@
   animation: nearbyActivity 1.55s ease-out infinite;
 }
 .nearbyPill > svg { width: 15px; height: 15px; }
-.nearbyPill > strong { margin-left: 1px; font-size: 15px; line-height: 1; }
+.nearbyPill > svg { animation: homeExploreArrow 1.25s cubic-bezier(.2,.75,.25,1) infinite; }
 
 @keyframes nearbyActivity {
   0% { box-shadow: 0 0 0 0 rgba(140,240,178,.65); opacity: 1; }

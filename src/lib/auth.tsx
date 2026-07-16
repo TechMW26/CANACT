@@ -2,64 +2,29 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signInWithCredential,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  getRedirectResult,
-  GoogleAuthProvider,
   signOut as fbSignOut,
   deleteUser,
   type User as FbUser,
 } from 'firebase/auth';
 import { onValue, ref, update, get, remove } from 'firebase/database';
-import { db, getFirebaseAuth, getGoogleProvider } from './firebase';
+import { db, getFirebaseAuth } from './firebase';
+import { sendOTP, verifyOTP, resetOTP, getOTPChannel } from './services/otp';
 import { UserProfile } from './types';
-
-/**
- * Detect Capacitor's native Android/iOS WebView. Embedded WebViews are blocked
- * from hosting Google's OAuth flow, so on native we open the system browser
- * and bridge the id token back via the canact://auth-callback deep link.
- */
-function isCapacitorNative(): boolean {
-  if (typeof window === 'undefined') return false;
-  const cap: any = (window as any).Capacitor;
-  if (!cap) return false;
-  if (typeof cap.isNativePlatform === 'function') return cap.isNativePlatform();
-  return cap.platform === 'android' || cap.platform === 'ios';
-}
-
-/**
- * Open the system browser to the hosted Google sign-in helper page. Returns
- * as soon as the browser is launched — the actual credential exchange happens
- * later when Android delivers the canact://auth-callback deep link to the
- * global listener registered in AuthProvider. This way the spinner on the
- * sign-in button clears immediately and the user simply sees the splash
- * screen / signed-in state when they return from the browser.
- */
-async function openBrowserGoogleSignIn(): Promise<void> {
-  const { Browser } = await import('@capacitor/browser');
-  const helperUrl =
-    'https://canact.vercel.app/auth/native?return=' +
-    encodeURIComponent('canact://auth-callback');
-  await Browser.open({ url: helperUrl, presentationStyle: 'fullscreen' });
-}
 
 interface SessionUser {
   uid: string;
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  phoneNumber: string | null;
 }
 
 interface AuthCtx {
   user: SessionUser | null;
   profile: UserProfile | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string, profilePatch?: Partial<UserProfile>) => Promise<void>;
+  requestOTP: (phone: string) => Promise<{ ok: boolean; channel?: string; error?: string }>;
+  confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateMyProfile: (patch: Partial<UserProfile>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -84,6 +49,7 @@ function toSession(u: FbUser): SessionUser {
     email: u.email,
     displayName: u.displayName,
     photoURL: u.photoURL,
+    phoneNumber: u.phoneNumber,
   };
 }
 
@@ -103,13 +69,8 @@ function fallbackDisplayName(u: Pick<FbUser, 'displayName' | 'email'>): string {
   return 'Canact user';
 }
 
-function isMobile(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-}
-
 function registrationProfile(u: FbUser): UserProfile {
-  const fullName = fallbackDisplayName(u);
+  const fullName = u.phoneNumber || fallbackDisplayName(u);
   const { firstName, lastName, middleName } = splitNameParts(fullName);
   return {
     uid: u.uid,
@@ -118,6 +79,7 @@ function registrationProfile(u: FbUser): UserProfile {
     middleName: middleName || undefined,
     lastName,
     email: u.email ?? undefined,
+    mobile: u.phoneNumber ?? undefined,
     photoURL: u.photoURL ?? undefined,
     profileComplete: false,
     onboarding: { version: 1, points: 0, startedAt: Date.now(), completed: {}, signals: {} },
@@ -129,7 +91,7 @@ function registrationProfile(u: FbUser): UserProfile {
     attrs: { behaviour: 0, reliability: 0, civic_sense: 0, rude: 0, unreliable: 0, uncivil: 0 },
     cardsReceived: { understanding: 0, humour: 0, goodVibes: 0, confidence: 0, cooperative: 0, intelligence: 0, creativity: 0, daring: 0 },
     badges: [],
-    tags: ['New User', 'Unverified Profile'],
+    tags: ['New User'],
     notificationSound: true,
     createdAt: Date.now(),
   };
@@ -189,24 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Auth state listener — the SOLE source of truth for `user`.
-  // We never await anything here; routing must not depend on RTDB succeeding.
+  // Auth state listener
   useEffect(() => {
     const auth = getFirebaseAuth();
-    // Pick up redirect result (mobile flow). On success, force a hard reload to
-    // '/' so React/Next state can't drift from Firebase state.
-    getRedirectResult(auth)
-      .then(async (r) => {
-        if (r?.user && typeof window !== 'undefined') {
-          const destination = await routeAfterSignIn(r.user).catch(() => '/');
-          // Replace history so back-button doesn't return to /welcome.
-          window.location.replace(destination);
-        }
-      })
-      .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.warn('[auth] getRedirectResult failed', err);
-      });
     const unsub = onAuthStateChanged(
       auth,
       (u) => {
@@ -216,11 +163,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           return;
         }
-        // Set user IMMEDIATELY so routing can react.
         setUser(toSession(u));
         setProfile((current) => current?.uid === u.uid ? current : null);
         setLoading(false);
-        // Seed profile in background; never blocks the listener.
         seedInBackground(u);
       },
       (err) => {
@@ -230,57 +175,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     );
     return () => unsub();
-  }, []);
-
-  // Global deep-link listener for the browser-based Google sign-in flow
-  // (Capacitor APK only). The /auth/native helper page redirects to
-  // canact://auth-callback#idToken=... once the user signs in via the system
-  // browser; Android delivers that URL to MainActivity, the @capacitor/app
-  // plugin emits `appUrlOpen`, and we exchange the id token for a Firebase
-  // credential here. Mounted once at app boot so it survives even if the
-  // user closes the welcome page after launching the browser.
-  useEffect(() => {
-    if (!isCapacitorNative()) return;
-    let handle: { remove: () => Promise<void> } | null = null;
-    let cancelled = false;
-    (async () => {
-      const [{ App }, { Browser }] = await Promise.all([
-        import('@capacitor/app'),
-        import('@capacitor/browser'),
-      ]);
-      if (cancelled) return;
-      handle = await App.addListener('appUrlOpen', async (data: { url: string }) => {
-        try {
-          if (!data?.url || !data.url.startsWith('canact://auth-callback')) return;
-          const hash = data.url.split('#')[1] ?? '';
-          const params = new URLSearchParams(hash);
-          const errorMsg = params.get('error');
-          if (errorMsg) {
-            // eslint-disable-next-line no-console
-            console.warn('[auth] browser sign-in returned error:', errorMsg);
-            try { await Browser.close(); } catch { /* noop */ }
-            return;
-          }
-          const idToken = params.get('idToken');
-          if (!idToken) return;
-          const cred = GoogleAuthProvider.credential(idToken);
-          const auth = getFirebaseAuth();
-          const r = await signInWithCredential(auth, cred);
-          if (r.user) seedInBackground(r.user);
-          try { await Browser.close(); } catch { /* noop */ }
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn('[auth] deep-link sign-in handler failed', err);
-        }
-      });
-    })().catch((err) => {
-      // eslint-disable-next-line no-console
-      console.warn('[auth] failed to register deep-link listener', err);
-    });
-    return () => {
-      cancelled = true;
-      handle?.remove().catch(() => { /* noop */ });
-    };
   }, []);
 
   // Profile subscription — independent of auth `loading`.
@@ -322,63 +216,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
-    signInWithGoogle: async () => {
-      const auth = getFirebaseAuth();
-
-      // Native (Capacitor APK): open the system browser and let the hosted
-      // helper page (/auth/native) handle Google sign-in. Resolve immediately
-      // — the global deep-link listener mounted in AuthProvider will exchange
-      // the returned id token for a Firebase credential. Awaiting here would
-      // freeze the sign-in button's spinner for the entire browser flow.
-      if (isCapacitorNative()) {
-        await openBrowserGoogleSignIn();
-        return;
-      }
-
-      const provider = getGoogleProvider();
-      if (isMobile()) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-      try {
-        const r = await signInWithPopup(auth, provider);
-        if (r.user) seedInBackground(r.user);
-      } catch (err: any) {
-        const code = err?.code ?? '';
-        if (
-          code === 'auth/popup-blocked' ||
-          code === 'auth/popup-closed-by-user' ||
-          code === 'auth/cancelled-popup-request' ||
-          code === 'auth/operation-not-supported-in-this-environment'
-        ) {
-          await signInWithRedirect(auth, provider);
-          return;
-        }
-        throw err;
-      }
+    requestOTP: async (phone: string) => {
+      return sendOTP(phone, 'recaptcha-container');
     },
-    signInWithEmail: async (email, password) => {
-      const auth = getFirebaseAuth();
-      const r = await signInWithEmailAndPassword(auth, email, password);
-      if (r.user) seedInBackground(r.user);
-    },
-    signUpWithEmail: async (email, password, profilePatch) => {
-      const auth = getFirebaseAuth();
-      const r = await createUserWithEmailAndPassword(auth, email, password);
-      if (!r.user) return;
-      const optimisticProfile = { ...registrationProfile(r.user), ...profilePatch } as UserProfile;
-      setUser(toSession(r.user));
-      setProfile(optimisticProfile);
-      setLoading(false);
-      update(ref(db, `users/${r.user.uid}`), cleanProfilePatch(optimisticProfile)).catch((err) => {
-        // Auth has already succeeded, so never strand the user on a loader
-        // because the initial profile write is slow or temporarily offline.
-        // Later registration steps retry writes through updateMyProfile.
-        // eslint-disable-next-line no-console
-        console.warn('[auth] initial registration profile write failed', err);
-      });
+    confirmOTP: async (code: string) => {
+      const result = await verifyOTP(code);
+      return result;
     },
     signOut: async () => {
+      resetOTP();
       await fbSignOut(getFirebaseAuth());
       setUser(null);
       setProfile(null);

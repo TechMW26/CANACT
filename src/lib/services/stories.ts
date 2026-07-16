@@ -1,6 +1,7 @@
 import { onValue, ref, set, remove, update, push, child } from 'firebase/database';
 import { db } from '../firebase';
 import type { StoryItem, StoryOverlay, StoryReply } from '../types';
+import { recordOnboardingSignal } from './onboarding';
 
 /** Recursively strip undefined values; Firebase RTDB rejects them and that's
  * the most common cause of "Share story" silently throwing. */
@@ -36,6 +37,7 @@ export async function addStory(
     expiresAt: Date.now() + 24 * 3600 * 1000,
   });
   await set(storyRef, story);
+  await recordOnboardingSignal(input.uid, 'create-post');
   return story;
 }
 
@@ -58,7 +60,11 @@ export async function deleteStory(authorUid: string, storyId?: string) {
  *  - legacy: `stories/{uid}` → a single StoryItem directly under the uid
  *  Each user's stories are sorted oldest-first so the segmented progress
  *  bar plays them in posting order; users are sorted by their newest
- *  story (latest first) so fresh creators surface to the left. */
+ *  story (latest first) so fresh creators surface to the left.
+ *
+ *  Rendering is capped at 30 most-recent users and 100 total stories. The
+ *  current mixed legacy/new schema still requires one root snapshot; moving
+ *  to a timestamp-indexed flat feed is required to cap network reads too. */
 export function listenActiveStories(cb: (items: StoryItem[]) => void) {
   return onValue(ref(db, 'stories'), (snap) => {
     const now = Date.now();
@@ -83,9 +89,17 @@ export function listenActiveStories(cb: (items: StoryItem[]) => void) {
       list.sort((a, b) => a.createdAt - b.createdAt);
       groups.push({ uid, latest: list[list.length - 1].createdAt, items: list });
     });
+    // Client-side render cap: 30 most-recent users, 100 total stories max.
     groups.sort((a, b) => b.latest - a.latest);
+    const topGroups = groups.slice(0, 30);
     const out: StoryItem[] = [];
-    for (const g of groups) out.push(...g.items);
+    for (const g of topGroups) {
+      for (const item of g.items) {
+        out.push(item);
+        if (out.length >= 100) break;
+      }
+      if (out.length >= 100) break;
+    }
     cb(out);
   });
 }

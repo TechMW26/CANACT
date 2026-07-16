@@ -172,13 +172,13 @@ export function PostDetailSheet({
         </section>
       </div>
 
-      <form onSubmit={submitComment} className="sticky bottom-0 z-10 flex shrink-0 gap-2 bg-white px-1 pb-2 pt-2">
+      <form onSubmit={submitComment} className="sticky bottom-0 z-10 flex shrink-0 gap-2 rounded-[999px] bg-white p-2">
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           rows={1}
           placeholder={composerPlaceholder}
-          className="max-h-28 min-h-11 flex-1 resize-none rounded-[900px] border border-line bg-white px-3 py-2.5 text-sm leading-snug outline-none focus:border-brand"
+          className="max-h-28 min-h-11 flex-1 resize-none rounded-[900px] border border-line bg-white p-2.5 text-sm leading-snug outline-none focus:border-brand"
         />
         <button
           type="submit"
@@ -281,7 +281,7 @@ function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; my
           onDelete={onDelete}
           bottomOverlay={<WhaReactionBar post={post} myUid={myUid} overlay />}
         >
-          <MediaSlider urls={post.mediaUrls!} posters={post.mediaPosters} rounded={false} />
+          <MediaSlider urls={post.mediaUrls!} posters={post.mediaPosters} lqips={post.mediaLqips} rounded={false} />
         </FullBleedMediaHeader>
       ) : (
         <DetailHeader authorName={post.authorName} authorUid={post.uid} authorPhoto={post.authorPhoto} subline={timeAgo(post.createdAt)} onShare={onShare} onDelete={onDelete} />
@@ -301,12 +301,12 @@ function WhaReactionBar({ post, myUid, overlay = false }: { post: WhaPost; myUid
           key={id}
           type="button"
           onClick={() => reactWha(post.id, myUid, id)}
-          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold backdrop-blur ${
+          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold ${
             myReact === id
               ? 'border-brand bg-brand text-white'
               : overlay
-                ? 'border-white/70 bg-white/92 text-ink'
-                : 'border-line bg-white text-ink'
+                ? 'border-white/50 bg-white/95 text-ink'
+                : 'border-line bg-white text-ink shadow-sm'
           }`}
         >
           <Icon size={14} /> {post.reactions?.[id] ?? 0}<span className="sr-only">{label}</span>
@@ -329,7 +329,7 @@ function PollDetails({ poll, myUid, onShare, onDeleted }: { poll: Poll; myUid: s
       {poll.photoURL ? (
         <FullBleedMediaHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} onDelete={onDelete}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={poll.photoURL} alt="" className="max-h-[58svh] w-full object-cover" />
+          <img src={poll.photoURL} alt="" className="max-h-[58svh] w-full object-cover lqip-img" style={poll.lqip ? { backgroundImage: `url(${poll.lqip})`, backgroundSize: 'cover' } : undefined} />
         </FullBleedMediaHeader>
       ) : (
         <DetailHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} onDelete={onDelete} />
@@ -404,7 +404,7 @@ function RateMeDetails({ session, myUid, onShare, onDeleted }: { session: RateMe
       >
         {session.photoURL ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.photoURL} alt="" className="max-h-[62svh] w-full object-cover" />
+          <img src={session.photoURL} alt="" className="max-h-[62svh] w-full object-cover lqip-img" style={session.lqip ? { backgroundImage: `url(${session.lqip})`, backgroundSize: 'cover' } : undefined} />
         ) : (
           <div className="flex aspect-square w-full items-center justify-center bg-brand-light text-xl font-black text-brand">Rate Me</div>
         )}
