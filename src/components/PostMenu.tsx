@@ -44,6 +44,34 @@ export function PostMenu({
     ? 'bg-black/45 text-white ring-1 ring-white/15 backdrop-blur'
     : 'bg-white/85 text-ink/70 ring-1 ring-line backdrop-blur';
 
+  const runDelete = async () => {
+    if (busy || !onDelete || !confirm('Delete this? This cannot be undone.')) return;
+    setBusy(true);
+    try {
+      await onDelete();
+      toast('Deleted', 'success');
+      setOpen(false);
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not delete', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runReport = async () => {
+    if (busy || !onReport) return;
+    setBusy(true);
+    try {
+      await onReport();
+      toast('Reported', 'success');
+      setOpen(false);
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not report', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div ref={ref} className={`relative ${className}`}>
       <div
@@ -67,24 +95,11 @@ export function PostMenu({
               role="button"
               tabIndex={0}
               aria-disabled={busy}
-              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                if (!confirm('Delete this? This cannot be undone.')) return;
-                setBusy(true);
-                onDelete().then(() => { toast('Deleted', 'success'); setOpen(false); }).catch((err: any) => toast(err?.message ?? 'Could not delete', 'error')).finally(() => setBusy(false));
+                void runDelete();
               }}}
-              onClick={async () => {
-                if (busy) return;
-                if (!confirm('Delete this? This cannot be undone.')) return;
-                try {
-                  setBusy(true);
-                  await onDelete();
-                  toast('Deleted', 'success');
-                  setOpen(false);
-                } catch (e: any) {
-                  toast(e?.message ?? 'Could not delete', 'error');
-                } finally { setBusy(false); }
-              }}
+              onClick={() => void runDelete()}
               className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50 cursor-pointer"
             >
               <Trash2 size={16} /> Delete
@@ -95,22 +110,11 @@ export function PostMenu({
               role="button"
               tabIndex={0}
               aria-disabled={busy}
-              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                setBusy(true);
-                onReport().then(() => { toast('Reported', 'success'); setOpen(false); }).catch((err: any) => toast(err?.message ?? 'Could not report', 'error')).finally(() => setBusy(false));
+                void runReport();
               }}}
-              onClick={async () => {
-                if (busy) return;
-                try {
-                  setBusy(true);
-                  await onReport();
-                  toast('Reported', 'success');
-                  setOpen(false);
-                } catch (e: any) {
-                  toast(e?.message ?? 'Could not report', 'error');
-                } finally { setBusy(false); }
-              }}
+              onClick={() => void runReport()}
               className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-ink hover:bg-brand-light/40 cursor-pointer"
             >
               <Flag size={16} /> Report
