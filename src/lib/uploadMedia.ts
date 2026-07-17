@@ -227,6 +227,113 @@ export async function probeVideo(blob: Blob): Promise<{ durationSec: number; wid
   }
 }
 
+/** Compress & convert a video on-device before upload.
+ *  Plays through a canvas for resolution downscaling, records with
+ *  MediaRecorder at an optimised bitrate. Falls back to the original
+ *  blob on any failure — callers always get a valid video.
+ *
+ *  Target: 720p max, ~2 Mbps video bitrate, MP4 container when supported. */
+async function compressVideo(blob: Blob): Promise<{ blob: Blob; mime: string }> {
+  if (typeof window === 'undefined') return { blob, mime: blob.type || 'video/mp4' };
+
+  let videoUrl = '';
+  try {
+    videoUrl = URL.createObjectURL(blob);
+
+    // Load metadata
+    const srcW = await new Promise<{ w: number; h: number; d: number }>((resolve, reject) => {
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.muted = true;
+      v.playsInline = true;
+      v.src = videoUrl;
+      v.onloadedmetadata = () => resolve({ w: v.videoWidth || 720, h: v.videoHeight || 1280, d: v.duration || 0 });
+      v.onerror = () => reject(new Error('cannot read video'));
+    });
+
+    // Only compress if video is larger than 720p or > 15 MB
+    const needsCompress = (srcW.w > 720 || srcW.h > 720) || blob.size > 15 * 1024 * 1024;
+    if (!needsCompress) return { blob, mime: blob.type || 'video/mp4' };
+
+    // Calculate output dimensions (max 720p, maintain aspect ratio)
+    let outW = srcW.w;
+    let outH = srcW.h;
+    if (outW > 720) { outH = Math.round(outH * (720 / outW)); outW = 720; }
+    if (outH > 720) { outW = Math.round(outW * (720 / outH)); outH = 720; }
+    // Ensure even dimensions (required by most encoders)
+    outW = outW - (outW % 2);
+    outH = outH - (outH % 2);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no canvas context');
+
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true;
+    video.playsInline = true;
+    video.src = videoUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () => reject(new Error('video load failed'));
+      video.load();
+    });
+
+    // Use MP4 with H.264 if supported, fall back to WebM
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')
+      ? 'video/mp4;codecs=avc1.42E01E'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : 'video/webm';
+
+    const chunks: Blob[] = [];
+    const stream = canvas.captureStream(30); // 30 fps
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 2_000_000, // ~2 Mbps
+    });
+
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+    const recorded = new Promise<Blob>((resolve) => {
+      recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType.split(';')[0] }));
+    });
+
+    // Draw frames and record
+    video.currentTime = 0;
+    await video.play();
+    recorder.start();
+
+    const drawFrame = () => {
+      if (video.ended || video.paused) return;
+      ctx.drawImage(video, 0, 0, outW, outH);
+      requestAnimationFrame(drawFrame);
+    };
+    drawFrame();
+
+    await new Promise<void>((resolve) => {
+      video.onended = () => { recorder.stop(); resolve(); };
+    });
+
+    const result = await recorded;
+    // Only use compressed version if it's actually smaller
+    if (result.size > 0 && result.size < blob.size) {
+      return { blob: result, mime: mimeType.split(';')[0] };
+    }
+    return { blob, mime: blob.type || 'video/mp4' };
+  } catch {
+    // Fall back to original blob on any failure
+    return { blob, mime: blob.type || 'video/mp4' };
+  } finally {
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+  }
+}
+
 /** Prepare an image or video Blob for upload: validate, normalise MIME,
  * grab dimensions/poster, optionally downscale images to target size,
  * generate LQIP placeholder. Throws with a user-friendly message on failure. */
@@ -288,6 +395,13 @@ export async function prepareMedia(input: Blob | File, opts?: PrepareOptions): P
   };
 
   if (isVideo) {
+    // ── On-device video compression: downscale + re-encode before upload ──
+    try {
+      const compressed = await compressVideo(blob);
+      blob = compressed.blob;
+      mime = compressed.mime;
+    } catch { /* fall back to original */ }
+
     try {
       const probe = await probeVideo(blob);
       if (probe.durationSec && probe.durationSec > MAX_VIDEO_SEC + 1) {

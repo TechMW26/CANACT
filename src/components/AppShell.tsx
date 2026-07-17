@@ -691,27 +691,12 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [islandMoment, setIslandMoment] = useState<{ icon: string; label: string; tone: 'positive' | 'negative' | 'neutral' } | null>(null);
   const islandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deltaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [homePillOpacity, setHomePillOpacity] = useState(home ? 0 : 1);
 
   const triggerIslandMoment = useCallback((icon: string, label: string, tone: 'positive' | 'negative' | 'neutral' = 'neutral') => {
     setIslandMoment({ icon, label, tone });
     if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
     islandTimerRef.current = setTimeout(() => { islandTimerRef.current = null; setIslandMoment(null); }, 2800);
   }, []);
-
-  // Listen for homepage scroll to control pill fade
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const opacity = (e as CustomEvent<{ pillOpacity: number }>).detail?.pillOpacity;
-      if (typeof opacity === 'number') setHomePillOpacity(opacity);
-    };
-    window.addEventListener('canact:home-scroll', handler);
-    return () => window.removeEventListener('canact:home-scroll', handler);
-  }, []);
-
-  useEffect(() => {
-    setHomePillOpacity(home ? 0 : 1);
-  }, [home]);
 
   // Real-time score listener with delta tracking
   useEffect(() => {
@@ -854,10 +839,24 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           <div
             ref={islandRef}
             className="canact-score-island-shell"
-            data-home-hidden={home && homePillOpacity <= 0.01}
-            style={{ opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity }}
-            aria-hidden="true"
-          />
+          >
+            <button
+              type="button"
+              onClick={() => { haptic('subtle'); setIslandOpen((v) => !v); }}
+              data-canact-score-target
+              aria-label={`Canact score ${liveScore}`}
+              aria-expanded={islandExpanded}
+              className="canact-score-island"
+              data-expanded="false"
+              data-tone={islandMoment?.tone ?? 'neutral'}
+            >
+              <span className="canact-score-island-compact">
+                <i />
+                <strong>{liveScore}</strong>
+                <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
+              </span>
+            </button>
+          </div>
 
           <div className="ml-auto inline-flex items-center gap-3">
             {/* Avatar — opens sidebar with range selector + profile link */}
@@ -953,11 +952,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           ref={islandPortalRef}
           className="canact-score-island-portal"
           data-expanded={islandExpanded}
-          data-home-hidden={home && homePillOpacity <= 0.01}
           style={{
             top: islandAnchor.top,
             left: islandAnchor.left,
-            opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity,
+            opacity: 1,
             '--canact-island-expanded-width': `${islandAnchor.expandedWidth}px`,
           } as React.CSSProperties}
           role={islandExpanded ? 'dialog' : undefined}
@@ -971,7 +969,6 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
             data-canact-score-target
             aria-label={islandExpanded ? 'Close Canact score details' : `Canact score ${liveScore}`}
             aria-expanded={islandExpanded}
-            tabIndex={home && homePillOpacity <= 0.01 ? -1 : undefined}
             onClick={() => {
               haptic('subtle');
               if (islandExpanded) {

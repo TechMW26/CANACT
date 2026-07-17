@@ -689,7 +689,7 @@ function NearbyPeopleDeck({ people, onVote, onAttr }: { people: PeoplePerson[]; 
       {launchLabel && launchKind ? <RocketLaunchOverlay label={launchLabel} kind={launchKind} onDone={() => { setLaunchLabel(null); setLaunchKind(null); }} /> : null}
       <div
         ref={containerRef}
-        className="relative h-[470px] overflow-hidden touch-none select-none"
+        className="relative aspect-[3/4] max-h-[70vh] overflow-hidden touch-none select-none"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

@@ -7,6 +7,81 @@
 .attributeAction strong { font-size: 14px; font-weight: 900; }
 .attributeAction small { margin-top: 2px; color: rgba(17,40,34,.52); font-size: 10px; font-weight: 650; line-height: 1.35; }
 
+.attributeSliders {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  border-radius: 26px;
+  background: rgba(250,248,242,.76);
+  padding: 18px;
+  color: #143e32;
+  box-shadow: 0 16px 38px rgba(24,55,45,.08), inset 0 1px 0 rgba(255,255,255,.82);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.attributeSliders header strong,
+.attributeSliders header small { display: block; }
+.attributeSliders header strong { font-size: 17px; font-weight: 950; letter-spacing: -.025em; }
+.attributeSliders header small { margin-top: 3px; color: rgba(17,40,34,.54); font-size: 11px; font-weight: 650; line-height: 1.4; }
+.attributePairList { display: grid; gap: 15px; }
+.attributePair { display: grid; gap: 8px; }
+.attributePair[data-locked="true"] { opacity: .62; }
+.attributeSpectrumLabels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 850;
+  color: rgba(17,40,34,.4);
+}
+.attributeSpectrumTrack {
+  position: relative;
+  height: 44px;
+  border-radius: 999px;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.attributeSpectrumBg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #e3d5c0 0%, #e3d5c0 48%, #e8e3d9 48%, #e8e3d9 52%, #d4ead8 52%, #d4ead8 100%);
+}
+.attributeSpectrumPill {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 100px;
+  height: 34px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #faf7f0;
+  box-shadow: 0 2px 8px rgba(17,40,34,.12), 0 0 0 1px rgba(17,40,34,.06);
+  transition: left .28s cubic-bezier(.22,.85,.3,1);
+  pointer-events: none;
+}
+.attributeSpectrumPill span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #1a4f3f;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.attributeSpectrumPillNeg { background: #f5ede0; }
+.attributeSpectrumPillPos { background: #edf7f0; }
+.attributeSpinner { justify-self: center; animation: spin .8s linear infinite; color: #1f6b55; }
+.attributeLock { justify-self: center; color: #9a514b; font-size: 11px; font-weight: 700; }
+.attributeHint { margin: -2px 0 0; color: rgba(17,40,34,.47); font-size: 10px; font-weight: 650; line-height: 1.45; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .folderCard {
   position: relative;
   min-width: 0;

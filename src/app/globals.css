@@ -371,7 +371,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   position: absolute;
   top: 50%;
   left: 50%;
-  z-index: 50;
+  z-index: 31;
   display: grid;
   width: 98px;
   height: 36px;
@@ -382,7 +382,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
 .canact-score-island-shell[data-home-hidden="true"] { pointer-events: none; }
 .canact-score-island-portal {
   position: fixed;
-  z-index: 2147482500;
+  z-index: 31;
   width: 98px;
   height: 36px;
   transform: translateX(-50%);

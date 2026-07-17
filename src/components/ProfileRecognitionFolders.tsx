@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { onValue, ref } from 'firebase/database';
 import { Avatar } from './Avatar';
 import { Sheet } from './Sheet';
 import { toast } from './Toaster';
@@ -16,8 +15,6 @@ import {
   Heart,
   Loader2,
   Laugh,
-  Minus,
-  Plus,
   Search,
   Send,
   ShieldCheck,
@@ -26,12 +23,11 @@ import {
   Users,
   Zap,
 } from './icons';
-import { ATTR_LABELS, CARD_KEYS, CARD_LABELS, LIFETIME_CARD_KINDS, LIFETIME_CARD_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type AttrKey, type CardKey, type ConnectionCardGift, type GiftCandidate, type GiftCandidateCategory, type LifetimeCardGift, type LifetimeCardKind, type LifetimeCardSlot, type UserProfile } from '@/lib/types';
+import { ATTR_LABELS, CARD_KEYS, CARD_LABELS, LIFETIME_CARD_KINDS, LIFETIME_CARD_LABELS, type AttrKey, type CardKey, type ConnectionCardGift, type GiftCandidate, type GiftCandidateCategory, type LifetimeCardGift, type LifetimeCardKind, type LifetimeCardSlot, type UserProfile } from '@/lib/types';
 import { defaultLifetimeInventory, listenLifetimeInventory, listenReceivedLifetimeCards, loadGiftCandidates, sendLifetimeCard } from '@/lib/services/lifetimeCards';
 import { listenReceivedConnectionCards, sendConnectionCard } from '@/lib/services/connectionCards';
-import { removeAttribute, setAttribute, SIX_HOURS } from '@/lib/services/votes';
+import { getAttributePairCooldownMs, listenAttributeVoteState, removeAttribute, setAttribute, type AttributeVoteMap } from '@/lib/services/votes';
 import { useAuth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
 import styles from './ProfileRecognitionFolders.module.css';
 import { CardsFolderSVG, ConnectionCardsFolderSVG } from './FolderSVGs';
 import { LifetimeCardSendAnimation } from './LifetimeCardSendAnimation';
@@ -126,8 +122,152 @@ const CONNECTION_CARD_DESCRIPTIONS: Record<CardKey, string> = {
   daring: 'For someone brave enough to take the meaningful leap.',
 };
 
+const ATTRIBUTE_PAIRS: ReadonlyArray<{ negative: AttrKey; positive: AttrKey }> = [
+  { negative: 'rude', positive: 'behaviour' },
+  { negative: 'unreliable', positive: 'reliability' },
+  { negative: 'uncivil', positive: 'civic_sense' },
+];
+
+export function AttributePairSlider({
+  negative,
+  positive,
+  negativeCount,
+  positiveCount,
+  selectedValue,
+  busy,
+  cooldownMs,
+  readOnly,
+  onCommit,
+}: {
+  negative: AttrKey;
+  positive: AttrKey;
+  negativeCount: number;
+  positiveCount: number;
+  selectedValue: -1 | 0 | 1;
+  busy: boolean;
+  cooldownMs: number;
+  readOnly: boolean;
+  onCommit: (value: -1 | 0 | 1) => void;
+}) {
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const pillRef = useRef<HTMLDivElement | null>(null);
+  const dragging = useRef(false);
+  const [draftPct, setDraftPct] = useState<number | null>(null);
+  const [edgeMargin, setEdgeMargin] = useState(15); // min % for pill center, ensures side gap = top/bottom gap
+  const total = negativeCount + positiveCount;
+  const communityBalance = total ? (positiveCount / total) * 100 : 50;
+  const locked = cooldownMs > 0;
+  const cooldownLabel = cooldownMs >= 3_600_000
+    ? `${Math.ceil(cooldownMs / 3_600_000)}h`
+    : `${Math.max(1, Math.ceil(cooldownMs / 60_000))}m`;
+  const label = ATTR_LABELS[positive];
+  const disabled = busy || (!readOnly && locked);
+
+  // Measure pill + track to compute equal side margin matching top/bottom gap (5px)
+  useEffect(() => {
+    const pill = pillRef.current;
+    const bar = barRef.current;
+    if (!pill || !bar) return;
+    const measure = () => {
+      const pw = pill.offsetWidth;
+      const bw = bar.offsetWidth;
+      if (bw > 0) {
+        // Top/bottom gap: (44 - 34) / 2 = 5px. Side gap must match: 5px.
+        // Pill center at 5px + halfPillWidth from edge → (5 + pw/2) / bw * 100
+        const margin = ((5 + pw / 2) / bw) * 100;
+        setEdgeMargin(margin);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(pill);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  // Clamp so pill edges stay exactly 5px from track edges (matching top/bottom)
+  const clampPct = (pct: number) => Math.max(edgeMargin, Math.min(100 - edgeMargin, pct));
+
+  // Resolve position: draft during drag, committed value otherwise, community balance for readOnly
+  const committedPct = clampPct(selectedValue === -1 ? edgeMargin : selectedValue === 1 ? 100 - edgeMargin : 50);
+  const pillPosition = readOnly
+    ? clampPct(communityBalance)
+    : draftPct ?? committedPct;
+
+  // Reset draft when selectedValue changes externally
+  useEffect(() => {
+    if (!dragging.current) setDraftPct(null);
+  }, [selectedValue]);
+
+  const getPctFromX = (clientX: number): number => {
+    const bar = barRef.current;
+    if (!bar) return 50;
+    const rect = bar.getBoundingClientRect();
+    const raw = ((clientX - rect.left) / rect.width) * 100;
+    return clampPct(raw);
+  };
+
+  const valueFromPct = (pct: number): -1 | 0 | 1 => {
+    const third = 100 / 3;
+    if (pct <= 50 - third / 2) return -1;
+    if (pct >= 50 + third / 2) return 1;
+    return 0;
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (disabled || readOnly) return;
+    dragging.current = true;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDraftPct(getPctFromX(e.clientX));
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current || disabled || readOnly) return;
+    setDraftPct(getPctFromX(e.clientX));
+  };
+
+  const onPointerUp = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const pct = draftPct ?? committedPct;
+    const v = valueFromPct(pct);
+    setDraftPct(null);
+    if (v !== selectedValue) onCommit(v);
+  };
+
+  return (
+    <div className={styles.attributePair} data-busy={busy} data-locked={locked} data-selected={selectedValue}>
+      <div className={styles.attributeSpectrumLabels}>
+        <span>+{negativeCount}</span>
+        <span>+{positiveCount}</span>
+      </div>
+      <div
+        ref={barRef}
+        className={styles.attributeSpectrumTrack}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{ touchAction: disabled ? 'none' : 'pan-y' }}
+      >
+        <div className={styles.attributeSpectrumBg} />
+        <div
+          ref={pillRef}
+          className={`${styles.attributeSpectrumPill} ${selectedValue === -1 ? styles.attributeSpectrumPillNeg : selectedValue === 1 ? styles.attributeSpectrumPillPos : ''}`}
+          style={{ left: `${pillPosition}%` }}
+        >
+          <span>{label}</span>
+        </div>
+      </div>
+      {busy ? <Loader2 className={styles.attributeSpinner} size={17} aria-label="Updating attribute" /> : null}
+      {!readOnly && locked ? <small className={styles.attributeLock}>Locked for {cooldownLabel}</small> : null}
+    </div>
+  );
+}
+
 export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHref }: { profile: UserProfile; isSelf: boolean; communityLeadersHref?: string }) {
   const { user } = useAuth();
+  const viewingSelf = isSelf || !profile.uid || user?.uid === profile.uid;
   const [folder, setFolder] = useState<Folder | null>(null);
   const [mode, setMode] = useState<CardMode>('received');
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('received');
@@ -146,8 +286,8 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   const [closingConnection, setClosingConnection] = useState(false);
   const [sendingConnection, setSendingConnection] = useState<CardKey | null>(null);
   const connectionSwipe = useCardSwipe();
-  const [attributePopupOpen, setAttributePopupOpen] = useState(false);
-  const [myAttrVotes, setMyAttrVotes] = useState<Record<string, { at: number }>>({});
+  const [myAttrVotes, setMyAttrVotes] = useState<AttributeVoteMap>({});
+  const [myAttrCooldowns, setMyAttrCooldowns] = useState<AttributeVoteMap>({});
   const [attributeBusy, setAttributeBusy] = useState<AttrKey | null>(null);
   const [clock, setClock] = useState(Date.now());
   const [launchLabel, setLaunchLabel] = useState<string | null>(null);
@@ -156,9 +296,9 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   useEffect(() => listenReceivedLifetimeCards(profile.uid, setReceived), [profile.uid]);
   useEffect(() => listenReceivedConnectionCards(profile.uid, setReceivedConnections), [profile.uid]);
   useEffect(() => {
-    if (isSelf) return listenLifetimeInventory(profile.uid, setInventory);
+    if (viewingSelf) return listenLifetimeInventory(profile.uid, setInventory);
     if (user?.uid) return listenLifetimeInventory(user.uid, setInventory);
-  }, [isSelf, profile.uid, user?.uid]);
+  }, [viewingSelf, profile.uid, user?.uid]);
   useEffect(() => { setSlide(0); }, [folder, mode, connectionMode]);
   useEffect(() => {
     if (pickerOpen || closingGift) rewardSwipe.reset();
@@ -167,27 +307,18 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     if (connectionPickerOpen || closingConnection) connectionSwipe.reset();
   }, [closingConnection, connectionPickerOpen, connectionSwipe.reset]);
   useEffect(() => {
-    if (!user || isSelf) { setMyAttrVotes({}); return; }
-    return onValue(ref(db, `votes/${profile.uid}/${user.uid}/attrs`), (snapshot) => {
-      const map: Record<string, { at: number }> = {};
-      snapshot.forEach((child) => { const v = child.val(); if (v) map[child.key!] = v; });
-      setMyAttrVotes(map);
+    if (!user || viewingSelf) { setMyAttrVotes({}); setMyAttrCooldowns({}); return; }
+    return listenAttributeVoteState(profile.uid, user.uid, ({ attrs, cooldowns }) => {
+      setMyAttrVotes(attrs);
+      setMyAttrCooldowns(cooldowns);
     });
-  }, [isSelf, profile.uid, user?.uid]);
+  }, [viewingSelf, profile.uid, user?.uid]);
   useEffect(() => {
-    if (!attributePopupOpen) return;
+    if (viewingSelf) return;
     setClock(Date.now());
     const timer = window.setInterval(() => setClock(Date.now()), 30_000);
     return () => window.clearInterval(timer);
-  }, [attributePopupOpen]);
-
-  const attributeCards = useMemo(() => [...POSITIVE_ATTRS, ...NEGATIVE_ATTRS].map((key) => ({
-    key,
-    count: Number(profile.attrs?.[key]) || 0,
-    positive: POSITIVE_ATTRS.includes(key as typeof POSITIVE_ATTRS[number]),
-  })), [profile.attrs]);
-  const positiveAttrs = useMemo(() => attributeCards.filter((a) => a.positive), [attributeCards]);
-  const negativeAttrs = useMemo(() => attributeCards.filter((a) => !a.positive), [attributeCards]);
+  }, [viewingSelf]);
   const rewardCards = LIFETIME_CARD_KINDS.map((kind) => inventory[kind]);
   const availableCount = rewardCards.filter((item) => item.status === 'available').length;
   const connectionCards = CARD_KEYS.map((key) => ({ key }));
@@ -200,18 +331,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     city: profile.city,
     categories: [],
   }), [profile.city, profile.firstName, profile.fullName, profile.photoURL, profile.uid]);
-  const attributeCooldown = (key: AttrKey): number => {
-    const v = myAttrVotes[key];
-    if (!v?.at) return 0;
-    return Math.max(0, SIX_HOURS - (clock - v.at));
-  };
-
-  /** Shortest cooldown across all given attributes (for the info line). */
-  const minCooldown = useMemo(() => {
-    const keys = Object.keys(myAttrVotes);
-    if (!keys.length) return 0;
-    return Math.min(...keys.map((k) => attributeCooldown(k as AttrKey)));
-  }, [myAttrVotes, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+  const attributeCooldown = (key: AttrKey): number => getAttributePairCooldownMs(myAttrVotes, myAttrCooldowns, key, clock);
 
   const givenAttrKeys = useMemo(() => new Set(Object.keys(myAttrVotes)), [myAttrVotes]);
 
@@ -230,7 +350,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   }
 
   async function addAttribute(key: AttrKey) {
-    if (!user || isSelf || attributeBusy) return;
+    if (!user || viewingSelf || attributeBusy) return;
 
     // Already given and past cooldown → take it back (minus).
     if (givenAttrKeys.has(key) && attributeCooldown(key) === 0) {
@@ -259,8 +379,8 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
       return;
     }
 
-    // Giving a new (different) attribute — per-attribute cooldown only
-    // applies if the exact same key was given already (handled by setAttribute).
+    // Giving or switching sides uses the pair-wide cooldown enforced by the
+    // shared service, so every attribute entry point follows the same ledger.
     setAttributeBusy(key);
     const label = ATTR_LABELS[key];
     try {
@@ -276,6 +396,15 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     } finally {
       setAttributeBusy(null);
     }
+  }
+
+  function updateAttributePair(negative: AttrKey, positive: AttrKey, value: number) {
+    if (viewingSelf || attributeBusy) return;
+    const current = givenAttrKeys.has(positive) ? positive : givenAttrKeys.has(negative) ? negative : null;
+    const next = value > 0 ? positive : value < 0 ? negative : null;
+    if (next === current) return;
+    if (next) void addAttribute(next);
+    else if (current) void addAttribute(current);
   }
 
   function openGiftPicker(kind: LifetimeCardKind, gift: LifetimeCardGift | null = null) {
@@ -338,27 +467,49 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
           <ConnectionCardsFolderSVG count={connectionCount} />
         </button>
         <button type="button" className={styles.folderCard} aria-label="Open lifetime cards" onClick={() => openFolder('cards')}>
-          <CardsFolderSVG count={received.length} label="Cards received" />
+          <CardsFolderSVG count={received.length} label="Lifetime cards" />
         </button>
       </div>
 
-      {communityLeadersHref ? (
-        <div className="grid grid-cols-2 gap-3">
-          <button type="button" className={styles.attributeAction} onClick={() => setAttributePopupOpen(true)}>
-            <span><strong>{isSelf ? 'Your attributes' : 'Know this person?'}</strong></span>
-            <ChevronRight size={20} />
-          </button>
-          <Link href={communityLeadersHref} className={styles.attributeAction}>
-            <span><strong>Community leaders</strong></span>
-            <ChevronRight size={20} />
-          </Link>
+      <section className={styles.attributeSliders} aria-labelledby={`attribute-sliders-${profile.uid}`}>
+        <header>
+          <div>
+            <strong id={`attribute-sliders-${profile.uid}`}>{viewingSelf ? 'Your attributes' : `Know ${profile.firstName || profile.fullName.split(' ')[0]}`}</strong>
+            <small>{viewingSelf ? 'Community balance across three paired signals.' : 'Slide toward the signal that matches your experience.'}</small>
+          </div>
+        </header>
+        <div className={styles.attributePairList}>
+          {ATTRIBUTE_PAIRS.map(({ negative, positive }) => {
+            const negativeCount = Number(profile.attrs?.[negative]) || 0;
+            const positiveCount = Number(profile.attrs?.[positive]) || 0;
+            const selectedValue: -1 | 0 | 1 = givenAttrKeys.has(positive) ? 1 : givenAttrKeys.has(negative) ? -1 : 0;
+            const busy = attributeBusy === negative || attributeBusy === positive;
+            const cooldownMs = getAttributePairCooldownMs(myAttrVotes, myAttrCooldowns, positive, clock);
+            return (
+              <AttributePairSlider
+                key={positive}
+                negative={negative}
+                positive={positive}
+                negativeCount={negativeCount}
+                positiveCount={positiveCount}
+                selectedValue={selectedValue}
+                busy={busy}
+                cooldownMs={cooldownMs}
+                readOnly={viewingSelf}
+                onCommit={(value) => updateAttributePair(negative, positive, value)}
+              />
+            );
+          })}
         </div>
-      ) : (
-        <button type="button" className={styles.attributeAction} onClick={() => setAttributePopupOpen(true)}>
-          <span><strong>{isSelf ? 'How people know you' : 'Know this person?'}</strong><small>{isSelf ? 'Open your six community attributes' : `Add what stands out about ${profile.firstName || profile.fullName.split(' ')[0]}`}</small></span>
+        {!viewingSelf ? <p className={styles.attributeHint}>Drag to an edge to give a signal. Return to the centre to take it back after the cooldown.</p> : null}
+      </section>
+
+      {communityLeadersHref ? (
+        <Link href={communityLeadersHref} className={styles.attributeAction}>
+          <span><strong>Community leaders</strong></span>
           <ChevronRight size={20} />
-        </button>
-      )}
+        </Link>
+      ) : null}
 
       <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost>
         {folder === 'connections' ? (
@@ -390,8 +541,8 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
               <button type="button" className={mode === 'reward' ? styles.activeTab : ''} onClick={() => setMode('reward')}>Give · {availableCount}/3</button>
             </div>
             {mode === 'received' ? (
-              <CardGallery items={received} index={slide} setIndex={setSlide} empty="No lifetime cards received yet." onDragY={isSelf ? rewardSwipe.onDrag : undefined} render={(gift) => (
-                isSelf ? (
+              <CardGallery items={received} index={slide} setIndex={setSlide} empty="No lifetime cards received yet." onDragY={viewingSelf ? rewardSwipe.onDrag : undefined} render={(gift) => (
+                viewingSelf ? (
                   <ReceivedLifetimeCard
                     card={gift}
                     active={pickerOpen && receivedGift?.id === gift.id}
@@ -415,7 +566,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         kind={giftKind}
         sourceGift={receivedGift}
         profile={profile}
-        fixedRecipient={isSelf ? null : profileRecipient}
+        fixedRecipient={viewingSelf ? null : profileRecipient}
         onClose={closeGiftPicker}
         onExited={finishGiftClose}
         onSendingChange={(sending) => setSendingSource(sending ? giftSourceKey : null)}
@@ -426,20 +577,12 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         open={connectionPickerOpen}
         kind={connectionKind}
         profile={profile}
-        fixedRecipient={isSelf ? null : profileRecipient}
+        fixedRecipient={viewingSelf ? null : profileRecipient}
         onClose={closeConnectionPicker}
         onExited={finishConnectionClose}
         onSendingChange={(sending) => setSendingConnection(sending ? connectionKind : null)}
         onSent={finishConnectionSend}
       />
-
-      <Sheet open={attributePopupOpen} onClose={() => setAttributePopupOpen(false)} title={isSelf ? 'Your attributes' : `Know ${profile.firstName || profile.fullName.split(' ')[0]}`} topmost>
-        <div className={styles.attributePopup}>
-          <p>{isSelf ? 'These are the community signals people have shared about you.' : minCooldown > 0 ? `You gave ${[...givenAttrKeys].map((k) => ATTR_LABELS[k as AttrKey]).join(', ')} · next update in ${Math.ceil(minCooldown / 3_600_000)}h.` : 'Choose the attributes that best reflect your experience with this person.'}</p>
-          <AttributePickerGroup title="Positive traits" items={positiveAttrs} selected={givenAttrKeys} isSelf={isSelf} disabled={!!attributeBusy} busy={attributeBusy} onPick={addAttribute} />
-          <AttributePickerGroup title="Concerns" items={negativeAttrs} selected={givenAttrKeys} isSelf={isSelf} disabled={!!attributeBusy} busy={attributeBusy} onPick={addAttribute} />
-        </div>
-      </Sheet>
 
       {launchLabel && launchKind ? <RocketLaunchOverlay label={launchLabel} kind={launchKind} onDone={() => { setLaunchLabel(null); setLaunchKind(null); }} /> : null}
     </>
@@ -516,23 +659,6 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
         </div>
       </div>
     </div>
-  );
-}
-
-function AttributePickerGroup({ title, items, selected, isSelf, disabled, busy, onPick }: { title: string; items: Array<{ key: AttrKey; count: number; positive: boolean }>; selected: Set<string>; isSelf: boolean; disabled: boolean; busy: AttrKey | null; onPick: (key: AttrKey) => void }) {
-  return (
-    <section className={styles.attributeGroup}>
-      <h3>{title}</h3>
-      <div>{items.map((item) => {
-        const chosen = selected.has(item.key);
-        return (
-          <button key={item.key} type="button" data-positive={item.positive} data-selected={chosen} disabled={isSelf || disabled} onClick={() => onPick(item.key)}>
-            <span><strong>{ATTR_LABELS[item.key]}</strong><small>{item.count} received</small></span>
-            {isSelf ? <b>{item.count}</b> : busy === item.key ? <Loader2 size={18} className="animate-spin" /> : chosen ? <i aria-hidden data-remove><Minus size={17} /></i> : <i aria-hidden><Plus size={17} /></i>}
-          </button>
-        );
-      })}</div>
-    </section>
   );
 }
 

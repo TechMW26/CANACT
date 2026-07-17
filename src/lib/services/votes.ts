@@ -19,6 +19,7 @@ export const SIX_HOURS = 6 * 3600 * 1000;
 
 export type AttributeVote = { at: number };
 export type AttributeVoteMap = Partial<Record<AttrKey, AttributeVote>>;
+export type AttributeVoteState = { attrs: AttributeVoteMap; cooldowns: AttributeVoteMap };
 export type AttributeMutationResult = {
   ok: boolean;
   action?: 'given' | 'replaced' | 'removed';
@@ -32,9 +33,36 @@ export function listenAttributeVotes(toUid: string, fromUid: string, callback: (
   });
 }
 
+export function listenAttributeVoteState(toUid: string, fromUid: string, callback: (state: AttributeVoteState) => void) {
+  return onValue(ref(db, `votes/${toUid}/${fromUid}`), (snapshot) => {
+    const value = snapshot.val() ?? {};
+    callback({
+      attrs: (value.attrs ?? {}) as AttributeVoteMap,
+      cooldowns: (value.attrCooldowns ?? {}) as AttributeVoteMap,
+    });
+  });
+}
+
 export function getAttributeCooldownMs(votes: AttributeVoteMap, attr: AttrKey, now = Date.now()) {
   const at = Number(votes[attr]?.at || 0);
   return at ? Math.max(0, SIX_HOURS - (now - at)) : 0;
+}
+
+/** One bipolar slider is one voting unit. Any action on either side locks the
+ * entire pair, including the neutral state after taking a signal back. */
+export function getAttributePairCooldownMs(
+  votes: AttributeVoteMap,
+  cooldowns: AttributeVoteMap,
+  attr: AttrKey,
+  now = Date.now(),
+) {
+  const opposite = ATTR_OPPOSITES[attr] as AttrKey | undefined;
+  const keys = opposite ? [attr, opposite] : [attr];
+  const latestActionAt = Math.max(...keys.flatMap((key) => [
+    Number(votes[key]?.at || 0),
+    Number(cooldowns[key]?.at || 0),
+  ]));
+  return latestActionAt ? Math.max(0, SIX_HOURS - (now - latestActionAt)) : 0;
 }
 
 // Local cache for vote lookups to avoid redundant get() calls
@@ -104,9 +132,9 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
 
 /**
  * Give an attribute to a user. Each voter can give multiple different
- * attributes to the same person — they accumulate independently. An active
- * attribute can never be counted twice. Removal/re-adding and opposite-trait
- * replacement both obey the same six-hour ledger across every UI entry point.
+ * attributes to the same person — one per bipolar pair. An active attribute
+ * can never be counted twice. Removal, re-adding, and switching sides all obey
+ * the pair's shared six-hour ledger across every UI entry point.
  */
 export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<AttributeMutationResult> {
   if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid attribute recipient');
@@ -127,19 +155,13 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
       waitMs = getAttributeCooldownMs(attrs, attr, votedAt);
       return;
     }
-    const previousActionAt = Number(cooldowns[attr]?.at || 0);
-    if (previousActionAt && votedAt - previousActionAt < SIX_HOURS) {
+    const pairWait = getAttributePairCooldownMs(attrs, cooldowns, attr, votedAt);
+    if (pairWait > 0) {
       reason = 'cooldown';
-      waitMs = SIX_HOURS - (votedAt - previousActionAt);
+      waitMs = pairWait;
       return;
     }
     if (opposite && attrs[opposite]) {
-      const oppositeWait = getAttributeCooldownMs(attrs, opposite, votedAt);
-      if (oppositeWait > 0) {
-        reason = 'cooldown';
-        waitMs = oppositeWait;
-        return;
-      }
       delete attrs[opposite];
       cooldowns[opposite] = { at: votedAt };
       removedOpposite = opposite;
@@ -173,9 +195,8 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
 }
 
 /**
- * Remove (take back) a specific attribute you previously gave. Each attribute
- * has its own 6h cooldown — you must wait before taking back a freshly-given
- * one, but other previously-given attributes can be taken back independently.
+ * Remove (take back) a specific attribute you previously gave. Each bipolar
+ * pair has one 6h cooldown; the opposite side remains locked after removal.
  */
 export async function removeAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<AttributeMutationResult> {
   if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid attribute recipient');
@@ -184,7 +205,12 @@ export async function removeAttribute(toUid: string, fromUid: string, attr: Attr
   let alreadyAbsent = false;
   const result = await runTransaction(ref(db, `votes/${toUid}/${fromUid}`), (current: any) => {
     if (!current?.attrs?.[attr]) { alreadyAbsent = true; return; }
-    const remaining = SIX_HOURS - (changedAt - Number(current.attrs[attr].at || 0));
+    const remaining = getAttributePairCooldownMs(
+      current.attrs ?? {},
+      current.attrCooldowns ?? {},
+      attr,
+      changedAt,
+    );
     if (remaining > 0) { waitMs = remaining; return; }
     const attrs = { ...current.attrs };
     delete attrs[attr];

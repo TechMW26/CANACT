@@ -9,8 +9,8 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, ATTR_LABELS, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
-import { getAttributeCooldownMs, removeAttribute, setAttribute, setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
+import { setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
 import { listenUserPolls, deletePoll } from '@/lib/services/poll';
@@ -18,7 +18,7 @@ import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/service
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
-import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
+import { ProfileRecognitionFolders, AttributePairSlider } from '@/components/ProfileRecognitionFolders';
 import { listenFavourites, requestFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest,
@@ -55,6 +55,7 @@ import {
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const { user, profile: me } = useAuth();
+  const viewingSelf = isSelf || user?.uid === uid;
   const [u, setU] = useState<UserProfile | null>(null);
   const [myVote, setMyVote] = useState<{ main?: 'like' | 'dislike'; attrs?: AttributeVoteMap; cards?: Record<string, number> } | null>(null);
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
@@ -62,24 +63,29 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
 
   useEffect(() => {
-    return onValue(ref(db, `users/${uid}`), (s) => setU(s.val()));
+    return onValue(ref(db, `users/${uid}`), (snapshot) => {
+      const value = snapshot.val() as UserProfile | null;
+      // The Firebase path is authoritative. Older records may have no uid
+      // field (or a stale copied value), which must never be used as a vote target.
+      setU(value ? { ...value, uid } : null);
+    });
   }, [uid]);
 
   useEffect(() => {
-    if (!user || isSelf) return;
+    if (!user || viewingSelf) return;
     return onValue(ref(db, `votes/${uid}/${user.uid}`), (s) => setMyVote(s.val() ?? {}));
-  }, [uid, user?.uid, isSelf]);
+  }, [uid, user?.uid, viewingSelf]);
 
   useEffect(() => {
-    if (!user || isSelf) return;
+    if (!user || viewingSelf) return;
     return listenFriendStatus(user.uid, uid, setFriendStatus);
-  }, [uid, user?.uid, isSelf]);
+  }, [uid, user?.uid, viewingSelf]);
 
   // Detect whether this profile is in the viewer's favourites (gold ring).
   useEffect(() => {
-    if (!user || isSelf) return;
+    if (!user || viewingSelf) return;
     return listenFavourites(user.uid, (uids) => setIsFavourite(uids.includes(uid)));
-  }, [uid, user?.uid, isSelf]);
+  }, [uid, user?.uid, viewingSelf]);
 
   // Instagram-style posts grid (user's authored WHA posts).
   const [posts, setPosts] = useState<WhaPost[]>([]);
@@ -131,23 +137,8 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     );
   }
 
-  const handleAttr = async (k: AttrKey) => {
-    if (isSelf || !user) return;
-    const votes = myVote?.attrs ?? {};
-    const current = votes[k];
-    const cooldown = getAttributeCooldownMs(votes, k);
-    if (current && cooldown > 0) {
-      toast(`Wait ${Math.ceil(cooldown / 3_600_000)}h to update this attribute`, 'error');
-      return;
-    }
-    const r = current ? await removeAttribute(uid, user.uid, k) : await setAttribute(uid, user.uid, k);
-    if (!r.ok) {
-      toast(`Wait ${Math.max(1, Math.ceil((r.waitMs ?? 0) / 3_600_000))}h to update attributes`, 'error');
-    } else toast(current ? 'Attribute taken back' : 'Attribute updated', 'success');
-  };
-
   const handleCard = async (c: CardKey) => {
-    if (isSelf || !user) return;
+    if (viewingSelf || !user) return;
     if (myVote?.cards?.[c]) await takeBackCard(uid, user.uid, c);
     else await giveCard(uid, user.uid, c);
   };
@@ -167,7 +158,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   })();
 
   const handleProfileSupport = async () => {
-    if (isSelf || !user || !me) return;
+    if (viewingSelf || !user || !me) return;
     try {
       if (friendStatus === 'incoming') {
         await acceptFriendRequest(
@@ -204,7 +195,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   };
 
   const handleProfileBookmark = async () => {
-    if (isSelf || !user || !me) return;
+    if (viewingSelf || !user || !me) return;
     try {
       await requestFollow(user.uid, me.fullName, uid);
       toast('Request sent', 'success');
@@ -214,7 +205,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   };
 
   const handleProfileVote = async (kind: 'like' | 'dislike') => {
-    if (isSelf || !user || profileVoteBusy) return;
+    if (viewingSelf || !user || profileVoteBusy) return;
     const previousVote = myVote?.main;
     setProfileVoteBusy(true);
     setMyVote((current) => ({ ...(current ?? {}), main: kind }));
@@ -241,7 +232,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   return (
     <CanactPagesProfileUI
       userProfile={u}
-      isSelf={isSelf}
+      isSelf={viewingSelf}
       isVerified={isVerified}
       age={age}
       locationText={locationText}
@@ -737,11 +728,7 @@ function CanactPagesProfileUI({
         <Sheet open={attrsSheetOpen} onClose={() => setAttrsSheetOpen(false)} title={`${displayName}'s attributes`}>
           <div className="flex flex-col gap-4">
             {userProfile.photoURL ? (
-              <img
-                src={userProfile.photoURL}
-                alt={displayName}
-                className="w-full h-auto aspect-square rounded-2xl object-cover bg-brand-light"
-              />
+              <img src={userProfile.photoURL} alt={displayName} className="w-full h-auto aspect-square rounded-2xl object-cover bg-brand-light" />
             ) : (
               <div className="flex w-full aspect-square items-center justify-center rounded-2xl bg-brand-light text-5xl font-extrabold text-brand">
                 {(displayName || '?')[0]?.toUpperCase()}
@@ -751,26 +738,24 @@ function CanactPagesProfileUI({
               <div className="text-lg font-extrabold text-ink">{displayName}</div>
               <div className="text-sm text-ink/50">@{profileSlug(userProfile)}</div>
             </div>
-            {POSITIVE_ATTRS.map((k) => {
-              const count = userProfile.attrs?.[k] ?? 0;
-              if (!count) return null;
-              return (
-                <div key={k} className="flex items-center justify-between rounded-xl bg-brand-light/40 px-4 py-3">
-                  <span className="text-sm font-semibold text-brand">{ATTR_LABELS[k]}</span>
-                  <span className="text-sm font-extrabold text-brand">{count}</span>
-                </div>
-              );
-            })}
-            {NEGATIVE_ATTRS.map((k) => {
-              const count = userProfile.attrs?.[k] ?? 0;
-              if (!count) return null;
-              return (
-                <div key={k} className="flex items-center justify-between rounded-xl bg-red-50 px-4 py-3">
-                  <span className="text-sm font-semibold text-red-700">{ATTR_LABELS[k]}</span>
-                  <span className="text-sm font-extrabold text-red-700">{count}</span>
-                </div>
-              );
-            })}
+            {[
+              { pos: 'behaviour' as AttrKey, neg: 'rude' as AttrKey },
+              { pos: 'reliability' as AttrKey, neg: 'unreliable' as AttrKey },
+              { pos: 'civic_sense' as AttrKey, neg: 'uncivil' as AttrKey },
+            ].map(({ pos, neg }) => (
+              <AttributePairSlider
+                key={pos}
+                negative={neg}
+                positive={pos}
+                negativeCount={userProfile.attrs?.[neg] ?? 0}
+                positiveCount={userProfile.attrs?.[pos] ?? 0}
+                selectedValue={0}
+                busy={false}
+                cooldownMs={0}
+                readOnly
+                onCommit={() => {}}
+              />
+            ))}
             {(!userProfile.attrs || Object.values(userProfile.attrs).every((v) => !v)) && (
               <p className="text-center text-sm text-ink/40">No attributes yet.</p>
             )}
@@ -831,26 +816,6 @@ function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
 }
 
 function LockedField(_: { label: string; value: string; className?: string }) { return null; }
-
-function AttrGroup({ title, items, u, mine, disabled, onPick, positive }: { title: string; items: readonly AttrKey[]; u: UserProfile; mine?: AttrKey; disabled: boolean; onPick: (k: AttrKey) => void; positive: boolean }) {
-  return (
-    <div className={`rounded-xl p-3 border ${positive ? 'border-brand-light bg-white' : 'border-line bg-white'}`}>
-      <h4 className={`text-xs font-bold mb-2 ${positive ? 'text-brand' : 'text-muted'}`}>{title}</h4>
-      <div className="flex flex-col gap-1.5">
-        {items.map((k) => {
-          const selected = mine === k;
-          return (
-            <button key={k} disabled={disabled} onClick={() => onPick(k)}
-              className={`text-left text-sm rounded-full px-3 h-9 border ${selected ? 'bg-brand text-white border-brand' : 'bg-candy text-ink border-line'} disabled:opacity-60`}>
-              <span>{ATTR_LABELS[k]}</span>
-              <span className="float-right text-xs opacity-80">{u.attrs?.[k] ?? 0}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 /** Single cell of the clean self-profile stats card (Likes / Friends /
  *  Rating). Mirrors the rounded white card with three centred columns
