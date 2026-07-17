@@ -61,7 +61,7 @@
 }
 .legend span { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; color: #244937; font-size: 10px; font-weight: 800; }
 .legend i, .filterLegend i { width: 8px; height: 8px; border-radius: 50%; }
-.heatDot { background: #126b36; box-shadow: 0 0 0 4px rgb(18 107 54 / 15%); }
+.legend .heatDot { width: 18px; border-radius: 999px; background: linear-gradient(90deg, #3e82f6, #35a853, #f4d347, #f29122, #da3a31); box-shadow: 0 0 0 3px rgb(18 107 54 / 10%); }
 .postDot { background: #1f6b55; }
 .storyDot { background: #f2b72e; }
 

@@ -31,6 +31,9 @@ function isVideoUrl(url: string | undefined | null): boolean {
  * networks.
  */
 export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment; mine?: boolean }) {
+  // Voice messages are self-contained — no DB lookup needed
+  if (attachment.kind === 'voice') return <VoiceMessageBubble audioUrl={attachment.audioUrl} durationSec={attachment.durationSec} />;
+
   // `thumb` is whatever paints in the preview tile. `thumbIsVideo` tells the
   // render path whether to use <img> or a paused <video> first-frame poster.
   const [thumb, setThumb] = useState<string | undefined>(attachment.thumbUrl);
@@ -119,9 +122,6 @@ export function ChatAttachmentCard({ attachment }: { attachment: ChatAttachment;
     : attachment.kind === 'reel' ? `/reel/${attachment.reelId}`
     : authorUid ? `/profile/${authorUid}` : '/feed';
   const label = attachment.kind === 'post' ? 'Post' : attachment.kind === 'poll' ? 'Poll' : attachment.kind === 'reel' ? 'Reel' : 'Rate Me';
-
-  // ── Voice message ──
-  if (attachment.kind === 'voice') return <VoiceMessageBubble audioUrl={attachment.audioUrl} durationSec={attachment.durationSec} />;
 
   return (
     <Link

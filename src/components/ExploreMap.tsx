@@ -37,27 +37,52 @@ type ActivityProperties = {
 };
 
 type LocatedPerson = FriendMapPerson & Point;
-type PersonCluster = { id: string; people: LocatedPerson[] };
+type PersonCluster = { id: string; people: LocatedPerson[]; center: Point };
 type MapPopup =
   | { mode: 'people'; people: LocatedPerson[] }
   | { mode: 'content'; person: LocatedPerson; activities: ExploreActivity[] };
 
 const MAP_CONTENT_TTL = 24 * 3600 * 1000;
 const SAME_LOCATION_METERS = 1;
-const OVERLAP_METERS = 2;
+const MARKER_CLUSTER_PIXELS = 52;
 
 function isLocatedPerson(person: FriendMapPerson): person is LocatedPerson {
   return typeof person.lat === 'number' && typeof person.lng === 'number';
 }
 
-function clusterPeople(people: FriendMapPerson[]): PersonCluster[] {
+function visualOverlapMeters(a: Point, b: Point, zoom: number) {
+  const latitude = (a.lat + b.lat) / 2;
+  const metersPerPixel = (156543.03392 * Math.cos((latitude * Math.PI) / 180)) / (2 ** zoom);
+  return Math.max(2, metersPerPixel * MARKER_CLUSTER_PIXELS);
+}
+
+function clusterPeople(people: FriendMapPerson[], zoom: number): PersonCluster[] {
+  const remaining = people.filter(isLocatedPerson);
   const clusters: PersonCluster[] = [];
-  for (const person of people.filter(isLocatedPerson)) {
-    const cluster = clusters.find((candidate) =>
-      haversineMeters(candidate.people[0], person) <= OVERLAP_METERS,
-    );
-    if (cluster) cluster.people.push(person);
-    else clusters.push({ id: person.uid, people: [person] });
+  while (remaining.length) {
+    const members = [remaining.shift()!];
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (let index = 0; index < remaining.length;) {
+        const person = remaining[index];
+        const overlaps = members.some((member) =>
+          haversineMeters(member, person) <= visualOverlapMeters(member, person, zoom),
+        );
+        if (overlaps) {
+          members.push(...remaining.splice(index, 1));
+          expanded = true;
+        } else index += 1;
+      }
+    }
+    clusters.push({
+      id: members.map((person) => person.uid).sort().join(':'),
+      people: members,
+      center: {
+        lat: members.reduce((sum, person) => sum + person.lat, 0) / members.length,
+        lng: members.reduce((sum, person) => sum + person.lng, 0) / members.length,
+      },
+    });
   }
   return clusters;
 }
@@ -90,6 +115,7 @@ export function ExploreMap({
   const [loadError, setLoadError] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const [popup, setPopup] = useState<MapPopup | null>(null);
+  const [mapZoom, setMapZoom] = useState(() => currentLocation ? 20 : 13);
   interactionRef.current = onInteraction;
   locationRef.current = currentLocation;
   routerRef.current = router;
@@ -123,7 +149,8 @@ export function ExploreMap({
     && typeof activity.createdAt === 'number'
     && clock - activity.createdAt <= MAP_CONTENT_TTL,
   ), [activities, clock]);
-  const personClusters = useMemo(() => clusterPeople(people), [people]);
+  const locatedPeople = useMemo(() => people.filter(isLocatedPerson), [people]);
+  const personClusters = useMemo(() => clusterPeople(locatedPeople, mapZoom), [locatedPeople, mapZoom]);
   const contentForPerson = useMemo(() => {
     const result = new Map<string, ExploreActivity[]>();
     for (const person of people.filter(isLocatedPerson)) {
@@ -158,6 +185,14 @@ export function ExploreMap({
       },
     })),
   }), [mapActivities]);
+  const peopleDensityGeoJSON = useMemo<FeatureCollection<GeoJSONPoint, ActivityProperties>>(() => ({
+    type: 'FeatureCollection',
+    features: locatedPeople.map((person) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [person.lng, person.lat] },
+      properties: { id: person.uid, kind: 'person', weight: 1, href: '', thumbUrl: '', color: '#1f6b55' },
+    })),
+  }), [locatedPeople]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -176,6 +211,7 @@ export function ExploreMap({
         cooperativeGestures: false,
         interactive: !preview,
       });
+      map.on('zoomend', () => { if (!disposed) setMapZoom(map.getZoom()); });
       if (!preview) {
         map.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
         map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
@@ -250,21 +286,34 @@ export function ExploreMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    if (!map.getSource('canact-activity')) {
-      map.addSource('canact-activity', { type: 'geojson', data: activityGeoJSON });
+    if (!map.getSource('canact-people-density')) {
+      map.addSource('canact-people-density', { type: 'geojson', data: peopleDensityGeoJSON });
       map.addLayer({
-        id: 'canact-activity-heat',
+        id: 'canact-people-density-heat',
         type: 'heatmap',
-        source: 'canact-activity',
-        maxzoom: 17,
+        source: 'canact-people-density',
+        maxzoom: 22,
         paint: {
-          'heatmap-weight': ['interpolate', ['linear'], ['get', 'weight'], 0, 0, 3, 1],
-          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 7, .55, 15, 1.5],
-          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 7, 18, 15, 48],
-          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, .45, 16, .72, 17, 0],
-          'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(31,107,85,0)', .18, 'rgba(124,166,96,.32)', .42, 'rgba(59,137,72,.55)', .7, 'rgba(20,111,54,.78)', 1, 'rgba(8,73,43,.9)'],
+          'heatmap-weight': 1,
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 7, .7, 15, 1.35, 20, 1.8],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 7, 24, 15, 52, 20, 72],
+          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 7, .42, 15, .68, 20, .62, 22, .45],
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(62,130,246,0)',
+            .08, 'rgba(62,130,246,.38)',
+            .28, 'rgba(53,168,83,.48)',
+            .5, 'rgba(244,211,71,.58)',
+            .72, 'rgba(242,145,34,.70)',
+            1, 'rgba(218,58,49,.82)',
+          ],
         },
       });
+    } else {
+      (map.getSource('canact-people-density') as GeoJSONSource).setData(peopleDensityGeoJSON);
+    }
+    if (!map.getSource('canact-activity')) {
+      map.addSource('canact-activity', { type: 'geojson', data: activityGeoJSON });
       map.addLayer({
         id: 'canact-content-pins-halo',
         type: 'circle',
@@ -296,7 +345,7 @@ export function ExploreMap({
     } else {
       (map.getSource('canact-activity') as GeoJSONSource).setData(activityGeoJSON);
     }
-  }, [activityGeoJSON, openActivityHref, ready]);
+  }, [activityGeoJSON, openActivityHref, peopleDensityGeoJSON, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -339,10 +388,11 @@ export function ExploreMap({
       marker.type = 'button';
       marker.className = styles.personMarker;
       const outsideImmediateRadius = currentLocation
-        ? haversineMeters(currentLocation, { lat: person.lat, lng: person.lng }) > 15
+        ? cluster.people.every((entry) => haversineMeters(currentLocation, entry) > 15)
         : false;
       marker.dataset.outsideRadius = String(outsideImmediateRadius);
       marker.dataset.hasLocalContent = String(cluster.people.some((entry) => (contentForPerson.get(entry.uid)?.length ?? 0) > 0));
+      marker.dataset.cluster = String(cluster.people.length > 1);
       marker.setAttribute('aria-label', cluster.people.length > 1 ? `Choose from ${cluster.people.length} people here` : `Open ${person.name}`);
       const portrait = document.createElement('span');
       portrait.className = styles.personMarkerPhoto;
@@ -360,7 +410,7 @@ export function ExploreMap({
         else openPerson(person);
       };
       else marker.tabIndex = -1;
-      markersRef.current.push(new library.Marker({ element: marker, anchor: 'bottom' }).setLngLat([person.lng, person.lat]).addTo(map));
+      markersRef.current.push(new library.Marker({ element: marker, anchor: 'bottom' }).setLngLat([cluster.center.lng, cluster.center.lat]).addTo(map));
     }
   }, [currentLocation?.lat, currentLocation?.lng, personClusters, contentForPerson, ready, preview]);
 
