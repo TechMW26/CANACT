@@ -1,4 +1,4 @@
-import { get, onValue, ref, runTransaction, set, remove } from 'firebase/database';
+import { get, onValue, ref, runTransaction, set, remove, update } from 'firebase/database';
 import { db } from '../firebase';
 import { AttrKey, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, UserProfile } from '../types';
 
@@ -212,27 +212,28 @@ async function refreshCanactScore(uid: string) {
     const snap = await get(ref(db, `users/${uid}`));
     const profile = snap.val() as UserProfile | null;
     if (!profile) return;
-    const oldRating = profile.rating ?? 0;
+    const oldScore = profile.canactScore ?? calculateCanactScore(profile).score;
     const { score, label } = calculateCanactScore(profile);
-    const newRating = Math.round(score);
-    profile.rating = newRating;
-    profile.ratingCount = profile.ratingCount ?? 0;
-    await set(ref(db, `users/${uid}/rating`), profile.rating);
+    const newScore = Math.round(score);
+    await update(ref(db, `users/${uid}`), {
+      canactScore: newScore,
+      canactScoreUpdatedAt: Date.now(),
+    });
 
     // Notify the user if their score changed meaningfully.
-    const delta = newRating - oldRating;
+    const delta = newScore - oldScore;
     if (Math.abs(delta) >= 5) {
       import('./sendPush').then(({ sendPush }) => {
         sendPush({
           toUid: uid,
           title: delta > 0
-            ? `Your trust score increased to ${newRating} ${label} ↑`
-            : `Your trust score changed to ${newRating} ${label}`,
+            ? `Your trust score increased to ${newScore} ${label} ↑`
+            : `Your trust score changed to ${newScore} ${label}`,
           body: delta > 0
             ? 'Your community presence is growing. Keep it up!'
             : 'Stay consistent — small reliable actions rebuild momentum.',
           url: '/',
-          tag: `score:${newRating}`,
+          tag: `score:${newScore}`,
         }).catch(() => {});
       }).catch(() => {});
     }

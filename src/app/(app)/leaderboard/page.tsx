@@ -12,10 +12,11 @@ import styles from './Leaderboard.module.css';
 
 type Movement = { direction: 'up' | 'down' | 'steady'; label: string };
 
-function movementForRank(rank: number): Movement {
-  if (rank % 3 === 1) return { direction: 'up', label: 'Moving up' };
-  if (rank % 3 === 2) return { direction: 'down', label: 'Slight drop' };
-  return { direction: 'steady', label: 'Holding steady' };
+function movementForProfile(profile: UserProfile): Movement {
+  const { delta } = calculateCanactScore(profile);
+  if (delta > 0) return { direction: 'up', label: `Score +${delta}` };
+  if (delta < 0) return { direction: 'down', label: `Score −${Math.abs(delta)}` };
+  return { direction: 'steady', label: 'Score steady' };
 }
 
 export default function LeaderboardPage() {
@@ -47,7 +48,8 @@ export default function LeaderboardPage() {
   const showCurrentUser = !!currentUser && currentIndex >= 3;
   const visibleRows = useMemo(() => rows
     .map((entry, index) => ({ entry, rank: index + 1 }))
-    .filter(({ entry, rank }) => rank > 3 && entry.uid !== user?.uid), [rows, user?.uid]);
+    .filter(({ entry, rank }) => rank > 3 && entry.uid !== user?.uid)
+    .slice(0, 197), [rows, user?.uid]);
 
   return (
     <main className={styles.page} aria-label="Leaderboard">
@@ -109,7 +111,7 @@ function canactScoreDisplay(profile: UserProfile) {
 }
 
 function RankRow({ profile, rank }: { profile: UserProfile; rank: number }) {
-  const movement = movementForRank(rank);
+  const movement = movementForProfile(profile);
   return (
     <li>
       <Link href={`/profile/${profile.uid}`} className={styles.rankRow}>

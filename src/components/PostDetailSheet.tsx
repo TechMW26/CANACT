@@ -132,7 +132,7 @@ export function PostDetailSheet({
           the composer below can use `position: sticky` against it without
           a nested scroll context (which previously clipped the composer
           on mobile). */}
-      <div className="pb-24">
+      <div className="-mx-2 pb-24">
         {item?.kind === 'wha' && post ? (
           <WhaPostDetails post={post} myUid={myUid} onShare={share} onDeleted={onClose} />
         ) : item?.kind === 'poll' && poll ? (
@@ -238,7 +238,7 @@ function FullBleedMediaHeader({
   children: ReactNode;
 }) {
   return (
-    <div className="relative -mx-4 overflow-hidden bg-black">
+    <div className="relative overflow-hidden rounded-2xl bg-black">
       {children}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent" />
       {bottomOverlay ? (
@@ -327,7 +327,23 @@ function PollDetails({ poll, myUid, onShare, onDeleted }: { poll: Poll; myUid: s
   return (
     <div>
       {poll.photoURL ? (
-        <FullBleedMediaHeader authorName={poll.authorName} authorUid={poll.uid} subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`} onShare={onShare} onDelete={onDelete}>
+        <FullBleedMediaHeader
+          authorName={poll.authorName}
+          authorUid={poll.uid}
+          subline={`${timeAgo(poll.createdAt)} · ${ended ? 'Ended' : timeLeft(poll.endsAt)}`}
+          onShare={onShare}
+          onDelete={onDelete}
+          bottomOverlay={
+            <div className="flex gap-2">
+              <button type="button" onClick={() => reactPoll(poll.id, myUid, 'like')} className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold ${myReact === 'like' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-ink'}`}>
+                <ThumbsUp size={14} /> {poll.likes ?? 0}
+              </button>
+              <button type="button" onClick={() => reactPoll(poll.id, myUid, 'dislike')} className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold ${myReact === 'dislike' ? 'bg-rose-500 text-white' : 'bg-white/90 text-ink'}`}>
+                <ThumbsDown size={14} /> {poll.dislikes ?? 0}
+              </button>
+            </div>
+          }
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={poll.photoURL} alt="" className="max-h-[58svh] w-full object-cover lqip-img" style={poll.lqip ? { backgroundImage: `url(${poll.lqip})`, backgroundSize: 'cover' } : undefined} />
         </FullBleedMediaHeader>
@@ -365,14 +381,6 @@ function PollDetails({ poll, myUid, onShare, onDeleted }: { poll: Poll; myUid: s
           </div>
         )}
       </div>
-      <div className="mt-3 flex gap-2">
-        <button type="button" onClick={() => reactPoll(poll.id, myUid, 'like')} className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold ${myReact === 'like' ? 'bg-brand text-white' : 'bg-white text-ink border border-line'}`}>
-          <ThumbsUp size={14} /> {poll.likes ?? 0}
-        </button>
-        <button type="button" onClick={() => reactPoll(poll.id, myUid, 'dislike')} className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-extrabold ${myReact === 'dislike' ? 'bg-brand text-white' : 'bg-white text-ink border border-line'}`}>
-          <ThumbsDown size={14} /> {poll.dislikes ?? 0}
-        </button>
-      </div>
     </div>
   );
 }
@@ -401,6 +409,16 @@ function RateMeDetails({ session, myUid, onShare, onDeleted }: { session: RateMe
         subline={ended ? 'Voting closed' : timeLeft(session.endsAt)}
         onShare={onShare}
         onDelete={onDelete}
+        bottomOverlay={locked ? undefined : (
+          <div className="flex gap-2">
+            <button type="button" disabled={locked} onClick={() => cast('dislike')} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-extrabold disabled:opacity-55 ${myVote === 'dislike' ? 'bg-rose-500 text-white' : 'bg-white/90 text-rose-600'}`}>
+              <ThumbsDown size={14} /> Down
+            </button>
+            <button type="button" disabled={locked} onClick={() => cast('like')} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-extrabold disabled:opacity-55 ${myVote === 'like' ? 'bg-emerald-500 text-white' : 'bg-white/90 text-emerald-700'}`}>
+              <ThumbsUp size={14} /> Up
+            </button>
+          </div>
+        )}
       >
         {session.photoURL ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -417,14 +435,6 @@ function RateMeDetails({ session, myUid, onShare, onDeleted }: { session: RateMe
         <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-white">
           <div style={{ width: `${downPct}%` }} className="bg-rose-300" />
           <div style={{ width: `${upPct}%` }} className="bg-emerald-300" />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" disabled={locked} onClick={() => cast('dislike')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-extrabold disabled:opacity-55 ${myVote === 'dislike' ? 'bg-rose-500 text-white' : 'bg-white text-rose-600'}`}>
-            <ThumbsDown size={16} /> Down vote
-          </button>
-          <button type="button" disabled={locked} onClick={() => cast('like')} className={`inline-flex h-11 items-center justify-center gap-2 rounded-full text-sm font-extrabold disabled:opacity-55 ${myVote === 'like' ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-700'}`}>
-            <ThumbsUp size={16} /> Up vote
-          </button>
         </div>
       </div>
     </div>

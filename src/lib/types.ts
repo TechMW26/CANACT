@@ -110,6 +110,10 @@ export interface UserProfile {
   verificationLockedAt?: number;
   rating: number;
   ratingCount: number;
+  /** Persisted Canact score cache. Ranking still recomputes from source
+   * signals so stale clients cannot affect leaderboard order. */
+  canactScore?: number;
+  canactScoreUpdatedAt?: number;
   likesCount: number;
   dislikesCount: number;
   attrs: Record<AttrKey, number>;

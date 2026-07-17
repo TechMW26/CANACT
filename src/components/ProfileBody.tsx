@@ -663,8 +663,8 @@ function CanactPagesProfileUI({
             {/* A local frosted lens keeps the score central without blurring
                 the whole portrait. Difference blending automatically flips
                 the glyphs for light and dark profile photos. */}
-            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
-              <div className="flex min-w-[96px] flex-col items-center rounded-[24px] bg-white/10 px-5 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.34)] ring-1 ring-white/25 backdrop-blur-[14px] backdrop-saturate-150">
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <div className="flex w-[96px] flex-col items-center justify-center rounded-full aspect-square bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.34)] ring-1 ring-white/25 backdrop-blur-[14px] backdrop-saturate-150">
                 <span className="mix-blend-difference text-[30px] font-black leading-none tracking-[-.05em] text-white">{canactScore.score}</span>
                 <span className="mt-1 mix-blend-difference text-[9px] font-black uppercase tracking-[.16em] text-white">{canactScore.label}</span>
               </div>
@@ -735,7 +735,7 @@ function CanactPagesProfileUI({
       {/* Attributes bottom-sheet — shows on avatar tap for third-party profiles */}
       {!isSelf && (
         <Sheet open={attrsSheetOpen} onClose={() => setAttrsSheetOpen(false)} title={`${displayName}'s attributes`}>
-          <div className="flex flex-col gap-4 pb-4">
+          <div className="flex flex-col gap-4">
             {userProfile.photoURL ? (
               <img
                 src={userProfile.photoURL}

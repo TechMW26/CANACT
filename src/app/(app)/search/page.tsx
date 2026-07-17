@@ -75,7 +75,7 @@ export default function SearchPage() {
   const [searchRows, setSearchRows] = useState<UserProfile[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
 
-  useEffect(() => listenLeaderboard('app', null, setDiscoverRows), []);
+  useEffect(() => listenLeaderboard('app', null, (rows) => setDiscoverRows(rows.slice(0, 200))), []);
 
   useEffect(() => {
     const text = query.trim();
