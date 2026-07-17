@@ -327,7 +327,6 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   -webkit-backdrop-filter: blur(18px) saturate(1.14) !important;
   backdrop-filter: blur(18px) saturate(1.14) !important;
   overflow: hidden;
-  top: 0.5em !important;
 }
 
 .canact-figma-header {
