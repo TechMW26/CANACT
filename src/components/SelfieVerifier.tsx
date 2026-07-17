@@ -20,11 +20,11 @@ interface BlinkState {
 const BLINKS_REQUIRED = 2;
 const BLINK_COOLDOWN_MS = 380;
 const DETECTION_INTERVAL_MS = 65;
-const MIN_FACE_RATIO = 0.075;
-const MAX_FACE_RATIO = 0.48;
+const MIN_FACE_RATIO = 0.02;
+const MAX_FACE_RATIO = 0.85;
 
 const STEPS: Array<{ id: LivenessStep; title: string; hint: string }> = [
-  { id: 'position', title: 'Center your face', hint: 'Keep your whole face inside the guide' },
+  { id: 'position', title: 'Show your face', hint: 'Make sure your face is clearly visible in the frame' },
   { id: 'visibility', title: 'Look at the camera', hint: 'Use even light and keep your face unobstructed' },
   { id: 'blink', title: 'Blink naturally', hint: 'Blink slowly twice while looking at the camera' },
   { id: 'hold', title: 'Hold still', hint: 'Perfect — completing your live verification' },
@@ -152,8 +152,8 @@ export function SelfieVerifier({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'user' },
-          width: { ideal: 720 },
-          height: { ideal: 960 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           frameRate: { ideal: 24, max: 30 },
         },
         audio: false,
@@ -238,7 +238,7 @@ export function SelfieVerifier({
     if (!modelReady || !cameraReady || stepRef.current !== 'loading') return;
     setStep('position');
     setStepIndex(0);
-    updateGuidance('Move your face into the guide');
+    updateGuidance('Show your face in the frame');
   }, [cameraReady, modelReady, setStep, updateGuidance]);
 
   const captureSnapshot = useCallback(() => {
@@ -323,13 +323,11 @@ export function SelfieVerifier({
           stabilityRef.current.visibility = 0;
           stabilityRef.current.hold = 0;
           stabilityRef.current.missing += 1;
-          updateGuidance(stabilityRef.current.missing > 24 ? 'Face the light and keep the camera steady' : 'Move your face into the guide', 'warning');
+          updateGuidance(stabilityRef.current.missing > 24 ? 'Face the light and keep the camera steady' : 'Show your face in the frame', 'warning');
         } else {
           drawMesh(landmarks, time);
           const geometry = faceGeometry(landmarks);
-          const centered = Math.abs(geometry.centerX - 0.5) < 0.15 && Math.abs(geometry.centerY - 0.47) < 0.18;
-          const sized = geometry.ratio >= MIN_FACE_RATIO && geometry.ratio <= MAX_FACE_RATIO;
-          const wellPositioned = centered && sized;
+          const wellPositioned = geometry.ratio >= MIN_FACE_RATIO && geometry.ratio <= MAX_FACE_RATIO;
           const categories = result.faceBlendshapes[0]?.categories;
           const leftBlink = blendshapeScore(categories, 'eyeBlinkLeft');
           const rightBlink = blendshapeScore(categories, 'eyeBlinkRight');
@@ -338,9 +336,8 @@ export function SelfieVerifier({
             : fallbackBlinkScore(landmarks);
           stabilityRef.current.missing = 0;
 
-          if (geometry.ratio < MIN_FACE_RATIO) updateGuidance('Come a little closer', 'warning');
+          if (geometry.ratio < MIN_FACE_RATIO) updateGuidance('Move a little closer', 'warning');
           else if (geometry.ratio > MAX_FACE_RATIO) updateGuidance('Move slightly farther away', 'warning');
-          else if (!centered) updateGuidance('Center your face in the guide', 'warning');
 
           const currentStep = stepRef.current;
           if (currentStep === 'position') {
@@ -364,7 +361,7 @@ export function SelfieVerifier({
             }
           } else if (currentStep === 'blink') {
             if (!wellPositioned) {
-              updateGuidance('Stay centered while blinking', 'warning');
+              updateGuidance('Stay still while blinking', 'warning');
             } else if (Number.isFinite(blinkScore)) {
               const blink = blinkRef.current;
               if (blinkScore > 0.48 && blink.armed) {
