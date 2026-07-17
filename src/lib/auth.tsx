@@ -4,11 +4,12 @@ import {
   onAuthStateChanged,
   signOut as fbSignOut,
   deleteUser,
+  reload,
   type User as FbUser,
 } from 'firebase/auth';
 import { onValue, ref, update, get, remove } from 'firebase/database';
 import { db, getFirebaseAuth } from './firebase';
-import { sendOTP, verifyOTP, resetOTP, getOTPChannel } from './services/otp';
+import { sendOTP, verifyOTP, resetOTP } from './services/otp';
 import { UserProfile } from './types';
 
 interface SessionUser {
@@ -24,7 +25,9 @@ interface AuthCtx {
   profile: UserProfile | null;
   loading: boolean;
   requestOTP: (phone: string) => Promise<{ ok: boolean; channel?: string; error?: string }>;
-  confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string }>;
+  confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string; isNewUser?: boolean; nextPath?: '/' | '/onboard' }>;
+  requestPhoneLinkOTP: (phone: string) => Promise<{ ok: boolean; channel?: string; error?: string }>;
+  confirmPhoneLinkOTP: (code: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateMyProfile: (patch: Partial<UserProfile>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -126,6 +129,7 @@ function profileBackfillFromAuth(u: SessionUser, profile: UserProfile | null): P
   if (!profile.lastName && nameParts.lastName) patch.lastName = nameParts.lastName;
   if (!profile.middleName && nameParts.middleName) patch.middleName = nameParts.middleName;
   if (!profile.email && u.email) patch.email = u.email;
+  if (!profile.mobile && u.phoneNumber) patch.mobile = u.phoneNumber;
   if (!profile.photoURL && u.photoURL) patch.photoURL = u.photoURL;
 
   return patch;
@@ -221,7 +225,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     confirmOTP: async (code: string) => {
       const result = await verifyOTP(code);
-      return result;
+      if (!result.ok) return result;
+      const signedInUser = getFirebaseAuth().currentUser;
+      if (!signedInUser) return { ok: false, error: 'Unable to finish sign in right now.' };
+      const nextPath = await routeAfterSignIn(signedInUser);
+      return { ...result, nextPath };
+    },
+    requestPhoneLinkOTP: async (phone: string) => {
+      return sendOTP(phone, 'phone-link-recaptcha', 'link');
+    },
+    confirmPhoneLinkOTP: async (code: string) => {
+      const result = await verifyOTP(code);
+      if (!result.ok) return result;
+      const auth = getFirebaseAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) return { ok: false, error: 'Unable to verify this number right now.' };
+      await reload(currentUser);
+      setUser(toSession(currentUser));
+      if (currentUser.phoneNumber) {
+        await update(ref(db, `users/${currentUser.uid}`), {
+          mobile: currentUser.phoneNumber,
+          mobileVerifiedAt: Date.now(),
+        });
+      }
+      resetOTP();
+      return { ok: true };
     },
     signOut: async () => {
       resetOTP();

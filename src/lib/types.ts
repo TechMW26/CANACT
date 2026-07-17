@@ -92,6 +92,9 @@ export interface UserProfile {
   lastName?: string;
   email?: string;
   mobile?: string;
+  mobileVerifiedAt?: number;
+  selfieVerifiedAt?: number;
+  selfieVerificationMethod?: 'blink-liveness-v1';
   city?: string;
   country?: string;
   countryCode?: string;

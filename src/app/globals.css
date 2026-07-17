@@ -349,6 +349,11 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   box-shadow: none;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  line-height: 1;
+}
+.canact-figma-header > .canact-header-inner svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .canact-figma-header .canact-distance-pill {
@@ -431,7 +436,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   transition: opacity 130ms ease, transform 300ms cubic-bezier(.2,.9,.2,1);
 }
 .canact-score-island[data-expanded="true"] .canact-score-island-compact { opacity: 0; transform: scale(.72); }
-.canact-score-island-compact > i { width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 9px #8ce2b0; animation: canactIslandLive 1.8s ease-in-out infinite; }
+.canact-score-island-compact > i { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 9px #8ce2b0; animation: canactIslandLive 1.8s ease-in-out infinite; }
 .canact-score-island-compact strong { font-size: 13px; font-weight: 900; letter-spacing: -.02em; }
 .canact-score-island-compact small { color: rgb(255 255 255 / 52%); font-size: 7px; font-weight: 900; letter-spacing: .13em; }
 .canact-score-island-panel {

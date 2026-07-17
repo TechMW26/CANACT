@@ -1,5 +1,8 @@
 'use client';
 import {
+  linkWithPhoneNumber,
+  getAdditionalUserInfo,
+  reload,
   signInWithPhoneNumber,
   signInWithCustomToken,
   RecaptchaVerifier,
@@ -8,6 +11,8 @@ import {
 import { getFirebaseAuth } from '../firebase';
 
 type OTPChannel = 'firebase-sms' | 'vobiz-whatsapp';
+type OTPMode = 'signin' | 'link';
+export type OTPVerifyResult = { ok: boolean; error?: string; isNewUser?: boolean };
 
 const SEND_FAILURE_MESSAGE = 'We could not send a code right now. Please try again shortly.';
 const VERIFY_FAILURE_MESSAGE = 'That code did not work. Request a new code and try again.';
@@ -17,6 +22,8 @@ let currentChannel: OTPChannel | null = null;
 let pendingPhone: string = '';
 let recaptchaVerifier: RecaptchaVerifier | null = null;
 let fallbackChallenge: string = '';
+let currentMode: OTPMode = 'signin';
+let recaptchaContainerId = 'recaptcha-container';
 let sendInFlight: Promise<{ ok: boolean; channel?: OTPChannel; error?: string }> | null = null;
 
 function ensureRecaptchaContainer(containerId: string) {
@@ -44,7 +51,7 @@ function clearRecaptcha(containerId?: string) {
   if (containerId && typeof document !== 'undefined') document.getElementById(containerId)?.replaceChildren();
 }
 
-async function sendWithFirebase(phone: string, containerId: string) {
+async function sendWithFirebase(phone: string, containerId: string, mode: OTPMode) {
   const auth = getFirebaseAuth();
   clearRecaptcha(containerId);
   ensureRecaptchaContainer(containerId);
@@ -55,6 +62,10 @@ async function sendWithFirebase(phone: string, containerId: string) {
   });
   // signInWithPhoneNumber renders and executes the verifier itself. Explicitly
   // rendering first can produce stale tokens after Fast Refresh or navigation.
+  if (mode === 'link') {
+    if (!auth.currentUser) throw new Error('auth-required');
+    return linkWithPhoneNumber(auth.currentUser, phone, recaptchaVerifier);
+  }
   return signInWithPhoneNumber(auth, phone, recaptchaVerifier);
 }
 
@@ -77,10 +88,11 @@ async function sendWithFallback(phone: string) {
  */
 export async function sendOTP(
   phone: string,
-  recaptchaContainerId: string,
+  containerId: string,
+  mode: OTPMode = 'signin',
 ): Promise<{ ok: boolean; channel?: OTPChannel; error?: string }> {
   if (sendInFlight) return sendInFlight;
-  sendInFlight = sendOTPInternal(phone, recaptchaContainerId).finally(() => {
+  sendInFlight = sendOTPInternal(phone, containerId, mode).finally(() => {
     sendInFlight = null;
   });
   return sendInFlight;
@@ -88,20 +100,23 @@ export async function sendOTP(
 
 async function sendOTPInternal(
   phone: string,
-  recaptchaContainerId: string,
+  containerId: string,
+  mode: OTPMode,
 ): Promise<{ ok: boolean; channel?: OTPChannel; error?: string }> {
   pendingPhone = phone;
+  currentMode = mode;
+  recaptchaContainerId = containerId;
   fbConfirmation = null;
   currentChannel = null;
   fallbackChallenge = '';
 
   // ── TRY 1: FIREBASE SMS ──
   try {
-    fbConfirmation = await sendWithFirebase(phone, recaptchaContainerId);
+    fbConfirmation = await sendWithFirebase(phone, containerId, mode);
     currentChannel = 'firebase-sms';
     return { ok: true, channel: 'firebase-sms' };
   } catch {
-    clearRecaptcha(recaptchaContainerId);
+    clearRecaptcha(containerId);
     console.warn('[OTP] Primary delivery unavailable; using fallback');
   }
 
@@ -117,12 +132,17 @@ async function sendOTPInternal(
  * Verify OTP: Firebase confirm() if SMS, Vobiz API if WhatsApp.
  * On success for Vobiz path, signs into Firebase with the returned custom token.
  */
-export async function verifyOTP(code: string): Promise<{ ok: boolean; error?: string }> {
+export async function verifyOTP(code: string): Promise<OTPVerifyResult> {
   if (currentChannel === 'firebase-sms') {
     if (!fbConfirmation) return { ok: false, error: VERIFY_FAILURE_MESSAGE };
     try {
-      await fbConfirmation.confirm(code);
-      return { ok: true };
+      const credential = await fbConfirmation.confirm(code);
+      return {
+        ok: true,
+        isNewUser: currentMode === 'signin'
+          ? !!getAdditionalUserInfo(credential)?.isNewUser
+          : false,
+      };
     } catch {
       return { ok: false, error: VERIFY_FAILURE_MESSAGE };
     }
@@ -130,16 +150,27 @@ export async function verifyOTP(code: string): Promise<{ ok: boolean; error?: st
 
   if (currentChannel === 'vobiz-whatsapp') {
     try {
-      const res = await fetch('/api/auth/verify-otp', {
+      const auth = getFirebaseAuth();
+      const isLink = currentMode === 'link';
+      const idToken = isLink ? await auth.currentUser?.getIdToken() : null;
+      if (isLink && !idToken) throw new Error('auth-required');
+      const res = await fetch(isLink ? '/api/auth/link-phone' : '/api/auth/verify-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({ phone: pendingPhone, otp: code, challenge: fallbackChallenge }),
       });
-      const data = await res.json().catch(() => null) as { ok?: boolean; token?: string } | null;
-      if (!res.ok || !data?.ok || !data.token) throw new Error('verification-failed');
-      // Sign into Firebase with custom token
-      await signInWithCustomToken(getFirebaseAuth(), data.token);
-      return { ok: true };
+      const data = await res.json().catch(() => null) as { ok?: boolean; token?: string; isNewUser?: boolean } | null;
+      if (!res.ok || !data?.ok || (!isLink && !data.token)) throw new Error('verification-failed');
+      if (isLink) {
+        if (!auth.currentUser) throw new Error('auth-required');
+        await reload(auth.currentUser);
+      } else {
+        await signInWithCustomToken(auth, data.token!);
+      }
+      return { ok: true, isNewUser: isLink ? false : !!data.isNewUser };
     } catch {
       return { ok: false, error: VERIFY_FAILURE_MESSAGE };
     }
@@ -159,5 +190,6 @@ export function resetOTP() {
   currentChannel = null;
   pendingPhone = '';
   fallbackChallenge = '';
-  clearRecaptcha('recaptcha-container');
+  currentMode = 'signin';
+  clearRecaptcha(recaptchaContainerId);
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFirebaseAdminApp, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
-import { getDatabase } from 'firebase-admin/database';
+import { getFirebaseAdminApp, readAdminRtdb, verifyAdminRequest } from '@/lib/server/firebaseAdmin';
 
 export const runtime = 'nodejs';
 
@@ -10,11 +9,7 @@ export async function GET(req: Request) {
   if (!admin) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
   try {
-    if (!app) return NextResponse.json({ ok: false, reason: 'admin-not-configured' }, { status: 503 });
-
-    const db = getDatabase(app);
-    const snap = await db.ref('heatzones').get();
-    const data = snap.val() || {};
+    const data = (await readAdminRtdb<Record<string, any>>('heatzones', app, admin.idToken)) || {};
 
     // ── Page views aggregation ──
     const pageViewCounts: Record<string, number> = {};

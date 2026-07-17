@@ -25,6 +25,7 @@ import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { IncomingCardEnvelope } from './IncomingCardEnvelope';
 import { OnboardingTaskGuide } from './OnboardingTaskGuide';
+import { MandatoryPhoneSheet } from './MandatoryPhoneSheet';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
@@ -256,6 +257,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const isFullScreen = !!pathname && /^\/inbox\/[^/]+/.test(pathname);
   const postPopups = (
     <>
+      <MandatoryPhoneSheet />
       <PostDetailSheet
         item={globalDetailItem}
         myUid={user.uid}

@@ -277,7 +277,7 @@ export default function InboxThreadPage() {
         data-liquid-blur="0"
         data-liquid-tint="250,248,242"
         data-liquid-tint-opacity="0.22"
-        className="safe-top sticky top-3 z-20 mx-3 flex items-center gap-3 rounded-[100px] border border-white/60 bg-transparent px-2 py-2 shadow-[0_4px_16px_rgba(0,0,0,.06)]"
+        className="safe-top sticky top-3 z-20 mx-3 flex items-center gap-3 rounded-[100px] border border-white/60 bg-transparent px-2 py-2 shadow-[0_4px_16px_rgba(0,0,0,.06)] [&_svg]:block [&_svg]:shrink-0"
       >
         <button
           type="button"

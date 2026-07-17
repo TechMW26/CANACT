@@ -88,7 +88,7 @@ export default function PostCreatePage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <header className="mb-4 flex items-center gap-2">
+      <header className="mb-4 flex items-center gap-2 [&_svg]:block [&_svg]:shrink-0">
         <button
           type="button"
           aria-label="Back to camera"

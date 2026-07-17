@@ -27,7 +27,7 @@ export function BrandMark({ size = 96, className }: { size?: number; className?:
 function CanactIcon({ size, className }: { size: number; className?: string }) {
   return (
     <span
-      className={clsx('relative inline-block shrink-0', className)}
+      className={clsx('relative block shrink-0 leading-[0]', className)}
       style={{ width: size * 1.8, height: size }}
       aria-label="Canact"
       role="img"

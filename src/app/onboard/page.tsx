@@ -17,43 +17,27 @@ import { uploadMedia } from '@/lib/uploadMedia';
 import styles from '@/components/AuthFlow.module.css';
 
 type Gender = 'female' | 'male';
-type RegistrationScreen = 'details' | 'name' | 'gender' | 'birthday' | 'zodiac' | 'selfie' | 'complete';
+type RegistrationScreen = 'details' | 'name' | 'gender' | 'birthday' | 'selfie' | 'complete';
 
-const SCREEN_ORDER: RegistrationScreen[] = ['details', 'name', 'gender', 'birthday', 'zodiac', 'selfie', 'complete'];
+const SCREEN_ORDER: RegistrationScreen[] = ['details', 'name', 'gender', 'birthday', 'selfie', 'complete'];
+const TOTAL_STEPS = 6;
 const PROGRESS_STEP: Record<RegistrationScreen, number> = {
   details: 2,
   name: 3,
   gender: 4,
   birthday: 4,
-  zodiac: 5,
-  selfie: 6,
-  complete: 7,
+  selfie: 5,
+  complete: 6,
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const YEARS = Array.from({ length: 100 }, (_, index) => new Date().getFullYear() - 13 - index);
 
-const ZODIAC = [
-  { cutoff: 120, name: 'Capricorn', symbol: '♑', description: 'patient, grounded and quietly ambitious', note: 'Your steady focus helps build lasting, dependable connections.' },
-  { cutoff: 219, name: 'Aquarius', symbol: '♒', description: 'independent, thoughtful and original', note: 'Your fresh perspective helps communities grow in unexpected ways.' },
-  { cutoff: 321, name: 'Pisces', symbol: '♓', description: 'empathetic, intuitive and imaginative', note: 'Your sensitivity helps people feel understood and supported.' },
-  { cutoff: 420, name: 'Aries', symbol: '♈', description: 'bold, energetic and direct', note: 'Your courage makes it easier for others to take positive action.' },
-  { cutoff: 521, name: 'Taurus', symbol: '♉', description: 'reliable, grounded, loyal and calm under pressure', note: 'A steady energy like yours helps build authentic relationships.' },
-  { cutoff: 622, name: 'Gemini', symbol: '♊', description: 'curious, expressive and adaptable', note: 'Your curiosity keeps conversations open, lively and connected.' },
-  { cutoff: 723, name: 'Cancer', symbol: '♋', description: 'caring, protective and emotionally aware', note: 'Your warmth creates the safety genuine connection needs.' },
-  { cutoff: 823, name: 'Leo', symbol: '♌', description: 'warm, confident and generous', note: 'Your generous spirit helps people feel seen and appreciated.' },
-  { cutoff: 923, name: 'Virgo', symbol: '♍', description: 'observant, practical and dependable', note: 'Your attention to detail turns good intentions into real help.' },
-  { cutoff: 1023, name: 'Libra', symbol: '♎', description: 'balanced, social and considerate', note: 'Your sense of fairness helps communities feel welcoming.' },
-  { cutoff: 1122, name: 'Scorpio', symbol: '♏', description: 'loyal, perceptive and resilient', note: 'Your depth and loyalty create strong, trusted bonds.' },
-  { cutoff: 1222, name: 'Sagittarius', symbol: '♐', description: 'optimistic, open and adventurous', note: 'Your optimism encourages others to explore and participate.' },
-  { cutoff: 1232, name: 'Capricorn', symbol: '♑', description: 'patient, grounded and quietly ambitious', note: 'Your steady focus helps build lasting, dependable connections.' },
-] as const;
-
 function RegistrationProgress({ screen }: { screen: RegistrationScreen }) {
   const step = PROGRESS_STEP[screen];
   return (
-    <div className={styles.progressWrap} aria-label={`Step ${step} of 7`}>
-      <div className={styles.progress}>{Array.from({ length: 7 }, (_, index) => <span key={index} className={index < step ? styles.active : ''} />)}</div>
-      <div className={styles.progressLabel}>Step {step} <b>of</b> 7</div>
+    <div className={styles.progressWrap} aria-label={`Step ${step} of ${TOTAL_STEPS}`}>
+      <div className={styles.progress}>{Array.from({ length: TOTAL_STEPS }, (_, index) => <span key={index} className={index < step ? styles.active : ''} />)}</div>
+      <div className={styles.progressLabel}>Step {step} <b>of</b> {TOTAL_STEPS}</div>
     </div>
   );
 }
@@ -72,17 +56,6 @@ function RegistrationArt({ compact = false }: { compact?: boolean }) {
 
 function BrandArt() {
   return <Image className={styles.registerBrand} src="/canact-brand.png" alt="Canact" width={1254} height={1254} priority />;
-}
-
-function zodiacFor(date: string) {
-  const [, month = '1', day = '1'] = date.split('-');
-  const marker = Number(month) * 100 + Number(day);
-  return ZODIAC.find((item) => marker < item.cutoff) ?? ZODIAC[0];
-}
-
-function formatBirthday(date: string) {
-  const parsed = new Date(`${date}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? date : new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric' }).format(parsed);
 }
 
 function isOldEnough(date: string) {
@@ -145,7 +118,6 @@ export default function OnboardPage() {
 
   const dob = year && month && day ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : '';
   const daysInMonth = useMemo(() => year && month ? new Date(Number(year), Number(month), 0).getDate() : 31, [month, year]);
-  const zodiac = zodiacFor(dob);
   const selfieSrc = selfieData || uploadedSelfie || profile?.photoURL || user?.photoURL || '';
 
   useEffect(() => {
@@ -181,7 +153,11 @@ export default function OnboardPage() {
         await updateMyProfile({ dateOfBirth: dob });
       } else if (screen === 'selfie' && selfieData) {
         const photoURL = (await uploadMedia(selfieData, { kind: 'avatar', uid: user.uid })).url;
-        await updateMyProfile({ photoURL });
+        await updateMyProfile({
+          photoURL,
+          selfieVerifiedAt: Date.now(),
+          selfieVerificationMethod: 'blink-liveness-v1',
+        });
         setUploadedSelfie(photoURL);
         setSelfieData('');
       } else if (screen === 'complete') {
@@ -274,24 +250,7 @@ export default function OnboardPage() {
                 <label><span>Month</span><select aria-label="Birth month" value={month} onChange={(event) => setMonth(event.target.value)}><option value="">Month</option>{MONTHS.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select></label>
                 <label><span>Year</span><select aria-label="Birth year" value={year} onChange={(event) => setYear(event.target.value)}><option value="">Year</option>{YEARS.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
               </div>
-              <p className={styles.privacyNote}><LockKeyhole /> Only your age and zodiac insight will be used here.</p>
-              <RegistrationProgress screen={screen} />
-            </div>
-          </>
-        ) : null}
-
-        {screen === 'zodiac' ? (
-          <>
-            <BrandArt />
-            <div className={styles.registerBody}>
-              <h1 className={styles.title}>Nice to know you</h1>
-              <p className={styles.subtitle}>A little birthday insight for you.</p>
-              <article className={styles.zodiacCard}>
-                <div className={styles.zodiacDate}><span />{formatBirthday(dob)}<span /></div>
-                <div className={styles.zodiacHeading}><span>{zodiac.symbol}</span><strong>{zodiac.name}</strong></div>
-                <p>You&apos;re a {zodiac.name.toLowerCase()} — generally {zodiac.description}.</p>
-                <div className={styles.zodiacNote}><Sparkles />{zodiac.note}</div>
-              </article>
+              <p className={styles.privacyNote}><LockKeyhole /> Only your age will be used here — never shared.</p>
               <RegistrationProgress screen={screen} />
             </div>
           </>

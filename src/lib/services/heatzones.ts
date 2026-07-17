@@ -1,5 +1,5 @@
 'use client';
-import { push, ref, set } from 'firebase/database';
+import { increment, ref, serverTimestamp, update } from 'firebase/database';
 import { db } from '../firebase';
 
 /** Known page route IDs for heatzone mapping. Add new routes here. */
@@ -85,37 +85,49 @@ export function pageLabel(pathname: string): string {
   return 'Unknown';
 }
 
+function analyticsKey(value: string) {
+  return encodeURIComponent(value).replace(/\./g, '%2E');
+}
+
 /**
  * Record a page view to RTDB. Called on every route change.
- * Data stored at: heatzones/pageViews/{pageLabel}_{YYYY-MM-DD}/{pushKey}
+ * Aggregated per authenticated user so normal RTDB profile rules allow the
+ * write and the admin's existing users subscription receives it in realtime.
  */
 export async function recordPageView(pathname: string, fromPage: string, uid?: string) {
   if (!uid) return;
   try {
     const label = pageLabel(pathname);
     const date = new Date().toISOString().slice(0, 10);
-    const node = push(ref(db, `heatzones/pageViews/${label}_${date}`));
-    await set(node, {
+    const from = fromPage === 'Direct' ? 'Direct' : pageLabel(fromPage);
+    const node = ref(db, `users/${uid}/analytics/pageViews/${date}/${analyticsKey(label)}`);
+    await update(node, {
       pageId: label,
-      fromPage: fromPage === 'Direct' ? 'Direct' : pageLabel(fromPage),
-      timestamp: Date.now(),
+      count: increment(1),
+      lastSeenAt: serverTimestamp(),
+      [`fromCounts/${analyticsKey(from)}`]: increment(1),
     });
-  } catch { /* fire-and-forget */ }
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') console.warn('[analytics] page view failed', error);
+  }
 }
 
 /**
  * Record a feature interaction to RTDB.
- * Data stored at: heatzones/featureClicks/{pageLabel}_{YYYY-MM-DD}/{pushKey}
+ * Stored as per-user daily counters, alongside page views.
  */
 export async function recordFeatureClick(pageLabel: string, featureId: string, uid?: string) {
   if (!uid) return;
   try {
     const date = new Date().toISOString().slice(0, 10);
-    const node = push(ref(db, `heatzones/featureClicks/${pageLabel}_${date}`));
-    await set(node, {
+    const node = ref(db, `users/${uid}/analytics/featureClicks/${date}/${analyticsKey(pageLabel)}/${analyticsKey(featureId)}`);
+    await update(node, {
       pageId: pageLabel,
       featureId,
-      timestamp: Date.now(),
+      count: increment(1),
+      lastSeenAt: serverTimestamp(),
     });
-  } catch { /* fire-and-forget */ }
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'production') console.warn('[analytics] feature click failed', error);
+  }
 }

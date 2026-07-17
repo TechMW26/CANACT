@@ -26,6 +26,106 @@ type HeatzoneResponse = {
   featureLeaderboard?: Record<string, Array<{ featureId: string; clicks: number }>>;
 };
 
+type HeatAccumulators = {
+  pages: Record<string, number>;
+  from: Record<string, Record<string, number>>;
+  features: Record<string, Record<string, number>>;
+};
+
+function emptyHeatAccumulators(): HeatAccumulators {
+  return { pages: {}, from: {}, features: {} };
+}
+
+function buildHeatzoneResponse(acc: HeatAccumulators): HeatzoneResponse {
+  const pageLeaderboard = Object.entries(acc.pages)
+    .map(([pageId, views]) => ({ pageId, views }))
+    .sort((a, b) => b.views - a.views);
+  const pageHeatmaps = pageLeaderboard.map(({ pageId, views }) => ({
+    pageId,
+    views,
+    jumps: Object.entries(acc.from[pageId] ?? {})
+      .map(([from, count]) => ({ from, count, pct: views ? Math.round((count / views) * 100) : 0 }))
+      .sort((a, b) => b.count - a.count),
+  }));
+  const featureLeaderboard = Object.fromEntries(
+    Object.entries(acc.features).map(([pageId, features]) => [
+      pageId,
+      Object.entries(features)
+        .map(([featureId, clicks]) => ({ featureId, clicks }))
+        .sort((a, b) => b.clicks - a.clicks),
+    ]),
+  );
+  return {
+    ok: true,
+    fetchedAt: Date.now(),
+    totals: {
+      pageViews: Object.values(acc.pages).reduce((sum, value) => sum + value, 0),
+      featureClicks: Object.values(acc.features).reduce(
+        (sum, features) => sum + Object.values(features).reduce((featureSum, value) => featureSum + value, 0),
+        0,
+      ),
+      uniquePages: pageLeaderboard.length,
+    },
+    pageLeaderboard,
+    pageHeatmaps,
+    featureLeaderboard,
+  };
+}
+
+function aggregateRealtimeHeatzones(users: Record<string, any> | null): HeatzoneResponse {
+  const acc = emptyHeatAccumulators();
+  for (const user of Object.values(users ?? {})) {
+    const analytics = user?.analytics ?? {};
+    for (const pages of Object.values(analytics.pageViews ?? {}) as Record<string, any>[]) {
+      for (const record of Object.values(pages ?? {}) as any[]) {
+        const pageId = String(record?.pageId || 'Unknown');
+        const count = Number(record?.count) || 0;
+        acc.pages[pageId] = (acc.pages[pageId] ?? 0) + count;
+        acc.from[pageId] ??= {};
+        for (const [encodedFrom, fromCount] of Object.entries(record?.fromCounts ?? {})) {
+          let from = encodedFrom;
+          try { from = decodeURIComponent(encodedFrom); } catch {}
+          acc.from[pageId][from] = (acc.from[pageId][from] ?? 0) + (Number(fromCount) || 0);
+        }
+      }
+    }
+    for (const pages of Object.values(analytics.featureClicks ?? {}) as Record<string, any>[]) {
+      for (const features of Object.values(pages ?? {}) as Record<string, any>[]) {
+        for (const record of Object.values(features ?? {}) as any[]) {
+          const pageId = String(record?.pageId || 'Unknown');
+          const featureId = String(record?.featureId || 'Unknown');
+          acc.features[pageId] ??= {};
+          acc.features[pageId][featureId] = (acc.features[pageId][featureId] ?? 0) + (Number(record?.count) || 0);
+        }
+      }
+    }
+  }
+  return buildHeatzoneResponse(acc);
+}
+
+function mergeHeatzoneResponses(legacy: HeatzoneResponse | null, realtime: HeatzoneResponse): HeatzoneResponse {
+  if (!legacy?.ok) return realtime;
+  const acc = emptyHeatAccumulators();
+  for (const source of [legacy, realtime]) {
+    for (const page of source.pageLeaderboard ?? []) {
+      acc.pages[page.pageId] = (acc.pages[page.pageId] ?? 0) + page.views;
+    }
+    for (const page of source.pageHeatmaps ?? []) {
+      acc.from[page.pageId] ??= {};
+      for (const jump of page.jumps) {
+        acc.from[page.pageId][jump.from] = (acc.from[page.pageId][jump.from] ?? 0) + jump.count;
+      }
+    }
+    for (const [pageId, features] of Object.entries(source.featureLeaderboard ?? {})) {
+      acc.features[pageId] ??= {};
+      for (const feature of features) {
+        acc.features[pageId][feature.featureId] = (acc.features[pageId][feature.featureId] ?? 0) + feature.clicks;
+      }
+    }
+  }
+  return buildHeatzoneResponse(acc);
+}
+
 type AdminView = 'overview' | 'users' | 'heatzones' | 'navigation';
 
 const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Icon: LucideIcon }> = [
@@ -101,9 +201,17 @@ export default function AdminDashboardPage() {
     });
   }, [query, userList]);
 
-  const heatTotals = heatData?.totals ?? { pageViews: 0, featureClicks: 0, uniquePages: 0 };
-  const selectedHeatmap = heatData?.pageHeatmaps?.find((p) => p.pageId === selectedPage);
-  const selectedFeatures = heatData?.featureLeaderboard?.[selectedPage ?? ''] ?? [];
+  const realtimeHeatData = useMemo(() => aggregateRealtimeHeatzones(usersSnapshot), [usersSnapshot]);
+  const resolvedHeatData = useMemo(() => mergeHeatzoneResponses(heatData, realtimeHeatData), [heatData, realtimeHeatData]);
+  const heatTotals = resolvedHeatData.totals ?? { pageViews: 0, featureClicks: 0, uniquePages: 0 };
+  const selectedHeatmap = resolvedHeatData.pageHeatmaps?.find((p) => p.pageId === selectedPage);
+  const selectedFeatures = resolvedHeatData.featureLeaderboard?.[selectedPage ?? ''] ?? [];
+
+  useEffect(() => {
+    const pages = resolvedHeatData.pageLeaderboard ?? [];
+    if (!pages.length) return;
+    if (!selectedPage || !pages.some((page) => page.pageId === selectedPage)) setSelectedPage(pages[0].pageId);
+  }, [resolvedHeatData, selectedPage]);
 
   if (loading) return <Splash message="Loading admin..." />;
   if (!user) return null;
@@ -175,7 +283,7 @@ export default function AdminDashboardPage() {
           </header>
 
           <div className="space-y-6 px-4 py-5 sm:px-6 lg:px-8">
-            {heatData?.ok === false && activeView === 'heatzones' && (
+            {heatData?.ok === false && usersSnapshot === null && activeView === 'heatzones' && (
               <Card className="rounded-lg border-brand-light bg-brand-light/60 text-brand">
                 <div className="font-extrabold">Heatzones unavailable</div>
                 <p className="mt-1 text-sm">{heatData.reason === 'unauthorized' ? 'Your signed-in account is not configured as an admin.' : heatData.reason}</p>
@@ -195,7 +303,7 @@ export default function AdminDashboardPage() {
 
             {activeView === 'heatzones' && (
               <HeatzonesPage
-                data={heatData}
+                data={resolvedHeatData}
                 busy={heatBusy}
                 selectedPage={selectedPage}
                 setSelectedPage={setSelectedPage}

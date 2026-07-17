@@ -316,7 +316,6 @@
 .registerScreen_name .registerBody .progressWrap,
 .registerScreen_gender .registerBody .progressWrap,
 .registerScreen_birthday .registerBody .progressWrap,
-.registerScreen_zodiac .registerBody .progressWrap,
 .registerScreen_selfie .registerBody .progressWrap,
 .registerScreen_complete .registerBody .progressWrap { margin-top: 28px; }
 
@@ -376,23 +375,6 @@
 }
 .privacyNote { display: flex; justify-content: center; align-items: center; gap: 7px; margin: 18px 0 0; color: rgb(17 40 34 / 52%); font-size: .78rem; }
 .privacyNote svg { width: 16px; height: 16px; }
-
-.zodiacCard {
-  margin-top: 18px;
-  padding: 22px 24px 18px;
-  border: 1px solid rgb(17 40 34 / 7%);
-  border-radius: 28px;
-  background: rgb(255 255 255 / 82%);
-  box-shadow: 0 10px 24px rgb(17 40 34 / 10%);
-}
-.zodiacDate { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; color: #34745f; font-size: .76rem; }
-.zodiacDate span { height: 1px; background: #e2e4df; }
-.zodiacHeading { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 25px; }
-.zodiacHeading > span { width: 70px; height: 70px; display: grid; place-items: center; border-radius: 50%; background: #e3f0ea; color: #1f6b55; font-size: 2.7rem; }
-.zodiacHeading strong { font-family: Georgia, serif; font-size: clamp(2.15rem, 10vw, 3rem); }
-.zodiacCard > p { max-width: 330px; margin: 18px auto; font-size: .86rem; line-height: 1.5; }
-.zodiacNote { display: flex; justify-content: center; align-items: center; gap: 7px; padding-top: 16px; border-top: 1px solid #e6e8e3; color: rgb(17 40 34 / 52%); font-size: .75rem; }
-.zodiacNote svg { width: 16px; height: 16px; color: #2e8068; }
 
 .selfieScan {
   width: 100%;

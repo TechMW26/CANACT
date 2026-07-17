@@ -7,6 +7,50 @@ import styles from './LifetimeCardSendAnimation.module.css';
 
 type CardRect = { left: number; top: number; width: number; height: number; naturalWidth: number; naturalHeight: number };
 
+// ── Module-level audio cache: preload & decode once, play instantly ──
+const audioCache = new Map<string, AudioBuffer>();
+let sharedAudioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext | null {
+  try {
+    if (!sharedAudioCtx) {
+      const Ctor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctor) sharedAudioCtx = new Ctor();
+    }
+    return sharedAudioCtx;
+  } catch { return null; }
+}
+
+async function preloadAudio(url: string): Promise<AudioBuffer | null> {
+  if (audioCache.has(url)) return audioCache.get(url)!;
+  const ctx = getAudioCtx();
+  if (!ctx) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+    audioCache.set(url, buf);
+    return buf;
+  } catch { return null; }
+}
+
+function playAudioBuffer(buffer: AudioBuffer, volume = 0.7) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') void ctx.resume();
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  src.buffer = buffer;
+  gain.gain.value = volume;
+  src.connect(gain).connect(ctx.destination);
+  src.start();
+}
+
+// Preload both sounds eagerly (non-blocking)
+if (typeof window !== 'undefined') {
+  preloadAudio('/sounds/lifetime-card.mp3');
+  preloadAudio('/sounds/connection-card.mp3');
+}
+
 export function LifetimeCardSendAnimation({
   sourceRect,
   renderCard,
@@ -96,14 +140,21 @@ export function LifetimeCardSendAnimation({
       ? ['#fff7c9', '#f8d15a', '#d99a16', '#fff0a1', '#bd7410', '#ffffff']
       : ['#1f6b55', '#8ab9a5', '#e7e1d1', '#d9ad45', '#7560a8', '#ffffff'];
 
+    let lastCanvasW = 0;
+    let lastCanvasH = 0;
     function resizeCanvas() {
       if (!context) return;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      if (w === lastCanvasW && h === lastCanvasH) return; // skip no-op resizes
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas!.width = Math.round(window.innerWidth * ratio);
-      canvas!.height = Math.round(window.innerHeight * ratio);
-      canvas!.style.width = `${window.innerWidth}px`;
-      canvas!.style.height = `${window.innerHeight}px`;
+      canvas!.width = Math.round(w * ratio);
+      canvas!.height = Math.round(h * ratio);
+      canvas!.style.width = `${w}px`;
+      canvas!.style.height = `${h}px`;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      lastCanvasW = w;
+      lastCanvasH = h;
     }
 
     function createParticle(index = 0) {
@@ -135,34 +186,41 @@ export function LifetimeCardSendAnimation({
     function startConfetti(onFinished?: () => void) {
       if (!context) { onFinished?.(); return; }
       stopConfetti();
-      particles = Array.from({ length: reducedMotion ? 45 : 145 }, (_, index) => createParticle(index));
+      // Reduce particle count on mobile / lower-DPI devices for smooth 60fps
+      const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
+      const count = reducedMotion ? 28 : isMobile ? 72 : 120;
+      particles = Array.from({ length: count }, (_, index) => createParticle(index));
       const startedAt = performance.now();
       const draw = (now: number) => {
         context.clearRect(0, 0, window.innerWidth, window.innerHeight);
-        particles.forEach((particle, index) => {
-          particle.vy += particle.gravity;
-          particle.y += particle.vy;
-          particle.x += particle.vx + Math.sin(now * .004 + particle.swayOffset) * particle.sway;
-          particle.rotation += particle.rotationSpeed;
+        const elapsed = now - startedAt;
+        const timeScale = now * .004;
+        // Batch-draw all particles with minimal context switches
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i]!;
+          p.vy += p.gravity;
+          p.y += p.vy;
+          p.x += p.vx + Math.sin(timeScale + p.swayOffset) * p.sway;
+          p.rotation += p.rotationSpeed;
           context.save();
-          context.globalAlpha = particle.opacity;
-          context.translate(particle.x, particle.y);
-          context.rotate(particle.rotation);
-          context.fillStyle = particle.color;
-          if (particle.circle) {
+          context.globalAlpha = p.opacity;
+          context.translate(p.x, p.y);
+          context.rotate(p.rotation);
+          context.fillStyle = p.color;
+          if (p.circle) {
             context.beginPath();
-            context.arc(0, 0, particle.width * .52, 0, Math.PI * 2);
+            context.arc(0, 0, p.width * .52, 0, Math.PI * 2);
             context.fill();
           } else {
-            context.fillRect(-particle.width / 2, -particle.height / 2, particle.width, particle.height);
+            context.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
           }
           context.restore();
-          if (particle.y > window.innerHeight + 40 && now - startedAt < 2350) {
-            particles[index] = createParticle(index % 18);
-            particles[index]!.y = -25 - Math.random() * 65;
+          if (p.y > window.innerHeight + 40 && elapsed < 2350) {
+            particles[i] = createParticle(i % 18);
+            particles[i]!.y = -25 - Math.random() * 65;
           }
-        });
-        if (now - startedAt < 3000) confettiFrame = requestAnimationFrame(draw);
+        }
+        if (elapsed < 3000) confettiFrame = requestAnimationFrame(draw);
         else { stopConfetti(); onFinished?.(); }
       };
       confettiFrame = requestAnimationFrame(draw);
@@ -171,28 +229,27 @@ export function LifetimeCardSendAnimation({
     function playSwish() {
       if (reducedMotion || direction !== 'send') return;
       try {
-        const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!AudioContextClass) return;
-        const audio = new AudioContextClass();
-        const length = Math.floor(audio.sampleRate * .34);
-        const buffer = audio.createBuffer(1, length, audio.sampleRate);
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') void ctx.resume();
+        const length = Math.floor(ctx.sampleRate * .34);
+        const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
         const channel = buffer.getChannelData(0);
         for (let index = 0; index < length; index += 1) channel[index] = (Math.random() * 2 - 1) * (1 - index / length);
-        const source = audio.createBufferSource();
-        const filter = audio.createBiquadFilter();
-        const gain = audio.createGain();
+        const source = ctx.createBufferSource();
+        const filter = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
         source.buffer = buffer;
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(420, audio.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(3400, audio.currentTime + .25);
+        filter.frequency.setValueAtTime(420, ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(3400, ctx.currentTime + .25);
         filter.Q.value = .7;
-        gain.gain.setValueAtTime(.0001, audio.currentTime);
-        gain.gain.exponentialRampToValueAtTime(.16, audio.currentTime + .045);
-        gain.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + .34);
-        source.connect(filter).connect(gain).connect(audio.destination);
-        source.onended = () => { void audio.close(); };
+        gain.gain.setValueAtTime(.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.16, ctx.currentTime + .045);
+        gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .34);
+        source.connect(filter).connect(gain).connect(ctx.destination);
         source.start();
-      } catch { /* Audio is enhancement-only and may be blocked by the OS. */ }
+      } catch { /* Audio is enhancement-only */ }
     }
 
     resizeCanvas();
@@ -213,12 +270,16 @@ export function LifetimeCardSendAnimation({
       if (direction === 'send' && motionFinished && confettiFinished) onComplete();
     };
 
-    // Play card sound on animation start
+    // Play card sound on animation start – use pre-decoded buffer for zero-lag playback
     if (direction === 'receive') {
       const audioSrc = tone === 'lifetime' ? '/sounds/lifetime-card.mp3' : '/sounds/connection-card.mp3';
-      const audio = new Audio(audioSrc);
-      audio.volume = 0.7;
-      audio.play().catch(() => { /* user may not have interacted yet */ });
+      const cached = audioCache.get(audioSrc);
+      if (cached) {
+        playAudioBuffer(cached, 0.7);
+      } else {
+        // Fallback: load & cache on first miss
+        preloadAudio(audioSrc).then((buf) => { if (buf) playAudioBuffer(buf, 0.7); });
+      }
     }
 
     const timeline = gsap.timeline({
@@ -230,7 +291,12 @@ export function LifetimeCardSendAnimation({
       },
     });
     if (direction === 'receive') {
-      const envelopeParts = [envelope.querySelector(`.${styles.envelopeBack}`), flap, envelope.querySelector(`.${styles.right}`), envelope.querySelector(`.${styles.bottom}`), envelope.querySelector(`.${styles.left}`), shine].filter(Boolean);
+      // Cache envelope parts from refs instead of DOM queries – avoids forced reflows
+      const envelopeBack = envelope.querySelector(`.${styles.envelopeBack}`);
+      const envelopeRight = envelope.querySelector(`.${styles.right}`);
+      const envelopeBottom = envelope.querySelector(`.${styles.bottom}`);
+      const envelopeLeft = envelope.querySelector(`.${styles.left}`);
+      const envelopeParts = [envelopeBack, flap, envelopeRight, envelopeBottom, envelopeLeft, shine].filter(Boolean) as (HTMLElement | HTMLDivElement)[];
       gsap.set(mailer, { y: -launchHeight * .72, opacity: 0, scale: .82 });
       gsap.set(cards, { x: 0, y: 12, scale: insideScale, opacity: 0 });
       gsap.set(flap, { rotateX: 0, zIndex: 10 });
@@ -284,7 +350,8 @@ export function LifetimeCardSendAnimation({
         .to({}, { duration: duration(.35) });
     }
 
-    requestAnimationFrame(() => timeline.play(0));
+    // Double rAF ensures layout/paint is fully settled before animation starts – eliminates startup jank
+    requestAnimationFrame(() => requestAnimationFrame(() => timeline.play(0)));
     return () => {
       dismissReceiveRef.current = null;
       timeline.kill();

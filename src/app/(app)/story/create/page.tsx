@@ -40,7 +40,7 @@ export default function StoryCreatePage() {
   if (isVideoUrl(shot)) {
     return (
       <div className="mx-auto max-w-md pb-10">
-        <header className="mb-3 flex items-center gap-2">
+        <header className="mb-3 flex items-center gap-2 [&_svg]:block [&_svg]:shrink-0">
           <button
             type="button"
             aria-label="Back"

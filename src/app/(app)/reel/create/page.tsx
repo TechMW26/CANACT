@@ -168,7 +168,7 @@ export default function ReelCreatePage() {
   // ────────────────── COMPOSE (caption + share) ──────────────────
   return (
     <div className="mx-auto max-w-2xl pb-10">
-      <header className="mb-4 flex items-center gap-2">
+      <header className="mb-4 flex items-center gap-2 [&_svg]:block [&_svg]:shrink-0">
         <button
           type="button"
           aria-label="Back"

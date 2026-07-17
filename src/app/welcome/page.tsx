@@ -166,6 +166,8 @@ export default function WelcomePage() {
         setTimeout(() => otpRefs.current[0]?.focus(), 300);
         return;
       }
+      toast(result.isNewUser ? 'Number verified — let’s create your profile' : 'Welcome back', 'success');
+      router.replace(result.nextPath ?? (result.isNewUser ? '/onboard' : '/'));
     } catch {
       setOtpError(OTP_VERIFY_MESSAGE);
       setOtpDigits(['', '', '', '', '', '']);
