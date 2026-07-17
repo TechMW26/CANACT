@@ -6,6 +6,7 @@ import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
 import { Avatar, RatingPill } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { Sheet } from '@/components/Sheet';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { AttrKey, ATTR_LABELS, CARD_KEYS, CARD_LABELS, CardKey, NEGATIVE_ATTRS, POSITIVE_ATTRS, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
@@ -222,7 +223,14 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       toast(kind === 'like' ? 'Liked profile' : 'Disliked profile', 'success');
     } catch (error: any) {
       setMyVote((current) => ({ ...(current ?? {}), main: previousVote }));
-      toast(error?.message ?? 'Could not update vote', 'error');
+      const msg = error?.message || '';
+      if (msg.startsWith('COOLDOWN:')) {
+        const remaining = Number(msg.split(':')[1]) || 0;
+        const hours = Math.max(1, Math.ceil(remaining / 3_600_000));
+        toast(`Wait ${hours}h before voting on this profile again`, 'error');
+      } else {
+        toast(msg || 'Could not update vote', 'error');
+      }
     } finally {
       setProfileVoteBusy(false);
     }
@@ -559,6 +567,7 @@ function CanactPagesProfileUI({
   const { updateMyProfile } = useAuth();
   const coverFileRef = useRef<HTMLInputElement>(null);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [attrsSheetOpen, setAttrsSheetOpen] = useState(false);
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
   const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
@@ -607,7 +616,6 @@ function CanactPagesProfileUI({
       <div className="relative h-[320px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
         {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-center opacity-55 mix-blend-luminosity" /> : null}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
-        {!isSelf ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} topTone={chromeTone.top} /> : null}
         {isSelf ? (
           <>
             <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={onCoverPick} />
@@ -619,17 +627,87 @@ function CanactPagesProfileUI({
       </div>
 
       <section className="relative px-5 pb-5 text-center">
-        {/* Avatar with optional golden favourite ring */}
-        <div className={`mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] bg-white ${isFavourite ? 'border-[#E8B830] shadow-[0_0_18px_rgba(232,184,48,0.35)]' : 'border-[#faf8f2]'}`}>
-          <Avatar src={userProfile.photoURL} name={displayName} size={110} />
-        </div>
+        {/* Avatar with score ring + like/dislike buttons — third-party profiles */}
+        {isSelf ? (
+          <div className={`mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] bg-white ${isFavourite ? 'border-[#E8B830] shadow-[0_0_18px_rgba(232,184,48,0.35)]' : 'border-[#faf8f2]'}`}>
+            <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+          </div>
+        ) : (
+          <div className="relative mx-auto -mt-[120px] flex items-center justify-center" style={{ width: 280, height: 280 }}>
+            {/* Score progress ring — exactly on the avatar border */}
+            <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 250 250">
+              <circle cx="125" cy="125" r="115" fill="none" stroke="#e8e5df" strokeWidth="8" />
+              <circle
+                cx="125" cy="125" r="115"
+                fill="none"
+                stroke={canactScore.label === 'TRUST' ? '#34d399' : canactScore.label === 'GOOD' ? '#4ade80' : canactScore.label === 'FAIR' ? '#fbbf24' : '#f87171'}
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 115}`}
+                strokeDashoffset={`${2 * Math.PI * 115 * (1 - Math.max(0.04, Math.min(1, canactScore.score / Math.max(canactScore.max, 1))))}`}
+                style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+              />
+            </svg>
+
+            {/* The image underlaps the inner half of the score stroke. This
+                avoids a separator seam at every device pixel ratio. */}
+            <button
+              type="button"
+              onClick={() => setAttrsSheetOpen(true)}
+              className={`relative z-10 flex h-[254px] w-[254px] items-center justify-center overflow-hidden rounded-full bg-white transition-transform active:scale-95 ${isFavourite ? 'ring-4 ring-inset ring-[#E8B830] shadow-[0_0_24px_rgba(232,184,48,0.35)]' : ''}`}
+              aria-label={`View ${displayName}'s attributes`}
+            >
+              <Avatar src={userProfile.photoURL} name={displayName} size={254} />
+            </button>
+
+            {/* A local frosted lens keeps the score central without blurring
+                the whole portrait. Difference blending automatically flips
+                the glyphs for light and dark profile photos. */}
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+              <div className="flex min-w-[96px] flex-col items-center rounded-[24px] bg-white/10 px-5 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.34)] ring-1 ring-white/25 backdrop-blur-[14px] backdrop-saturate-150">
+                <span className="mix-blend-difference text-[30px] font-black leading-none tracking-[-.05em] text-white">{canactScore.score}</span>
+                <span className="mt-1 mix-blend-difference text-[9px] font-black uppercase tracking-[.16em] text-white">{canactScore.label}</span>
+              </div>
+            </div>
+
+            {/* Vote controls sit on the lower circular radius. */}
+            <button
+              type="button"
+              disabled={profileVoteBusy}
+              aria-label="Dislike"
+              aria-pressed={profileVote === 'dislike'}
+              onClick={() => onProfileVote('dislike')}
+              className={`absolute left-0 top-[72%] z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow-lg transition disabled:opacity-55 ${
+                profileVote === 'dislike' ? 'bg-rose-500 text-white' : 'bg-white text-rose-500 hover:bg-rose-50'
+              }`}
+            >
+              <ThumbsDown size={24} />
+            </button>
+
+            {/* Like button — mirrored on the lower-right radius. */}
+            <button
+              type="button"
+              disabled={profileVoteBusy}
+              aria-label="Like"
+              aria-pressed={profileVote === 'like'}
+              onClick={() => onProfileVote('like')}
+              className={`absolute right-0 top-[72%] z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow-lg transition disabled:opacity-55 ${
+                profileVote === 'like' ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-600 hover:bg-emerald-50'
+              }`}
+            >
+              <ThumbsUp size={24} />
+            </button>
+          </div>
+        )}
 
         {/* Canact score badge — visible to everyone */}
+        {isSelf && (
         <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-black/85 px-3 py-1.5 text-xs font-extrabold text-white shadow-lg">
           <span className={`h-2 w-2 rounded-full ${canactScore.label === 'TRUST' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : canactScore.label === 'GOOD' ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : canactScore.label === 'FAIR' ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'}`} />
           <span>{canactScore.score}</span>
           <span className={`font-black ${canactScore.label === 'TRUST' ? 'text-emerald-400' : canactScore.label === 'GOOD' ? 'text-green-400' : canactScore.label === 'FAIR' ? 'text-amber-400' : 'text-red-400'}`}>{canactScore.label}</span>
         </div>
+        )}
 
         <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
         <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
@@ -653,6 +731,52 @@ function CanactPagesProfileUI({
           {thumbs.length ? thumbs.map((thumb) => <Link key={thumb.id} href={thumb.href} prefetch className="aspect-square overflow-hidden rounded-[18px] bg-[#e7e1d1]">{thumb.src ? <img src={thumb.src} alt={thumb.label} loading="lazy" className="h-full w-full object-cover" /> : thumb.video ? <video src={thumb.video} muted playsInline className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-2 text-center text-xs font-bold text-brand">{thumb.label}</span>}</Link>) : <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">No content yet</div>}
         </div>
       </section>
+
+      {/* Attributes bottom-sheet — shows on avatar tap for third-party profiles */}
+      {!isSelf && (
+        <Sheet open={attrsSheetOpen} onClose={() => setAttrsSheetOpen(false)} title={`${displayName}'s attributes`}>
+          <div className="flex flex-col gap-4 pb-4">
+            {userProfile.photoURL ? (
+              <img
+                src={userProfile.photoURL}
+                alt={displayName}
+                className="w-full h-auto aspect-square rounded-2xl object-cover bg-brand-light"
+              />
+            ) : (
+              <div className="flex w-full aspect-square items-center justify-center rounded-2xl bg-brand-light text-5xl font-extrabold text-brand">
+                {(displayName || '?')[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="text-center">
+              <div className="text-lg font-extrabold text-ink">{displayName}</div>
+              <div className="text-sm text-ink/50">@{profileSlug(userProfile)}</div>
+            </div>
+            {POSITIVE_ATTRS.map((k) => {
+              const count = userProfile.attrs?.[k] ?? 0;
+              if (!count) return null;
+              return (
+                <div key={k} className="flex items-center justify-between rounded-xl bg-brand-light/40 px-4 py-3">
+                  <span className="text-sm font-semibold text-brand">{ATTR_LABELS[k]}</span>
+                  <span className="text-sm font-extrabold text-brand">{count}</span>
+                </div>
+              );
+            })}
+            {NEGATIVE_ATTRS.map((k) => {
+              const count = userProfile.attrs?.[k] ?? 0;
+              if (!count) return null;
+              return (
+                <div key={k} className="flex items-center justify-between rounded-xl bg-red-50 px-4 py-3">
+                  <span className="text-sm font-semibold text-red-700">{ATTR_LABELS[k]}</span>
+                  <span className="text-sm font-extrabold text-red-700">{count}</span>
+                </div>
+              );
+            })}
+            {(!userProfile.attrs || Object.values(userProfile.attrs).every((v) => !v)) && (
+              <p className="text-center text-sm text-ink/40">No attributes yet.</p>
+            )}
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }

@@ -373,7 +373,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   left: 50%;
   z-index: 50;
   display: grid;
-  width: min(310px, 78vw);
+  width: 98px;
   height: 36px;
   place-items: start center;
   transform: translate(-50%, -18px);
@@ -383,19 +383,23 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
 .canact-score-island-portal {
   position: fixed;
   z-index: 2147482500;
-  width: min(310px, calc(100vw - 24px));
-  height: 158px;
+  width: 98px;
+  height: 36px;
   transform: translateX(-50%);
   transform-origin: top center;
   isolation: isolate;
-  animation: canactIslandPortalIn 360ms cubic-bezier(.2,.9,.2,1) both;
+  transition:
+    width 540ms cubic-bezier(.22,1.22,.36,1),
+    height 540ms cubic-bezier(.22,1.22,.36,1),
+    border-radius 540ms cubic-bezier(.22,1.22,.36,1),
+    opacity 140ms linear;
+  will-change: width, height;
 }
-.canact-score-island-portal > .canact-score-island[data-expanded="true"] { width: 100%; }
-.canact-score-island-portal[data-closing="true"] {
-  pointer-events: none;
-  animation-name: canactIslandPortalOut;
-  animation-duration: 300ms;
+.canact-score-island-portal[data-expanded="true"] {
+  width: var(--canact-island-expanded-width, min(98vw, 408px));
+  height: 196px;
 }
+.canact-score-island-portal[data-home-hidden="true"] { pointer-events: none; }
 
 /* Firebase's invisible reCAPTCHA challenge is injected directly under body
    with its own 2-billion z-index. App sheets intentionally sit above that,
@@ -412,8 +416,8 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-score-island {
   position: relative;
   display: block;
-  width: 98px;
-  height: 36px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border: 0;
   border-radius: 999px;
@@ -424,15 +428,13 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   box-shadow: 0 9px 24px rgb(0 0 0 / 25%), inset 0 0 0 1px rgb(255 255 255 / 8%), inset 0 -8px 16px rgb(0 0 0 / 36%);
   transform: translateZ(0);
   transform-origin: top center;
-  transition: width 440ms cubic-bezier(.2,.9,.2,1), height 440ms cubic-bezier(.2,.9,.2,1), border-radius 440ms cubic-bezier(.2,.9,.2,1), box-shadow 280ms ease;
-  will-change: width, height, border-radius;
+  transition: border-radius 500ms cubic-bezier(.22,1.2,.36,1), box-shadow 300ms ease;
+  will-change: border-radius;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 .canact-score-island[data-expanded="true"] {
-  width: min(310px, 78vw);
-  height: 158px;
-  border-radius: 32px;
+  border-radius: 38px;
   box-shadow: 0 18px 44px rgb(0 0 0 / 34%), inset 0 0 0 1px rgb(255 255 255 / 9%), inset 0 -18px 28px rgb(0 0 0 / 42%);
 }
 .canact-score-island:focus-visible { outline: 3px solid rgb(140 226 176 / 48%); outline-offset: 3px; }
@@ -446,7 +448,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   gap: 7px;
   opacity: 1;
   transform: scale(1);
-  transition: opacity 130ms ease, transform 300ms cubic-bezier(.2,.9,.2,1);
+  transition: opacity 120ms ease, transform 320ms cubic-bezier(.22,1.16,.36,1);
 }
 .canact-score-island[data-expanded="true"] .canact-score-island-compact { opacity: 0; transform: scale(.72); }
 .canact-score-island-compact > i { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 9px #8ce2b0; animation: canactIslandLive 1.8s ease-in-out infinite; }
@@ -457,33 +459,33 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   inset: 0;
   display: grid;
   grid-template-columns: minmax(0,1fr) auto;
-  grid-template-rows: auto 4px auto auto;
-  gap: 8px 12px;
-  padding: 15px 16px 12px;
+  grid-template-rows: auto 5px auto auto;
+  gap: 11px 14px;
+  padding: 20px 22px 17px;
   opacity: 0;
   transform: translateY(9px) scale(.94);
-  transition: opacity 180ms ease 90ms, transform 360ms cubic-bezier(.2,.9,.2,1) 60ms;
+  transition: opacity 170ms ease, transform 420ms cubic-bezier(.22,1.18,.36,1);
 }
-.canact-score-island[data-expanded="true"] .canact-score-island-panel { opacity: 1; transform: translateY(0) scale(1); }
+.canact-score-island[data-expanded="true"] .canact-score-island-panel { opacity: 1; transform: translateY(0) scale(1); transition-delay: 105ms; }
 .canact-score-island-event { display: flex; min-width: 0; align-items: center; gap: 9px; }
-.canact-score-island-event > i { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border-radius: 50%; background: rgb(140 226 176 / 14%); color: #8ce2b0; font-size: 15px; font-style: normal; animation: canactIslandMoment 520ms cubic-bezier(.2,1.4,.3,1) both; }
+.canact-score-island-event > i { display: grid; width: 42px; height: 42px; flex: none; place-items: center; border-radius: 50%; background: rgb(140 226 176 / 14%); color: #8ce2b0; font-size: 18px; font-style: normal; animation: canactIslandMoment 520ms cubic-bezier(.2,1.4,.3,1) both; }
 .canact-score-island[data-tone="negative"] .canact-score-island-event > i { background: rgb(248 113 113 / 14%); color: #fca5a5; }
 .canact-score-island-event span { min-width: 0; }
 .canact-score-island-event small, .canact-score-island-event strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.canact-score-island-event small { color: rgb(255 255 255 / 44%); font-size: 7px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
-.canact-score-island-event strong { margin-top: 3px; font-size: 10px; font-weight: 800; }
+.canact-score-island-event small { color: rgb(255 255 255 / 48%); font-size: 9px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
+.canact-score-island-event strong { margin-top: 4px; font-size: 13px; font-weight: 850; }
 .canact-score-island-value { display: flex; align-items: baseline; gap: 4px; }
-.canact-score-island-value b { font-size: 25px; font-weight: 950; letter-spacing: -.06em; line-height: 1; }
-.canact-score-island-value em { color: #8ce2b0; font-size: 8px; font-style: normal; font-weight: 900; }
+.canact-score-island-value b { font-size: 36px; font-weight: 950; letter-spacing: -.06em; line-height: 1; }
+.canact-score-island-value em { color: #8ce2b0; font-size: 11px; font-style: normal; font-weight: 900; }
 .canact-score-island-value em[data-positive="false"] { color: #fca5a5; }
 .canact-score-island-meter { grid-column: 1 / -1; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 9%); }
 .canact-score-island-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#4eaf8d,#9ce8ba); box-shadow: 0 0 12px rgb(140 226 176 / 36%); transition: width 700ms cubic-bezier(.2,.8,.2,1); }
-.canact-score-island-meta { grid-column: 1 / -1; display: flex; justify-content: space-between; color: rgb(255 255 255 / 42%); font-size: 7px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.canact-score-island-meta { grid-column: 1 / -1; display: flex; justify-content: space-between; color: rgb(255 255 255 / 46%); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .canact-score-island-attributes {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
+  gap: 7px;
 }
 .canact-score-island-attributes > span {
   display: flex;
@@ -491,9 +493,9 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  border-radius: 8px;
+  border-radius: 11px;
   background: rgb(140 226 176 / 10%);
-  padding: 5px 6px;
+  padding: 7px 8px;
   color: #a7e9c2;
 }
 .canact-score-island-attributes > span[data-positive="false"] {
@@ -503,7 +505,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-score-island-attributes small {
   overflow: hidden;
   color: rgb(255 255 255 / 60%);
-  font-size: 6.5px;
+  font-size: 8.5px;
   font-weight: 750;
   letter-spacing: -.01em;
   text-overflow: ellipsis;
@@ -511,19 +513,11 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 }
 .canact-score-island-attributes b {
   flex: none;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 @keyframes canactIslandLive { 50% { opacity: .55; transform: scale(.72); } }
 @keyframes canactIslandMoment { from { opacity: 0; transform: scale(.45); } to { opacity: 1; transform: scale(1); } }
-@keyframes canactIslandPortalIn {
-  from { opacity: 0; transform: translateX(-50%) scale(.42, .28); }
-  to { opacity: 1; transform: translateX(-50%) scale(1); }
-}
-@keyframes canactIslandPortalOut {
-  from { opacity: 1; transform: translateX(-50%) scale(1); }
-  to { opacity: 0; transform: translateX(-50%) scale(.42, .28); }
-}
 @media (prefers-reduced-motion: reduce) {
   .canact-score-island-shell, .canact-score-island-portal, .canact-score-island, .canact-score-island-compact, .canact-score-island-panel { transition-duration: 1ms !important; animation-duration: 1ms !important; }
   .canact-score-island-compact > i, .canact-score-island-event > i { animation: none !important; }

@@ -72,7 +72,7 @@ export default function ProfileSettingsPage() {
       {/* Header */}
       <div className={styles.header}>
         <Link href="/profile" prefetch className={styles.backBtn} aria-label="Back">
-          <ArrowLeft size={18} />
+          <ArrowLeft size={22} />
         </Link>
         <div className={styles.headerTitle}>
           <h1>Profile settings</h1>

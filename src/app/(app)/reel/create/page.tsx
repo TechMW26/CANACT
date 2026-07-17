@@ -175,7 +175,7 @@ export default function ReelCreatePage() {
           onClick={() => setStep('preview')}
           className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ring-1 ring-line"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={22} />
         </button>
         <div>
           <div className="text-xl font-black tracking-tight text-ink">Share a Reel</div>

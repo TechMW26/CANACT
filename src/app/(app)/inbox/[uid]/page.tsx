@@ -285,7 +285,7 @@ export default function InboxThreadPage() {
           aria-label="Back"
           className="inline-flex h-10 w-10 items-center justify-center rounded-full text-ink hover:bg-brand-light/40"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={22} />
         </button>
         <Link href={`/profile/${otherUid}`} className="flex min-w-0 flex-1 items-center gap-3">
           <Avatar src={other?.photoURL ?? null} name={other?.fullName ?? '?'} size={38} />

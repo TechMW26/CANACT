@@ -58,12 +58,21 @@ function recomputeRating(u: UserProfile) {
 
 export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like' | 'dislike') {
   const myVoteRef = ref(db, `votes/${toUid}/${fromUid}/main`);
+  const votedAtRef = ref(db, `votes/${toUid}/${fromUid}/votedAt`);
   const cacheKey = `${toUid}/${fromUid}/main`;
   let prev = getCachedVote(cacheKey);
   if (prev === undefined) {
     prev = (await get(myVoteRef)).val() as 'like' | 'dislike' | null;
     cacheVote(cacheKey, prev);
   }
+
+  // ── 6‑hour cooldown: you can like/dislike the same person once every 6h ──
+  const lastVotedAt = (await get(votedAtRef)).val() as number | null;
+  if (lastVotedAt && Date.now() - lastVotedAt < SIX_HOURS) {
+    const remaining = SIX_HOURS - (Date.now() - lastVotedAt);
+    throw new Error(`COOLDOWN:${remaining}`);
+  }
+
   if (prev === kind) {
     await recordOnboardingSignal(fromUid, 'rate-profile');
     return;
@@ -78,6 +87,7 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
     return u;
   });
   await set(myVoteRef, kind);
+  await set(votedAtRef, Date.now());
   await recordOnboardingSignal(fromUid, 'rate-profile');
 
   // Notify the recipient that someone liked/disliked them.

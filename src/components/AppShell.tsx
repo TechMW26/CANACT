@@ -317,7 +317,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar — fixed to the viewport so it's always in view
           regardless of how far the main column scrolls. Hidden under lg
           (tablet portrait still gets the floating mobile header + bottom nav). */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white/60 lg:backdrop-blur lg:border-r lg:border-line lg:z-20">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white/60 lg:backdrop-blur lg:border-r lg:border-line lg:z-[2147482600]">
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/" />
         </div>
@@ -680,11 +680,9 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [sidebarEntered, setSidebarEntered] = useState(false);
   const [islandOpen, setIslandOpen] = useState(false);
   const islandRef = useRef<HTMLDivElement | null>(null);
-  const islandButtonRef = useRef<HTMLButtonElement | null>(null);
   const islandPortalRef = useRef<HTMLDivElement | null>(null);
-  const [islandAnchor, setIslandAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [islandAnchor, setIslandAnchor] = useState<{ top: number; left: number; expandedWidth: number } | null>(null);
   const [islandPortalMounted, setIslandPortalMounted] = useState(false);
-  const [islandPortalClosing, setIslandPortalClosing] = useState(false);
   const [liveScore, setLiveScore] = useState(0);
   const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
   const prevScoreRef = useRef(0);
@@ -797,14 +795,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const scoreSummary = liveSummary ?? calculateCanactScore(profile);
   const scorePercent = Math.max(4, Math.min(100, (liveScore / Math.max(scoreSummary.max, 1)) * 100));
 
-  useLayoutEffect(() => {
-    if (islandExpanded) {
-      setIslandPortalMounted(true);
-      setIslandPortalClosing(false);
-    } else if (islandPortalMounted) {
-      setIslandPortalClosing(true);
-    }
-  }, [islandExpanded, islandPortalMounted]);
+  useEffect(() => setIslandPortalMounted(true), []);
 
   useLayoutEffect(() => {
     if (!islandPortalMounted) return;
@@ -813,14 +804,17 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
     const updateAnchor = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const trigger = islandButtonRef.current;
+        const trigger = islandRef.current;
         if (!trigger) return;
         const rect = trigger.getBoundingClientRect();
-        const popupWidth = Math.min(310, window.innerWidth - 24);
-        const halfWidth = popupWidth / 2;
-        const left = Math.min(window.innerWidth - 12 - halfWidth, Math.max(12 + halfWidth, rect.left + rect.width / 2));
-        const top = Math.min(window.innerHeight - 170, Math.max(12, rect.top));
-        setIslandAnchor((current) => current?.top === top && current.left === left ? current : { top, left });
+        const header = trigger.closest('.canact-figma-header')?.getBoundingClientRect();
+        const expandedWidth = Math.min(window.innerWidth - 16, Math.max(280, (header?.width ?? window.innerWidth - 24) * .98));
+        const halfWidth = expandedWidth / 2;
+        const left = Math.min(window.innerWidth - 8 - halfWidth, Math.max(8 + halfWidth, rect.left + rect.width / 2));
+        const top = Math.min(window.innerHeight - 44, Math.max(8, rect.top));
+        setIslandAnchor((current) => current?.top === top && current.left === left && current.expandedWidth === expandedWidth
+          ? current
+          : { top, left, expandedWidth });
       });
     };
 
@@ -860,29 +854,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           <div
             ref={islandRef}
             className="canact-score-island-shell"
-            data-expanded="false"
             data-home-hidden={home && homePillOpacity <= 0.01}
             style={{ opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity }}
-          >
-            <button
-              ref={islandButtonRef}
-              type="button"
-              onClick={() => { haptic('subtle'); setIslandOpen((v) => !v); }}
-              data-canact-score-target
-              aria-label={`Canact score ${liveScore}`}
-              aria-expanded={islandExpanded}
-              tabIndex={home && homePillOpacity <= 0.01 ? -1 : undefined}
-              className="canact-score-island"
-              data-expanded="false"
-              data-tone={islandMoment?.tone ?? 'neutral'}
-            >
-              <span className="canact-score-island-compact">
-                <i />
-                <strong>{liveScore}</strong>
-                <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
-              </span>
-            </button>
-          </div>
+            aria-hidden="true"
+          />
 
           <div className="ml-auto inline-flex items-center gap-3">
             {/* Avatar — opens sidebar with range selector + profile link */}
@@ -891,21 +866,21 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
                 type="button"
                 aria-label="Open profile menu"
                 onClick={() => { haptic('subtle'); setAvatarPopup((v) => !v); }}
-                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}
+                className={`inline-flex h-22 w-22 shrink-0 items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}
               >
-                <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={36} />
+                <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={50} />
               </button>
               {sidebarMounted && createPortal(
                 <>
                   {/* Backdrop — fades in/out */}
                   <div
-                    className={`fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarEntered ? 'opacity-100' : 'opacity-0'}`}
+                    className={`fixed inset-0 z-[2147482600] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarEntered ? 'opacity-100' : 'opacity-0'}`}
                     onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
                     aria-hidden="true"
                   />
                   {/* Sidebar panel — slides in from right, 80% width */}
                   <aside
-                    className={`fixed inset-y-0 right-0 z-[131] flex w-[80%] max-w-[400px] flex-col bg-[#faf8f2] shadow-2xl rounded-l-[32px] transition-transform duration-300 ease-out ${sidebarEntered ? 'translate-x-0' : 'translate-x-full'}`}
+                    className={`fixed inset-y-0 right-0 z-[2147482601] flex w-[80%] max-w-[400px] flex-col bg-[#faf8f2] shadow-2xl rounded-l-[32px] transition-transform duration-300 ease-out ${sidebarEntered ? 'translate-x-0' : 'translate-x-full'}`}
                     role="dialog"
                     aria-modal="true"
                     aria-label="Profile menu"
@@ -977,30 +952,42 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         <div
           ref={islandPortalRef}
           className="canact-score-island-portal"
-          data-closing={islandPortalClosing}
-          style={{ top: islandAnchor.top, left: islandAnchor.left }}
-          role="dialog"
-          aria-label="Canact score details"
-          onAnimationEnd={(event) => {
-            if (event.target !== event.currentTarget || !islandPortalClosing) return;
-            setIslandPortalMounted(false);
-            setIslandPortalClosing(false);
-            setIslandAnchor(null);
-          }}
+          data-expanded={islandExpanded}
+          data-home-hidden={home && homePillOpacity <= 0.01}
+          style={{
+            top: islandAnchor.top,
+            left: islandAnchor.left,
+            opacity: home ? 'var(--canact-home-pill-opacity, 0)' : homePillOpacity,
+            '--canact-island-expanded-width': `${islandAnchor.expandedWidth}px`,
+          } as React.CSSProperties}
+          role={islandExpanded ? 'dialog' : undefined}
+          aria-label={islandExpanded ? 'Canact score details' : undefined}
         >
           <button
             type="button"
             className="canact-score-island"
-            data-expanded="true"
+            data-expanded={islandExpanded}
             data-tone={islandMoment?.tone ?? 'neutral'}
-            aria-label="Close Canact score details"
+            data-canact-score-target
+            aria-label={islandExpanded ? 'Close Canact score details' : `Canact score ${liveScore}`}
+            aria-expanded={islandExpanded}
+            tabIndex={home && homePillOpacity <= 0.01 ? -1 : undefined}
             onClick={() => {
               haptic('subtle');
-              setIslandOpen(false);
-              setIslandMoment(null);
-              if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+              if (islandExpanded) {
+                setIslandOpen(false);
+                setIslandMoment(null);
+                if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+              } else {
+                setIslandOpen(true);
+              }
             }}
           >
+            <span className="canact-score-island-compact">
+              <i />
+              <strong>{liveScore}</strong>
+              <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
+            </span>
             <span className="canact-score-island-panel">
               <span className="canact-score-island-event">
                 <i>{islandMoment?.icon ?? <Activity size={16} />}</i>
