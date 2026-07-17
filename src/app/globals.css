@@ -396,6 +396,19 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   animation-name: canactIslandPortalOut;
   animation-duration: 300ms;
 }
+
+/* Firebase's invisible reCAPTCHA challenge is injected directly under body
+   with its own 2-billion z-index. App sheets intentionally sit above that,
+   so explicitly promote only the challenge host and badge to the top layer. */
+body > div[style*="z-index: 2000000000"],
+body > div:has(iframe[title*="recaptcha challenge"]),
+.grecaptcha-badge {
+  z-index: 2147483647 !important;
+}
+
+body > div:has(iframe[title*="recaptcha challenge"]) {
+  pointer-events: auto !important;
+}
 .canact-score-island {
   position: relative;
   display: block;
