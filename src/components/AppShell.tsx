@@ -835,28 +835,8 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
           <Brand size={38} href="/" />
 
-          {/* Dynamic Island score pill */}
-          <div
-            ref={islandRef}
-            className="canact-score-island-shell"
-          >
-            <button
-              type="button"
-              onClick={() => { haptic('subtle'); setIslandOpen((v) => !v); }}
-              data-canact-score-target
-              aria-label={`Canact score ${liveScore}`}
-              aria-expanded={islandExpanded}
-              className="canact-score-island"
-              data-expanded="false"
-              data-tone={islandMoment?.tone ?? 'neutral'}
-            >
-              <span className="canact-score-island-compact">
-                <i />
-                <strong>{liveScore}</strong>
-                <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
-              </span>
-            </button>
-          </div>
+          {/* Anchor for portal positioning */}
+          <div ref={islandRef} className="canact-score-island-shell" />
 
           <div className="ml-auto inline-flex items-center gap-3">
             {/* Avatar — opens sidebar with range selector + profile link */}
@@ -955,7 +935,6 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           style={{
             top: islandAnchor.top,
             left: islandAnchor.left,
-            opacity: 1,
             '--canact-island-expanded-width': `${islandAnchor.expandedWidth}px`,
           } as React.CSSProperties}
           role={islandExpanded ? 'dialog' : undefined}

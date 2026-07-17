@@ -29,6 +29,8 @@ import {
   unfriend,
 } from '@/lib/services/friends';
 import { calculateCanactScore } from '@/lib/canactScore';
+import { useGeo } from '@/lib/useGeo';
+import { haversineMeters } from '@/lib/utils';
 import {
   Award,
   CheckCircle2,
@@ -61,6 +63,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
   const [isFavourite, setIsFavourite] = useState(false);
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
+  const { coords: myCoords } = useGeo();
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (snapshot) => {
@@ -228,6 +231,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   };
 
   const score = calculateCanactScore(u);
+  const theirLoc = (u as any).lastLocation as { lat?: number; lng?: number } | undefined;
+  const outOfRange = !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
+    && haversineMeters(myCoords, { lat: theirLoc.lat!, lng: theirLoc.lng! }) > 15;
 
   return (
     <CanactPagesProfileUI
@@ -237,6 +243,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       age={age}
       locationText={locationText}
       canactScore={score}
+      blurred={outOfRange}
       tab={tab}
       setTab={setTab}
       posts={posts}
@@ -534,6 +541,7 @@ function CanactPagesProfileUI({
   profileVoteBusy,
   friendStatus,
   isFavourite,
+  blurred,
 }: {
   userProfile: UserProfile;
   isSelf: boolean;
@@ -541,6 +549,7 @@ function CanactPagesProfileUI({
   age?: number;
   locationText: string;
   canactScore: ReturnType<typeof calculateCanactScore>;
+  blurred: boolean;
   tab: ProfileTabKey;
   setTab: (tab: ProfileTabKey) => void;
   posts: WhaPost[];
@@ -603,7 +612,8 @@ function CanactPagesProfileUI({
   };
 
   return (
-    <div className="-mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
+    <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
+      <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
       <div className="relative h-[320px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
         {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-center opacity-55 mix-blend-luminosity" /> : null}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
@@ -691,15 +701,6 @@ function CanactPagesProfileUI({
           </div>
         )}
 
-        {/* Canact score badge — visible to everyone */}
-        {isSelf && (
-        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-black/85 px-3 py-1.5 text-xs font-extrabold text-white shadow-lg">
-          <span className={`h-2 w-2 rounded-full ${canactScore.label === 'TRUST' ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : canactScore.label === 'GOOD' ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : canactScore.label === 'FAIR' ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.5)]'}`} />
-          <span>{canactScore.score}</span>
-          <span className={`font-black ${canactScore.label === 'TRUST' ? 'text-emerald-400' : canactScore.label === 'GOOD' ? 'text-green-400' : canactScore.label === 'FAIR' ? 'text-amber-400' : 'text-red-400'}`}>{canactScore.label}</span>
-        </div>
-        )}
-
         <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
         <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
         {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
@@ -722,6 +723,17 @@ function CanactPagesProfileUI({
           {thumbs.length ? thumbs.map((thumb) => <Link key={thumb.id} href={thumb.href} prefetch className="aspect-square overflow-hidden rounded-[18px] bg-[#e7e1d1]">{thumb.src ? <img src={thumb.src} alt={thumb.label} loading="lazy" className="h-full w-full object-cover" /> : thumb.video ? <video src={thumb.video} muted playsInline className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-2 text-center text-xs font-bold text-brand">{thumb.label}</span>}</Link>) : <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">No content yet</div>}
         </div>
       </section>
+      </div>{/* end blur wrapper */}
+
+      {/* Out-of-range notice */}
+      {blurred && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+          <div className="rounded-2xl bg-black/80 px-6 py-4 text-center text-sm font-bold text-white shadow-xl backdrop-blur">
+            <MapPin size={20} className="mx-auto mb-2" />
+            This person is outside your 15&nbsp;m range.<br />Move closer to see their full profile.
+          </div>
+        </div>
+      )}
 
       {/* Attributes bottom-sheet — shows on avatar tap for third-party profiles */}
       {!isSelf && (
