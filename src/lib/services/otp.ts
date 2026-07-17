@@ -81,6 +81,32 @@ function hydrateSession(session: StoredOTPSession) {
   fallbackChallenge = session.fallbackChallenge || '';
 }
 
+export async function getPhoneLinkStatus(
+  phone: string,
+): Promise<'available' | 'current' | 'other' | 'unknown'> {
+  try {
+    const auth = getFirebaseAuth();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return 'unknown';
+    const response = await fetch('/api/auth/phone-status', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await response.json().catch(() => null) as {
+      ok?: boolean;
+      status?: 'available' | 'current' | 'other';
+    } | null;
+    return response.ok && data?.ok && data.status ? data.status : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function getActiveOTPSession(phone?: string, mode?: OTPMode): OTPSession | null {
   const session = readStoredSession();
   if (!session || (phone && session.phone !== phone) || (mode && session.mode !== mode)) return null;
@@ -226,6 +252,17 @@ export async function verifyOTP(code: string): Promise<OTPVerifyResult> {
       if (currentMode === 'link') {
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error('auth-required');
+        const linkStatus = await getPhoneLinkStatus(pendingPhone);
+        if (linkStatus === 'current') {
+          await reload(currentUser);
+          clearStoredSession();
+          return { ok: true, isNewUser: false, accountSwitched: false };
+        }
+        if (linkStatus === 'other') {
+          await signInWithCredential(auth, credential);
+          clearStoredSession();
+          return { ok: true, isNewUser: false, accountSwitched: true };
+        }
         try {
           await linkWithCredential(currentUser, credential);
           clearStoredSession();

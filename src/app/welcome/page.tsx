@@ -309,8 +309,6 @@ export default function WelcomePage() {
           </button>
 
           <Progress step={1} />
-
-          <p className={styles.textLink}>One secure step. <strong>Existing accounts sign in; new accounts continue setup.</strong></p>
           </div>
         </div>
       </section>

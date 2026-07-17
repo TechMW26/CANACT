@@ -168,9 +168,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) { window.location.replace('/welcome'); return; }
+    if (!user) { window.location.replace('/admin/login'); return; }
+    if (user.email?.toLowerCase() !== 'avi2001raj@gmail.com') {
+      // Signed in but not as admin — sign out and redirect
+      import('firebase/auth').then(({ signOut }) => {
+        signOut(getFirebaseAuth()).then(() => window.location.replace('/admin/login'));
+      });
+      return;
+    }
     fetchHeatzones();
-  }, [loading, user?.uid]);
+  }, [loading, user?.uid, user?.email]);
 
   // Derive user stats from RTDB snapshot
   const userList = useMemo(() => {
@@ -214,7 +221,7 @@ export default function AdminDashboardPage() {
   }, [resolvedHeatData, selectedPage]);
 
   if (loading) return <Splash message="Loading admin..." />;
-  if (!user) return null;
+  if (!user) return <Splash message="Redirecting to admin login…" />;
 
   const activeMeta = ADMIN_VIEWS.find((view) => view.id === activeView) ?? ADMIN_VIEWS[0];
 

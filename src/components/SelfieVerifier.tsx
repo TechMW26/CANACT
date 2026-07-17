@@ -1,17 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FaceLandmarker as FaceLandmarkerInstance, NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { Button } from '@/components/Button';
 import { CheckCircle2, Eye, RefreshCw, ShieldCheck, Sparkles } from '@/components/icons';
 
 type LivenessStep = 'loading' | 'position' | 'visibility' | 'blink' | 'hold' | 'done' | 'error';
-type FaceApiModule = typeof import('face-api.js');
+type VisionModule = typeof import('@mediapipe/tasks-vision');
 type GuidanceTone = 'neutral' | 'warning' | 'success';
 
 interface BlinkState {
   count: number;
-  baseline: number;
-  samples: number;
   closedFrames: number;
   openFrames: number;
   armed: boolean;
@@ -19,29 +18,29 @@ interface BlinkState {
 }
 
 const BLINKS_REQUIRED = 2;
-const BLINK_COOLDOWN_MS = 350;
-const MIN_FACE_RATIO = 0.035;
-const MAX_FACE_RATIO = 0.34;
+const BLINK_COOLDOWN_MS = 380;
+const DETECTION_INTERVAL_MS = 65;
+const MIN_FACE_RATIO = 0.075;
+const MAX_FACE_RATIO = 0.48;
 
 const STEPS: Array<{ id: LivenessStep; title: string; hint: string }> = [
-  { id: 'position', title: 'Center your face', hint: 'Keep your whole face inside the circle' },
+  { id: 'position', title: 'Center your face', hint: 'Keep your whole face inside the guide' },
   { id: 'visibility', title: 'Look at the camera', hint: 'Use even light and keep your face unobstructed' },
   { id: 'blink', title: 'Blink naturally', hint: 'Blink slowly twice while looking at the camera' },
-  { id: 'hold', title: 'Hold still', hint: 'Perfect — capturing your verified selfie' },
+  { id: 'hold', title: 'Hold still', hint: 'Perfect — completing your live verification' },
 ];
 
 const INITIAL_BLINK: BlinkState = {
   count: 0,
-  baseline: 0.3,
-  samples: 0,
   closedFrames: 0,
   openFrames: 0,
   armed: false,
   lastBlinkTime: 0,
 };
 
-function eyeAspectRatio(points: Array<{ x: number; y: number }>) {
-  if (points.length < 6) return Number.NaN;
+function eyeAspectRatio(landmarks: NormalizedLandmark[], indices: number[]) {
+  const points = indices.map((index) => landmarks[index]);
+  if (points.some((point) => !point)) return Number.NaN;
   const [p1, p2, p3, p4, p5, p6] = points;
   const horizontal = Math.hypot(p1.x - p4.x, p1.y - p4.y);
   if (horizontal <= 0) return Number.NaN;
@@ -51,15 +50,39 @@ function eyeAspectRatio(points: Array<{ x: number; y: number }>) {
   ) / (2 * horizontal);
 }
 
-function computeBlinkEAR(landmarks: any) {
-  try {
-    const left = eyeAspectRatio(landmarks.getLeftEye?.() || []);
-    const right = eyeAspectRatio(landmarks.getRightEye?.() || []);
-    if (!Number.isFinite(left) || !Number.isFinite(right)) return Number.NaN;
-    return (left + right) / 2;
-  } catch {
-    return Number.NaN;
+function fallbackBlinkScore(landmarks: NormalizedLandmark[]) {
+  const left = eyeAspectRatio(landmarks, [362, 385, 387, 263, 373, 380]);
+  const right = eyeAspectRatio(landmarks, [33, 160, 158, 133, 153, 144]);
+  if (!Number.isFinite(left) || !Number.isFinite(right)) return Number.NaN;
+  const ear = (left + right) / 2;
+  return Math.max(0, Math.min(1, (0.3 - ear) / 0.18));
+}
+
+function blendshapeScore(
+  categories: Array<{ categoryName: string; score: number }> | undefined,
+  name: string,
+) {
+  return categories?.find((category) => category.categoryName === name)?.score;
+}
+
+function faceGeometry(landmarks: NormalizedLandmark[]) {
+  let minX = 1;
+  let maxX = 0;
+  let minY = 1;
+  let maxY = 0;
+  for (const point of landmarks) {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
   }
+  const width = maxX - minX;
+  const height = maxY - minY;
+  return {
+    centerX: minX + width / 2,
+    centerY: minY + height / 2,
+    ratio: width * height,
+  };
 }
 
 export function SelfieVerifier({
@@ -70,15 +93,21 @@ export function SelfieVerifier({
   onCancel: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const meshRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const landmarkerRef = useRef<FaceLandmarkerInstance | null>(null);
+  const visionRef = useRef<VisionModule | null>(null);
   const loopRef = useRef<number>(0);
   const runningRef = useRef(false);
-  const faceApiRef = useRef<FaceApiModule | null>(null);
+  const stepRef = useRef<LivenessStep>('loading');
   const stabilityRef = useRef({ position: 0, visibility: 0, hold: 0, missing: 0 });
   const blinkRef = useRef<BlinkState>({ ...INITIAL_BLINK });
   const lastDetectionRef = useRef(0);
+  const lastVideoTimeRef = useRef(-1);
+  const meshProgressRef = useRef(0);
+  const captureSnapshotRef = useRef<() => boolean>(() => false);
 
-  const [step, setStep] = useState<LivenessStep>('loading');
+  const [step, setStepState] = useState<LivenessStep>('loading');
   const [stepIndex, setStepIndex] = useState(0);
   const [blinkCount, setBlinkCount] = useState(0);
   const [modelReady, setModelReady] = useState(false);
@@ -89,9 +118,19 @@ export function SelfieVerifier({
   const [guidance, setGuidance] = useState('Preparing secure face detection…');
   const [guidanceTone, setGuidanceTone] = useState<GuidanceTone>('neutral');
 
+  const setStep = useCallback((next: LivenessStep) => {
+    stepRef.current = next;
+    setStepState(next);
+  }, []);
+
   const updateGuidance = useCallback((message: string, tone: GuidanceTone = 'neutral') => {
     setGuidance((current) => current === message ? current : message);
     setGuidanceTone(tone);
+  }, []);
+
+  const clearMesh = useCallback(() => {
+    const canvas = meshRef.current;
+    canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
 
   const stopCamera = useCallback(() => {
@@ -100,19 +139,21 @@ export function SelfieVerifier({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    clearMesh();
     setCameraReady(false);
-  }, []);
+  }, [clearMesh]);
 
   const startCamera = useCallback(async () => {
     try {
       runningRef.current = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       setCameraReady(false);
+      updateGuidance('Starting the front camera…');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: { ideal: 'user' },
           width: { ideal: 720 },
-          height: { ideal: 720 },
+          height: { ideal: 960 },
           frameRate: { ideal: 24, max: 30 },
         },
         audio: false,
@@ -134,30 +175,59 @@ export function SelfieVerifier({
       setCameraError('Camera access is unavailable. Allow camera permission, then try again.');
       setStep('error');
     }
-  }, []);
+  }, [setStep, updateGuidance]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const faceapi = await import('face-api.js');
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models'),
-        ]);
-        if (!cancelled) {
-          faceApiRef.current = faceapi;
-          setModelReady(true);
+        updateGuidance('Loading on-device face model…');
+        const vision = await import('@mediapipe/tasks-vision');
+        const files = await vision.FilesetResolver.forVisionTasks('/models/mediapipe/wasm');
+        let landmarker: FaceLandmarkerInstance;
+        try {
+          landmarker = await vision.FaceLandmarker.createFromOptions(files, {
+            baseOptions: { modelAssetPath: '/models/mediapipe/face_landmarker.task', delegate: 'GPU' },
+            runningMode: 'VIDEO',
+            numFaces: 1,
+            minFaceDetectionConfidence: 0.55,
+            minFacePresenceConfidence: 0.55,
+            minTrackingConfidence: 0.5,
+            outputFaceBlendshapes: true,
+          });
+        } catch {
+          landmarker = await vision.FaceLandmarker.createFromOptions(files, {
+            baseOptions: { modelAssetPath: '/models/mediapipe/face_landmarker.task', delegate: 'CPU' },
+            runningMode: 'VIDEO',
+            numFaces: 1,
+            minFaceDetectionConfidence: 0.5,
+            minFacePresenceConfidence: 0.5,
+            minTrackingConfidence: 0.45,
+            outputFaceBlendshapes: true,
+          });
         }
-      } catch {
+        if (cancelled) {
+          landmarker.close();
+          return;
+        }
+        visionRef.current = vision;
+        landmarkerRef.current = landmarker;
+        setModelReady(true);
+      } catch (error) {
+        console.warn('[face-verification] model initialization failed', error);
         if (!cancelled) {
-          setCameraError('Face detection could not start. Please try again.');
+          setCameraError('Face detection could not start. Check your connection and try again.');
           setStep('error');
         }
       }
     })();
-    return () => { cancelled = true; };
-  }, [modelAttempt]);
+    return () => {
+      cancelled = true;
+      landmarkerRef.current?.close();
+      landmarkerRef.current = null;
+      visionRef.current = null;
+    };
+  }, [modelAttempt, setStep, updateGuidance]);
 
   useEffect(() => {
     void startCamera();
@@ -165,11 +235,11 @@ export function SelfieVerifier({
   }, [startCamera, stopCamera]);
 
   useEffect(() => {
-    if (!modelReady || !cameraReady || step !== 'loading') return;
+    if (!modelReady || !cameraReady || stepRef.current !== 'loading') return;
     setStep('position');
     setStepIndex(0);
-    updateGuidance('Move your face into the circle');
-  }, [cameraReady, modelReady, step, updateGuidance]);
+    updateGuidance('Move your face into the guide');
+  }, [cameraReady, modelReady, setStep, updateGuidance]);
 
   const captureSnapshot = useCallback(() => {
     const video = videoRef.current;
@@ -194,93 +264,113 @@ export function SelfieVerifier({
     setStep('done');
     stopCamera();
     return true;
-  }, [stopCamera, updateGuidance]);
+  }, [setStep, stopCamera, updateGuidance]);
+
+  useEffect(() => { captureSnapshotRef.current = captureSnapshot; }, [captureSnapshot]);
+
+  const drawMesh = useCallback((landmarks: NormalizedLandmark[], time: number) => {
+    const canvas = meshRef.current;
+    const video = videoRef.current;
+    const vision = visionRef.current;
+    if (!canvas || !video || !vision) return;
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.save();
+    context.translate(canvas.width, 0);
+    context.scale(-1, 1);
+    const drawing = new vision.DrawingUtils(context);
+    meshProgressRef.current = Math.min(1, meshProgressRef.current + 0.055);
+    const connections = vision.FaceLandmarker.FACE_LANDMARKS_TESSELATION;
+    const visibleConnections = connections.slice(0, Math.max(1, Math.floor(connections.length * meshProgressRef.current)));
+    const pulse = 0.18 + ((Math.sin(time / 260) + 1) / 2) * 0.18;
+    drawing.drawConnectors(landmarks, visibleConnections, { color: `rgba(97,235,191,${pulse})`, lineWidth: 0.75 });
+    drawing.drawConnectors(landmarks, vision.FaceLandmarker.FACE_LANDMARKS_CONTOURS, { color: 'rgba(190,255,232,.82)', lineWidth: 1.25 });
+    drawing.drawLandmarks(landmarks.filter((_, index) => index % 4 === 0), { color: 'rgba(224,255,244,.72)', radius: 0.9 });
+    context.restore();
+  }, []);
 
   useEffect(() => {
-    if (!modelReady || !cameraReady || step === 'done' || step === 'error' || step === 'loading') return;
-    const faceapi = faceApiRef.current;
-    if (!faceapi) return;
+    if (!modelReady || !cameraReady || !landmarkerRef.current) return;
     runningRef.current = true;
 
-    const detect = async (time: number) => {
+    const detect = (time: number) => {
       if (!runningRef.current) return;
-      if (time - lastDetectionRef.current < 90) {
+      const video = videoRef.current;
+      const landmarker = landmarkerRef.current;
+      if (!video || !landmarker || video.readyState < 2 || time - lastDetectionRef.current < DETECTION_INTERVAL_MS) {
         loopRef.current = requestAnimationFrame(detect);
         return;
       }
       lastDetectionRef.current = time;
-      const video = videoRef.current;
-      if (!video || video.readyState < 2) {
+      if (video.currentTime === lastVideoTimeRef.current) {
         loopRef.current = requestAnimationFrame(detect);
         return;
       }
+      lastVideoTimeRef.current = video.currentTime;
 
       try {
-        const result = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.42 }))
-          .withFaceLandmarks(true);
-
-        if (!result || result.detection.score < 0.52) {
+        const result = landmarker.detectForVideo(video, performance.now());
+        const landmarks = result.faceLandmarks[0];
+        if (!landmarks) {
+          clearMesh();
+          meshProgressRef.current = 0;
           stabilityRef.current.position = 0;
           stabilityRef.current.visibility = 0;
           stabilityRef.current.hold = 0;
           stabilityRef.current.missing += 1;
-          updateGuidance(stabilityRef.current.missing > 18 ? 'Use brighter, even light on your face' : 'Move your face into the circle', 'warning');
+          updateGuidance(stabilityRef.current.missing > 24 ? 'Face the light and keep the camera steady' : 'Move your face into the guide', 'warning');
         } else {
-          const { box } = result.detection;
-          const width = video.videoWidth;
-          const height = video.videoHeight;
-          const centerX = box.x + box.width / 2;
-          const centerY = box.y + box.height / 2;
-          const faceRatio = (box.width * box.height) / (width * height);
-          const horizontallyCentered = Math.abs(centerX - width / 2) / width < 0.2;
-          const verticallyCentered = Math.abs(centerY - height / 2) / height < 0.22;
-          const centered = horizontallyCentered && verticallyCentered;
-          const sized = faceRatio >= MIN_FACE_RATIO && faceRatio <= MAX_FACE_RATIO;
+          drawMesh(landmarks, time);
+          const geometry = faceGeometry(landmarks);
+          const centered = Math.abs(geometry.centerX - 0.5) < 0.15 && Math.abs(geometry.centerY - 0.47) < 0.18;
+          const sized = geometry.ratio >= MIN_FACE_RATIO && geometry.ratio <= MAX_FACE_RATIO;
           const wellPositioned = centered && sized;
-          const ear = computeBlinkEAR(result.landmarks);
+          const categories = result.faceBlendshapes[0]?.categories;
+          const leftBlink = blendshapeScore(categories, 'eyeBlinkLeft');
+          const rightBlink = blendshapeScore(categories, 'eyeBlinkRight');
+          const blinkScore = typeof leftBlink === 'number' && typeof rightBlink === 'number'
+            ? (leftBlink + rightBlink) / 2
+            : fallbackBlinkScore(landmarks);
           stabilityRef.current.missing = 0;
 
-          if (faceRatio < MIN_FACE_RATIO) updateGuidance('Come a little closer', 'warning');
-          else if (faceRatio > MAX_FACE_RATIO) updateGuidance('Move slightly farther away', 'warning');
-          else if (!centered) updateGuidance('Center your face in the circle', 'warning');
-          else if (step === 'position') updateGuidance('Great — keep looking at the camera', 'success');
+          if (geometry.ratio < MIN_FACE_RATIO) updateGuidance('Come a little closer', 'warning');
+          else if (geometry.ratio > MAX_FACE_RATIO) updateGuidance('Move slightly farther away', 'warning');
+          else if (!centered) updateGuidance('Center your face in the guide', 'warning');
 
-          if (step === 'position') {
+          const currentStep = stepRef.current;
+          if (currentStep === 'position') {
             stabilityRef.current.position = wellPositioned ? stabilityRef.current.position + 1 : 0;
-            if (stabilityRef.current.position >= 5) {
+            if (wellPositioned) updateGuidance('Face detected — keep looking here', 'success');
+            if (stabilityRef.current.position >= 7) {
               stabilityRef.current.visibility = 0;
               setStep('visibility');
               setStepIndex(1);
-              updateGuidance('Keep both eyes visible', 'success');
+              updateGuidance('Great — keep both eyes visible', 'success');
             }
-          } else if (step === 'visibility') {
-            const visible = wellPositioned && Number.isFinite(ear) && ear > 0.12 && ear < 0.7;
-            stabilityRef.current.visibility = visible ? stabilityRef.current.visibility + 1 : 0;
-            if (visible) {
-              const blink = blinkRef.current;
-              blink.baseline = blink.samples === 0 ? ear : blink.baseline * 0.8 + ear * 0.2;
-              blink.samples += 1;
-            } else if (wellPositioned) {
-              updateGuidance('Remove anything covering your eyes', 'warning');
-            }
-            if (stabilityRef.current.visibility >= 6) {
+          } else if (currentStep === 'visibility') {
+            const eyesVisible = wellPositioned && Number.isFinite(blinkScore) && blinkScore < 0.55;
+            stabilityRef.current.visibility = eyesVisible ? stabilityRef.current.visibility + 1 : 0;
+            if (!eyesVisible && wellPositioned) updateGuidance('Keep both eyes visible', 'warning');
+            if (stabilityRef.current.visibility >= 8) {
+              blinkRef.current.armed = true;
               setStep('blink');
               setStepIndex(2);
               updateGuidance('Blink slowly twice', 'neutral');
             }
-          } else if (step === 'blink') {
+          } else if (currentStep === 'blink') {
             if (!wellPositioned) {
-              updateGuidance('Keep your face centered while blinking', 'warning');
-            } else if (Number.isFinite(ear)) {
+              updateGuidance('Stay centered while blinking', 'warning');
+            } else if (Number.isFinite(blinkScore)) {
               const blink = blinkRef.current;
-              if (!blink.armed && ear > blink.baseline * 0.86) blink.armed = true;
-              const closedThreshold = Math.max(0.13, blink.baseline * 0.72);
-              const openThreshold = Math.max(closedThreshold + 0.025, blink.baseline * 0.84);
-              if (ear < closedThreshold && blink.armed) {
+              if (blinkScore > 0.48 && blink.armed) {
                 blink.closedFrames += 1;
                 blink.openFrames = 0;
-              } else if (ear > openThreshold && blink.closedFrames >= 1) {
+              } else if (blinkScore < 0.24 && blink.closedFrames >= 2) {
                 blink.openFrames += 1;
                 if (blink.openFrames >= 1 && Date.now() - blink.lastBlinkTime > BLINK_COOLDOWN_MS) {
                   blink.count += 1;
@@ -293,24 +383,25 @@ export function SelfieVerifier({
                     stabilityRef.current.hold = 0;
                     setStep('hold');
                     setStepIndex(3);
-                    updateGuidance('Perfect — hold still', 'success');
+                    updateGuidance('Liveness confirmed — hold still', 'success');
                   } else {
                     updateGuidance('One more natural blink', 'success');
                   }
                 }
-              } else if (ear > openThreshold) {
-                blink.closedFrames = 0;
-                blink.openFrames = 0;
+              } else if (blinkScore < 0.24) {
+                blink.armed = true;
+                if (blink.closedFrames < 2) blink.closedFrames = 0;
               }
             }
-          } else if (step === 'hold') {
-            stabilityRef.current.hold = wellPositioned && Number.isFinite(ear)
+          } else if (currentStep === 'hold') {
+            stabilityRef.current.hold = wellPositioned && Number.isFinite(blinkScore) && blinkScore < 0.55
               ? stabilityRef.current.hold + 1
               : 0;
-            if (stabilityRef.current.hold >= 6) captureSnapshot();
+            if (stabilityRef.current.hold >= 10) captureSnapshotRef.current();
           }
         }
-      } catch {
+      } catch (error) {
+        console.warn('[face-verification] frame detection paused', error);
         updateGuidance('Keep still while detection resumes', 'warning');
       }
 
@@ -322,7 +413,7 @@ export function SelfieVerifier({
       runningRef.current = false;
       if (loopRef.current) cancelAnimationFrame(loopRef.current);
     };
-  }, [cameraReady, captureSnapshot, modelReady, step, updateGuidance]);
+  }, [cameraReady, clearMesh, drawMesh, modelReady, setStep, updateGuidance]);
 
   const resetScan = useCallback(() => {
     setSnapshotUrl('');
@@ -331,18 +422,22 @@ export function SelfieVerifier({
     stabilityRef.current = { position: 0, visibility: 0, hold: 0, missing: 0 };
     blinkRef.current = { ...INITIAL_BLINK };
     lastDetectionRef.current = 0;
+    lastVideoTimeRef.current = -1;
+    meshProgressRef.current = 0;
+    clearMesh();
     if (!modelReady) {
       setStep('loading');
       setModelAttempt((attempt) => attempt + 1);
     } else {
       setStep('position');
+      updateGuidance('Move your face into the guide');
       void startCamera();
     }
-  }, [modelReady, startCamera]);
+  }, [clearMesh, modelReady, setStep, startCamera, updateGuidance]);
 
   if (step === 'error') {
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-6">
+      <div className="fixed inset-0 z-[2147483400] flex items-center justify-center bg-black/90 p-6">
         <div className="w-full max-w-sm rounded-[32px] bg-white p-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100"><ShieldCheck size={28} className="text-red-500" /></div>
           <h2 className="text-xl font-extrabold text-ink">Verification paused</h2>
@@ -355,7 +450,7 @@ export function SelfieVerifier({
 
   if (step === 'done') {
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-6">
+      <div className="fixed inset-0 z-[2147483400] flex items-center justify-center bg-black/90 p-6">
         <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100"><CheckCircle2 size={28} className="text-emerald-600" /></div>
           <h2 className="text-xl font-extrabold text-ink">Liveness verified</h2>
@@ -378,22 +473,23 @@ export function SelfieVerifier({
       : 'border-white/80';
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+    <div className="fixed inset-0 z-[2147483400] flex flex-col bg-black">
       <div className="relative flex-1 overflow-hidden">
         <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_34%,rgba(0,0,0,.24)_51%,rgba(0,0,0,.62)_100%)]" />
+        <canvas ref={meshRef} className="pointer-events-none absolute inset-0 h-full w-full object-cover" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_34%,rgba(0,0,0,.20)_52%,rgba(0,0,0,.62)_100%)]" />
 
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent p-6 safe-top">
           <button type="button" onClick={onCancel} className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur" aria-label="Cancel verification">✕</button>
         </div>
 
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-20">
-          <div className={`relative aspect-square w-[min(72vw,310px)] rounded-full border-[3px] transition-colors duration-300 ${ringClass}`} aria-hidden="true">
+          <div className={`relative aspect-square w-[min(76vw,330px)] rounded-full border-[3px] transition-colors duration-300 ${ringClass}`} aria-hidden="true">
             <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70" />
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-[calc(50%+135px)] w-[min(86vw,390px)] -translate-x-1/2 text-center">
+        <div className="absolute left-1/2 top-[calc(50%+140px)] w-[min(88vw,410px)] -translate-x-1/2 text-center">
           <div className={`inline-flex max-w-full items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white backdrop-blur-md ${guidanceTone === 'success' ? 'bg-emerald-600/75' : guidanceTone === 'warning' ? 'bg-amber-600/75' : 'bg-black/55'}`} role="status" aria-live="polite">
             <Sparkles size={15} className={step === 'loading' ? 'animate-pulse' : ''} />
             <span>{guidance}</span>

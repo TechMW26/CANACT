@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { onValue, ref, update, get, remove } from 'firebase/database';
 import { db, getFirebaseAuth } from './firebase';
-import { getActiveOTPSession, sendOTP, verifyOTP, resetOTP, type OTPSession } from './services/otp';
+import { getActiveOTPSession, getPhoneLinkStatus, sendOTP, verifyOTP, resetOTP, type OTPSession } from './services/otp';
 import { UserProfile } from './types';
 
 interface SessionUser {
@@ -27,6 +27,7 @@ interface AuthCtx {
   requestOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
   confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string; isNewUser?: boolean; nextPath?: '/' | '/onboard' }>;
   requestPhoneLinkOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
+  phoneLinkStatus: (phone: string) => Promise<'available' | 'current' | 'other' | 'unknown'>;
   confirmPhoneLinkOTP: (code: string) => Promise<{ ok: boolean; error?: string }>;
   pendingOTP: (mode: 'signin' | 'link') => OTPSession | null;
   signOut: () => Promise<void>;
@@ -235,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     requestPhoneLinkOTP: async (phone: string, forceNew = false) => {
       return sendOTP(phone, 'phone-link-recaptcha', 'link', forceNew);
     },
+    phoneLinkStatus: getPhoneLinkStatus,
     confirmPhoneLinkOTP: async (code: string) => {
       const result = await verifyOTP(code);
       if (!result.ok) return result;

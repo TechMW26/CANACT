@@ -4,9 +4,12 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { pageLabel, recordFeatureClick, recordPageView } from '@/lib/services/heatzones';
 
+const ADMIN_EMAIL = 'avi2001raj@gmail.com';
+
 /**
  * Tracks page views for the Heatzones admin analytics.
  * On every route change, records: current page, previous page, and user UID.
+ * Admin activity is never tracked.
  */
 export function PageViewTracker() {
   const pathname = usePathname();
@@ -15,8 +18,10 @@ export function PageViewTracker() {
   const lastRecordedRef = useRef<string>('');
   const userRef = useRef<string>('');
 
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || isAdmin) return;
     if (userRef.current !== user.uid) {
       userRef.current = user.uid;
       prevRef.current = '';
@@ -29,10 +34,10 @@ export function PageViewTracker() {
     recordPageView(current, prev, user.uid);
     prevRef.current = current;
     lastRecordedRef.current = recordKey;
-  }, [pathname, user?.uid]);
+  }, [pathname, user?.uid, isAdmin]);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || isAdmin) return;
     const handleClick = (event: MouseEvent) => {
       const target = event.target instanceof Element
         ? event.target.closest<HTMLElement>('[data-heat-feature],a,button,[role="button"]')
@@ -58,7 +63,7 @@ export function PageViewTracker() {
 
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [pathname, user?.uid]);
+  }, [pathname, user?.uid, isAdmin]);
 
   return null;
 }

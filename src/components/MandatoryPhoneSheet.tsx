@@ -11,7 +11,7 @@ import { ArrowRight, MessageCircle, ShieldCheck } from './icons';
 type Stage = 'phone' | 'otp';
 
 export function MandatoryPhoneSheet() {
-  const { user, profile, requestPhoneLinkOTP, confirmPhoneLinkOTP, pendingOTP } = useAuth();
+  const { user, profile, requestPhoneLinkOTP, confirmPhoneLinkOTP, phoneLinkStatus, pendingOTP } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [stage, setStage] = useState<Stage>('phone');
   const [country, setCountry] = useState<CountryCode>('IN');
@@ -20,6 +20,7 @@ export function MandatoryPhoneSheet() {
   const [channel, setChannel] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [ownershipNotice, setOwnershipNotice] = useState('');
   const otpRef = useRef<HTMLInputElement>(null);
   const visible = !!user && !!profile && profile.profileComplete !== false && !user.phoneNumber;
   const fullPhone = useMemo(() => toE164(country, national), [country, national]);
@@ -66,6 +67,13 @@ export function MandatoryPhoneSheet() {
     }
     setBusy(true);
     setError('');
+    setOwnershipNotice('');
+    const ownership = await phoneLinkStatus(fullPhone);
+    if (ownership === 'other') {
+      setOwnershipNotice('This number is already in use. Confirming the code will sign you into its existing account.');
+    } else if (ownership === 'current') {
+      setOwnershipNotice('This number is already verified on your account.');
+    }
     const result = await requestPhoneLinkOTP(fullPhone, forceNew).catch(() => ({ ok: false as const }));
     setBusy(false);
     if (!result.ok) {
@@ -154,6 +162,11 @@ export function MandatoryPhoneSheet() {
                 Code sent to {fullPhone}{channel === 'vobiz-whatsapp' ? ' via WhatsApp' : ' via SMS'}
               </p>
               {error && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#a33b35]">{error}</p>}
+              {ownershipNotice && (
+                <p role="status" className="mx-auto mt-3 max-w-md rounded-2xl bg-[#fff1cf] px-4 py-3 text-center text-xs font-semibold leading-5 text-[#684e13]">
+                  {ownershipNotice}
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -165,7 +178,7 @@ export function MandatoryPhoneSheet() {
               {!busy && <ArrowRight className="h-5 w-5" aria-hidden="true" />}
             </button>
             <div className="flex items-center justify-center gap-5 text-sm font-semibold text-[#176f57]">
-              <button type="button" disabled={busy} onClick={() => { setStage('phone'); setOtp(''); setError(''); }}>Change number</button>
+              <button type="button" disabled={busy} onClick={() => { setStage('phone'); setOtp(''); setError(''); setOwnershipNotice(''); }}>Change number</button>
               <button type="button" disabled={busy} onClick={() => void requestCode(true)}>Send a new code</button>
             </div>
           </div>
