@@ -32,7 +32,8 @@ export async function POST(request: Request) {
     try {
       const owner = await adminAuth.getUserByPhoneNumber(phone);
       if (owner.uid !== verifiedUser.uid) {
-        return NextResponse.json({ ok: false }, { status: 409 });
+        const token = await adminAuth.createCustomToken(owner.uid);
+        return NextResponse.json({ ok: true, accountSwitched: true, token });
       }
     } catch (error: any) {
       if (error?.code !== 'auth/user-not-found') throw error;
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       mobile: phone,
       mobileVerifiedAt: Date.now(),
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, accountSwitched: false });
   } catch (error) {
     console.error('[OTP] phone link route failed', error);
     return NextResponse.json({ ok: false }, { status: 500 });

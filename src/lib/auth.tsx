@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { onValue, ref, update, get, remove } from 'firebase/database';
 import { db, getFirebaseAuth } from './firebase';
-import { sendOTP, verifyOTP, resetOTP } from './services/otp';
+import { getActiveOTPSession, sendOTP, verifyOTP, resetOTP, type OTPSession } from './services/otp';
 import { UserProfile } from './types';
 
 interface SessionUser {
@@ -24,10 +24,11 @@ interface AuthCtx {
   user: SessionUser | null;
   profile: UserProfile | null;
   loading: boolean;
-  requestOTP: (phone: string) => Promise<{ ok: boolean; channel?: string; error?: string }>;
+  requestOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
   confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string; isNewUser?: boolean; nextPath?: '/' | '/onboard' }>;
-  requestPhoneLinkOTP: (phone: string) => Promise<{ ok: boolean; channel?: string; error?: string }>;
+  requestPhoneLinkOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
   confirmPhoneLinkOTP: (code: string) => Promise<{ ok: boolean; error?: string }>;
+  pendingOTP: (mode: 'signin' | 'link') => OTPSession | null;
   signOut: () => Promise<void>;
   updateMyProfile: (patch: Partial<UserProfile>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -220,8 +221,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
-    requestOTP: async (phone: string) => {
-      return sendOTP(phone, 'recaptcha-container');
+    requestOTP: async (phone: string, forceNew = false) => {
+      return sendOTP(phone, 'recaptcha-container', 'signin', forceNew);
     },
     confirmOTP: async (code: string) => {
       const result = await verifyOTP(code);
@@ -231,8 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const nextPath = await routeAfterSignIn(signedInUser);
       return { ...result, nextPath };
     },
-    requestPhoneLinkOTP: async (phone: string) => {
-      return sendOTP(phone, 'phone-link-recaptcha', 'link');
+    requestPhoneLinkOTP: async (phone: string, forceNew = false) => {
+      return sendOTP(phone, 'phone-link-recaptcha', 'link', forceNew);
     },
     confirmPhoneLinkOTP: async (code: string) => {
       const result = await verifyOTP(code);
@@ -251,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetOTP();
       return { ok: true };
     },
+    pendingOTP: (mode) => getActiveOTPSession(undefined, mode),
     signOut: async () => {
       resetOTP();
       await fbSignOut(getFirebaseAuth());

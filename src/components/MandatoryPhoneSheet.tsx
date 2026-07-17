@@ -5,13 +5,13 @@ import { createPortal } from 'react-dom';
 import type { CountryCode } from 'libphonenumber-js';
 import { useAuth } from '@/lib/auth';
 import { lockPageScroll } from '@/lib/scrollLock';
-import { isPhoneValid, PhoneInput, toE164 } from './PhoneInput';
+import { isPhoneValid, PhoneInput, splitStoredPhone, toE164 } from './PhoneInput';
 import { ArrowRight, MessageCircle, ShieldCheck } from './icons';
 
 type Stage = 'phone' | 'otp';
 
 export function MandatoryPhoneSheet() {
-  const { user, profile, requestPhoneLinkOTP, confirmPhoneLinkOTP } = useAuth();
+  const { user, profile, requestPhoneLinkOTP, confirmPhoneLinkOTP, pendingOTP } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [stage, setStage] = useState<Stage>('phone');
   const [country, setCountry] = useState<CountryCode>('IN');
@@ -25,6 +25,17 @@ export function MandatoryPhoneSheet() {
   const fullPhone = useMemo(() => toE164(country, national), [country, national]);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const session = pendingOTP('link');
+    if (!session) return;
+    const restored = splitStoredPhone(session.phone);
+    setCountry(restored.country);
+    setNational(restored.national);
+    setChannel(session.channel);
+    setStage('otp');
+  }, [pendingOTP, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -47,7 +58,7 @@ export function MandatoryPhoneSheet() {
 
   if (!mounted || !visible) return null;
 
-  async function requestCode() {
+  async function requestCode(forceNew = false) {
     if (busy) return;
     if (!isPhoneValid(country, national)) {
       setError('Enter a valid mobile number.');
@@ -55,7 +66,7 @@ export function MandatoryPhoneSheet() {
     }
     setBusy(true);
     setError('');
-    const result: { ok: boolean; channel?: string } = await requestPhoneLinkOTP(fullPhone).catch(() => ({ ok: false }));
+    const result = await requestPhoneLinkOTP(fullPhone, forceNew).catch(() => ({ ok: false as const }));
     setBusy(false);
     if (!result.ok) {
       setError('We could not send a code right now. Please try again shortly.');
@@ -115,7 +126,7 @@ export function MandatoryPhoneSheet() {
             <button
               type="button"
               disabled={busy}
-              onClick={requestCode}
+              onClick={() => void requestCode()}
               className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#176f57] px-5 text-base font-bold text-white transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
             >
               {busy ? 'Sending code…' : 'Verify my number'}
@@ -155,7 +166,7 @@ export function MandatoryPhoneSheet() {
             </button>
             <div className="flex items-center justify-center gap-5 text-sm font-semibold text-[#176f57]">
               <button type="button" disabled={busy} onClick={() => { setStage('phone'); setOtp(''); setError(''); }}>Change number</button>
-              <button type="button" disabled={busy} onClick={requestCode}>Send a new code</button>
+              <button type="button" disabled={busy} onClick={() => void requestCode(true)}>Send a new code</button>
             </div>
           </div>
         )}

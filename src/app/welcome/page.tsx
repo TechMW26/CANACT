@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CountryCode } from 'libphonenumber-js';
 import { ArrowLeft, ArrowRight, MessageCircle } from 'lucide-react';
-import { PhoneInput, isPhoneValid, toE164 } from '@/components/PhoneInput';
+import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
@@ -25,7 +25,7 @@ function Progress({ step = 1 }: { step?: number }) {
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { user, profile, loading, requestOTP, confirmOTP, signOut } = useAuth();
+  const { user, profile, loading, requestOTP, confirmOTP, pendingOTP, signOut } = useAuth();
   const [busy, setBusy] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
 
@@ -40,6 +40,20 @@ export default function WelcomePage() {
   const [otpError, setOtpError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Restore an unexpired verification after navigation/reload. The Firebase
+  // verification ID is kept in sessionStorage, never the code itself.
+  useEffect(() => {
+    const session = pendingOTP('signin');
+    if (!session) return;
+    const restored = splitStoredPhone(session.phone);
+    setPhoneCountry(restored.country);
+    setPhoneDigits(restored.national);
+    setOtpChannel(session.channel === 'vobiz-whatsapp' ? 'WhatsApp' : 'SMS');
+    setOtpSent(true);
+    const elapsedSeconds = Math.floor((Date.now() - (session.expiresAt - 5 * 60 * 1000)) / 1000);
+    setResendCooldown(Math.max(0, 30 - elapsedSeconds));
+  }, [pendingOTP]);
 
   // Timer for resend cooldown
   useEffect(() => {
@@ -114,7 +128,7 @@ export default function WelcomePage() {
     setOtpError('');
     setBusy(true);
     try {
-      const result = await requestOTP(fullPhone);
+      const result = await requestOTP(fullPhone, true);
       if (!result.ok) {
         toast(OTP_SEND_MESSAGE, 'error');
         return;
