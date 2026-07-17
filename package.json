@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "android:sync": "cap sync android",
     "android:open": "cap open android",
-    "android:assets": "@capacitor/assets generate --android --assetPath assets --iconBackgroundColor \"#FFF8F8\" --iconBackgroundColorDark \"#FFF8F8\" --splashBackgroundColor \"#FFF8F8\" --splashBackgroundColorDark \"#FFF8F8\""
+    "android:assets": "@capacitor/assets generate --android --assetPath assets --iconBackgroundColor \"#FFF8F8\" --iconBackgroundColorDark \"#FFF8F8\" --splashBackgroundColor \"#FFF8F8\" --splashBackgroundColorDark \"#FFF8F8\"",
+    "score:reset": "node --env-file=.env.local scripts/reset-canact-scores.mjs --apply"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^7.5.0",

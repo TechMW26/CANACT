@@ -245,7 +245,7 @@
   width: min(100%, 560px);
   min-height: max(var(--canact-viewport-height), 100dvh);
   margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 38px;
+  padding: max(18px, env(safe-area-inset-top)) 38px 110px;
   background: #faf8f2;
   text-align: center;
   position: relative;
@@ -264,13 +264,14 @@
 
 .registerBrand { width: 150px; height: 170px; margin: -10px auto 0; object-fit: contain; }
 .registerOrbit {
-  height: min(42vh, 390px);
-  margin: calc(-1 * max(18px, env(safe-area-inset-top))) -38px 0;
+  height: min(38vh, 340px);
+  margin: 0 -38px 0;
   overflow: hidden;
   position: relative;
+  z-index: 0;
 }
-.registerOrbit img { display: block; width: 100%; height: auto; transform: translateY(-12px); }
-.registerOrbitCompact { height: min(32vh, 292px); }
+.registerOrbit img { display: block; width: 100%; height: auto; transform: translateY(-8px); }
+.registerOrbitCompact { height: min(28vh, 260px); }
 .eyebrow { margin: -12px 0 18px; color: #287156; font-weight: 650; }
 .registerPage .progressWrap { margin-top: 0; gap: 13px; }
 .registerPage .registerBody > .progressWrap { margin-top: 24px; }
@@ -312,7 +313,7 @@
 .registerScreen_name .registerBody,
 .registerScreen_gender .registerBody,
 .registerScreen_birthday .registerBody,
-.registerScreen_selfie .registerBody { margin-top: 4px; }
+.registerScreen_selfie .registerBody { margin-top: 12px; }
 .registerScreen_name .registerBody .progressWrap,
 .registerScreen_gender .registerBody .progressWrap,
 .registerScreen_birthday .registerBody .progressWrap,
@@ -435,9 +436,16 @@
 @media (max-height: 760px) {
   .welcomeArt { height: 46vh; min-height: 300px; }
   .welcomeContent { margin-top: -10px; }
-  .progressWrap { margin-top: 30px; }
-  .primaryButton { min-height: 68px; }
-  .primaryIcon { width: 54px; height: 54px; }
+  .progressWrap { margin-top: 24px; }
+  .primaryButton { min-height: 62px; }
+  .primaryIcon { width: 50px; height: 50px; }
+  .registerPage { padding-bottom: 100px; }
+  .registerOrbit { height: min(32vh, 260px); }
+  .registerOrbitCompact { height: min(24vh, 200px); }
+  .registerBody { margin-top: 12px; }
+  .registerBody .title { font-size: clamp(1.6rem, 6vw, 2rem); }
+  .registerFooter { padding: 10px 38px calc(12px + env(safe-area-inset-bottom)); }
+  .registerFooter .primaryButton { min-height: 58px; }
   .loginPage { padding-top: 8px; }
   .brandFull { height: 180px; }
   .loginCard { margin-top: -18px; padding-top: 24px; }
@@ -452,7 +460,6 @@
   .choice { min-height: 66px; }
   .choiceIcon { width: 42px; height: 42px; }
   .selfieScan { height: 170px; }
-  .zodiacCard { padding-top: 16px; }
 }
 
 @media (min-width: 700px) {

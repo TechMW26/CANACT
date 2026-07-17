@@ -33,7 +33,7 @@ type PeopleView = 'map' | 'list';
 type MapLocation = { lat: number; lng: number; at?: number; source: 'live' | 'city' };
 type CityPoint = { lat: number; lng: number };
 type FriendProfile = UserProfile & { lastLocation?: { lat?: number; lng?: number; at?: number } };
-type PeoplePerson = FriendMapPerson & { at?: number; rating?: number; relation: 'friend' | 'favourite' };
+type PeoplePerson = FriendMapPerson & { at?: number; rating?: number; relation: 'community' | 'friend' | 'favourite' };
 type FavouriteRequest = { fromUid: string; fromName: string; createdAt: number; profile?: UserProfile | null };
 
 export default function FavouritesPage() {
@@ -50,13 +50,15 @@ export default function FavouritesPage() {
   const [friendReqs, setFriendReqs] = useState<FriendEdge[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<Record<string, FriendProfile | null>>({});
   const [favs, setFavs] = useState<FriendProfile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<FriendProfile[]>([]);
   const [favReqs, setFavReqs] = useState<FavouriteRequest[]>([]);
   const homeMapHandoffRef = useRef(false);
   const knownProfiles = useMemo(() => [
+    ...allProfiles,
     ...Object.values(friendProfiles).filter(isFriendProfile),
     ...favs,
     profile as FriendProfile | null,
-  ].filter(isFriendProfile), [friendProfiles, favs, profile]);
+  ].filter(isFriendProfile), [allProfiles, friendProfiles, favs, profile]);
   const cityLocations = useCityLocations(knownProfiles);
 
   useEffect(() => { if (user) return listenFriends(user.uid, setFriends); }, [user?.uid]);
@@ -65,6 +67,10 @@ export default function FavouritesPage() {
   useEffect(() => listenActiveStories(setStories), []);
   useEffect(() => listenPollFeed(setPolls), []);
   useEffect(() => listenReels(setReels), []);
+  useEffect(() => onValue(ref(db, 'users'), (snapshot) => {
+    const value = snapshot.val() as Record<string, FriendProfile> | null;
+    setAllProfiles(Object.entries(value ?? {}).map(([uid, candidate]) => ({ ...candidate, uid: candidate?.uid || uid })));
+  }), []);
   useEffect(() => {
     document.documentElement.setAttribute('data-canact-fullscreen-page', 'true');
     return () => document.documentElement.removeAttribute('data-canact-fullscreen-page');
@@ -154,23 +160,46 @@ export default function FavouritesPage() {
     };
   }).sort((a, b) => a.name.localeCompare(b.name)), [favs, cityLocations]);
 
+  const allPeople = useMemo<PeoplePerson[]>(() => {
+    const friendUids = new Set(friends.map((friend) => friend.uid));
+    const favouriteUids = new Set(favs.map((fav) => fav.uid));
+    return allProfiles.flatMap<PeoplePerson>((candidate) => {
+      if (!candidate.uid || candidate.uid === user?.uid) return [];
+      const location = resolveProfileLocation(candidate, cityLocations);
+      return [{
+        uid: candidate.uid,
+        relation: friendUids.has(candidate.uid) ? 'friend' : favouriteUids.has(candidate.uid) ? 'favourite' : 'community',
+        name: candidate.fullName || candidate.firstName || 'Canact user',
+        photoURL: candidate.photoURL ?? null,
+        city: candidate.city,
+        country: candidate.country,
+        lat: location?.lat,
+        lng: location?.lng,
+        locationAt: location?.at,
+        locationSource: location?.source,
+        rating: candidate.rating,
+      }];
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allProfiles, cityLocations, favs, friends, user?.uid]);
+
   const { radius } = useDistance();
   const storedLocation = useMemo(() => resolveProfileLocation(profile as FriendProfile | null, cityLocations), [profile, cityLocations]);
   const currentLocation = liveCoords ?? storedLocation;
 
   const visiblePeople = useMemo(() => {
-    const candidates = tab === 'favourites' ? favouritePeople : friendPeople;
+    const candidates = tab === 'favourites' ? favouritePeople : allPeople;
     if (!currentLocation) return candidates;
     return candidates.filter((person) => {
       if (typeof person.lat !== 'number' || typeof person.lng !== 'number') return false;
       const distance = haversineMeters(currentLocation, { lat: person.lat, lng: person.lng });
       return Number.isFinite(radius) && distance <= radius;
     });
-  }, [tab, favouritePeople, friendPeople, currentLocation, radius]);
+  }, [tab, favouritePeople, allPeople, currentLocation, radius]);
+  const mapPeople = tab === 'favourites' ? favouritePeople : allPeople;
   const totalRequests = friendReqs.length + favReqs.length;
   const mapActivities = useMemo<ExploreActivity[]>(() => {
     const now = Date.now();
-    const locatedPeople = [...friendPeople, ...favouritePeople].filter(hasLocation);
+    const locatedPeople = allPeople.filter(hasLocation);
     const personByUid = new Map(locatedPeople.map((person) => [person.uid, person]));
     const peopleActivity: ExploreActivity[] = locatedPeople.map((person) => ({
       id: `person-${person.uid}`,
@@ -223,7 +252,7 @@ export default function FavouritesPage() {
       return [{ id: `reel-${reel.id}`, kind: 'reel' as const, lat: reel.lat, lng: reel.lng, weight: 1.15, href: `/reel/${reel.id}`, authorUid: reel.uid, authorName: reel.authorName, label: reel.caption || 'Reel', createdAt: reel.createdAt, thumbUrl: reel.posterUrl, color: '#8c62b7' }];
     });
     return [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
-  }, [friendPeople, favouritePeople, posts, stories, polls, reels]);
+  }, [allPeople, posts, stories, polls, reels]);
   if (!user) return null;
 
   // Map view renders outside the transformed container so position:fixed works correctly.
@@ -231,6 +260,7 @@ export default function FavouritesPage() {
     return (
       <ExploreMapSurface
         firstName={profile?.firstName || profile?.fullName?.split(' ')[0] || 'there'}
+        mapPeople={mapPeople}
         people={visiblePeople}
         currentLocation={currentLocation}
         activities={mapActivities}
@@ -238,7 +268,7 @@ export default function FavouritesPage() {
         tab={tab}
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen((value) => !value)}
-        friendCount={friends.length}
+        friendCount={allPeople.length}
         favouriteCount={favs.length}
         requestCount={totalRequests}
         onTabChange={setTab}
@@ -291,6 +321,7 @@ export default function FavouritesPage() {
 
 function ExploreMapSurface({
   firstName,
+  mapPeople,
   people,
   currentLocation,
   activities,
@@ -308,6 +339,7 @@ function ExploreMapSurface({
   myPhotoURL,
 }: {
   firstName: string;
+  mapPeople: PeoplePerson[];
   people: PeoplePerson[];
   currentLocation: { lat: number; lng: number } | null;
   activities: ExploreActivity[];
@@ -350,7 +382,7 @@ function ExploreMapSurface({
   return (
     <section className={styles.exploreScreen} aria-label="Explore nearby activity">
       <ExploreMap
-        people={people}
+        people={mapPeople}
         currentLocation={currentLocation}
         activities={activities}
         myPhotoURL={myPhotoURL}
@@ -446,7 +478,7 @@ function RelationshipToggle({
   return (
     <div data-liquid-glass="surface" data-liquid-radius="28" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.08" className="pointer-events-auto mx-auto w-[min(calc(100vw-24px),540px)] overflow-hidden rounded-[28px] border border-white/60 bg-transparent p-1 shadow-sm">
       <div className="grid grid-cols-3 gap-1">
-        <PillTab active={tab === 'friends'} onClick={() => onTabChange('friends')} label="Friends" badge={friendCount} />
+        <PillTab active={tab === 'friends'} onClick={() => onTabChange('friends')} label="Everyone" badge={friendCount} />
         <PillTab active={tab === 'favourites'} onClick={() => onTabChange('favourites')} label="Favourites" badge={favouriteCount} />
         <PillTab active={tab === 'requests'} onClick={() => onTabChange('requests')} label="Requests" badge={requestCount} />
       </div>
@@ -459,7 +491,7 @@ function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 're
   return (
     <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.16" className="pointer-events-auto sticky top-[calc(var(--canact-header-top-inset,0px)+var(--canact-header-offset,0px)+92px)] z-10 mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white/60 bg-transparent pl-6 pr-2 py-2 shadow-sm backdrop-blur-xl">
       <div className="min-w-0">
-        <h3 className="truncate text-base font-extrabold text-ink">{tab === 'friends' ? 'My friends' : 'My favourites'}</h3>
+        <h3 className="truncate text-base font-extrabold text-ink">{tab === 'friends' ? 'People nearby' : 'My favourites'}</h3>
         <div className="mt-0.5 truncate text-xs font-semibold text-ink/50">{locatedCount} of {people.length} visible on map</div>
       </div>
       <ViewSwitch view={view} onChange={onViewChange} />
@@ -746,7 +778,7 @@ function PeopleListSurface({ people, tab, onUnfriend, onBlock }: { people: Peopl
 
 function PeopleList({ people, tab, onUnfriend, onBlock }: { people: PeoplePerson[]; tab: Exclude<Tab, 'requests'>; onUnfriend: (person: PeoplePerson) => Promise<void> | void; onBlock: (person: PeoplePerson) => Promise<void> | void }) {
   if (people.length === 0) {
-    return <p className="px-3 py-10 text-center text-sm font-semibold text-muted">{tab === 'friends' ? 'You don\'t have any friends yet.' : 'Search for users to add them.'}</p>;
+    return <p className="px-3 py-10 text-center text-sm font-semibold text-muted">{tab === 'friends' ? 'No people found nearby.' : 'Search for users to add them.'}</p>;
   }
   return (
     <ul className="divide-y divide-line">
@@ -770,13 +802,15 @@ function PeopleList({ people, tab, onUnfriend, onBlock }: { people: PeoplePerson
               ) : null}
             </Link>
             <div className="flex shrink-0 items-center gap-2">
-              {tab === 'friends' ? (
+              {tab === 'friends' && person.relation === 'friend' ? (
                 <>
                   <Link href={`/inbox/${person.uid}`} prefetch><Button size="sm" variant="subtle">Message</Button></Link>
                   <Button size="sm" variant="outline" onClick={() => onUnfriend(person)}>Unfriend</Button>
                 </>
-              ) : (
+              ) : tab === 'favourites' ? (
                 <Button size="sm" variant="outline" onClick={() => onBlock(person)}>Block</Button>
+              ) : (
+                <Link href={`/profile/${person.uid}`} prefetch><Button size="sm" variant="subtle">View profile</Button></Link>
               )}
             </div>
           </li>

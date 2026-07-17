@@ -139,6 +139,10 @@ export interface UserProfile {
     activity?: { lastActiveAt?: number; routeViews?: Record<string, number> };
     tours?: Record<string, { completedAt?: number; skippedAt?: number }>;
   };
+  /** Historical reputation adjustment captured during the zero-score reset.
+   * It lets existing votes/cards remain visible without carrying old points. */
+  scoreAdjustmentOffset?: number;
+  scoreResetAt?: number;
   /** Aggregate help statistics shown on profile + help cards. */
   helpStats?: {
     offered?: number;   // offers extended by this user

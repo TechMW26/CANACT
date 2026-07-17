@@ -1,9 +1,8 @@
 import { CARD_KEYS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type UserProfile } from './types';
 
 export const CANACT_SCORE_MIN = 0;
-export const CANACT_SCORE_BASELINE = 700;
+export const CANACT_SCORE_BASELINE = 0;
 export const CANACT_SCORE_MAX = 950;
-const CANACT_LEGACY_SCORE_MIN = 250;
 
 export type CanactScoreSummary = {
   score: number;
@@ -18,9 +17,18 @@ export function calculateCanactScore(profile?: UserProfile | null): CanactScoreS
   if (!profile) return makeSummary(0, 0);
 
   const isOnboardingAccount = profile.onboarding?.version === 1;
-  const startingScore = isOnboardingAccount
-    ? Math.max(0, Math.min(300, Number(profile.onboarding?.points || 0)))
-    : CANACT_SCORE_BASELINE;
+  if (!isOnboardingAccount) return makeSummary(0, 0);
+
+  const startingScore = Math.max(0, Math.min(300, Number(profile.onboarding?.points || 0)));
+  // Setup is an intentional 0 → 300 progression. Reputation signals begin
+  // affecting the score only after all onboarding tasks have completed.
+  if (!profile.onboarding?.completedAt) return makeSummary(startingScore, startingScore);
+
+  const adjustment = calculateCanactAdjustment(profile) - Number(profile.scoreAdjustmentOffset || 0);
+  return makeSummary(startingScore + adjustment, startingScore);
+}
+
+export function calculateCanactAdjustment(profile: UserProfile): number {
 
   let adjustment = 0;
 
@@ -147,12 +155,11 @@ export function calculateCanactScore(profile?: UserProfile | null): CanactScoreS
   // ===================================================================
   // T5 — VERIFICATION & BADGES
   // ===================================================================
-  // KYC is already one of the 300 onboarding points for versioned accounts.
-  if (profile.profileVerified && !isOnboardingAccount) adjustment += 15;
+  // KYC is already one of the 300 onboarding points.
   const nonVerificationBadges = (profile.badges ?? []).filter((badge) => badge.toLowerCase() !== 'verified').length;
   if (nonVerificationBadges > 0) adjustment += Math.min(10, nonVerificationBadges * 2);
 
-  return makeSummary(startingScore + adjustment, startingScore, isOnboardingAccount ? CANACT_SCORE_MIN : CANACT_LEGACY_SCORE_MIN);
+  return adjustment;
 }
 
 export function getCanactScoreLabel(score: number): CanactScoreSummary['label'] {

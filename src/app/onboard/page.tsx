@@ -99,9 +99,10 @@ export default function OnboardPage() {
   useEffect(() => {
     if (!user || !profile || hydrated.current) return;
     hydrated.current = true;
-    const fallbackName = (profile.fullName || user.displayName || '').trim().split(/\s+/).filter(Boolean);
-    setFirstName(profile.firstName || fallbackName[0] || '');
-    setLastName(profile.lastName || (fallbackName.length > 1 ? fallbackName[fallbackName.length - 1] : ''));
+    // Only pre-fill if the user already saved a name in a previous partial registration.
+    // Never derive names from Google display name or other sources — let the user fill fresh.
+    setFirstName(profile.firstName || '');
+    setLastName(profile.lastName || '');
     const draftMobile = sessionStorage.getItem('canact:registration-mobile') || '';
     const parsedPhone = splitStoredPhone(profile.mobile || draftMobile, (profile.countryCode as CountryCode) || 'IN');
     setPhoneCountry(parsedPhone.country);
