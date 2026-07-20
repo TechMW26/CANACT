@@ -45,12 +45,7 @@ export function CanactHome() {
   const positiveSignals = Math.max(0, (profile?.likesCount || 0) + (profile?.ratingCount || 0));
   const goodActs = (profile?.helpStats?.resolved || 0) + (profile?.helpStats?.confirmed || 0);
 
-  const storedLocation = (profile as (UserProfile & { lastLocation?: { lat?: number; lng?: number } }) | null)?.lastLocation;
-  const currentLocation = coords
-    ? { lat: coords.lat, lng: coords.lng }
-    : typeof storedLocation?.lat === 'number' && typeof storedLocation?.lng === 'number'
-      ? { lat: storedLocation.lat, lng: storedLocation.lng }
-      : null;
+  const currentLocation = coords ? { lat: coords.lat, lng: coords.lng } : null;
 
   // Load map-visible profiles. Distance styling in ExploreMap keeps the
   // immediate 15 m vicinity clear and de-emphasises everyone farther away.

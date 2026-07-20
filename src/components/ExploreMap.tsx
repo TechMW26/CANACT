@@ -7,6 +7,7 @@ import type maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, MapGeoJSONFeature } from 'maplibre-gl';
 import type { FeatureCollection, Point as GeoJSONPoint } from 'geojson';
 import type { FriendMapPerson } from './FriendsWorldMap';
+import { MapPin } from '@/components/icons';
 import { haversineMeters } from '@/lib/utils';
 import styles from './ExploreMap.module.css';
 
@@ -116,6 +117,7 @@ export function ExploreMap({
   const [clock, setClock] = useState(() => Date.now());
   const [popup, setPopup] = useState<MapPopup | null>(null);
   const [mapZoom, setMapZoom] = useState(() => currentLocation ? 20 : 13);
+  const hasCurrentLocation = currentLocation !== null;
   interactionRef.current = onInteraction;
   locationRef.current = currentLocation;
   routerRef.current = router;
@@ -196,17 +198,17 @@ export function ExploreMap({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || mapRef.current) return;
+    if (!container || mapRef.current || !currentLocation) return;
     let disposed = false;
     import('maplibre-gl').then((library) => {
       if (disposed || !containerRef.current) return;
       libraryRef.current = library;
-      const center: [number, number] = currentLocation ? [currentLocation.lng, currentLocation.lat] : [77.209, 28.6139];
+      const center: [number, number] = [currentLocation.lng, currentLocation.lat];
       const map = new library.Map({
         container: containerRef.current,
         style: 'https://tiles.openfreemap.org/styles/bright',
         center,
-        zoom: currentLocation ? 20 : 13,
+        zoom: 20,
         attributionControl: false,
         cooperativeGestures: false,
         interactive: !preview,
@@ -267,7 +269,7 @@ export function ExploreMap({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [preview]);
+  }, [preview, hasCurrentLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -487,6 +489,18 @@ export function ExploreMap({
       router.push(`/profile/${encodeURIComponent(person.uid)}`);
     }
   };
+
+  if (!currentLocation) {
+    return (
+      <div className={styles.frame} data-canact-map="locked">
+        <div className={styles.locationGate} role="status" aria-live="polite">
+          <MapPin size={25} aria-hidden="true" />
+          <strong>Current location required</strong>
+          <span>The map stays hidden until your location is available.</span>
+        </div>
+      </div>
+    );
+  }
 
   return <>
     <div className={styles.frame} data-canact-map="true" data-ready={ready}><div ref={containerRef} className={styles.map} /><div className={styles.tint} aria-hidden="true" />{!ready && !loadError ? <div className={styles.mapStatus}>Loading nearby map…</div> : null}{loadError ? <div className={styles.mapStatus}>Map preview unavailable</div> : null}</div>

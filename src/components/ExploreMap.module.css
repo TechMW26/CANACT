@@ -19,6 +19,10 @@
 .personMarker[data-outside-radius="true"] { opacity: .42; filter: blur(3px) saturate(.55); }
 .personMarker[data-outside-radius="false"] { opacity: 1; filter: none; }
 .mapStatus { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: #e9e4cf; color: rgb(17 40 34 / 58%); font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+.locationGate { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 7px; background: #faf8f2; padding: 24px; color: #123b30; text-align: center; }
+.locationGate svg { margin-bottom: 4px; color: #1f6b55; }
+.locationGate strong { font-size: 16px; font-weight: 900; }
+.locationGate span { max-width: 280px; color: rgb(18 59 48 / 58%); font-size: 12px; font-weight: 700; line-height: 1.45; }
 
 .mapPopupBackdrop { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: flex-end; justify-content: center; background: rgb(7 24 19 / 30%); padding: 14px; backdrop-filter: blur(8px); }
 .mapPopup { width: min(100%, 440px); max-height: min(70dvh, 620px); overflow: hidden; border-radius: 28px; background: rgb(250 248 242 / 96%); padding: 10px 14px max(18px, env(safe-area-inset-bottom)); color: #102d26; box-shadow: 0 24px 70px rgb(9 35 27 / 28%); animation: mapPopupIn 260ms cubic-bezier(.2,.8,.2,1); }

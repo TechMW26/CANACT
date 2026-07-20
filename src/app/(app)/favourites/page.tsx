@@ -38,7 +38,7 @@ type FavouriteRequest = { fromUid: string; fromName: string; createdAt: number; 
 
 export default function FavouritesPage() {
   const { user, profile } = useAuth();
-  const { coords: liveCoords, error: locationError } = useGeo();
+  const { coords: liveCoords, error: locationError, retry: retryLocation } = useGeo();
   const [tab, setTab] = useState<Tab>('friends');
   const [peopleView, setPeopleView] = useState<PeopleView>('map');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -183,8 +183,7 @@ export default function FavouritesPage() {
   }, [allProfiles, cityLocations, favs, friends, user?.uid]);
 
   const { radius } = useDistance();
-  const storedLocation = useMemo(() => resolveProfileLocation(profile as FriendProfile | null, cityLocations), [profile, cityLocations]);
-  const currentLocation = liveCoords ?? storedLocation;
+  const currentLocation = liveCoords;
 
   const visiblePeople = useMemo(() => {
     const candidates = tab === 'favourites' ? favouritePeople : allPeople;
@@ -254,6 +253,9 @@ export default function FavouritesPage() {
     return [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
   }, [allPeople, posts, stories, polls, reels]);
   if (!user) return null;
+  if (!liveCoords) {
+    return <LocationRequiredPage pending={!locationError} onRetry={retryLocation} />;
+  }
 
   // Map view renders outside the transformed container so position:fixed works correctly.
   if (tab !== 'requests' && peopleView === 'map') {
@@ -316,6 +318,19 @@ export default function FavouritesPage() {
 
       {peopleView === 'list' && tab !== 'requests' ? <div className="mx-auto mt-4 w-full max-w-[540px]"><MapToolbar tab={tab} people={visiblePeople} view={peopleView} onViewChange={setPeopleView} /></div> : null}
     </div>
+  );
+}
+
+function LocationRequiredPage({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
+  return (
+    <main className="fixed inset-0 z-[30] flex items-center justify-center bg-[#FAF8F2] px-6 text-center text-ink">
+      <div className="flex max-w-sm flex-col items-center">
+        <span className="grid h-16 w-16 place-items-center rounded-full bg-brand-light text-brand"><MapPin size={27} /></span>
+        <h1 className="mt-5 text-2xl font-black tracking-tight">{pending ? 'Finding your location…' : 'Location is required'}</h1>
+        <p className="mt-2 text-sm font-semibold leading-6 text-ink/55">Explore stays private until your current location is available.</p>
+        {!pending ? <button type="button" onClick={onRetry} className="mt-6 h-12 rounded-full bg-brand px-7 font-extrabold text-white">Try location again</button> : null}
+      </div>
+    </main>
   );
 }
 

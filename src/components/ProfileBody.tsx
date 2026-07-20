@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FastAverageColor } from 'fast-average-color';
 import { onValue, ref } from 'firebase/database';
 import { Card } from '@/components/Card';
@@ -31,6 +32,7 @@ import {
 import { calculateCanactScore } from '@/lib/canactScore';
 import { useGeo } from '@/lib/useGeo';
 import { haversineMeters } from '@/lib/utils';
+import { lockPageScroll } from '@/lib/scrollLock';
 import {
   Award,
   CheckCircle2,
@@ -63,7 +65,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [friendStatus, setFriendStatus] = useState<'none' | 'requested' | 'incoming' | 'friends'>('none');
   const [isFavourite, setIsFavourite] = useState(false);
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
-  const { coords: myCoords } = useGeo();
+  const { coords: myCoords, error: locationError, retry: retryLocation } = useGeo();
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (snapshot) => {
@@ -234,6 +236,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const theirLoc = (u as any).lastLocation as { lat?: number; lng?: number } | undefined;
   const outOfRange = !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
     && haversineMeters(myCoords, { lat: theirLoc.lat!, lng: theirLoc.lng! }) > 15;
+  const accessBlockReason: 'location' | 'range' | null = !myCoords ? 'location' : outOfRange ? 'range' : null;
 
   return (
     <CanactPagesProfileUI
@@ -243,7 +246,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       age={age}
       locationText={locationText}
       canactScore={score}
-      blurred={outOfRange}
+      accessBlockReason={accessBlockReason}
+      locationError={locationError}
+      onRetryLocation={retryLocation}
       tab={tab}
       setTab={setTab}
       posts={posts}
@@ -541,7 +546,9 @@ function CanactPagesProfileUI({
   profileVoteBusy,
   friendStatus,
   isFavourite,
-  blurred,
+  accessBlockReason,
+  locationError,
+  onRetryLocation,
 }: {
   userProfile: UserProfile;
   isSelf: boolean;
@@ -549,7 +556,9 @@ function CanactPagesProfileUI({
   age?: number;
   locationText: string;
   canactScore: ReturnType<typeof calculateCanactScore>;
-  blurred: boolean;
+  accessBlockReason: 'location' | 'range' | null;
+  locationError: string | null;
+  onRetryLocation: () => void;
   tab: ProfileTabKey;
   setTab: (tab: ProfileTabKey) => void;
   posts: WhaPost[];
@@ -588,6 +597,7 @@ function CanactPagesProfileUI({
   // Gold button for favourite-related states
   const isGoldButton = !isSelf && (isFavourite || friendStatus === 'friends');
   const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
+  const blurred = accessBlockReason !== null;
 
   const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -725,15 +735,7 @@ function CanactPagesProfileUI({
       </section>
       </div>{/* end blur wrapper */}
 
-      {/* Out-of-range notice */}
-      {blurred && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <div className="rounded-2xl bg-black/80 px-6 py-4 text-center text-sm font-bold text-white shadow-xl backdrop-blur">
-            <MapPin size={20} className="mx-auto mb-2" />
-            This person is outside your 15&nbsp;m range.<br />Move closer to see their full profile.
-          </div>
-        </div>
-      )}
+      <ProfileAccessGate reason={accessBlockReason} locationError={locationError} onRetryLocation={onRetryLocation} />
 
       {/* Attributes bottom-sheet — shows on avatar tap for third-party profiles */}
       {!isSelf && (
@@ -775,6 +777,70 @@ function CanactPagesProfileUI({
         </Sheet>
       )}
     </div>
+  );
+}
+
+function ProfileAccessGate({
+  reason,
+  locationError,
+  onRetryLocation,
+}: {
+  reason: 'location' | 'range' | null;
+  locationError: string | null;
+  onRetryLocation: () => void;
+}) {
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!reason) return;
+    return lockPageScroll();
+  }, [reason]);
+
+  if (!reason || !portalReady) return null;
+
+  const needsLocation = reason === 'location';
+  const locating = needsLocation && !locationError;
+
+  return createPortal(
+    <div
+      data-canact-popup="true"
+      className="pointer-events-none fixed inset-0 z-[2147483000] flex items-center justify-center overscroll-none px-5"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="out-of-range-profile-message"
+    >
+      <div className="absolute inset-0 bg-black/[0.03]" aria-hidden="true" />
+      <div
+        id="out-of-range-profile-message"
+        className="relative w-full max-w-sm rounded-[28px] bg-[#202221]/95 px-7 py-6 text-center text-[16px] font-bold leading-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+      >
+        <MapPin size={24} className="mx-auto mb-3" aria-hidden="true" />
+        {needsLocation ? (
+          <>
+            {locating ? 'Finding your location…' : 'Location access is required.'}
+            <span className="mt-1 block font-medium text-white/70">
+              Profiles stay hidden until your current location is available.
+            </span>
+            {!locating ? (
+              <button type="button" onClick={onRetryLocation} className="pointer-events-auto mt-4 h-11 rounded-full bg-white px-6 text-sm font-extrabold text-[#202221]">
+                Try location again
+              </button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            This person is outside your 15&nbsp;m range.
+            <br />
+            Move closer to see their full profile.
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
