@@ -56,6 +56,8 @@ export function Sheet({
     onClose,
     getScrollElement: () => scrollRef.current,
   });
+  const swipeRef = swipeDismissHandlers.ref;
+  const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => { onExitedRef.current = onExited; }, [onExited]);
 
@@ -146,7 +148,8 @@ export function Sheet({
         className={`absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-[320ms] ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
-        {...swipeDismissHandlers}
+        ref={swipeRef}
+        onTouchStart={swipeOnTouchStart}
         data-canact-sheet-panel="true"
         data-entered={entered}
         data-liquid-glass="surface"

@@ -1,5 +1,6 @@
 'use client';
-import { useCallback, useEffect, useRef, type TouchEvent } from 'react';
+'use client';
+import { useCallback, useEffect, useRef } from 'react';
 import { pushCanactPopupGesture } from './popupGuards';
 
 type Options = {
@@ -23,6 +24,7 @@ export function useTopScrollSwipeDismiss({
   enabled = true,
   threshold = 74,
 }: Options) {
+  const elementRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
   const getScrollElementRef = useRef(getScrollElement);
   const gestureRef = useRef<GestureState>({ active: false, closed: false, startX: 0, startY: 0, releaseGesture: null });
@@ -40,39 +42,59 @@ export function useTopScrollSwipeDismiss({
     gestureRef.current = { active: false, closed: false, startX: 0, startY: 0, releaseGesture: null };
   }, []);
 
-  const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
-    if (!enabled || event.touches.length !== 1 || !isScrollAtTop()) {
+  // Attach touchmove as non-passive so preventDefault works
+  useEffect(() => {
+    const el = elementRef.current;
+    if (!el) return;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const gesture = gestureRef.current;
+      if (!gesture.active || gesture.closed || e.touches.length !== 1) return;
+      e.stopPropagation();
+      if (!isScrollAtTop()) {
+        reset();
+        return;
+      }
+      const touch = e.touches[0];
+      const deltaY = touch.clientY - gesture.startY;
+      const deltaX = touch.clientX - gesture.startX;
+      const mostlyVertical = deltaY > Math.abs(deltaX) * 1.2;
+      if (deltaY > 8 && mostlyVertical) e.preventDefault();
+      if (deltaY >= threshold && mostlyVertical) {
+        gestureRef.current.closed = true;
+        closeRef.current();
+      }
+    };
+
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', handleTouchMove);
+  }, [isScrollAtTop, reset, threshold]);
+
+  // Attach touchend / touchcancel so we can reset
+  useEffect(() => {
+    const el = elementRef.current;
+    if (!el) return;
+    const end = () => reset();
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+    return () => {
+      el.removeEventListener('touchend', end);
+      el.removeEventListener('touchcancel', end);
+    };
+  }, [reset]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent<HTMLElement>) => {
+    if (!enabled || e.touches.length !== 1 || !isScrollAtTop()) {
       reset();
       return;
     }
-    event.stopPropagation();
-    const touch = event.touches[0];
+    e.stopPropagation();
+    const touch = e.touches[0];
     gestureRef.current = { active: true, closed: false, startX: touch.clientX, startY: touch.clientY, releaseGesture: pushCanactPopupGesture() };
   }, [enabled, isScrollAtTop, reset]);
 
-  const onTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
-    const gesture = gestureRef.current;
-    if (!gesture.active || gesture.closed || event.touches.length !== 1) return;
-    event.stopPropagation();
-    if (!isScrollAtTop()) {
-      reset();
-      return;
-    }
-    const touch = event.touches[0];
-    const deltaY = touch.clientY - gesture.startY;
-    const deltaX = touch.clientX - gesture.startX;
-    const mostlyVertical = deltaY > Math.abs(deltaX) * 1.2;
-    if (deltaY > 8 && mostlyVertical) event.preventDefault();
-    if (deltaY >= threshold && mostlyVertical) {
-      gestureRef.current.closed = true;
-      closeRef.current();
-    }
-  }, [isScrollAtTop, reset, threshold]);
-
   return {
+    ref: elementRef,
     onTouchStart,
-    onTouchMove,
-    onTouchEnd: reset,
-    onTouchCancel: reset,
   };
 }

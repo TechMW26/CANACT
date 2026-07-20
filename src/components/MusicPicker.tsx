@@ -20,6 +20,8 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
     onClose,
     getScrollElement: () => listRef.current,
   });
+  const swipeRef = swipeDismissHandlers.ref;
+  const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
 
   useEffect(() => {
     if (!open) {
@@ -56,7 +58,8 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
       <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-transparent backdrop-blur-sm" />
       <div
-        {...swipeDismissHandlers}
+        ref={swipeRef}
+        onTouchStart={swipeOnTouchStart}
         style={{ maxHeight: '80svh', paddingBottom: 'var(--canact-popup-bottom-inset)' }}
         className="relative flex w-[100vw] max-w-[100vw] flex-col overflow-hidden rounded-t-3xl bg-white p-4 lg:w-full lg:max-w-md"
       >

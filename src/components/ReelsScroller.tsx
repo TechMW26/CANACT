@@ -272,6 +272,8 @@ function CommentsSheet({
     onClose,
     getScrollElement: () => listRef.current,
   });
+  const swipeRef = swipeDismissHandlers.ref;
+  const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
 
   useEffect(() => listenReelComments(reel.id, setItems), [reel.id]);
   useEffect(() => pushCanactPopupOpen(), []);
@@ -302,7 +304,8 @@ function CommentsSheet({
     <div data-canact-popup="true" className="absolute inset-0 z-40" onClick={onClose}>
       <div className="absolute inset-0 bg-transparent backdrop-blur-sm canact-sheet-backdrop" />
       <div
-        {...swipeDismissHandlers}
+        ref={swipeRef}
+        onTouchStart={swipeOnTouchStart}
         data-liquid-glass="surface"
         data-liquid-radius="24"
         data-liquid-blur="0"
