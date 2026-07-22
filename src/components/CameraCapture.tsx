@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Aperture, Check, Film, ImageIcon, Loader2, X } from './icons';
+import { Aperture, Check, Film, ImageIcon, Loader2, Plus, X } from './icons';
 
 type Mode = 'photo' | 'video';
 type Facing = 'user' | 'environment';
@@ -193,7 +193,7 @@ export function CameraCapture({
         <div className="flex flex-1 items-center justify-center px-5 py-6">
           {shots.length ? (
             <div className="w-full max-w-md">
-              <div className="grid max-h-[62dvh] grid-cols-2 gap-2 overflow-y-auto rounded-[28px] bg-white/5 p-2">
+              <div className="grid max-h-[62dvh] grid-cols-2 gap-3 overflow-x-hidden overflow-y-auto rounded-[28px] bg-white/5 p-3 scroll-p-3">
                 {shots.map((src, index) => (
                   <div key={`${index}-${src.slice(-12)}`} className="relative aspect-[4/5] overflow-hidden rounded-[22px] bg-white/5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -211,6 +211,23 @@ export function CameraCapture({
                     </span>
                   </div>
                 ))}
+                {shots.length < maxPhotos && (
+                  <button
+                    type="button"
+                    onClick={() => libraryRef.current?.click()}
+                    disabled={busy}
+                    aria-label="Add more media"
+                    className="group flex aspect-[4/5] min-h-0 flex-col items-center justify-center rounded-[22px] border border-dashed border-white/25 bg-white/[0.06] text-white transition active:scale-[.98] active:bg-white/10 disabled:opacity-50"
+                  >
+                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15 transition group-active:scale-95">
+                      {busy ? <Loader2 size={24} className="animate-spin" /> : <Plus size={28} />}
+                    </span>
+                    <span className="mt-3 text-sm font-extrabold">Add media</span>
+                    <span className="mt-1 text-[11px] font-semibold text-white/45">
+                      {maxPhotos - shots.length} remaining
+                    </span>
+                  </button>
+                )}
               </div>
               <div className="mt-3 text-center text-xs font-semibold text-white/55">{shots.length} of {maxPhotos} selected</div>
             </div>

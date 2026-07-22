@@ -129,7 +129,13 @@ export default function PostCreatePage() {
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               {shots.map((shot, index) => (
-                <button key={shot.id} type="button" onClick={() => setSelectedShot(index)} className={`relative h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-white/5 transition ${selectedShot === index ? 'ring-2 ring-white' : 'opacity-60 ring-1 ring-white/15'}`}>
+                <button
+                  key={shot.id}
+                  type="button"
+                  aria-pressed={selectedShot === index}
+                  onClick={() => setSelectedShot(index)}
+                  className={`relative h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-white/5 transition-opacity ${selectedShot === index ? 'opacity-100' : 'opacity-60'}`}
+                >
                   {shot.isVideo ? <VideoPreview src={shot.src} poster={shot.poster} className="h-full w-full" fit="cover" /> : <img src={shot.src} alt="" className="h-full w-full object-cover" />}
                   <span className="absolute bottom-1 right-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-black/70 px-1 text-[10px] font-bold">{index + 1}</span>
                 </button>
