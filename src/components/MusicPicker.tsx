@@ -20,7 +20,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
     onClose,
     getScrollElement: () => listRef.current,
   });
-  const swipeRef = swipeDismissHandlers.ref;
+  const swipeRef = swipeDismissHandlers.ref as unknown as React.RefObject<HTMLDivElement | null>;
   const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
 
   useEffect(() => {

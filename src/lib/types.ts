@@ -409,7 +409,9 @@ export interface ReelItem {
   lng?: number;
   /** CSS filter id from MEDIA_FILTERS (e.g. 'vivid', 'mono'). */
   filter?: string;
-  music?: { id: string; title: string; artist: string; url: string };
+  music?: { id: string; title: string; artist: string; url: string; startAtSec?: number; volume?: number };
+  /** True when soundtrack and original audio are already muxed into videoUrl. */
+  audioStitched?: boolean;
   likes?: Record<string, number>;
   views?: number;
   commentCount?: number;

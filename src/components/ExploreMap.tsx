@@ -150,7 +150,7 @@ export function ExploreMap({
     activity.kind !== 'person'
     && typeof activity.createdAt === 'number'
     && clock - activity.createdAt <= MAP_CONTENT_TTL,
-  ), [activities, clock]);
+  ).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)), [activities, clock]);
   const locatedPeople = useMemo(() => people.filter(isLocatedPerson), [people]);
   const personClusters = useMemo(() => clusterPeople(locatedPeople, mapZoom), [locatedPeople, mapZoom]);
   const contentForPerson = useMemo(() => {

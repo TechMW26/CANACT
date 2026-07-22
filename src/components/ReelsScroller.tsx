@@ -19,6 +19,7 @@ import { filterCss } from '@/lib/mediaFilters';
 import { lockPageScroll } from '@/lib/scrollLock';
 import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 import { pushCanactPopupOpen } from '@/lib/popupGuards';
+import { useReelAudioSync } from '@/lib/reelAudio';
 
 export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   const { user, profile } = useAuth();
@@ -123,6 +124,7 @@ function ReelTile({
   // screen reels stay at preload="none", which keeps the page-level
   // bandwidth flat regardless of how long the feed is.
   const [isActive, setIsActive] = useState(false);
+  useReelAudioSync(videoRef, audioRef, !!reel.music && !reel.audioStitched, reel.music?.startAtSec ?? 0, reel.music?.volume ?? 0.8);
 
   useEffect(() => {
     const el = ref.current;
@@ -133,7 +135,6 @@ function ReelTile({
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
             setIsActive(true);
             videoRef.current?.play().catch(() => {});
-            audioRef.current?.play().catch(() => {});
             bumpReelView(reel.id).catch(() => {});
           } else {
             setIsActive(false);
@@ -158,7 +159,6 @@ function ReelTile({
       onClick={() => {
         if (paused) {
           videoRef.current?.play().catch(() => {});
-          audioRef.current?.play().catch(() => {});
         } else {
           videoRef.current?.pause();
           audioRef.current?.pause();
@@ -175,9 +175,9 @@ function ReelTile({
         loop
         playsInline
         preload={isActive ? 'auto' : 'none'}
-        muted={!!reel.music || muted}
+        muted={muted}
       />
-      {reel.music && (
+      {reel.music && !reel.audioStitched && (
         <audio ref={audioRef} src={reel.music.url} loop muted={muted} />
       )}
 
@@ -272,7 +272,7 @@ function CommentsSheet({
     onClose,
     getScrollElement: () => listRef.current,
   });
-  const swipeRef = swipeDismissHandlers.ref;
+  const swipeRef = swipeDismissHandlers.ref as React.RefObject<HTMLDivElement | null>;
   const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
 
   useEffect(() => listenReelComments(reel.id, setItems), [reel.id]);

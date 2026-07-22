@@ -26,6 +26,7 @@ import { createReel } from '@/lib/services/reels';
 import { uploadMedia } from '@/lib/uploadMedia';
 import type { MusicTrack } from '@/lib/musicLibrary';
 import { filterCss, MEDIA_FILTERS, type MediaFilterId } from '@/lib/mediaFilters';
+import { stitchReelAudio, useReelAudioSync } from '@/lib/reelAudio';
 
 const MAX_DURATION = 60;
 
@@ -38,6 +39,8 @@ export default function ReelCreatePage() {
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const composeRef = useRef<HTMLVideoElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const composeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const [step, setStep] = useState<Step>('capture');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -46,7 +49,12 @@ export default function ReelCreatePage() {
   const [showMusic, setShowMusic] = useState(false);
   const [filter, setFilter] = useState<MediaFilterId>('none');
   const [muted, setMuted] = useState(false);
+  const [musicStartAt, setMusicStartAt] = useState(0);
+  const [musicVolume, setMusicVolume] = useState(0.8);
   const [busy, setBusy] = useState(false);
+
+  useReelAudioSync(previewRef, previewAudioRef, step === 'preview' && !!music && !muted, musicStartAt, musicVolume);
+  useReelAudioSync(composeRef, composeAudioRef, step === 'compose' && !!music && !muted, musicStartAt, musicVolume);
 
   const retake = () => {
     setVideoUrl(null);
@@ -122,6 +130,7 @@ export default function ReelCreatePage() {
           className="absolute inset-0 h-full w-full object-contain"
           style={{ filter: filterCss(filter) }}
         />
+        {music && <audio ref={previewAudioRef} src={music.url} loop muted={muted} />}
 
         {/* Top bar */}
         <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/60 to-transparent p-4 safe-top">
@@ -177,6 +186,19 @@ export default function ReelCreatePage() {
         >
           <ArrowLeft size={22} />
         </button>
+
+        {music && (
+          <div className="mt-3 rounded-2xl bg-brand-light/45 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-bold text-ink">
+              <span>Soundtrack start</span><span>{musicStartAt.toFixed(1)}s</span>
+            </div>
+            <input aria-label="Soundtrack start time" type="range" min="0" max="30" step="0.5" value={musicStartAt} onChange={(e) => setMusicStartAt(Number(e.target.value))} className="w-full accent-brand" />
+            <div className="mb-2 mt-3 flex items-center justify-between text-xs font-bold text-ink">
+              <span>Music volume</span><span>{Math.round(musicVolume * 100)}%</span>
+            </div>
+            <input aria-label="Music volume" type="range" min="0.1" max="1" step="0.05" value={musicVolume} onChange={(e) => setMusicVolume(Number(e.target.value))} className="w-full accent-brand" />
+          </div>
+        )}
         <div>
           <div className="text-xl font-black tracking-tight text-ink">Share a Reel</div>
           <div className="text-xs text-ink/55">Vertical short clip</div>
@@ -206,6 +228,7 @@ export default function ReelCreatePage() {
               className="h-full w-full object-contain"
               style={{ filter: filterCss(filter) }}
             />
+            {music && <audio ref={composeAudioRef} src={music.url} loop muted={muted} />}
             <button
               type="button"
               onClick={() => setMuted((m) => !m)}
@@ -263,7 +286,9 @@ export default function ReelCreatePage() {
             try {
               // Process the recorded/picked video on-device, then upload the
               // final blob to Vercel Blob. Only the public URL is stored in RTDB.
-            const { url: hostedUrl, posterUrl, lqip } = await uploadMedia(videoUrl, { kind: 'reel', uid: user.uid });
+            const stitched = music ? await stitchReelAudio(videoUrl, music.url, { startAtSec: musicStartAt, musicVolume }) : null;
+            if (music && !stitched) toast('Your soundtrack will stay synchronized during playback', 'info');
+            const { url: hostedUrl, posterUrl, lqip } = await uploadMedia(stitched ?? videoUrl, { kind: 'reel', uid: user.uid });
             await createReel({
               uid: user.uid,
               authorName: profile.fullName,
@@ -275,7 +300,8 @@ export default function ReelCreatePage() {
                 lat: coords?.lat,
                 lng: coords?.lng,
                 filter: filter === 'none' ? undefined : filter,
-                music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url } : undefined,
+                music: music ? { id: music.id, title: music.title, artist: music.artist, url: music.url, startAtSec: musicStartAt, volume: musicVolume } : undefined,
+                audioStitched: !!stitched,
               });
               router.replace('/reels');
             } catch (e: any) {

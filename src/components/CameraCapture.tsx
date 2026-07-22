@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Aperture, Check, Film, ImageIcon, Loader2, X } from './icons';
 
@@ -41,10 +41,48 @@ export function CameraCapture({
   const photoCameraRef = useRef<HTMLInputElement | null>(null);
   const videoCameraRef = useRef<HTMLInputElement | null>(null);
   const libraryRef = useRef<HTMLInputElement | null>(null);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [mode, setMode] = useState<Mode>(() => initialMode === 'video' && allowVideo ? 'video' : 'photo');
   const [shots, setShots] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewAttemptedRef = useRef(false);
+
+  // Start live camera preview — must be triggered by a user gesture on mobile
+  const startPreview = async () => {
+    if (previewReady || previewLoading || previewAttemptedRef.current) return;
+    previewAttemptedRef.current = true;
+    setPreviewLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: defaultFacing, width: { ideal: 720 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (previewVideoRef.current) {
+        previewVideoRef.current.srcObject = stream;
+        await previewVideoRef.current.play();
+        setPreviewReady(true);
+      } else {
+        stream.getTracks().forEach((t) => t.stop());
+      }
+    } catch {
+      setPreviewReady(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, []);
 
   const photoEnabled = allowPhoto;
   const videoEnabled = allowVideo;
@@ -180,15 +218,27 @@ export function CameraCapture({
             <div className="w-full max-w-sm text-center">
               <button
                 type="button"
-                onClick={() => openCamera()}
+                onClick={() => { if (previewReady) { openCamera(); } else if (!previewAttemptedRef.current) { startPreview(); } else { openCamera(); } }}
                 disabled={busy}
-                className="group mx-auto flex aspect-[4/5] w-full max-w-[310px] flex-col items-center justify-center overflow-hidden rounded-[36px] bg-gradient-to-br from-[#173f34] via-[#0d201b] to-black ring-1 ring-white/14 transition active:scale-[.985]"
+                className="group relative mx-auto flex aspect-[4/5] w-full max-w-[310px] flex-col items-center justify-center overflow-hidden rounded-[36px] ring-1 ring-white/14 transition active:scale-[.985]"
               >
-                <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-white text-[#0d2c23] shadow-[0_20px_60px_rgb(89_211_168_/_25%)]">
-                  {busy ? <Loader2 size={30} className="animate-spin" /> : mode === 'video' ? <Film size={31} /> : <Aperture size={31} />}
+                {/* Fallback gradient behind the video */}
+                <div className="absolute inset-0 bg-gradient-to-br from-[#173f34] via-[#0d201b] to-black" />
+                {/* Live camera preview — always mounted, hidden until ready */}
+                <video
+                  ref={previewVideoRef}
+                  playsInline
+                  muted
+                  className={`absolute inset-0 h-full w-full object-cover ${previewReady ? '' : 'hidden'}`}
+                />
+                {/* Overlay UI on top of preview */}
+                <span className="relative z-10 inline-flex h-20 w-20 items-center justify-center rounded-full bg-black/30 text-white shadow-[0_20px_60px_rgb(89_211_168_/_25%)] backdrop-blur-md ring-1 ring-white/20">
+                  {busy || previewLoading ? <Loader2 size={30} className="animate-spin" /> : mode === 'video' ? <Film size={31} /> : <Aperture size={31} />}
                 </span>
-                <span className="mt-6 text-xl font-black">Open phone camera</span>
-                <span className="mt-2 max-w-[230px] text-sm font-medium leading-5 text-white/58">
+                <span className="relative z-10 mt-6 text-xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+                  {previewLoading ? 'Starting camera…' : previewReady ? 'Tap to open camera' : 'Tap to enable camera'}
+                </span>
+                <span className="relative z-10 mt-2 max-w-[230px] text-sm font-medium leading-5 text-white/70 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
                   {mode === 'video' ? `Record with your phone camera · up to ${maxVideoSec}s` : 'Take a photo with your phone camera'}
                 </span>
               </button>

@@ -56,7 +56,7 @@ export function Sheet({
     onClose,
     getScrollElement: () => scrollRef.current,
   });
-  const swipeRef = swipeDismissHandlers.ref;
+  const swipeRef = swipeDismissHandlers.ref as React.RefObject<HTMLDivElement | null>;
   const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => { onExitedRef.current = onExited; }, [onExited]);

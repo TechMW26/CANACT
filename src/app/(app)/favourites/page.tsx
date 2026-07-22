@@ -250,7 +250,9 @@ export default function FavouritesPage() {
       if (!isMapFresh(reel.createdAt) || typeof reel.lat !== 'number' || typeof reel.lng !== 'number') return [];
       return [{ id: `reel-${reel.id}`, kind: 'reel' as const, lat: reel.lat, lng: reel.lng, weight: 1.15, href: `/reel/${reel.id}`, authorUid: reel.uid, authorName: reel.authorName, label: reel.caption || 'Reel', createdAt: reel.createdAt, thumbUrl: reel.posterUrl, color: '#8c62b7' }];
     });
-    return [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
+    const merged = [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
+    merged.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    return merged;
   }, [allPeople, posts, stories, polls, reels]);
   if (!user) return null;
   if (!liveCoords) {
