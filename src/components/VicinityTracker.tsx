@@ -8,6 +8,7 @@ import { POSITIVE_ATTRS, NEGATIVE_ATTRS, ATTR_LABELS } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { ThumbsUp, ThumbsDown, X } from './icons';
 import { toast } from './Toaster';
+import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 
 const ALL_ATTRS = [...POSITIVE_ATTRS, ...NEGATIVE_ATTRS] as AttrKey[];
 
@@ -53,6 +54,7 @@ function ProximityRatingPrompt({
   const [attrVotes, setAttrVotes] = useState<AttributeVoteMap>({});
   const [busy, setBusy] = useState(false);
   const minutes = Math.max(1, Math.round(pending.durationMs / 60000));
+  const swipe = useTopScrollSwipeDismiss({ onClose: () => { void handleSkip(); } });
 
   const isPositive = (key: AttrKey) => (POSITIVE_ATTRS as readonly string[]).includes(key);
 
@@ -86,7 +88,7 @@ function ProximityRatingPrompt({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/20 backdrop-blur-sm p-3 md:items-center">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl">
+      <div ref={swipe.ref as React.RefObject<HTMLDivElement | null>} className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl will-change-transform">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <Avatar src={pending.otherPhoto ?? null} name={pending.otherName} size={48} />

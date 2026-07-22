@@ -55,9 +55,9 @@ export function Sheet({
   const swipeDismissHandlers = useTopScrollSwipeDismiss({
     onClose,
     getScrollElement: () => scrollRef.current,
+    enabled: mounted,
   });
   const swipeRef = swipeDismissHandlers.ref as React.RefObject<HTMLDivElement | null>;
-  const swipeOnTouchStart = swipeDismissHandlers.onTouchStart;
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => { onExitedRef.current = onExited; }, [onExited]);
 
@@ -149,7 +149,6 @@ export function Sheet({
       />
       <div
         ref={swipeRef}
-        onTouchStart={swipeOnTouchStart}
         data-canact-sheet-panel="true"
         data-entered={entered}
         data-liquid-glass="surface"

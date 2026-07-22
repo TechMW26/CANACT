@@ -1,8 +1,11 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { lockPageScroll } from '@/lib/scrollLock';
+import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 
 export function Modal({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; footer?: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const swipe = useTopScrollSwipeDismiss({ onClose, enabled: open, getScrollElement: () => scrollRef.current });
   useEffect(() => {
     if (!open) return;
     return lockPageScroll();
@@ -11,9 +14,9 @@ export function Modal({ open, onClose, title, children, footer }: { open: boolea
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-transparent p-0 backdrop-blur-sm lg:items-center lg:p-4" onClick={onClose}>
-      <div className="max-h-[90svh] w-[100vw] max-w-[100vw] overflow-auto overscroll-contain rounded-t-2xl border border-line bg-white [-webkit-overflow-scrolling:touch] lg:w-full lg:max-w-md lg:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={swipe.ref as React.RefObject<HTMLDivElement | null>} className="max-h-[90svh] w-[100vw] max-w-[100vw] overflow-hidden overscroll-contain rounded-t-2xl border border-line bg-white will-change-transform lg:w-full lg:max-w-md lg:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         {title && <div className="px-5 py-4 border-b border-line text-lg font-bold">{title}</div>}
-        <div className="p-5">{children}</div>
+        <div ref={scrollRef} className="max-h-[calc(90svh-8rem)] overflow-y-auto overscroll-contain p-5 [-webkit-overflow-scrolling:touch]">{children}</div>
         {footer && <div className="px-5 py-4 border-t border-line flex gap-2 justify-end">{footer}</div>}
       </div>
     </div>

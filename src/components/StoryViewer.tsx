@@ -50,9 +50,9 @@ export function StoryViewer({
   const viewersSwipeDismissHandlers = useTopScrollSwipeDismiss({
     onClose: () => setShowViewers(false),
     getScrollElement: () => viewersSheetRef.current,
+    enabled: showViewers,
   });
   const viewersSwipeRef = viewersSwipeDismissHandlers.ref;
-  const viewersSwipeOnTouchStart = viewersSwipeDismissHandlers.onTouchStart;
 
   const story = liveStory ?? stories[index];
   const isMine = story?.uid === meUid;
@@ -348,7 +348,6 @@ export function StoryViewer({
         <div className="absolute inset-0 z-[110] flex items-end bg-transparent backdrop-blur-sm" onClick={() => setShowViewers(false)}>
           <div
             ref={(el) => { viewersSheetRef.current = el; (viewersSwipeRef as any).current = el; }}
-            onTouchStart={viewersSwipeOnTouchStart}
             onClick={(e) => e.stopPropagation()}
             style={{
               maxHeight: '70svh',
