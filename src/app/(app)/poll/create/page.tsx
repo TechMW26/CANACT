@@ -5,7 +5,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { GlassSwitch } from '@/components/GlassSwitch';
 import { Input, Select, Textarea } from '@/components/Input';
-import { ImageIcon, X } from '@/components/icons';
+import { Camera, ImageIcon, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { createPoll } from '@/lib/services/poll';
@@ -26,6 +26,7 @@ export default function PollCreatePage() {
   const [busy, setBusy] = useState(false);
   const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => () => {
     if (photo?.previewUrl) URL.revokeObjectURL(photo.previewUrl);
@@ -33,7 +34,7 @@ export default function PollCreatePage() {
 
   function choosePhoto(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith('image/')) return toast('Choose an image', 'error');
+    if (file.type && !file.type.startsWith('image/')) return toast('Choose an image', 'error');
     setPhoto((current) => {
       if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
       return { file, previewUrl: URL.createObjectURL(file) };
@@ -54,6 +55,17 @@ export default function PollCreatePage() {
             className="hidden"
             onChange={(event) => choosePhoto(event.target.files?.[0])}
           />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => {
+              choosePhoto(event.target.files?.[0]);
+              event.currentTarget.value = '';
+            }}
+          />
           {photo ? (
             <div className="relative overflow-hidden rounded-3xl bg-black">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -71,13 +83,22 @@ export default function PollCreatePage() {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => photoInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-[#E8C8CE] bg-brand-light/30 px-4 py-8 text-sm font-extrabold text-brand"
-            >
-              <ImageIcon size={18} /> Add poll photo
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 rounded-3xl border border-dashed border-[#E8C8CE] bg-brand-light/30 px-4 py-8 text-sm font-extrabold text-brand"
+              >
+                <Camera size={18} /> Camera
+              </button>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 rounded-3xl border border-dashed border-[#E8C8CE] bg-brand-light/30 px-4 py-8 text-sm font-extrabold text-brand"
+              >
+                <ImageIcon size={18} /> Library
+              </button>
+            </div>
           )}
           <div className="flex items-center gap-2 text-sm">
             <GlassSwitch checked={openEnded} label="Open-ended poll" onChange={setOpenEnded} />

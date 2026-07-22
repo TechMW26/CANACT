@@ -13,9 +13,9 @@ type Item = {
 };
 
 const ITEMS: Item[] = [
-  { href: '/story/create', title: 'Story',           desc: 'Camera-first, edit with text. 24h.',     Icon: Sparkles,  accent: 'from-[#E8F2ED] to-[#DDEDE5]' },
-  { href: '/post/create',  title: "What's Happening", desc: 'Photos / carousel. Auto-disappears 24h.', Icon: Camera,    accent: 'from-[#F0F5F1] to-[#DDEDE5]' },
-  { href: '/reel/create',  title: 'Reel',             desc: 'Short vertical clip. Coming soon.',      Icon: Film,      accent: 'from-[#FFF1F3] to-[#E8F2ED]' },
+  { href: '/story/create', title: 'Story',           desc: 'Capture, customise and share for 24h.',  Icon: Sparkles,  accent: 'from-[#E8F2ED] to-[#DDEDE5]' },
+  { href: '/post/create',  title: 'Post',             desc: 'Photo, video or carousel.',               Icon: Camera,    accent: 'from-[#F0F5F1] to-[#DDEDE5]' },
+  { href: '/reel/create',  title: 'Reel',             desc: 'Record, edit and share a vertical clip.', Icon: Film,      accent: 'from-[#FFF1F3] to-[#E8F2ED]' },
   { href: '/rateme/start', title: 'Rate Me',          desc: 'Front-camera selfie. Live for hours.',   Icon: Eye,       accent: 'from-[#F0F5F1] to-[#DDEDE5]' },
   { href: '/poll/create',  title: 'Poll · Ask',       desc: 'Quick read from your area.',             Icon: BarChart3, accent: 'from-[#FFF1F3] to-[#E8F2ED]' },
   { href: '/help/create',  title: 'Help',             desc: 'Red / Orange / Yellow ping.',            Icon: HeartHandshake,  accent: 'from-[#FAF8F2] to-[#E8F2ED]' },
@@ -46,4 +46,3 @@ export function PlusSheet({ open, onClose }: { open: boolean; onClose: () => voi
     </Sheet>
   );
 }
-

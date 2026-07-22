@@ -101,6 +101,7 @@ export {
   AlignLeft,
   CloudUpload,
   Grid3X3,
+  Expand,
   Activity,
   TrendingUp,
 } from 'lucide-react';
