@@ -4,6 +4,7 @@ import {
 import { db } from '../firebase';
 import type { PresenceEntry, Encounter, PendingRating, UserProfile } from '../types';
 import { haversineMeters } from '../utils';
+import { subscribeGeoFix } from '../useGeo';
 import { sendPush } from './sendPush';
 
 /* Tunable thresholds — chosen for accurate "they were really together" detection. */
@@ -177,7 +178,6 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
   const photo = profile.photoURL;
 
   let lastFix: { lat: number; lng: number; accuracy: number; ts: number } | null = null;
-  let watchId: number | null = null;
   let timer: any = null;
   let presenceCache: Record<string, PresenceEntry> = {};
   let stopped = false;
@@ -186,22 +186,7 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
     presenceCache = (snap.val() ?? {}) as Record<string, PresenceEntry>;
   });
 
-  if (typeof navigator !== 'undefined' && navigator.geolocation) {
-    try {
-      watchId = navigator.geolocation.watchPosition(
-        (p) => {
-          lastFix = {
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            accuracy: p.coords.accuracy,
-            ts: Date.now(),
-          };
-        },
-        () => { /* ignore — tick will simply not write presence */ },
-        { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
-      );
-    } catch { /* unsupported */ }
-  }
+  const stopGeo = subscribeGeoFix((fix) => { lastFix = fix; });
 
   const tick = async () => {
     if (stopped) return;
@@ -276,7 +261,7 @@ export function startVicinity(opts: StartOpts): VicinityHandle {
       stopped = true;
       clearTimeout(initial);
       if (timer) clearInterval(timer);
-      if (watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+      stopGeo();
       presenceListener();
       if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', visHandler);
       clearPresence(uid).catch(() => {});

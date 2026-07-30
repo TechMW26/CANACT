@@ -36,7 +36,6 @@ export function StoryViewer({
   onDelete: (authorUid: string, storyId: string) => Promise<void>;
 }) {
   const [index, setIndex] = useState(startIndex);
-  const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liveStory, setLiveStory] = useState<StoryItem | null>(stories[startIndex] ?? null);
   const [showViewers, setShowViewers] = useState(false);
@@ -46,6 +45,7 @@ export function StoryViewer({
   const startedAtRef = useRef<number>(Date.now());
   const elapsedRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
+  const progressFillRef = useRef<HTMLDivElement | null>(null);
   const viewersSheetRef = useRef<HTMLDivElement | null>(null);
   const viewersSwipeDismissHandlers = useTopScrollSwipeDismiss({
     onClose: () => setShowViewers(false),
@@ -85,7 +85,7 @@ export function StoryViewer({
     if (target.uid !== meUid) {
       void markStoryView(target.uid, target.id, { uid: meUid, name: meName, photoURL: mePhoto ?? undefined });
     }
-    setProgress(0);
+    if (progressFillRef.current) progressFillRef.current.style.transform = 'scaleX(0)';
     elapsedRef.current = 0;
     startedAtRef.current = Date.now();
   }, [index, stories, meUid, meName, mePhoto]);
@@ -100,7 +100,9 @@ export function StoryViewer({
       const delta = now - startedAtRef.current;
       const total = elapsedRef.current + delta;
       const pct = Math.min(1, total / DURATION_MS);
-      setProgress(pct);
+      if (progressFillRef.current) {
+        progressFillRef.current.style.transform = `scaleX(${pct})`;
+      }
       if (pct >= 1) {
         if (index >= stories.length - 1) {
           onClose();
@@ -175,10 +177,13 @@ export function StoryViewer({
             return segs.map((origIdx, segIdx) => (
               <div key={origIdx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
                 <div
+                  ref={segIdx === myPos ? progressFillRef : undefined}
                   className="h-full rounded-full bg-white"
                   style={{
-                    width: segIdx < myPos ? '100%' : segIdx === myPos ? `${progress * 100}%` : '0%',
-                    transition: segIdx === myPos ? 'none' : 'width 120ms linear',
+                    width: '100%',
+                    transform: segIdx < myPos ? 'scaleX(1)' : 'scaleX(0)',
+                    transformOrigin: 'left center',
+                    transition: segIdx === myPos ? 'none' : 'transform 120ms linear',
                   }}
                 />
               </div>

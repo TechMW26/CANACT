@@ -46,6 +46,8 @@ type MapPopup =
 const MAP_CONTENT_TTL = 24 * 3600 * 1000;
 const SAME_LOCATION_METERS = 1;
 const MARKER_CLUSTER_PIXELS = 52;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+let contentPinSequence = 0;
 
 function isLocatedPerson(person: FriendMapPerson): person is LocatedPerson {
   return typeof person.lat === 'number' && typeof person.lng === 'number';
@@ -57,35 +59,134 @@ function visualOverlapMeters(a: Point, b: Point, zoom: number) {
   return Math.max(2, metersPerPixel * MARKER_CLUSTER_PIXELS);
 }
 
+function projectedPixel(point: Point, zoom: number) {
+  const worldSize = 256 * (2 ** zoom);
+  const latitude = Math.max(-85.051129, Math.min(85.051129, point.lat));
+  const sinLatitude = Math.sin(latitude * Math.PI / 180);
+  return {
+    x: ((point.lng + 180) / 360) * worldSize,
+    y: (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * worldSize,
+  };
+}
+
 function clusterPeople(people: FriendMapPerson[], zoom: number): PersonCluster[] {
-  const remaining = people.filter(isLocatedPerson);
-  const clusters: PersonCluster[] = [];
-  while (remaining.length) {
-    const members = [remaining.shift()!];
-    let expanded = true;
-    while (expanded) {
-      expanded = false;
-      for (let index = 0; index < remaining.length;) {
-        const person = remaining[index];
-        const overlaps = members.some((member) =>
-          haversineMeters(member, person) <= visualOverlapMeters(member, person, zoom),
-        );
-        if (overlaps) {
-          members.push(...remaining.splice(index, 1));
-          expanded = true;
-        } else index += 1;
+  const located = people.filter(isLocatedPerson);
+  if (!located.length) return [];
+
+  const parent = located.map((_, index) => index);
+  const rank = located.map(() => 0);
+  const buckets = new Map<string, number[]>();
+  const worldSize = 256 * (2 ** zoom);
+  const maxLatitude = Math.min(85.051129, Math.max(...located.map((person) => Math.abs(person.lat))));
+  const minimumMetersPerPixel = (156543.03392 * Math.cos((maxLatitude * Math.PI) / 180)) / (2 ** zoom);
+  const bucketSize = Math.max(MARKER_CLUSTER_PIXELS, 2 / Math.max(minimumMetersPerPixel, 0.001));
+  const bucketColumns = Math.max(1, Math.ceil(worldSize / bucketSize));
+  const find = (index: number): number => {
+    let root = index;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[index] !== index) {
+      const next = parent[index];
+      parent[index] = root;
+      index = next;
+    }
+    return root;
+  };
+  const union = (left: number, right: number) => {
+    let leftRoot = find(left);
+    let rightRoot = find(right);
+    if (leftRoot === rightRoot) return;
+    if (rank[leftRoot] < rank[rightRoot]) [leftRoot, rightRoot] = [rightRoot, leftRoot];
+    parent[rightRoot] = leftRoot;
+    if (rank[leftRoot] === rank[rightRoot]) rank[leftRoot] += 1;
+  };
+
+  located.forEach((person, index) => {
+    const projected = projectedPixel(person, zoom);
+    const cellX = ((Math.floor(projected.x / bucketSize) % bucketColumns) + bucketColumns) % bucketColumns;
+    const cellY = Math.floor(projected.y / bucketSize);
+    for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
+      const wrappedX = ((cellX + xOffset) % bucketColumns + bucketColumns) % bucketColumns;
+      for (let yOffset = -1; yOffset <= 1; yOffset += 1) {
+        const candidates = buckets.get(`${wrappedX}:${cellY + yOffset}`);
+        if (!candidates) continue;
+        for (const candidateIndex of candidates) {
+          const candidate = located[candidateIndex];
+          if (haversineMeters(candidate, person) <= visualOverlapMeters(candidate, person, zoom)) {
+            union(candidateIndex, index);
+          }
+        }
       }
     }
-    clusters.push({
+    const key = `${cellX}:${cellY}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(index);
+    else buckets.set(key, [index]);
+  });
+
+  const groups = new Map<number, LocatedPerson[]>();
+  located.forEach((person, index) => {
+    const root = find(index);
+    const group = groups.get(root);
+    if (group) group.push(person);
+    else groups.set(root, [person]);
+  });
+
+  return Array.from(groups.values()).map((members) => ({
       id: members.map((person) => person.uid).sort().join(':'),
       people: members,
       center: {
         lat: members.reduce((sum, person) => sum + person.lat, 0) / members.length,
         lng: members.reduce((sum, person) => sum + person.lng, 0) / members.length,
       },
-    });
+    }));
+}
+
+function createContentPinGraphic(color: string, thumbnail?: string) {
+  const clipId = `canact-map-pin-${contentPinSequence += 1}`;
+  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  svg.setAttribute('width', '44');
+  svg.setAttribute('height', '56');
+  svg.setAttribute('viewBox', '-2 -2 44 56');
+  svg.setAttribute('overflow', 'visible');
+
+  const path = document.createElementNS(SVG_NAMESPACE, 'path');
+  path.setAttribute('d', 'M20 0C8.95 0 0 8.95 0 20c0 11.05 20 32 20 32s20-20.95 20-32C40 8.95 31.05 0 20 0z');
+  path.setAttribute('fill', '#fff');
+  path.setAttribute('stroke', color);
+  path.setAttribute('stroke-width', '3');
+  svg.appendChild(path);
+
+  if (thumbnail) {
+    const defs = document.createElementNS(SVG_NAMESPACE, 'defs');
+    const clip = document.createElementNS(SVG_NAMESPACE, 'clipPath');
+    clip.setAttribute('id', clipId);
+    const clipCircle = document.createElementNS(SVG_NAMESPACE, 'circle');
+    clipCircle.setAttribute('cx', '20');
+    clipCircle.setAttribute('cy', '18');
+    clipCircle.setAttribute('r', '16');
+    clip.appendChild(clipCircle);
+    defs.appendChild(clip);
+    svg.prepend(defs);
+
+    const image = document.createElementNS(SVG_NAMESPACE, 'image');
+    image.setAttribute('href', thumbnail);
+    image.setAttribute('x', '4');
+    image.setAttribute('y', '2');
+    image.setAttribute('width', '32');
+    image.setAttribute('height', '32');
+    image.setAttribute('clip-path', `url(#${clipId})`);
+    image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    svg.appendChild(image);
+  } else {
+    const circle = document.createElementNS(SVG_NAMESPACE, 'circle');
+    circle.setAttribute('cx', '20');
+    circle.setAttribute('cy', '18');
+    circle.setAttribute('r', '10');
+    circle.setAttribute('fill', color);
+    svg.appendChild(circle);
   }
-  return clusters;
+
+  return svg;
 }
 
 export function ExploreMap({
@@ -153,20 +254,24 @@ export function ExploreMap({
   ).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)), [activities, clock]);
   const locatedPeople = useMemo(() => people.filter(isLocatedPerson), [people]);
   const personClusters = useMemo(() => clusterPeople(locatedPeople, mapZoom), [locatedPeople, mapZoom]);
-  const contentForPerson = useMemo(() => {
-    const result = new Map<string, ExploreActivity[]>();
-    for (const person of people.filter(isLocatedPerson)) {
-      result.set(person.uid, recentContent.filter((activity) =>
-        activity.authorUid === person.uid
-        && haversineMeters(person, activity) <= SAME_LOCATION_METERS,
-      ));
+  const indexedContent = useMemo(() => {
+    const peopleByUid = new Map(locatedPeople.map((person) => [person.uid, person]));
+    const byPerson = new Map<string, ExploreActivity[]>();
+    const detached: ExploreActivity[] = [];
+    for (const activity of recentContent) {
+      const author = activity.authorUid ? peopleByUid.get(activity.authorUid) : undefined;
+      if (!author || haversineMeters(author, activity) > SAME_LOCATION_METERS) {
+        detached.push(activity);
+        continue;
+      }
+      const local = byPerson.get(author.uid);
+      if (local) local.push(activity);
+      else byPerson.set(author.uid, [activity]);
     }
-    return result;
-  }, [people, recentContent]);
-  const detachedContent = useMemo(() => recentContent.filter((activity) => {
-    const author = people.filter(isLocatedPerson).find((person) => person.uid === activity.authorUid);
-    return !author || haversineMeters(author, activity) > SAME_LOCATION_METERS;
-  }), [people, recentContent]);
+    return { byPerson, detached };
+  }, [locatedPeople, recentContent]);
+  const contentForPerson = indexedContent.byPerson;
+  const detachedContent = indexedContent.detached;
   const mapActivities = useMemo(() => [
     ...activities.filter((activity) => activity.kind === 'person'),
     ...detachedContent,
@@ -200,6 +305,7 @@ export function ExploreMap({
     const container = containerRef.current;
     if (!container || mapRef.current || !currentLocation) return;
     let disposed = false;
+    let recenterTimer: ReturnType<typeof setTimeout> | null = null;
     import('maplibre-gl').then((library) => {
       if (disposed || !containerRef.current) return;
       libraryRef.current = library;
@@ -222,7 +328,6 @@ export function ExploreMap({
         map.on('rotatestart', () => interactionRef.current?.());
 
         // Re-center on user pin after 3 seconds of inactivity
-        let recenterTimer: ReturnType<typeof setTimeout> | null = null;
         const scheduleRecenter = () => {
           if (recenterTimer) clearTimeout(recenterTimer);
           recenterTimer = setTimeout(() => {
@@ -237,7 +342,14 @@ export function ExploreMap({
         map.on('rotateend', scheduleRecenter);
       }
       mapRef.current = map;
-      const resizeObserver = new ResizeObserver(() => map.resize());
+      let resizeFrame = 0;
+      const resizeObserver = new ResizeObserver(() => {
+        if (resizeFrame) return;
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = 0;
+          map.resize();
+        });
+      });
       resizeObserver.observe(containerRef.current);
       map.once('load', () => { map.resize(); setReady(true); });
       map.once('error', () => { if (!map.loaded()) setLoadError(true); });
@@ -260,10 +372,14 @@ export function ExploreMap({
         img.src = canvas.toDataURL();
         img.onload = () => { if (!map.hasImage(id)) map.addImage(id, img); };
       });
-      map.once('remove', () => resizeObserver.disconnect());
+      map.once('remove', () => {
+        resizeObserver.disconnect();
+        if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+      });
     }).catch(() => setLoadError(true));
     return () => {
       disposed = true;
+      if (recenterTimer) clearTimeout(recenterTimer);
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       mapRef.current?.remove();
@@ -277,13 +393,15 @@ export function ExploreMap({
     // Padding offsets the center so the pin lands in the visual middle
     // of the screen, not the geometric center of the map div (which sits
     // behind the header greeting and the bottom people sheet).
+    map.stop();
     map.easeTo({
       center: [currentLocation.lng, currentLocation.lat],
       zoom: 20,
-      duration: 850,
+      duration: preview ? 0 : 450,
       padding: { top: 140, bottom: 220, left: 32, right: 32 },
+      essential: false,
     });
-  }, [currentLocation?.lat, currentLocation?.lng, ready]);
+  }, [currentLocation?.lat, currentLocation?.lng, preview, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -364,11 +482,11 @@ export function ExploreMap({
           width: 44px; height: 44px;
           border-radius: 50%;
           border: 4px solid #E8B830;
-          background-image: url(${JSON.stringify(myPhotoURL).slice(1, -1)});
           background-size: cover;
           background-position: center;
           box-shadow: 0 0 0 8px rgba(232,184,48,0.2), 0 8px 20px rgba(17,40,34,0.25);
         `;
+        me.style.backgroundImage = `url(${JSON.stringify(myPhotoURL)})`;
       } else {
         me.className = styles.meMarker;
       }
@@ -398,7 +516,7 @@ export function ExploreMap({
       marker.setAttribute('aria-label', cluster.people.length > 1 ? `Choose from ${cluster.people.length} people here` : `Open ${person.name}`);
       const portrait = document.createElement('span');
       portrait.className = styles.personMarkerPhoto;
-      if (person.photoURL) portrait.style.backgroundImage = `url(${JSON.stringify(person.photoURL).slice(1, -1)})`;
+      if (person.photoURL) portrait.style.backgroundImage = `url(${JSON.stringify(person.photoURL)})`;
       else portrait.textContent = person.name.slice(0, 1).toUpperCase();
       marker.appendChild(portrait);
       if (cluster.people.length > 1) {
@@ -446,19 +564,7 @@ export function ExploreMap({
         filter: drop-shadow(0 2px 8px rgba(0,0,0,0.22));
       `;
 
-      // Build location pin shape inline
-      const pinSvg = `
-        <svg width="44" height="56" viewBox="-2 -2 44 56" overflow="visible" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <clipPath id="pinClip-${activity.id}">
-              <circle cx="20" cy="18" r="16"/>
-            </clipPath>
-          </defs>
-          <path d="M20 0C8.95 0 0 8.95 0 20c0 11.05 20 32 20 32s20-20.95 20-32C40 8.95 31.05 0 20 0z" fill="#fff" stroke="${color}" stroke-width="3"/>
-          ${thumb ? `<image href="${thumb}" x="4" y="2" width="32" height="32" clip-path="url(#pinClip-${activity.id})" preserveAspectRatio="xMidYMid slice"/>` : `<circle cx="20" cy="18" r="10" fill="${color}"/>`}
-        </svg>`;
-
-      el.innerHTML = pinSvg;
+      el.appendChild(createContentPinGraphic(color, thumb));
       if (!preview) {
         el.onpointerdown = (event) => event.stopPropagation();
         el.onclick = (event) => {

@@ -39,9 +39,10 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   const [center, setCenter] = useState<{ x: number; y: number } | null>(null);
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [rotation, setRotation] = useState(0);
   const closeTimer = useRef(0);
-  const dragRef = useRef<{ startAngle: number; startRotation: number; lastAngle: number; ts: number } | null>(null);
+  const rotationRef = useRef(0);
+  const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const dragRef = useRef<{ startRotation: number; lastAngle: number; ts: number } | null>(null);
   const velocityRef = useRef(0);
   const animRef = useRef(0);
   const hasDragged = useRef(false);
@@ -58,6 +59,17 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     const minR = ITEM_SIZE / (2 * Math.sin(Math.PI / items.length)) + 8;
     return Math.max(170, Math.ceil(minR * 1.8));
   }, [items.length]);
+
+  const applyRotation = useCallback((rotation: number) => {
+    rotationRef.current = rotation;
+    const step = items.length ? 360 / items.length : 0;
+    itemRefs.current.forEach((item, index) => {
+      if (!item) return;
+      const radians = ((rotation + index * step) * Math.PI) / 180;
+      item.style.setProperty('--orbit-x', `${radius * Math.cos(radians)}px`);
+      item.style.setProperty('--orbit-y', `${radius * Math.sin(radians)}px`);
+    });
+  }, [items.length, radius]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -104,15 +116,20 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   useEffect(() => {
     if (!visible || !center) return;
     let frame: number;
-    const autoRotate = () => {
+    let previousTime = performance.now();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const autoRotate = (now: number) => {
       if (!dragRef.current && !hasDragged.current) {
-        setRotation((r) => r + 0.25);
+        const elapsed = Math.min(50, now - previousTime);
+        applyRotation(rotationRef.current + elapsed * 0.015);
       }
+      previousTime = now;
       frame = requestAnimationFrame(autoRotate);
     };
-    frame = requestAnimationFrame(autoRotate);
+    applyRotation(rotationRef.current);
+    if (!reduceMotion) frame = requestAnimationFrame(autoRotate);
     return () => cancelAnimationFrame(frame);
-  }, [visible, center]);
+  }, [applyRotation, visible, center]);
 
   // Escape key
   useEffect(() => {
@@ -125,10 +142,10 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   // Inertia animation
   const applyInertia = useCallback(() => {
     if (Math.abs(velocityRef.current) < 0.3) { velocityRef.current = 0; return; }
-    setRotation((r) => r + velocityRef.current);
+    applyRotation(rotationRef.current + velocityRef.current);
     velocityRef.current *= 0.94;
     animRef.current = requestAnimationFrame(applyInertia);
-  }, []);
+  }, [applyRotation]);
 
   // Pointer handlers for rotation
   const onPointerDown = (e: React.PointerEvent) => {
@@ -139,7 +156,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     const dx = e.clientX - center.x;
     const dy = e.clientY - center.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    dragRef.current = { startAngle: angle, startRotation: rotation, lastAngle: angle, ts: performance.now() };
+    dragRef.current = { startRotation: rotationRef.current, lastAngle: angle, ts: performance.now() };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -152,7 +169,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     const delta = angle - dragRef.current.lastAngle;
     // Normalize delta for wraparound
     const normalized = delta > 180 ? delta - 360 : delta < -180 ? delta + 360 : delta;
-    setRotation(dragRef.current.startRotation + (angle - dragRef.current.startAngle));
+    applyRotation(rotationRef.current + normalized);
     // Track velocity
     const now = performance.now();
     const dt = Math.max(16, now - dragRef.current.ts);
@@ -167,20 +184,6 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
       animRef.current = requestAnimationFrame(applyInertia);
     }
   };
-
-  // Calculate positions
-  const positions = useMemo(() => {
-    if (!center) return [];
-    const step = items.length > 0 ? 360 / items.length : 0;
-    return items.map((_, i) => {
-      const angleDeg = rotation + i * step;
-      const rad = (angleDeg * Math.PI) / 180;
-      return {
-        x: center.x + radius * Math.cos(rad) - ITEM_SIZE / 2,
-        y: center.y + radius * Math.sin(rad) - ITEM_SIZE / 2,
-      };
-    });
-  }, [center, rotation, radius, items.length]);
 
   if (!open && !closing) return null;
 
@@ -229,7 +232,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
           const step = items.length > 0 ? 360 / items.length : 0;
           let bestIdx = 0; let bestDiff = Infinity;
           items.forEach((_, i) => {
-            const itemAngle = ((rotation + i * step) % 360 + 360) % 360;
+            const itemAngle = ((rotationRef.current + i * step) % 360 + 360) % 360;
             let diff = Math.abs(clickAngle - itemAngle);
             if (diff > 180) diff = 360 - diff;
             if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
@@ -263,17 +266,19 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
       )}
       {/* Items */}
       {items.map((item, i) => {
-        const pos = positions[i];
+        const step = items.length ? 360 / items.length : 0;
+        const radians = ((rotationRef.current + i * step) * Math.PI) / 180;
         const isHelp = item.className === 'help';
         return (
           <Link
+            ref={(element) => { itemRefs.current[i] = element; }}
             key={item.href}
             href={item.href}
             role="menuitem"
             aria-label={item.label}
             onClick={(e) => {
               // Only navigate if not dragged
-              if (dragRef.current && Math.abs(rotation - (dragRef.current?.startRotation ?? 0)) > 2) {
+              if (hasDragged.current) {
                 e.preventDefault();
                 return;
               }
@@ -281,14 +286,16 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
             }}
             style={{
               ...itemBase,
-              left: pos ? pos.x : 0,
-              top: pos ? pos.y : 0,
+              left: center ? center.x - ITEM_SIZE / 2 : 0,
+              top: center ? center.y - ITEM_SIZE / 2 : 0,
+              '--orbit-x': `${radius * Math.cos(radians)}px`,
+              '--orbit-y': `${radius * Math.sin(radians)}px`,
               opacity: visible ? 1 : 0,
-              transform: visible ? 'scale(1)' : 'scale(0.5)',
+              transform: `translate3d(var(--orbit-x), var(--orbit-y), 0) scale(${visible ? 1 : .5})`,
               borderColor: isHelp ? 'rgb(255 200 195 / 88%)' : undefined,
               background: isHelp ? 'rgb(204 59 53 / 68%)' : undefined,
               transitionDelay: visible ? `${i * 25}ms` : `${(items.length - 1 - i) * 25}ms`,
-            }}
+            } as React.CSSProperties}
           >
             <span style={{ position: 'relative', zIndex: 3, display: 'grid', width: '100%', height: '100%', placeItems: 'center', color: isHelp ? '#fff' : '#1f6b55' }}>
               <item.Icon size={22} strokeWidth={2.2} />

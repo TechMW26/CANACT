@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { Activity, ArrowUp, Heart, Sparkles, Users } from '@/components/icons';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
@@ -26,6 +26,7 @@ export function CanactHome() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scoreRef = useRef<HTMLDivElement | null>(null);
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
+  const transitionCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef(0);
   const atEndRef = useRef(false);
   const endReachedAtRef = useRef(0);
@@ -85,6 +86,21 @@ export function CanactHome() {
     });
   }, []);
 
+  useLayoutEffect(() => {
+    if (!exploreTransition) return;
+    const source = mapWrapRef.current?.querySelector<HTMLCanvasElement>('.maplibregl-canvas');
+    const target = transitionCanvasRef.current;
+    if (!source || !target) return;
+    target.width = source.width;
+    target.height = source.height;
+    try {
+      target.getContext('2d')?.drawImage(source, 0, 0);
+    } catch {
+      // The solid map background remains a safe fallback if a WebView
+      // prevents copying its WebGL canvas.
+    }
+  }, [exploreTransition]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -126,6 +142,8 @@ export function CanactHome() {
       '--map-clip-right': `${Math.max(0, viewportWidth - (rect?.right ?? viewportWidth))}px`,
       '--map-clip-bottom': `${Math.max(0, viewportHeight - (rect?.bottom ?? viewportHeight))}px`,
       '--map-clip-left': `${Math.max(0, rect?.left ?? 0)}px`,
+      '--map-scale-x': String(Math.max(0.01, (rect?.width ?? viewportWidth) / viewportWidth)),
+      '--map-scale-y': String(Math.max(0.01, (rect?.height ?? viewportHeight) / viewportHeight)),
     } as React.CSSProperties);
     document.documentElement.setAttribute('data-canact-explore-handoff', 'true');
     setExploreTransition(true);
@@ -284,7 +302,7 @@ export function CanactHome() {
       {exploreTransition ? (
         <div className={styles.exploreTransition} style={transitionOrigin} role="status" aria-label="Opening Explore map">
           <div className={styles.exploreTransitionMap}>
-            <ExploreMap people={people} currentLocation={currentLocation} preview myPhotoURL={profile?.photoURL} />
+            <canvas ref={transitionCanvasRef} aria-hidden="true" />
           </div>
         </div>
       ) : null}

@@ -58,24 +58,6 @@ const SIDE_LINKS = [
   { href: '/settings',     label: 'Settings',      Icon: SettingsIcon },
 ];
 
-const ROUTE_PREFETCH_HREFS = [
-  '/',
-  '/feed',
-  '/leaderboard',
-  '/profile',
-  '/favourites',
-  '/search',
-  '/inbox',
-  '/help',
-  '/notifications',
-  '/settings',
-  '/post/create',
-  '/story/create',
-  '/poll/create',
-  '/rateme/start',
-  '/help/create',
-];
-
 const LIQUID_GLASS_FILL_STYLE = { position: 'absolute', top: '50%', left: '50%', width: '100%', height: '100%' } as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -154,14 +136,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     prefetchedRoutesRef.current.add(href);
     try { router.prefetch(href); } catch { /* prefetch is best-effort */ }
   }, [router]);
-
-  useEffect(() => {
-    if (!user) return;
-    const cancelIdle = scheduleIdleWork(() => {
-      ROUTE_PREFETCH_HREFS.forEach(prefetchRoute);
-    }, 1800);
-    return cancelIdle;
-  }, [prefetchRoute, user]);
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
@@ -639,20 +613,6 @@ function isIOSDevice() {
   const ua = navigator.userAgent || '';
   const platform = navigator.platform || '';
   return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
-function scheduleIdleWork(callback: () => void, timeout: number) {
-  if (typeof window === 'undefined') return () => {};
-  const idleWindow = window as Window & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-    cancelIdleCallback?: (id: number) => void;
-  };
-  if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-    const id = idleWindow.requestIdleCallback(callback, { timeout });
-    return () => idleWindow.cancelIdleCallback?.(id);
-  }
-  const id = window.setTimeout(callback, 500);
-  return () => window.clearTimeout(id);
 }
 
 function titleFor(path: string | null) {
