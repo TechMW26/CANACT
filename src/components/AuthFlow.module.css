@@ -262,7 +262,7 @@
   justify-content: center;
 }
 
-.registerBrand { width: 150px; height: 170px; margin: -10px auto 0; object-fit: contain; }
+.registerBrand { width: 110px; height: 125px; margin: -10px auto 0; object-fit: contain; }
 .registerOrbit {
   height: min(38vh, 340px);
   margin: 0 -38px 0;
@@ -449,7 +449,7 @@
   .loginPage { padding-top: 8px; }
   .brandFull { height: 180px; }
   .loginCard { margin-top: -18px; padding-top: 24px; }
-  .registerBrand { height: 132px; }
+  .registerBrand { height: 100px; }
   .registerBody { margin-top: 22px; }
   .registerOrbit { height: 245px; }
   .registerOrbitCompact { height: 190px; }
