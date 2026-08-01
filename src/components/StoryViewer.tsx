@@ -7,11 +7,12 @@ import { isVideoUrl } from './CameraCapture';
 import { filterCss } from '@/lib/mediaFilters';
 import { lockPageScroll } from '@/lib/scrollLock';
 import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
-import { Heart, MessageSquare, Send, Trash2, X, Eye, Volume2, VolumeX } from './icons';
+import { Heart, MessageSquare, Send, Share2, Trash2, X, Eye, Volume2, VolumeX } from './icons';
 import { listenStory, markStoryView, replyToStory, toggleStoryLike } from '@/lib/services/stories';
 import type { StoryItem } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 import { toast } from './Toaster';
+import { shareExternal } from '@/lib/shareExternal';
 
 const DURATION_MS = 5000;
 
@@ -56,6 +57,16 @@ export function StoryViewer({
 
   const story = liveStory ?? stories[index];
   const isMine = story?.uid === meUid;
+
+  const shareStory = async () => {
+    if (!story) return;
+    try {
+      const result = await shareExternal({ title: `${story.authorName}'s Canact story`, text: story.caption, url: story.mediaUrl });
+      if (result === 'copied') toast('Story link copied', 'success');
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') toast(error?.message ?? 'Could not share story', 'error');
+    }
+  };
 
   useEffect(() => {
     return lockPageScroll();
@@ -305,14 +316,13 @@ export function StoryViewer({
         {/* Footer */}
         <div className="mt-3 px-1">
           {isMine ? (
-            <button
-              type="button"
-              onClick={() => setShowViewers(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-white/15 px-4 py-3 text-sm font-bold backdrop-blur"
-            >
-              <Eye size={16} /> {viewers.length} {viewers.length === 1 ? 'view' : 'views'}
-              {likeCount > 0 ? <span className="ml-2 inline-flex items-center gap-1 text-pink-300"><Heart size={14} fill="currentColor" /> {likeCount}</span> : null}
-            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowViewers(true)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white/15 px-4 py-3 text-sm font-bold backdrop-blur">
+                <Eye size={16} /> {viewers.length} {viewers.length === 1 ? 'view' : 'views'}
+                {likeCount > 0 ? <span className="ml-2 inline-flex items-center gap-1 text-pink-300"><Heart size={14} fill="currentColor" /> {likeCount}</span> : null}
+              </button>
+              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"><Share2 size={18} /></button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <input
@@ -343,6 +353,7 @@ export function StoryViewer({
               >
                 <Send size={16} />
               </button>
+              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"><Share2 size={18} /></button>
             </div>
           )}
         </div>

@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/auth';
 import { sendChatMessage, startOrGetThread, threadIdFor } from '@/lib/services/chat';
 import { listenFriends } from '@/lib/services/friends';
 import type { ChatAttachment, FriendEdge } from '@/lib/types';
-import { Check, Loader2, Search, Send } from './icons';
+import { Check, Loader2, Search, Send, Share2 } from './icons';
+import { shareExternal } from '@/lib/shareExternal';
 
 /**
  * Bottom-sheet picker for sharing a post or reel to a friend (mutual accepted
@@ -87,6 +88,26 @@ export function ShareToChatSheet({
     }
   }
 
+  async function shareOutsideCanact() {
+    if (!attachment) return;
+    const path = attachment.kind === 'post' ? `/post/${attachment.postId}`
+      : attachment.kind === 'reel' ? `/reel/${attachment.reelId}`
+        : attachment.kind === 'poll' ? `/poll/${attachment.pollId}`
+          : attachment.kind === 'rateme' ? `/rateme/${attachment.sessionId}`
+            : '';
+    if (!path) return toast('This attachment cannot be shared externally.', 'error');
+    try {
+      const result = await shareExternal({
+        title: 'Shared from Canact',
+        text: 'See this on Canact',
+        url: `${window.location.origin}${path}`,
+      });
+      if (result === 'copied') toast('Link copied', 'success');
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') toast(error?.message ?? 'Could not share', 'error');
+    }
+  }
+
   return (
     <Sheet open={open} onClose={onClose} topmost>
       <div className="canact-share-sheet mx-auto flex w-full max-w-[360px] flex-col pb-2 text-ink">
@@ -150,6 +171,9 @@ export function ShareToChatSheet({
         >
           {sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
           {selectedFriends.length > 1 ? `Send ${selectedFriends.length}` : 'Send'}
+        </button>
+        <button type="button" onClick={shareOutsideCanact} className="mx-auto mt-2 inline-flex min-w-36 items-center justify-center gap-2 rounded-2xl border border-brand/25 bg-white px-6 py-3 text-sm font-black text-brand">
+          <Share2 size={17} /> Share outside Canact
         </button>
       </div>
     </Sheet>

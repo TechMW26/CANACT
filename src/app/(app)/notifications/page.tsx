@@ -16,7 +16,11 @@ export default function NotificationsPage() {
     <div className="space-y-2 pt-4">
       {items.length === 0 && <Card className="text-center text-muted">No notifications yet.</Card>}
       {items.map((n) => {
-        const href = n.kind === 'help' ? `/help/${n.data?.helpId}` : n.kind === 'follow' ? `/profile/${n.data?.fromUid}` : '#';
+        const href = typeof n.data?.url === 'string'
+          ? n.data.url
+          : n.kind === 'help' ? `/help/${n.data?.helpId}`
+            : n.kind === 'follow' ? `/profile/${n.data?.fromUid}`
+              : '/notifications';
         return (
           <Link key={n.id} href={href} onClick={() => markRead(user.uid, n.id)}>
             <Card className={`border-l-4 ${n.read ? 'border-line opacity-70' : 'border-brand'}`}>

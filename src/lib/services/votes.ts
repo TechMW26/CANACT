@@ -45,7 +45,7 @@ export function listenAttributeVoteState(toUid: string, fromUid: string, callbac
 
 export function getAttributeCooldownMs(votes: AttributeVoteMap, attr: AttrKey, now = Date.now()) {
   const at = Number(votes[attr]?.at || 0);
-  return at ? Math.max(0, SIX_HOURS - (now - at)) : 0;
+  return at ? Math.min(SIX_HOURS, Math.max(0, SIX_HOURS - (now - at))) : 0;
 }
 
 /** One bipolar slider is one voting unit. Any action on either side locks the
@@ -62,7 +62,7 @@ export function getAttributePairCooldownMs(
     Number(votes[key]?.at || 0),
     Number(cooldowns[key]?.at || 0),
   ]));
-  return latestActionAt ? Math.max(0, SIX_HOURS - (now - latestActionAt)) : 0;
+  return latestActionAt ? Math.min(SIX_HOURS, Math.max(0, SIX_HOURS - (now - latestActionAt))) : 0;
 }
 
 // Local cache for vote lookups to avoid redundant get() calls
@@ -97,7 +97,7 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
   // ── 6‑hour cooldown: you can like/dislike the same person once every 6h ──
   const lastVotedAt = (await get(votedAtRef)).val() as number | null;
   if (lastVotedAt && Date.now() - lastVotedAt < SIX_HOURS) {
-    const remaining = SIX_HOURS - (Date.now() - lastVotedAt);
+    const remaining = Math.min(SIX_HOURS, SIX_HOURS - (Date.now() - lastVotedAt));
     throw new Error(`COOLDOWN:${remaining}`);
   }
 
@@ -119,13 +119,20 @@ export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like
   await recordOnboardingSignal(fromUid, 'rate-profile');
 
   // Notify the recipient that someone liked/disliked them.
-  import('./sendPush').then(({ sendPush }) => {
+  Promise.all([import('./sendPush'), import('./notifications')]).then(([{ sendPush }, { pushNotification }]) => {
+    const title = kind === 'like' ? 'Someone liked your profile' : 'Someone gave feedback on your profile';
     sendPush({
       toUid,
-      title: kind === 'like' ? 'Someone liked your profile 👍' : 'Someone gave feedback on your profile',
+      title,
       body: 'Tap to see your updated community signals.',
       url: `/profile/${toUid}`,
       tag: `vote:${fromUid}`,
+    }).catch(() => {});
+    pushNotification(toUid, {
+      kind: 'react',
+      title,
+      body: 'Your community signal totals were updated.',
+      data: { url: `/profile/${toUid}` },
     }).catch(() => {});
   }).catch(() => {});
 }

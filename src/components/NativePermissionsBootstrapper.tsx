@@ -22,8 +22,8 @@ function isNative(): boolean {
  * sign-in), requests permissions Canact needs to deliver calls while closed:
  *  - POST_NOTIFICATIONS (Android 13+): heads-up incoming-call popups.
  *  - Geolocation (fine): help-radius matching.
- *  - Microphone (RECORD_AUDIO): so the first incoming voice call can connect
- *    instantly without a permission dialog interrupting the ringing flow.
+ * Microphone/camera access stays feature-scoped and is requested only when a
+ * user starts or answers a call.
  *
  * It also subscribes to the FCM token (via @capacitor-firebase/messaging) and
  * persists it to RTDB at users/{uid}/fcmTokens/{token} so the Cloud Function
@@ -44,113 +44,49 @@ export default function NativePermissionsBootstrapper() {
       writeToken(cachedToken).catch(() => { /* noop */ });
     });
 
-    // ---- Per-permission helpers -----------------------------------------
-    // Each helper RETURNS a boolean indicating whether the permission is
-    // granted right now. They're idempotent: safe to call repeatedly.
-    // The runner below chains them sequentially and only advances to the
-    // next one once the previous resolved as granted, so the user sees
-    // one OS dialog at a time instead of three stacked on top of each
-    // other (which on first launch caused users to miss prompts entirely).
-    const ensureNotifications = async (): Promise<boolean> => {
+    const prepareNotifications = async () => {
       try {
         const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
-        if (cancelled) return false;
+        if (cancelled) return;
         const cur = await FirebaseMessaging.checkPermissions();
-        if (cur.receive === 'granted') return true;
+        if (cur.receive === 'granted') {
+          await registerFcmToken((t) => { cachedToken = t; });
+          return;
+        }
+        const key = 'canact:perms:notifications:asked:v1';
+        if (localStorage.getItem(key)) return;
+        // Mark before opening the OS dialog so dismissals cannot create a
+        // prompt loop on remount or app resume.
+        localStorage.setItem(key, '1');
         const req = await FirebaseMessaging.requestPermissions();
-        return req.receive === 'granted';
+        await writeDebug(`notif:${req.receive}`);
+        if (req.receive === 'granted') await registerFcmToken((t) => { cachedToken = t; });
       } catch (err: any) {
         await writeDebug('notif-err:' + (err?.message || String(err)).slice(0, 120));
-        return false;
       }
     };
 
-    const ensureLocation = async (): Promise<boolean> => {
+    const prepareLocation = async () => {
       try {
         const { Geolocation } = await import('@capacitor/geolocation');
-        if (cancelled) return false;
+        if (cancelled) return;
         const cur = await Geolocation.checkPermissions();
-        if (cur.location === 'granted' || cur.coarseLocation === 'granted') return true;
+        if (cur.location === 'granted' || cur.coarseLocation === 'granted') return;
+        const key = 'canact:perms:location:asked:v1';
+        if (localStorage.getItem(key)) return;
+        localStorage.setItem(key, '1');
         const req = await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
-        return req.location === 'granted' || req.coarseLocation === 'granted';
+        const granted = req.location === 'granted' || req.coarseLocation === 'granted';
+        await writeDebug(`location:${granted ? 'granted' : 'denied'}`);
       } catch (err: any) {
         await writeDebug('loc-err:' + (err?.message || String(err)).slice(0, 120));
-        return false;
       }
-    };
-
-    const ensureMic = async (): Promise<boolean> => {
-      // Capacitor doesn't ship a first-class permissions plugin for the
-      // microphone, so we rely on getUserMedia to trigger the OS dialog.
-      // A successful resolve == granted; instantly stop the track to
-      // release the mic. Any reject == denied / dismissed.
-      try {
-        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return false;
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        stream.getTracks().forEach((t) => t.stop());
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    type Step = { id: 'notif' | 'location' | 'mic'; ensure: () => Promise<boolean> };
-    const steps: Step[] = [
-      { id: 'notif', ensure: ensureNotifications },
-      { id: 'location', ensure: ensureLocation },
-      { id: 'mic', ensure: ensureMic },
-    ];
-
-    // Tracks which steps are still ungranted across retry cycles so we
-    // know when to stop nagging.
-    const granted: Record<string, boolean> = { notif: false, location: false, mic: false };
-    const RETRY_DELAY_MS = 8_000;
-    const MAX_RETRIES = 6;
-    let retries = 0;
-
-    /**
-     * Walk the steps in order. After a step is granted, run its
-     * post-grant follow-up (FCM token write, etc.). If a step is denied
-     * we BREAK the chain — the next permission isn't requested until
-     * the user grants the current one (or a retry fires).
-     */
-    const runChain = async () => {
-      await writeDebug('chain-start:' + retries);
-      for (const step of steps) {
-        if (cancelled) return;
-        if (granted[step.id]) continue;
-        const ok = await step.ensure();
-        granted[step.id] = ok;
-        await writeDebug(step.id + ':' + (ok ? 'granted' : 'denied'));
-        if (step.id === 'notif' && ok) {
-          // Now safe to fetch the FCM token (would have failed before
-          // the user granted POST_NOTIFICATIONS on Android 13+).
-          await registerFcmToken((t) => { cachedToken = t; }).catch(() => {});
-        }
-        if (!ok) break; // sequential gate — stop here, retry will pick up
-      }
-    };
-
-    /** Re-run the chain on a timer until everything is granted or we
-     *  hit the retry cap. This catches the case where the user swipes
-     *  away a system dialog by mistake — we re-prompt a few seconds
-     *  later instead of leaving the permission silently broken. */
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRetry = () => {
-      if (cancelled) return;
-      if (granted.notif && granted.location && granted.mic) return; // done
-      if (retries >= MAX_RETRIES) return;
-      retryTimer = setTimeout(async () => {
-        retries += 1;
-        await runChain();
-        scheduleRetry();
-      }, RETRY_DELAY_MS);
     };
 
     (async () => {
       await writeDebug('start');
-      await runChain();
-      scheduleRetry();
+      await prepareNotifications();
+      if (!cancelled) await prepareLocation();
 
       // --- Full-screen-intent special access (Android 14+) ---------------
       // Independent of the core trio above; runs after them so the user
@@ -195,7 +131,6 @@ export default function NativePermissionsBootstrapper() {
 
     return () => {
       cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
       unsubAuth();
     };
   }, []);

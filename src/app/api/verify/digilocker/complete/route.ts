@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { rtdbDelete, rtdbGet, rtdbPatch } from '@/lib/server/rtdb';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  deleteUserRtdb,
+  getFirebaseAdminApp,
+  patchUserRtdb,
+  readAdminRtdb,
+  verifyUserRequest,
+} from '@/lib/server/firebaseAdmin';
 
 export const runtime = 'nodejs';
 
@@ -12,28 +19,51 @@ function splitName(fullName: string) {
   };
 }
 
+function otpHash(requestId: string, otp: string) {
+  const secret = process.env.KYC_OTP_HASH_SECRET
+    ?? (process.env.NODE_ENV !== 'production' ? 'canact-local-kyc' : '');
+  if (!secret) throw new Error('KYC verification is not configured.');
+  return createHmac('sha256', secret).update(`${requestId}:${otp}`).digest('hex');
+}
+
+function hashesMatch(left: string, right: string) {
+  const a = Buffer.from(left, 'hex');
+  const b = Buffer.from(right, 'hex');
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
+}
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const uid = String(body?.uid ?? '').trim();
-    if (!uid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const app = getFirebaseAdminApp();
+    const verified = await verifyUserRequest(req, app);
+    if (!verified) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const body = await req.json();
     const otp = String(body?.otp ?? '').trim();
     const requestId = String(body?.requestId ?? '').trim();
-    if (!otp || !requestId) {
+    if (!/^\d{6}$/.test(otp) || !requestId) {
       return NextResponse.json({ error: 'Missing verification details.' }, { status: 400 });
     }
 
-    const request = await rtdbGet<any>(`verificationRequests/${uid}`);
+    const request = await readAdminRtdb<any>(`verificationRequests/${verified.uid}`, app, verified.idToken);
     if (!request || request.requestId !== requestId) {
       return NextResponse.json({ error: 'Verification request expired. Please request a new OTP.' }, { status: 410 });
     }
-    if (otp !== String(request.otp)) {
-      await rtdbPatch(`verificationRequests/${uid}`, { attempts: (request.attempts ?? 0) + 1 });
+    if ((request.expiresAt ?? 0) < Date.now() || (request.attempts ?? 0) >= 5) {
+      await deleteUserRtdb(`verificationRequests/${verified.uid}`, app, verified.idToken);
+      return NextResponse.json({ error: 'Verification request expired. Please request a new OTP.' }, { status: 410 });
+    }
+    if (!hashesMatch(otpHash(requestId, otp), String(request.otpHash ?? ''))) {
+      await patchUserRtdb(
+        `verificationRequests/${verified.uid}`,
+        { attempts: (request.attempts ?? 0) + 1 },
+        app,
+        verified.idToken,
+      );
       return NextResponse.json({ error: 'Incorrect OTP. Please try again.' }, { status: 400 });
     }
 
-    const user = await rtdbGet<any>(`users/${uid}`);
+    const user = await readAdminRtdb<any>(`users/${verified.uid}`, app, verified.idToken);
     if (!user) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
 
     const fullName = user.fullName || [user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ');
@@ -44,7 +74,7 @@ export async function POST(req: Request) {
     const badges = Array.from(new Set([...(user.badges ?? []), 'Verified']));
     const now = Date.now();
 
-    await rtdbPatch(`users/${uid}`, {
+    await patchUserRtdb(`users/${verified.uid}`, {
       fullName,
       firstName: parts.firstName,
       middleName: parts.middleName || null,
@@ -58,8 +88,8 @@ export async function POST(req: Request) {
       verificationLockedAt: now,
       tags,
       badges,
-    });
-    await rtdbDelete(`verificationRequests/${uid}`);
+    }, app, verified.idToken);
+    await deleteUserRtdb(`verificationRequests/${verified.uid}`, app, verified.idToken);
 
     return NextResponse.json({
       ok: true,

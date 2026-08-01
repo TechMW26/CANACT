@@ -61,9 +61,12 @@ export default function LeaderboardPage() {
           return (
             <div key={podiumKey} className={`${styles.place} ${styles[`place${rank}`]}`}>
               {entry ? (
-                <Link href={`/profile/${entry.uid}`} aria-label={`${entry.fullName}, rank ${rank}`} className={styles.podiumAvatar}>
-                  <Avatar src={entry.photoURL} name={entry.fullName} size={rank === 1 ? 96 : 72} />
-                </Link>
+                <>
+                  <Link href={`/profile/${entry.uid}`} aria-label={`${entry.fullName}, rank ${rank}`} className={styles.podiumAvatar}>
+                    <Avatar src={entry.photoURL} name={entry.fullName} size={rank === 1 ? 96 : 72} />
+                  </Link>
+                  <Link href={`/profile/${entry.uid}`} className={styles.podiumName}>{entry.firstName || entry.fullName}</Link>
+                </>
               ) : <span className={styles.avatarPlaceholder} />}
               <div className={`${styles.cube} ${styles[`cube${rank}`]}`} aria-hidden="true">
                 <span>{rank}</span>

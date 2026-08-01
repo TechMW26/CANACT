@@ -628,6 +628,8 @@ function titleFor(path: string | null) {
   if (path.startsWith('/search')) return 'Search';
   if (path.startsWith('/underground')) return 'Underground';
   if (path.startsWith('/settings')) return 'Settings';
+  if (path.startsWith('/terms')) return 'Terms of Service';
+  if (path.startsWith('/privacy')) return 'Privacy Policy';
   if (path.startsWith('/edit-profile')) return 'Edit profile';
   return '';
 }

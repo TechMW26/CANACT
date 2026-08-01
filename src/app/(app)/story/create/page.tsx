@@ -21,6 +21,7 @@ export default function StoryCreatePage() {
   const [shot, setShot] = useState<string | null>(null);
   const [videoCaption, setVideoCaption] = useState('');
   const [videoFilter, setVideoFilter] = useState<MediaFilterId>('none');
+  const [durationHours, setDurationHours] = useState<12 | 24 | 48 | 72>(24);
   const [busy, setBusy] = useState(false);
 
   if (!user || !profile) return null;
@@ -51,7 +52,7 @@ export default function StoryCreatePage() {
           </button>
           <div>
             <div className="text-xl font-black tracking-tight text-ink">Preview & share</div>
-            <div className="text-xs text-ink/55">Video · disappears in 24h</div>
+            <div className="text-xs text-ink/55">Video · disappears in {durationHours}h</div>
           </div>
         </header>
 
@@ -85,6 +86,15 @@ export default function StoryCreatePage() {
           />
         </div>
 
+        <div className="mt-3 rounded-2xl bg-white p-3 ring-1 ring-line">
+          <div className="mb-2 text-xs font-extrabold uppercase tracking-wider text-ink/55">Story expiry</div>
+          <div className="grid grid-cols-4 gap-2">
+            {([12, 24, 48, 72] as const).map((hours) => (
+              <button key={hours} type="button" onClick={() => setDurationHours(hours)} className={`rounded-xl py-2 text-xs font-bold ${durationHours === hours ? 'bg-brand text-white' : 'bg-brand-light text-brand'}`}>{hours}h</button>
+            ))}
+          </div>
+        </div>
+
         <Button
           full
           size="lg"
@@ -105,6 +115,7 @@ export default function StoryCreatePage() {
                 lng: coords?.lng,
                 filter: videoFilter === 'none' ? undefined : videoFilter,
                 overlays: [],
+                durationHours,
               });
               toast('Story shared', 'success');
               router.replace('/feed');
@@ -125,7 +136,7 @@ export default function StoryCreatePage() {
     <StoryEditor
       imageUrl={shot}
       onCancel={() => setShot(null)}
-      onShare={async (overlays, caption, filter) => {
+      onShare={async (overlays, caption, filter, selectedDuration = 24) => {
         try {
           const { url: hostedUrl, lqip } = await uploadMedia(shot, { kind: 'story', uid: user.uid, maxWidth: 720, maxHeight: 1280, quality: 0.82 });
           await upsertStory({
@@ -139,6 +150,7 @@ export default function StoryCreatePage() {
             lng: coords?.lng,
             filter: filter && filter !== 'none' ? filter : undefined,
             overlays,
+            durationHours: selectedDuration,
           });
           toast('Story shared', 'success');
           router.replace('/feed');

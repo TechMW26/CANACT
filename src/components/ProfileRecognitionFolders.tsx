@@ -265,7 +265,7 @@ export function AttributePairSlider({
   );
 }
 
-export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHref }: { profile: UserProfile; isSelf: boolean; communityLeadersHref?: string }) {
+export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHref, showAttributes = true }: { profile: UserProfile; isSelf: boolean; communityLeadersHref?: string; showAttributes?: boolean }) {
   const { user } = useAuth();
   const viewingSelf = isSelf || !profile.uid || user?.uid === profile.uid;
   const [folder, setFolder] = useState<Folder | null>(null);
@@ -471,7 +471,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         </button>
       </div>
 
-      <section className={styles.attributeSliders} aria-labelledby={`attribute-sliders-${profile.uid}`}>
+      {showAttributes ? <section className={styles.attributeSliders} aria-labelledby={`attribute-sliders-${profile.uid}`}>
         <header>
           <div>
             <strong id={`attribute-sliders-${profile.uid}`}>{viewingSelf ? 'Your attributes' : `Know ${profile.firstName || profile.fullName.split(' ')[0]}`}</strong>
@@ -502,7 +502,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
           })}
         </div>
         {!viewingSelf ? <p className={styles.attributeHint}>Drag to an edge to give a signal. Return to the centre to take it back after the cooldown.</p> : null}
-      </section>
+      </section> : null}
 
       {communityLeadersHref ? (
         <Link href={communityLeadersHref} className={styles.attributeAction}>

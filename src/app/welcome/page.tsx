@@ -35,7 +35,6 @@ export default function WelcomePage() {
 
   // OTP state
   const [otpSent, setOtpSent] = useState(false);
-  const [otpChannel, setOtpChannel] = useState('');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -49,7 +48,6 @@ export default function WelcomePage() {
     const restored = splitStoredPhone(session.phone);
     setPhoneCountry(restored.country);
     setPhoneDigits(restored.national);
-    setOtpChannel(session.channel === 'vobiz-whatsapp' ? 'WhatsApp' : 'SMS');
     setOtpSent(true);
     const elapsedSeconds = Math.floor((Date.now() - (session.expiresAt - 5 * 60 * 1000)) / 1000);
     setResendCooldown(Math.max(0, 30 - elapsedSeconds));
@@ -106,11 +104,10 @@ export default function WelcomePage() {
     try {
       const result = await requestOTP(fullPhone);
       if (!result.ok) {
-        toast(OTP_SEND_MESSAGE, 'error');
+        toast(result.error || OTP_SEND_MESSAGE, 'error');
         return;
       }
       setOtpSent(true);
-      setOtpChannel(result.channel === 'vobiz-whatsapp' ? 'WhatsApp' : 'SMS');
       setResendCooldown(30);
       setOtpError('');
       setTimeout(() => otpRefs.current[0]?.focus(), 200);
@@ -130,10 +127,9 @@ export default function WelcomePage() {
     try {
       const result = await requestOTP(fullPhone, true);
       if (!result.ok) {
-        toast(OTP_SEND_MESSAGE, 'error');
+        toast(result.error || OTP_SEND_MESSAGE, 'error');
         return;
       }
-      setOtpChannel(result.channel === 'vobiz-whatsapp' ? 'WhatsApp' : 'SMS');
       setResendCooldown(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 200);
     } catch {
@@ -212,7 +208,7 @@ export default function WelcomePage() {
             <div className={styles.registerBody}>
             <h1 className={styles.title}>Enter verification code</h1>
             <p className={styles.subtitle}>
-              Sent via {otpChannel} to {fullPhone}
+              Sent via SMS to {fullPhone}
             </p>
 
             <div className={styles.otpGrid}>
@@ -296,6 +292,8 @@ export default function WelcomePage() {
               <MessageCircle size={14} />
               <span>A verification code will be sent via SMS.</span>
             </div>
+
+            <div id="recaptcha-container" className={styles.recaptcha} />
           </div>
 
           <button
@@ -313,8 +311,6 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* Hidden reCAPTCHA container for Firebase Phone Auth */}
-      <div id="recaptcha-container" style={{ position: 'fixed', right: 0, bottom: 0, zIndex: -1, pointerEvents: 'none' }} />
     </main>
   );
 }

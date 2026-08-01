@@ -7,13 +7,12 @@ import {
   reload,
   signInWithCredential,
   signInWithPhoneNumber,
-  signInWithCustomToken,
   RecaptchaVerifier,
   ConfirmationResult,
 } from 'firebase/auth';
 import { getFirebaseAuth } from '../firebase';
 
-type OTPChannel = 'firebase-sms' | 'vobiz-whatsapp';
+type OTPChannel = 'firebase-sms';
 type OTPMode = 'signin' | 'link';
 export type OTPVerifyResult = { ok: boolean; error?: string; isNewUser?: boolean; accountSwitched?: boolean };
 export type OTPSession = {
@@ -24,7 +23,6 @@ export type OTPSession = {
 };
 type StoredOTPSession = OTPSession & {
   verificationId?: string;
-  fallbackChallenge?: string;
 };
 type OTPSendResult = {
   ok: boolean;
@@ -41,7 +39,6 @@ let fbConfirmation: ConfirmationResult | null = null;
 let currentChannel: OTPChannel | null = null;
 let pendingPhone: string = '';
 let recaptchaVerifier: RecaptchaVerifier | null = null;
-let fallbackChallenge: string = '';
 let currentMode: OTPMode = 'signin';
 let recaptchaContainerId = 'recaptcha-container';
 let sendInFlight: Promise<OTPSendResult> | null = null;
@@ -54,7 +51,7 @@ function readStoredSession(): StoredOTPSession | null {
   if (typeof window === 'undefined') return null;
   try {
     const session = JSON.parse(window.sessionStorage.getItem(OTP_SESSION_KEY) || 'null') as StoredOTPSession | null;
-    if (!session?.phone || !session.channel || !session.mode || session.expiresAt <= Date.now()) {
+    if (!session?.phone || session.channel !== 'firebase-sms' || !session.mode || session.expiresAt <= Date.now()) {
       window.sessionStorage.removeItem(OTP_SESSION_KEY);
       return null;
     }
@@ -78,7 +75,6 @@ function hydrateSession(session: StoredOTPSession) {
   pendingPhone = session.phone;
   currentChannel = session.channel;
   currentMode = session.mode;
-  fallbackChallenge = session.fallbackChallenge || '';
 }
 
 export async function getPhoneLinkStatus(
@@ -120,10 +116,9 @@ function ensureRecaptchaContainer(containerId: string) {
   if (!container) {
     container = document.createElement('div');
     container.id = containerId;
-    container.style.position = 'fixed';
-    container.style.inset = 'auto 0 0 auto';
-    container.style.zIndex = '-1';
-    container.style.pointerEvents = 'none';
+    container.style.display = 'flex';
+    container.style.justifyContent = 'center';
+    container.style.margin = '16px auto';
     document.body.appendChild(container);
   }
   container.removeAttribute('aria-hidden');
@@ -144,12 +139,13 @@ async function sendWithFirebase(phone: string, containerId: string, mode: OTPMod
   clearRecaptcha(containerId);
   ensureRecaptchaContainer(containerId);
   recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-    size: 'invisible',
+    // A visible challenge is more reliable than score-based invisible
+    // verification in embedded browsers and gives users a clear recovery path.
+    size: 'normal',
     callback: () => undefined,
     'expired-callback': () => clearRecaptcha(containerId),
   });
-  // signInWithPhoneNumber renders and executes the verifier itself. Explicitly
-  // rendering first can produce stale tokens after Fast Refresh or navigation.
+  // The Firebase SDK renders and waits for the challenge before sending SMS.
   if (mode === 'link') {
     if (!auth.currentUser) throw new Error('auth-required');
     return linkWithPhoneNumber(auth.currentUser, phone, recaptchaVerifier);
@@ -157,23 +153,8 @@ async function sendWithFirebase(phone: string, containerId: string, mode: OTPMod
   return signInWithPhoneNumber(auth, phone, recaptchaVerifier);
 }
 
-async function sendWithFallback(phone: string) {
-  const res = await fetch('/api/auth/send-otp', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
-  });
-  const data = await res.json().catch(() => null) as { ok?: boolean; challenge?: string } | null;
-  if (!res.ok || !data?.ok || !data.challenge) throw new Error('fallback-unavailable');
-  fallbackChallenge = data.challenge;
-  currentChannel = 'vobiz-whatsapp';
-  const expiresAt = Date.now() + OTP_SESSION_TTL_MS;
-  writeStoredSession({ phone, mode: currentMode, channel: 'vobiz-whatsapp', fallbackChallenge, expiresAt });
-  return { ok: true, channel: 'vobiz-whatsapp' as const, expiresAt };
-}
-
 /**
- * Send OTP: Firebase SMS first, Vobiz WhatsApp fallback.
+ * Send an SMS OTP with Firebase Phone Authentication.
  * Must be called from a user gesture (button click).
  */
 export async function sendOTP(
@@ -207,9 +188,7 @@ async function sendOTPInternal(
   recaptchaContainerId = containerId;
   fbConfirmation = null;
   currentChannel = null;
-  fallbackChallenge = '';
 
-  // ── TRY 1: FIREBASE SMS ──
   try {
     fbConfirmation = await sendWithFirebase(phone, containerId, mode);
     currentChannel = 'firebase-sms';
@@ -222,22 +201,15 @@ async function sendOTPInternal(
       expiresAt,
     });
     return { ok: true, channel: 'firebase-sms', expiresAt };
-  } catch {
+  } catch (error: any) {
     clearRecaptcha(containerId);
-    console.warn('[OTP] Primary delivery unavailable; using fallback');
-  }
-
-  // ── TRY 2: VOBZ WHATSAPP ──
-  try {
-    return await sendWithFallback(phone);
-  } catch {
-    return { ok: false, error: SEND_FAILURE_MESSAGE };
+    console.error('[OTP] Firebase SMS send failed', error?.code || 'unknown', error?.message || 'unknown');
+    return { ok: false, error: firebaseSendError(error) };
   }
 }
 
 /**
- * Verify OTP: Firebase confirm() if SMS, Vobiz API if WhatsApp.
- * On success for Vobiz path, signs into Firebase with the returned custom token.
+ * Verify the SMS code with Firebase and complete sign-in or phone linking.
  */
 export async function verifyOTP(code: string): Promise<OTPVerifyResult> {
   const storedSession = readStoredSession();
@@ -286,50 +258,24 @@ export async function verifyOTP(code: string): Promise<OTPVerifyResult> {
     }
   }
 
-  if (currentChannel === 'vobiz-whatsapp') {
-    try {
-      const auth = getFirebaseAuth();
-      const isLink = currentMode === 'link';
-      const idToken = isLink ? await auth.currentUser?.getIdToken() : null;
-      if (isLink && !idToken) throw new Error('auth-required');
-      const res = await fetch(isLink ? '/api/auth/link-phone' : '/api/auth/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-        },
-        body: JSON.stringify({ phone: pendingPhone, otp: code, challenge: fallbackChallenge }),
-      });
-      const data = await res.json().catch(() => null) as {
-        ok?: boolean;
-        token?: string;
-        isNewUser?: boolean;
-        accountSwitched?: boolean;
-      } | null;
-      if (!res.ok || !data?.ok || (!isLink && !data.token)) throw new Error('verification-failed');
-      if (isLink) {
-        if (data.accountSwitched) {
-          if (!data.token) throw new Error('missing-switch-token');
-          await signInWithCustomToken(auth, data.token);
-        } else {
-          if (!auth.currentUser) throw new Error('auth-required');
-          await reload(auth.currentUser);
-        }
-      } else {
-        await signInWithCustomToken(auth, data.token!);
-      }
-      clearStoredSession();
-      return {
-        ok: true,
-        isNewUser: isLink ? false : !!data.isNewUser,
-        accountSwitched: isLink ? !!data.accountSwitched : false,
-      };
-    } catch {
-      return { ok: false, error: VERIFY_FAILURE_MESSAGE };
-    }
-  }
-
   return { ok: false, error: VERIFY_FAILURE_MESSAGE };
+}
+
+function firebaseSendError(error: any) {
+  switch (error?.code) {
+    case 'auth/invalid-phone-number': return 'Enter a valid mobile number.';
+    case 'auth/too-many-requests': return 'Too many attempts. Please wait before requesting another code.';
+    case 'auth/quota-exceeded': return 'Firebase SMS quota is currently exhausted. Please try again later.';
+    case 'auth/billing-not-enabled': return 'Firebase Phone Authentication requires billing to be enabled for this project.';
+    case 'auth/operation-not-allowed': return 'Phone sign-in is not enabled in Firebase Authentication.';
+    case 'auth/app-not-authorized':
+    case 'auth/unauthorized-domain': return 'This app domain is not authorized in Firebase Authentication.';
+    case 'auth/captcha-check-failed':
+    case 'auth/invalid-app-credential':
+    case 'auth/missing-client-identifier': return 'Firebase could not verify this browser. Refresh the page and try again.';
+    case 'auth/network-request-failed': return 'Network error while contacting Firebase. Check your connection and try again.';
+    default: return SEND_FAILURE_MESSAGE;
+  }
 }
 
 /** Which channel delivered the OTP? For UI display. */
@@ -342,7 +288,6 @@ export function resetOTP() {
   fbConfirmation = null;
   currentChannel = null;
   pendingPhone = '';
-  fallbackChallenge = '';
   currentMode = 'signin';
   clearStoredSession();
   clearRecaptcha(recaptchaContainerId);

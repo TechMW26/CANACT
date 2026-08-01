@@ -123,6 +123,8 @@ export interface UserProfile {
   notificationSound: boolean;
   underground?: boolean;
   undergroundUntil?: number;
+  undergroundStartedAt?: number;
+  undergroundExtendedAt?: number;
   undergroundDayCount?: number;
   undergroundDayKey?: string;
   rateMeOn?: boolean;
@@ -292,6 +294,7 @@ export interface StoryItem {
   replies?: Record<string, StoryReply>;
   createdAt: number;
   expiresAt: number;
+  durationHours?: 12 | 24 | 48 | 72;
 }
 
 export interface HelpRequest {

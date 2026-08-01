@@ -3,9 +3,10 @@ import { db } from '../firebase';
 import { WhaPost } from '../types';
 import { recordOnboardingSignal } from './onboarding';
 
-function notify(receiverUid: string, title: string, body: string, url: string) {
-  import('./sendPush').then(({ sendPush }) => {
+function notify(receiverUid: string, kind: 'react' | 'comment', title: string, body: string, url: string) {
+  Promise.all([import('./sendPush'), import('./notifications')]).then(([{ sendPush }, { pushNotification }]) => {
     sendPush({ toUid: receiverUid, title, body, url, tag: url }).catch(() => {});
+    pushNotification(receiverUid, { kind, title, body, data: { url } }).catch(() => {});
   }).catch(() => {});
 }
 
@@ -42,32 +43,48 @@ export function listenWhaFeed(cb: (items: WhaPost[]) => void) {
   });
 }
 
-/** Listen for posts authored by a specific user (Instagram-style profile grid).
- * Caches locally to avoid re-filtering all posts on every listen. */
-const _userPostCache = new Map<string, { unsub: () => void; data: WhaPost[] }>();
+/** Shared per-user listeners. Every subscriber receives future updates and the
+ * root Firebase listener is released when the last profile view unmounts. */
+type UserPostSubscription = {
+  data: WhaPost[];
+  listeners: Set<(items: WhaPost[]) => void>;
+  unsubscribe: () => void;
+};
+const _userPostCache = new Map<string, UserPostSubscription>();
 export function listenUserWhaPosts(uid: string, cb: (items: WhaPost[]) => void) {
-  if (_userPostCache.has(uid)) {
-    const cached = _userPostCache.get(uid)!;
-    cb(cached.data);
-    return cached.unsub;
+  const cached = _userPostCache.get(uid);
+  if (cached) {
+    cached.listeners.add(cb);
+    cb([...cached.data]);
+    return () => {
+      cached.listeners.delete(cb);
+      if (cached.listeners.size === 0) {
+        cached.unsubscribe();
+        _userPostCache.delete(uid);
+      }
+    };
   }
   const r = query(ref(db, 'wha'), orderByChild('createdAt'));
-  const data: WhaPost[] = [];
+  const entry: UserPostSubscription = { data: [], listeners: new Set([cb]), unsubscribe: () => {} };
   const unsub = onValue(r, (snap) => {
-    data.length = 0;
+    const data: WhaPost[] = [];
     snap.forEach((c) => {
       const v = c.val() as WhaPost;
       if (v && v.uid === uid) data.push(v);
     });
     data.sort((a, b) => b.createdAt - a.createdAt);
-    cb(data);
+    entry.data = data;
+    entry.listeners.forEach((listener) => listener([...data]));
   });
-  const cleanup = () => {
-    unsub();
-    _userPostCache.delete(uid);
+  entry.unsubscribe = unsub;
+  _userPostCache.set(uid, entry);
+  return () => {
+    entry.listeners.delete(cb);
+    if (entry.listeners.size === 0) {
+      entry.unsubscribe();
+      _userPostCache.delete(uid);
+    }
   };
-  _userPostCache.set(uid, { unsub: cleanup, data });
-  return cleanup;
 }
 
 export function listenPost(id: string, cb: (p: WhaPost | null) => void) {
@@ -117,7 +134,7 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
   // Notify the post author about the reaction.
   if (authorUid && authorUid !== uid && cur !== kind) {
     const emoji = { cool: '😎', love: '❤️', wow: '😮', sad: '😢', angry: '😡' }[kind];
-    notify(authorUid, `${emoji} Someone reacted to your post`, `Tap to see the reaction.`, `/post/${postId}`);
+    notify(authorUid, 'react', `${emoji} Someone reacted to your post`, 'Tap to see the reaction.', `/post/${postId}`);
   }
   if (cur !== kind) await recordOnboardingSignal(uid, 'engage-post');
 }
@@ -134,7 +151,7 @@ export async function addComment(postId: string, uid: string, name: string, text
     const authorUid = (postSnap.val() as WhaPost | null)?.uid;
     if (authorUid && authorUid !== uid) {
       await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      notify(authorUid, `${name} commented on your post`, text.slice(0, 100), `/post/${postId}`);
+      notify(authorUid, 'comment', `${name} commented on your post`, text.slice(0, 100), `/post/${postId}`);
     }
   } catch { /* non-fatal */ }
 }

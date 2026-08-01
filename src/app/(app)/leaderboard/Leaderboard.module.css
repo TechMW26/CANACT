@@ -43,6 +43,20 @@
 .podiumAvatar img, .podiumAvatar > div { width: 100% !important; height: 100% !important; }
 .place1 .podiumAvatar { bottom: 222px; width: 96px; height: 96px; }
 .place2 .podiumAvatar, .place3 .podiumAvatar { bottom: 164px; width: 72px; height: 72px; }
+.podiumName {
+  position: absolute;
+  bottom: 130px;
+  z-index: 5;
+  max-width: 94%;
+  overflow: hidden;
+  color: #173b2a;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.place1 .podiumName { bottom: 188px; font-size: 14px; }
 .avatarPlaceholder { position: absolute; z-index: 4; border-radius: 50%; background: #e2e8e2; }
 .place1 .avatarPlaceholder { bottom: 222px; width: 96px; height: 96px; }
 .place2 .avatarPlaceholder, .place3 .avatarPlaceholder { bottom: 164px; width: 72px; height: 72px; }
@@ -157,6 +171,8 @@
   .podium { height: 330px; }
   .place1 .podiumAvatar { bottom: 202px; width: 82px; height: 82px; }
   .place2 .podiumAvatar, .place3 .podiumAvatar { bottom: 148px; width: 64px; height: 64px; }
+  .place1 .podiumName { bottom: 174px; }
+  .place2 .podiumName, .place3 .podiumName { bottom: 118px; }
   .cube1 { height: 194px; }
   .cube2 { height: 140px; }
   .cube3 { height: 130px; }

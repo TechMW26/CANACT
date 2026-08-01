@@ -280,6 +280,8 @@
 .registerBody .subtitle { font-size: 1rem; }
 .registerFields { display: grid; gap: 16px; margin-top: 30px; }
 .registerFields .field { margin: 0; }
+.recaptcha { width: 100%; display: flex; justify-content: center; overflow: hidden; }
+.recaptcha:empty { display: none; }
 
 .otpGrid {
   width: min(100%, 344px);

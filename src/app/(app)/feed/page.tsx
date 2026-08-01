@@ -542,7 +542,7 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
     <article className="overflow-hidden rounded-[34px] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
-      <button type="button" onClick={onOpen} className={`relative block w-full ${heightClass} overflow-hidden bg-[#e8e4d8] text-left`}>
+      <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpen(); }} className={`relative block w-full ${heightClass} overflow-hidden bg-[#e8e4d8] text-left cursor-pointer`}>
         {cover && isVideo ? (
           <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
         ) : cover ? (
@@ -553,12 +553,12 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
             <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
           </div>
         )}
-        <span className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white/90 py-1.5 pl-1.5 pr-3 backdrop-blur">
+        <Link href={`/profile/${post.uid}`} onClick={(event) => event.stopPropagation()} className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white/90 py-1.5 pl-1.5 pr-3 backdrop-blur" aria-label={`View ${post.authorName}'s profile`}>
           <Avatar src={post.authorPhoto} name={post.authorName} size={28} />
           <span className="max-w-[180px] truncate text-xs font-bold text-ink">{post.authorName}</span>
-        </span>
+        </Link>
         {post.uid === myUid ? <span className="absolute right-4 top-4" onClick={(event) => event.stopPropagation()}><PostMenu isOwner onDelete={async () => { await deletePost(post.id, myUid); }} /></span> : null}
-      </button>
+      </div>
       <div className="px-7 pb-7 pt-6">
         <button type="button" onClick={onOpen} className="block w-full text-left">
           <h2 className="whitespace-pre-wrap text-[21px] font-extrabold leading-[1.2] tracking-[-0.025em] text-black">{post.text || "What's Happening"}</h2>

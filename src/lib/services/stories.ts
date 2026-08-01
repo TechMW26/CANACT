@@ -2,6 +2,7 @@ import { onValue, ref, set, remove, update, push, child } from 'firebase/databas
 import { db } from '../firebase';
 import type { StoryItem, StoryOverlay, StoryReply } from '../types';
 import { recordOnboardingSignal } from './onboarding';
+import { pushNotification } from './notifications';
 
 /** Recursively strip undefined values; Firebase RTDB rejects them and that's
  * the most common cause of "Share story" silently throwing. */
@@ -30,11 +31,15 @@ export async function addStory(
 ) {
   const storyRef = push(child(ref(db), `stories/${input.uid}`));
   const id = storyRef.key as string;
+  const durationHours = [12, 24, 48, 72].includes(Number(input.durationHours))
+    ? Number(input.durationHours) as 12 | 24 | 48 | 72
+    : 24;
   const story: StoryItem = stripUndef({
     ...input,
+    durationHours,
     id,
     createdAt: Date.now(),
-    expiresAt: Date.now() + 24 * 3600 * 1000,
+    expiresAt: Date.now() + durationHours * 3600 * 1000,
   });
   await set(storyRef, story);
   await recordOnboardingSignal(input.uid, 'create-post');
@@ -104,6 +109,26 @@ export function listenActiveStories(cb: (items: StoryItem[]) => void) {
   });
 }
 
+/** Stream one profile's currently active stories without loading the global
+ * story feed. Supports the legacy single-story node and the current collection. */
+export function listenUserStories(uid: string, cb: (items: StoryItem[]) => void) {
+  return onValue(ref(db, `stories/${uid}`), (snap) => {
+    const now = Date.now();
+    const value = snap.val();
+    if (!value || typeof value !== 'object') return cb([]);
+    if (typeof value.mediaUrl === 'string' && Number(value.expiresAt) > now) {
+      cb([{ ...value, id: value.id || uid, uid } as StoryItem]);
+      return;
+    }
+    const items = Object.entries(value as Record<string, StoryItem>)
+      .flatMap(([id, story]) => story && typeof story.mediaUrl === 'string' && story.expiresAt > now
+        ? [{ ...story, id: story.id || id, uid }]
+        : [])
+      .sort((a, b) => a.createdAt - b.createdAt);
+    cb(items);
+  });
+}
+
 /** Path resolver that handles both schemas — legacy single-doc lives at
  *  `stories/{uid}`, new collection at `stories/{uid}/{storyId}`. */
 function storyPath(authorUid: string, storyId: string): string {
@@ -135,6 +160,14 @@ export async function toggleStoryLike(
     [`likes/${viewerUid}`]: liked ? Date.now() : null,
     [`viewers/${viewerUid}/liked`]: liked,
   });
+  if (liked && authorUid !== viewerUid) {
+    await pushNotification(authorUid, {
+      kind: 'react',
+      title: 'Someone liked your story',
+      body: 'Open your profile to see your active stories.',
+      data: { url: `/profile/${authorUid}` },
+    });
+  }
 }
 
 export async function replyToStory(
@@ -145,6 +178,14 @@ export async function replyToStory(
   const replyRef = push(child(ref(db), `${storyPath(authorUid, storyId)}/replies`));
   const item: StoryReply = { ...reply, id: replyRef.key as string, createdAt: Date.now() };
   await set(replyRef, item);
+  if (authorUid !== reply.fromUid) {
+    await pushNotification(authorUid, {
+      kind: 'comment',
+      title: `${reply.fromName} replied to your story`,
+      body: reply.text.slice(0, 100),
+      data: { url: `/profile/${authorUid}` },
+    });
+  }
   return item;
 }
 

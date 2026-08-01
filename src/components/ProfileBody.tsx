@@ -10,16 +10,18 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, Poll, RateMeSession, ReelItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, Poll, RateMeSession, ReelItem, StoryItem, UserProfile, WhaPost } from '@/lib/types';
 import { setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
 import { listenUserPolls, deletePoll } from '@/lib/services/poll';
 import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
+import { deleteStory, listenUserStories } from '@/lib/services/stories';
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
 import { ProfileRecognitionFolders, AttributePairSlider } from '@/components/ProfileRecognitionFolders';
+import { StoryViewer } from '@/components/StoryViewer';
 import { listenFavourites, requestFollow } from '@/lib/services/favourites';
 import {
   acceptFriendRequest,
@@ -55,6 +57,7 @@ import {
   ShoppingBag,
   AlignLeft,
   Video,
+  Sparkles,
 } from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
@@ -96,7 +99,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [posts, setPosts] = useState<WhaPost[]>([]);
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [tab, setTab] = useState<'posts' | 'reels' | 'polls' | 'rateme'>('posts');
+  const [stories, setStories] = useState<StoryItem[]>([]);
+  const [storyViewerIndex, setStoryViewerIndex] = useState<number | null>(null);
+  const [tab, setTab] = useState<ProfileTabKey>('posts');
   useEffect(() => {
     return listenUserWhaPosts(uid, setPosts);
   }, [uid]);
@@ -105,6 +110,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   }, [uid]);
   useEffect(() => {
     return listenUserPolls(uid, setPolls);
+  }, [uid]);
+  useEffect(() => {
+    return listenUserStories(uid, setStories);
   }, [uid]);
   // Surface the user's Rate Me sessions on their profile so a finished
   // round still has a permanent home (matches the wall behaviour). We
@@ -150,17 +158,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
 
   const locationText = [u.city, u.country].filter(Boolean).join(', ');
   const isVerified = !!u.profileVerified;
-
-  // Compute age from dateOfBirth (stored as YYYY-MM-DD or similar). Used in
-  // the clean self-hero "Name · 26" line in the reference design.
-  const age = (() => {
-    if (!u.dateOfBirth) return undefined;
-    const d = new Date(u.dateOfBirth);
-    if (Number.isNaN(d.getTime())) return undefined;
-    const diff = Date.now() - d.getTime();
-    const a = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
-    return a > 0 && a < 130 ? a : undefined;
-  })();
 
   const handleProfileSupport = async () => {
     if (viewingSelf || !user || !me) return;
@@ -236,14 +233,16 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const theirLoc = (u as any).lastLocation as { lat?: number; lng?: number } | undefined;
   const outOfRange = !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
     && haversineMeters(myCoords, { lat: theirLoc.lat!, lng: theirLoc.lng! }) > 15;
-  const accessBlockReason: 'location' | 'range' | null = !myCoords ? 'location' : outOfRange ? 'range' : null;
+  const accessBlockReason: 'location' | 'range' | null = viewingSelf
+    ? null
+    : !myCoords ? 'location' : outOfRange ? 'range' : null;
 
   return (
-    <CanactPagesProfileUI
+    <>
+      <CanactPagesProfileUI
       userProfile={u}
       isSelf={viewingSelf}
       isVerified={isVerified}
-      age={age}
       locationText={locationText}
       canactScore={score}
       accessBlockReason={accessBlockReason}
@@ -254,7 +253,9 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       posts={posts}
       reels={reels}
       polls={polls}
+      stories={stories}
       ratemes={ratemes}
+      onOpenStory={setStoryViewerIndex}
       onSupport={handleProfileSupport}
       onBookmark={handleProfileBookmark}
       onProfileVote={handleProfileVote}
@@ -262,11 +263,27 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       profileVoteBusy={profileVoteBusy}
       friendStatus={friendStatus}
       isFavourite={isFavourite}
-    />
+      />
+      {storyViewerIndex !== null && stories[storyViewerIndex] && user && me ? (
+        <StoryViewer
+          stories={stories}
+          startIndex={storyViewerIndex}
+          meUid={user.uid}
+          meName={me.fullName}
+          mePhoto={me.photoURL}
+          onClose={() => setStoryViewerIndex(null)}
+          onDelete={async (authorUid, storyId) => {
+            await deleteStory(authorUid, storyId);
+            setStoryViewerIndex(null);
+            toast('Story removed', 'success');
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
-type ProfileTabKey = 'posts' | 'reels' | 'polls' | 'rateme';
+type ProfileTabKey = 'posts' | 'stories' | 'reels' | 'polls' | 'rateme';
 
 function profileSlug(user: UserProfile) {
   return String(user.fullName || user.email || user.mobile || 'canact')
@@ -530,7 +547,6 @@ function CanactPagesProfileUI({
   userProfile,
   isSelf,
   isVerified,
-  age,
   locationText,
   canactScore,
   tab,
@@ -538,7 +554,9 @@ function CanactPagesProfileUI({
   posts,
   reels,
   polls,
+  stories,
   ratemes,
+  onOpenStory,
   onSupport,
   onBookmark,
   onProfileVote,
@@ -553,7 +571,6 @@ function CanactPagesProfileUI({
   userProfile: UserProfile;
   isSelf: boolean;
   isVerified: boolean;
-  age?: number;
   locationText: string;
   canactScore: ReturnType<typeof calculateCanactScore>;
   accessBlockReason: 'location' | 'range' | null;
@@ -564,7 +581,9 @@ function CanactPagesProfileUI({
   posts: WhaPost[];
   reels: ReelItem[];
   polls: Poll[];
+  stories: StoryItem[];
   ratemes: RateMeSession[];
+  onOpenStory: (index: number) => void;
   onSupport: () => Promise<void>;
   onBookmark: () => Promise<void>;
   onProfileVote: (kind: 'like' | 'dislike') => Promise<void>;
@@ -596,7 +615,7 @@ function CanactPagesProfileUI({
             : 'Add Friend';
   // Gold button for favourite-related states
   const isGoldButton = !isSelf && (isFavourite || friendStatus === 'friends');
-  const thumbs = profileThumbnails(activeTab, posts, reels, polls, ratemes);
+  const thumbs = activeTab === 'stories' ? [] : profileThumbnails(activeTab, posts, reels, polls, ratemes);
   const blurred = accessBlockReason !== null;
 
   const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -641,7 +660,15 @@ function CanactPagesProfileUI({
         {/* Avatar with score ring + like/dislike buttons — third-party profiles */}
         {isSelf ? (
           <div className={`mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] bg-white ${isFavourite ? 'border-[#E8B830] shadow-[0_0_18px_rgba(232,184,48,0.35)]' : 'border-[#faf8f2]'}`}>
-            <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+            {stories.length ? (
+              <button type="button" onClick={() => onOpenStory(0)} aria-label="View your stories" className="block h-full w-full">
+                <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+              </button>
+            ) : (
+              <Link href="/story/create" aria-label="Create a story" className="block h-full w-full">
+                <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+              </Link>
+            )}
           </div>
         ) : (
           <div className="relative mx-auto -mt-[120px] flex items-center justify-center" style={{ width: 280, height: 280 }}>
@@ -712,25 +739,42 @@ function CanactPagesProfileUI({
         )}
 
         <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
-        <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}{age ? ` · ${age}` : ''}</p>
+        <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}</p>
         {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
 
         <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} />
 
         <div className="mt-4 flex gap-3">
           {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className={`h-12 flex-1 rounded-full font-bold text-white transition ${isGoldButton ? 'bg-[#E8B830] shadow-[0_4px_16px_rgba(232,184,48,0.3)]' : 'bg-brand'}`}>{supportLabel}</button>}
-          <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">{isSelf ? 'Settings' : 'Message'}</Link>
+          {isSelf || friendStatus === 'friends' ? (
+            <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">{isSelf ? 'Settings' : 'Message'}</Link>
+          ) : (
+            <button type="button" onClick={onSupport} className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand/30 bg-white font-bold text-brand/60">Connect to message</button>
+          )}
         </div>
 
-        <div className="mt-8 flex items-center justify-center gap-12 border-b border-line pb-3">
-          {([{ id: 'posts', Icon: ShoppingBag }, { id: 'reels', Icon: Video }, { id: 'polls', Icon: AlignLeft }] as const).map(({ id, Icon }) => {
+        <div className="mt-8 flex items-center justify-center gap-7 border-b border-line pb-3 sm:gap-12">
+          {([{ id: 'posts', Icon: ShoppingBag }, { id: 'stories', Icon: Sparkles }, { id: 'reels', Icon: Video }, { id: 'polls', Icon: AlignLeft }] as const).map(({ id, Icon }) => {
             const active = activeTab === id;
             return <button key={id} type="button" onClick={() => setTab(id)} className={`relative grid h-10 w-10 place-items-center ${active ? 'text-brand' : 'text-ink/30'}`}><Icon size={21} strokeWidth={active ? 2.4 : 1.7} />{active ? <span className="absolute -bottom-3 h-[3px] w-8 rounded-full bg-brand" /> : null}</button>;
           })}
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2">
-          {thumbs.length ? thumbs.map((thumb) => <Link key={thumb.id} href={thumb.href} prefetch className="aspect-square overflow-hidden rounded-[18px] bg-[#e7e1d1]">{thumb.src ? <img src={thumb.src} alt={thumb.label} loading="lazy" className="h-full w-full object-cover" /> : thumb.video ? <video src={thumb.video} muted playsInline className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-2 text-center text-xs font-bold text-brand">{thumb.label}</span>}</Link>) : <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">No content yet</div>}
+          {activeTab === 'stories' ? (
+            stories.length ? stories.map((story, index) => (
+              <button key={story.id} type="button" onClick={() => onOpenStory(index)} className="relative aspect-[9/16] overflow-hidden rounded-[18px] bg-[#e7e1d1]">
+                {/\.(mp4|webm|mov)(\?|$)/i.test(story.mediaUrl)
+                  ? <video src={story.mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                  : <img src={story.mediaUrl} alt={story.caption || 'Story'} loading="lazy" className="h-full w-full object-cover" />}
+              </button>
+            )) : (
+              <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">
+                <p>No active stories.</p>
+                {isSelf ? <Link href="/story/create" className="mt-3 inline-flex rounded-full bg-brand px-4 py-2 text-xs font-bold text-white">Add story</Link> : null}
+              </div>
+            )
+          ) : thumbs.length ? thumbs.map((thumb) => <Link key={thumb.id} href={thumb.href} prefetch className="aspect-square overflow-hidden rounded-[18px] bg-[#e7e1d1]">{thumb.src ? <img src={thumb.src} alt={thumb.label} loading="lazy" className="h-full w-full object-cover" /> : thumb.video ? <video src={thumb.video} muted playsInline className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-2 text-center text-xs font-bold text-brand">{thumb.label}</span>}</Link>) : <div className="col-span-3 rounded-[22px] bg-white px-5 py-10 text-sm font-semibold text-muted">No content yet</div>}
         </div>
       </section>
       </div>{/* end blur wrapper */}

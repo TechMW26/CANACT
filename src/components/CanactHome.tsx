@@ -43,7 +43,8 @@ export function CanactHome() {
   const score = summary.score;
   const tier = getCanactScoreLabel(score);
   const name = firstName(profile?.firstName || profile?.fullName || user?.displayName);
-  const positiveSignals = Math.max(0, (profile?.likesCount || 0) + (profile?.ratingCount || 0));
+  const likes = Math.max(0, profile?.likesCount || 0);
+  const dislikes = Math.max(0, profile?.dislikesCount || 0);
   const goodActs = (profile?.helpStats?.resolved || 0) + (profile?.helpStats?.confirmed || 0);
 
   const currentLocation = coords ? { lat: coords.lat, lng: coords.lng } : null;
@@ -256,12 +257,12 @@ export function CanactHome() {
 
         <div className={styles.belowFold}>
         <div className={styles.statsRow}>
-          <div className={styles.statItem}><span><Heart /></span><b>{positiveSignals}</b><small>Positive</small></div>
-          <div className={styles.statItem}><span><Users /></span><b>{profile?.ratingCount || 0}</b><small>Connections</small></div>
+          <div className={styles.statItem}><span><Heart /></span><b>{likes}</b><small>Likes</small></div>
+          <div className={styles.statItem}><span><Users /></span><b>{dislikes}</b><small>Dislikes</small></div>
           <div className={styles.statItem}><span><Sparkles /></span><b>{goodActs}</b><small>Good acts</small></div>
         </div>
 
-        {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" /></div> : null}
+        {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" showAttributes={false} /></div> : null}
 
         <div className={styles.insight}>
           <span><Activity /></span>

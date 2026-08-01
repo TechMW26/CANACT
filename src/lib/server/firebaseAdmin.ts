@@ -158,6 +158,33 @@ export async function writeUserRtdb(path: string, value: unknown, app: App | nul
   if (!response.ok) throw new Error(`RTDB write failed: ${response.status}`);
 }
 
+export async function patchUserRtdb(path: string, value: Record<string, unknown>, app: App | null, idToken: string): Promise<void> {
+  if (app) {
+    await getDatabase(app).ref(path).update(value);
+    return;
+  }
+  const url = new URL(`${RTDB_BASE}/${path}.json`);
+  url.searchParams.set('auth', idToken);
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`RTDB patch failed: ${response.status}`);
+}
+
+export async function deleteUserRtdb(path: string, app: App | null, idToken: string): Promise<void> {
+  if (app) {
+    await getDatabase(app).ref(path).remove();
+    return;
+  }
+  const url = new URL(`${RTDB_BASE}/${path}.json`);
+  url.searchParams.set('auth', idToken);
+  const response = await fetch(url, { method: 'DELETE', cache: 'no-store' });
+  if (!response.ok) throw new Error(`RTDB delete failed: ${response.status}`);
+}
+
 async function verifyIdTokenWithRest(idToken: string): Promise<{ uid: string; email?: string | null }> {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!apiKey) throw new Error('firebase-api-key-missing');

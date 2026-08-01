@@ -207,10 +207,10 @@ function ReelTile({
 
       <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-4 pb-8 safe-bottom">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <Link href={`/profile/${reel.uid}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-2" aria-label={`View ${reel.authorName}'s profile`}>
             <Avatar src={reel.authorPhoto ?? null} name={reel.authorName} size={36} />
             <div className="text-sm font-extrabold">{reel.authorName}</div>
-          </div>
+          </Link>
           {reel.caption && <div className="mt-2 text-sm leading-snug">{reel.caption}</div>}
           {reel.music && (
             <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[11px] font-bold backdrop-blur">

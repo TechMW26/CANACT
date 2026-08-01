@@ -12,9 +12,9 @@ export const VICINITY = {
   /** Effective max distance to count as "in vicinity" (meters). */
   RADIUS: 15,
   /** Hard ceiling: any sample whose accuracy is worse than this is discarded. */
-  MAX_ACCURACY: 80,
-  /** Extra slack we allow on top of the radius based on combined GPS accuracy. */
-  ACC_SLACK: 30,
+  MAX_ACCURACY: 35,
+  /** Keep the product's 15 m boundary exact; poor fixes are discarded above. */
+  ACC_SLACK: 0,
   /** Encounter must persist this long before it qualifies for a rating. */
   MIN_DURATION_MS: 45_000,
   /** Encounter must have at least this many in-vicinity samples to qualify. */

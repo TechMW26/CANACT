@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
 import { Avatar } from '@/components/Avatar';
 import { useAuth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
+import { db, getFirebaseAuth } from '@/lib/firebase';
 import { toast } from '@/components/Toaster';
 import {
   ArrowLeft, CheckCircle2, ChevronRight, Eye, Loader2, Lock, Pencil, Sparkles, Star,
@@ -34,10 +34,12 @@ export default function ProfileSettingsPage() {
     if (!aadhaar.trim()) return toast('Enter your Aadhaar number.', 'error');
     setBusy('otp');
     try {
+      const idToken = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!idToken) throw new Error('Please sign in again.');
       const res = await fetch('/api/verify/digilocker/send-otp', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ aadhaarNumber: aadhaar, uid: user.uid }),
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ aadhaarNumber: aadhaar }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -53,10 +55,12 @@ export default function ProfileSettingsPage() {
     if (!otp.trim() || !requestId) return toast('Enter the OTP.', 'error');
     setBusy('verify');
     try {
+      const idToken = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!idToken) throw new Error('Please sign in again.');
       const res = await fetch('/api/verify/digilocker/complete', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ otp, requestId, uid: user.uid }),
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ otp, requestId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);

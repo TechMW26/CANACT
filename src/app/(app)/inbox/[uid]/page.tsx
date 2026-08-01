@@ -38,6 +38,7 @@ export default function InboxThreadPage() {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [other, setOther] = useState<UserProfile | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -79,14 +80,18 @@ export default function InboxThreadPage() {
     let off: (() => void) | undefined;
     let offMsgs: (() => void) | undefined;
     (async () => {
-      await startOrGetThread(
-        { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
-        { uid: other.uid, name: other.fullName, photoURL: other.photoURL },
-      );
-      const id = threadIdFor(user.uid, other.uid);
-      off = listenThread(id, setThread);
-      offMsgs = listenMessages(id, setMessages);
-      markThreadRead(id, user.uid).catch(() => {});
+      try {
+        await startOrGetThread(
+          { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
+          { uid: other.uid, name: other.fullName, photoURL: other.photoURL },
+        );
+        const id = threadIdFor(user.uid, other.uid);
+        off = listenThread(id, setThread);
+        offMsgs = listenMessages(id, setMessages);
+        markThreadRead(id, user.uid).catch(() => {});
+      } catch (error: any) {
+        setConnectionError(error?.message ?? 'Connect as friends before messaging.');
+      }
     })();
     return () => { off?.(); offMsgs?.(); };
   }, [user, profile, other]);
@@ -129,12 +134,22 @@ export default function InboxThreadPage() {
 
   if (!user || !profile) return null;
 
+  if (connectionError) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center px-6 text-center">
+        <div>
+          <h1 className="text-xl font-extrabold text-ink">Connection required</h1>
+          <p className="mt-2 text-sm text-muted">{connectionError}</p>
+          <Link href={`/profile/${otherUid}`} className="mt-5 inline-flex rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white">View profile</Link>
+        </div>
+      </div>
+    );
+  }
+
   const incomingPending = thread?.status === 'pending' && thread.initiator !== user.uid;
   const outgoingPending = thread?.status === 'pending' && thread.initiator === user.uid;
   const canSend =
-    thread?.status === 'accepted' ||
-    (thread?.status === 'pending' && thread.initiator === user.uid && messages.length === 0) ||
-    !!pendingAttachment;
+    thread?.status === 'accepted';
 
   function buildReplyTo(m: ChatMessage): ChatMessage['replyTo'] {
     return {

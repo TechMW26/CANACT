@@ -21,7 +21,7 @@ export function StoryEditor({
 }: {
   imageUrl: string;
   onCancel: () => void;
-  onShare: (overlays: StoryOverlay[], caption?: string, filter?: MediaFilterId) => void | Promise<void>;
+  onShare: (overlays: StoryOverlay[], caption?: string, filter?: MediaFilterId, durationHours?: 12 | 24 | 48 | 72) => void | Promise<void>;
 }) {
   const [overlays, setOverlays] = useState<StoryOverlay[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,6 +29,7 @@ export function StoryEditor({
   const [filter, setFilter] = useState<MediaFilterId>('none');
   const [showFilters, setShowFilters] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [durationHours, setDurationHours] = useState<12 | 24 | 48 | 72>(24);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
 
@@ -201,6 +202,12 @@ export function StoryEditor({
             {showFilters ? (
               <FilterStrip thumbUrl={imageUrl} selected={filter} onChange={setFilter} />
             ) : null}
+            <div className="flex items-center gap-1.5" aria-label="Story expiry">
+              <span className="mr-1 text-xs font-bold text-white/75">Expires</span>
+              {([12, 24, 48, 72] as const).map((hours) => (
+                <button key={hours} type="button" onClick={() => setDurationHours(hours)} className={`rounded-full px-2.5 py-1 text-xs font-bold ${durationHours === hours ? 'bg-white text-ink' : 'bg-white/15 text-white'}`}>{hours}h</button>
+              ))}
+            </div>
             <div className="flex items-center gap-2">
               <input
                 value={caption}
@@ -222,7 +229,7 @@ export function StoryEditor({
                 onClick={async () => {
                   setBusy(true);
                   try {
-                    await onShare(overlays, caption.trim() || undefined, filter);
+                    await onShare(overlays, caption.trim() || undefined, filter, durationHours);
                   } finally {
                     setBusy(false);
                   }

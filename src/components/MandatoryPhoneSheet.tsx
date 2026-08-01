@@ -17,7 +17,6 @@ export function MandatoryPhoneSheet() {
   const [country, setCountry] = useState<CountryCode>('IN');
   const [national, setNational] = useState('');
   const [otp, setOtp] = useState('');
-  const [channel, setChannel] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ownershipNotice, setOwnershipNotice] = useState('');
@@ -34,7 +33,6 @@ export function MandatoryPhoneSheet() {
     const restored = splitStoredPhone(session.phone);
     setCountry(restored.country);
     setNational(restored.national);
-    setChannel(session.channel);
     setStage('otp');
   }, [pendingOTP, visible]);
 
@@ -74,13 +72,15 @@ export function MandatoryPhoneSheet() {
     } else if (ownership === 'current') {
       setOwnershipNotice('This number is already verified on your account.');
     }
-    const result = await requestPhoneLinkOTP(fullPhone, forceNew).catch(() => ({ ok: false as const }));
+    const result = await requestPhoneLinkOTP(fullPhone, forceNew).catch(() => ({
+      ok: false as const,
+      error: 'We could not contact Firebase. Please try again shortly.',
+    }));
     setBusy(false);
     if (!result.ok) {
-      setError('We could not send a code right now. Please try again shortly.');
+      setError(result.error || 'We could not send a code right now. Please try again shortly.');
       return;
     }
-    setChannel(result.channel);
     setOtp('');
     setStage('otp');
   }
@@ -159,7 +159,7 @@ export function MandatoryPhoneSheet() {
                 aria-invalid={!!error}
               />
               <p className="mt-2 text-center text-xs text-[#66766f]">
-                Code sent to {fullPhone}{channel === 'vobiz-whatsapp' ? ' via WhatsApp' : ' via SMS'}
+                Code sent to {fullPhone} via SMS
               </p>
               {error && <p role="alert" className="mt-2 text-center text-xs font-semibold text-[#a33b35]">{error}</p>}
               {ownershipNotice && (
@@ -183,7 +183,7 @@ export function MandatoryPhoneSheet() {
             </div>
           </div>
         )}
-        <div id="phone-link-recaptcha" />
+        <div id="phone-link-recaptcha" className="mt-4 flex justify-center empty:hidden" />
       </section>
     </div>,
     document.body,

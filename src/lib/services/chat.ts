@@ -8,16 +8,35 @@ function threadIdFor(a: string, b: string) {
 }
 export { threadIdFor };
 
+async function assertConnected(a: string, b: string) {
+  const [friend, blockedByA, blockedByB] = await Promise.all([
+    get(ref(db, `friends/${a}/${b}`)),
+    get(ref(db, `blocks/${a}/${b}`)),
+    get(ref(db, `blocks/${b}/${a}`)),
+  ]);
+  if (!friend.exists()) throw new Error('Connect as friends before messaging.');
+  if (blockedByA.exists() || blockedByB.exists()) throw new Error('Messaging is unavailable for this connection.');
+}
+
 export async function startOrGetThread(me: { uid: string; name: string; photoURL?: string }, other: { uid: string; name: string; photoURL?: string }) {
+  if (!me.uid || !other.uid || me.uid === other.uid) throw new Error('Invalid chat participants.');
+  await assertConnected(me.uid, other.uid);
   const id = threadIdFor(me.uid, other.uid);
   const r = ref(db, `chatThreads/${id}`);
   const snap = await get(r);
-  if (snap.exists()) return snap.val() as ChatThread;
+  if (snap.exists()) {
+    const existing = snap.val() as ChatThread;
+    if (existing.status !== 'accepted') {
+      await update(r, { status: 'accepted' });
+      existing.status = 'accepted';
+    }
+    return existing;
+  }
   const thread: ChatThread = {
     id,
     members: { [me.uid]: true, [other.uid]: true },
     initiator: me.uid,
-    status: 'pending',
+    status: 'accepted',
     createdAt: Date.now(),
     lastMessageAt: Date.now(),
     participants: {
@@ -79,6 +98,21 @@ export async function sendChatMessage(
   text: string,
   extras?: { replyTo?: ChatMessage['replyTo']; attachment?: ChatAttachment },
 ) {
+  const threadSnap = await get(ref(db, `chatThreads/${threadId}`));
+  const thread = threadSnap.val() as ChatThread | null;
+  const expectedId = threadIdFor(fromUid, toUid);
+  if (
+    !thread
+    || thread.id !== expectedId
+    || threadId !== expectedId
+    || !thread.members?.[fromUid]
+    || !thread.members?.[toUid]
+    || thread.status !== 'accepted'
+  ) {
+    throw new Error('This conversation is not available.');
+  }
+  await assertConnected(fromUid, toUid);
+
   const node = push(ref(db, `chatMessages/${threadId}`));
   const msg: ChatMessage = {
     id: node.key as string,
@@ -103,8 +137,6 @@ export async function sendChatMessage(
 
   // Best-effort web push to the recipient. Body is sanitized server-side and
   // emojis stripped per product policy.
-  const threadSnap = await get(ref(db, `chatThreads/${threadId}`));
-  const thread = threadSnap.val() as ChatThread | null;
   const fromName = thread?.participants?.[fromUid]?.name || 'Someone';
   sendPush({
     toUid,

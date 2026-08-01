@@ -8,7 +8,7 @@ import { Combobox, type ComboOption } from '@/components/Combobox';
 import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import type { CountryCode } from 'libphonenumber-js';
 import { Avatar } from '@/components/Avatar';
-import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
+import { SelfieVerifier } from '@/components/SelfieVerifier';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/Toaster';
 import { uploadMedia } from '@/lib/uploadMedia';
@@ -20,7 +20,6 @@ type CountryCityApi = typeof import('country-state-city');
 export default function EditProfilePage() {
   const { user, profile, updateMyProfile } = useAuth();
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
   const displayName = (profile?.fullName || user?.displayName || user?.email?.split('@')[0] || '').trim();
   const displayNameParts = displayName.split(/\s+/).filter(Boolean);
@@ -29,8 +28,7 @@ export default function EditProfilePage() {
   const initialPhone = splitStoredPhone(profile?.mobile, (profile?.countryCode as CountryCode) || 'IN');
   const [photo, setPhoto] = useState(profile?.photoURL ?? user?.photoURL ?? '');
   const [coverPhoto, setCoverPhoto] = useState(profile?.coverPhoto ?? '');
-  const [photoEditorFile, setPhotoEditorFile] = useState<File | null>(null);
-  const [photoEditorOpen, setPhotoEditorOpen] = useState(false);
+  const [selfieOpen, setSelfieOpen] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
   const [firstName, setFirstName] = useState(profile?.firstName ?? fallbackFirstName);
@@ -95,21 +93,12 @@ export default function EditProfilePage() {
   if (!profile) return null;
   const locked = !!profile.profileVerified;
 
-  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!f.type.startsWith('image/')) return toast('Please select an image', 'error');
-    setPhotoEditorFile(f);
-    setPhotoEditorOpen(true);
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
-  const saveEditedPhoto = async (blob: Blob) => {
+  const saveVerifiedSelfie = async (dataUrl: string) => {
     if (!profile) return;
     const previousUrl = photo;
     setPhotoBusy(true);
     try {
-      const { url } = await uploadMedia(blob, { kind: 'avatar', uid: profile.uid });
+      const { url } = await uploadMedia(dataUrl, { kind: 'avatar', uid: profile.uid });
       await updateMyProfile({ photoURL: url });
       setPhoto(url);
       if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
@@ -117,8 +106,7 @@ export default function EditProfilePage() {
           navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] });
         } catch { /* ignore */ }
       }
-      setPhotoEditorOpen(false);
-      setPhotoEditorFile(null);
+      setSelfieOpen(false);
       toast('Profile photo updated', 'success');
     } catch (err: any) {
       toast(err?.message ?? 'Could not upload image', 'error');
@@ -224,20 +212,19 @@ export default function EditProfilePage() {
           </span>
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={() => setSelfieOpen(true)}
             aria-label="Change photo"
             className="absolute -bottom-1 -right-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand text-white ring-4 ring-white"
           >
             <Camera size={16} />
           </button>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
         </div>
         <div className="flex-1 text-center sm:text-left">
           <h2 className="text-lg font-extrabold text-ink">{profile.fullName || displayName || 'Canact user'}</h2>
-          <p className="mt-0.5 text-sm text-muted">JPG, PNG or WebP. Adjust crop and colour before it saves.</p>
+          <p className="mt-0.5 text-sm text-muted">Take a live selfie so your profile photo represents you.</p>
           <div className="mt-3 inline-flex flex-wrap justify-center gap-2 sm:justify-start">
-            <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} loading={photoBusy}>
-              <Camera size={14} className="mr-1" /> Change photo
+            <Button size="sm" variant="outline" onClick={() => setSelfieOpen(true)} loading={photoBusy}>
+              <Camera size={14} className="mr-1" /> Take new selfie
             </Button>
             {photo ? (
               <Button size="sm" variant="ghost" onClick={removePhoto} loading={photoBusy}>
@@ -354,13 +341,7 @@ export default function EditProfilePage() {
           <Button full size="lg" loading={busy} onClick={onSave}>Save changes</Button>
         </div>
       </div>
-      <ProfileImageEditorSheet
-        file={photoEditorFile}
-        open={photoEditorOpen}
-        busy={photoBusy}
-        onClose={() => { setPhotoEditorOpen(false); setPhotoEditorFile(null); }}
-        onApply={saveEditedPhoto}
-      />
+      {selfieOpen ? <SelfieVerifier onCancel={() => setSelfieOpen(false)} onCapture={(dataUrl) => { void saveVerifiedSelfie(dataUrl); }} /> : null}
     </div>
   );
 }

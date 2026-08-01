@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/Card';
@@ -75,6 +76,10 @@ export default function SettingsPage() {
       <Card>
         <h3 className="font-bold">About</h3>
         <p className="text-sm text-muted">Canact v1.0 — community-first, mobile-first.</p>
+        <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-brand">
+          <Link href="/terms" className="rounded-full bg-brand-light px-3 py-2">Terms of Service</Link>
+          <Link href="/privacy" className="rounded-full bg-brand-light px-3 py-2">Privacy Policy</Link>
+        </div>
       </Card>
       <ConfirmDialog open={open} onClose={() => setOpen(false)} title="Delete profile?" message="Your account and data will be permanently removed." confirmLabel="Delete" danger
         onConfirm={async () => {
