@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FastAverageColor } from 'fast-average-color';
 import { onValue, ref } from 'firebase/database';
@@ -10,7 +10,7 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_KEYS, CARD_LABELS, CardKey, Poll, RateMeSession, ReelItem, StoryItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_LABELS, CardKey, ConnectionCardGift, Poll, RateMeSession, ReelItem, StoryItem, UserProfile, WhaPost } from '@/lib/types';
 import { setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
@@ -18,11 +18,11 @@ import { listenUserPolls, deletePoll } from '@/lib/services/poll';
 import { deleteRateMeSession, listenUserRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenUserStories } from '@/lib/services/stories';
 import { toast } from '@/components/Toaster';
-import { uploadMedia } from '@/lib/uploadMedia';
 import { PostMenu } from '@/components/PostMenu';
-import { ProfileRecognitionFolders, AttributePairSlider } from '@/components/ProfileRecognitionFolders';
+import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenFavourites, requestFollow } from '@/lib/services/favourites';
+import { listenReceivedConnectionCards } from '@/lib/services/connectionCards';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -58,6 +58,10 @@ import {
   AlignLeft,
   Video,
   Sparkles,
+  Laugh,
+  ShieldCheck,
+  Smile,
+  Zap,
 } from '@/components/icons';
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
@@ -543,6 +547,52 @@ function ProfileVotePill({
   );
 }
 
+function ConnectionOrbitIcon({ kind }: { kind: CardKey }) {
+  if (kind === 'confidence') return <ShieldCheck size={19} />;
+  if (kind === 'humour') return <Laugh size={19} />;
+  if (kind === 'goodVibes') return <Smile size={19} />;
+  if (kind === 'daring') return <Zap size={19} />;
+  if (kind === 'cooperative') return <UsersIcon size={19} />;
+  if (kind === 'understanding') return <Heart size={19} />;
+  return <Sparkles size={19} />;
+}
+
+function ProfileAttributeGauge({
+  id,
+  label,
+  positive,
+  negative,
+}: {
+  id: string;
+  label: string;
+  positive: number;
+  negative: number;
+}) {
+  const total = positive + negative;
+  const ratio = total ? positive / total : .5;
+  const angle = -80 + ratio * 160;
+  return (
+    <div className="min-w-0 text-center">
+      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[118px] overflow-visible" aria-label={`${label}: ${positive} positive and ${negative} negative`}>
+        <defs>
+          <linearGradient id={`profile-gauge-${id}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#df5c54" />
+            <stop offset=".48" stopColor="#e5b93f" />
+            <stop offset="1" stopColor="#43a66d" />
+          </linearGradient>
+        </defs>
+        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke="#e9e3d7" strokeWidth="9" strokeLinecap="round" />
+        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke={`url(#profile-gauge-${id})`} strokeWidth="7" strokeLinecap="round" />
+        <g style={{ transform: `rotate(${angle}deg)`, transformOrigin: '60px 59px', transition: 'transform 500ms cubic-bezier(.2,.8,.2,1)' }}>
+          <path d="M58.5 59 60 23 61.5 59Z" fill="#163f33" />
+        </g>
+        <circle cx="60" cy="59" r="5" fill="#173f34" stroke="#faf8f2" strokeWidth="2" />
+      </svg>
+      <strong className="-mt-1 block truncate text-[11px] font-black text-[#173f34]">{label}</strong>
+    </div>
+  );
+}
+
 function CanactPagesProfileUI({
   userProfile,
   isSelf,
@@ -592,14 +642,11 @@ function CanactPagesProfileUI({
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
   isFavourite: boolean;
 }) {
-  const { updateMyProfile } = useAuth();
-  const coverFileRef = useRef<HTMLInputElement>(null);
-  const [coverBusy, setCoverBusy] = useState(false);
   const [attrsSheetOpen, setAttrsSheetOpen] = useState(false);
+  const [receivedConnections, setReceivedConnections] = useState<ConnectionCardGift[]>([]);
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
-  const heroSrc = profileHeroImage(userProfile, posts, reels, ratemes);
-  const chromeTone = useAdaptiveProfileChrome(heroSrc);
+  useAdaptiveProfileChrome(null);
   const nameLines = splitProfileName(displayName);
   const role = userProfile.tags?.[0] || locationText || `${(userProfile.rating ?? 0).toFixed(1)} rating`;
   const supportLabel = isSelf
@@ -617,132 +664,89 @@ function CanactPagesProfileUI({
   const isGoldButton = !isSelf && (isFavourite || friendStatus === 'friends');
   const thumbs = activeTab === 'stories' ? [] : profileThumbnails(activeTab, posts, reels, polls, ratemes);
   const blurred = accessBlockReason !== null;
-
-  const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!f.type.startsWith('image/')) return toast('Please select an image', 'error');
-    const previousUrl = userProfile.coverPhoto ?? heroSrc;
-    setCoverBusy(true);
-    try {
-      const blob = new Blob([f], { type: f.type });
-      const { url } = await uploadMedia(blob, { kind: 'cover', uid: userProfile.uid });
-      await updateMyProfile({ coverPhoto: url });
-      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
-        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* ignore */ }
+  const connectionHighlights = useMemo(() => {
+    const grouped = new Map<CardKey, { kind: CardKey; count: number; latest: number }>();
+    for (const card of receivedConnections) {
+      const current = grouped.get(card.kind);
+      if (current) {
+        current.count += 1;
+        current.latest = Math.max(current.latest, card.sentAt);
+      } else {
+        grouped.set(card.kind, { kind: card.kind, count: 1, latest: card.sentAt });
       }
-      toast('Cover photo updated', 'success');
-    } catch (err: any) {
-      toast(err?.message ?? 'Could not upload cover', 'error');
-    } finally {
-      setCoverBusy(false);
-      if (coverFileRef.current) coverFileRef.current.value = '';
     }
-  };
+    return Array.from(grouped.values())
+      .sort((left, right) => right.count - left.count || right.latest - left.latest)
+      .slice(0, 4);
+  }, [receivedConnections]);
+
+  useEffect(() => listenReceivedConnectionCards(userProfile.uid, setReceivedConnections), [userProfile.uid]);
 
   return (
     <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
-      <div className="relative h-[320px] overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#9fd0b3,transparent_35%),linear-gradient(135deg,#164d3e,#68a48d)]">
-        {heroSrc ? <img src={heroSrc} alt="" className="pointer-events-none h-full w-full object-cover object-center opacity-55 mix-blend-luminosity" /> : null}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#173f34]/45 to-transparent" />
-        {isSelf ? (
-          <>
-            <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={onCoverPick} />
-            <button type="button" disabled={coverBusy} onClick={() => coverFileRef.current?.click()} className="absolute bottom-3 right-3 z-10 flex h-9 items-center gap-1.5 rounded-full bg-black/30 px-3 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-black/45 disabled:opacity-55">
-              <Camera size={14} /> {coverBusy ? 'Uploading…' : 'Edit cover'}
-            </button>
-          </>
-        ) : null}
-      </div>
+      <section className="relative px-5 pb-5 pt-5 text-center">
+        <div className="mx-auto inline-flex h-9 items-center gap-2 rounded-full bg-[#173f34] px-4 text-white shadow-[0_8px_20px_rgba(20,63,51,.14)]">
+          <span className="h-2 w-2 rounded-full bg-[#68c986]" />
+          <strong className="text-sm font-black">{canactScore.score}</strong>
+          <span className="text-[9px] font-black uppercase tracking-[.14em] text-white/65">{canactScore.label}</span>
+        </div>
 
-      <section className="relative px-5 pb-5 text-center">
-        {/* Avatar with score ring + like/dislike buttons — third-party profiles */}
-        {isSelf ? (
-          <div className={`mx-auto -mt-[62px] h-[124px] w-[124px] overflow-hidden rounded-full border-[7px] bg-white ${isFavourite ? 'border-[#E8B830] shadow-[0_0_18px_rgba(232,184,48,0.35)]' : 'border-[#faf8f2]'}`}>
-            {stories.length ? (
+        <div className="relative mx-auto mt-2 h-[300px] w-full max-w-[360px]">
+          {connectionHighlights.length ? (
+            <svg className="pointer-events-none absolute inset-x-4 top-3 h-[222px] w-auto text-[#173f34]/55" viewBox="0 0 328 222" aria-hidden="true">
+              <path d="M58 46C95 45 112 61 135 90" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+              <path d="M270 46C232 45 216 61 193 90" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+              <path d="M47 158C92 158 108 143 134 128" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+              <path d="M281 158C236 158 220 143 194 128" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+            </svg>
+          ) : null}
+
+          {connectionHighlights.map((item, index) => {
+            const positions = ['left-0 top-4', 'right-0 top-4', 'left-0 top-[55%]', 'right-0 top-[55%]'];
+            return (
+              <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[76px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
+                <span className="grid h-12 w-12 place-items-center rounded-full border border-[#173f34]/10 bg-[#faf8f2] text-[#1f6b55] shadow-[0_8px_22px_rgba(20,63,51,.11)]"><ConnectionOrbitIcon kind={item.kind} /></span>
+                <span className="max-w-full truncate text-[9px] font-bold text-[#173f34]/65">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
+              </button>
+            );
+          })}
+
+          <div className={`absolute left-1/2 top-[42%] z-10 h-[204px] w-[204px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-[5px] bg-white shadow-[0_18px_45px_rgba(16,54,42,.16)] ${isFavourite ? 'border-[#E8B830]' : 'border-[#faf8f2]'}`}>
+            {isSelf ? (stories.length ? (
               <button type="button" onClick={() => onOpenStory(0)} aria-label="View your stories" className="block h-full w-full">
-                <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
               </button>
             ) : (
               <Link href="/story/create" aria-label="Create a story" className="block h-full w-full">
-                <Avatar src={userProfile.photoURL} name={displayName} size={110} />
+                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
               </Link>
+            )) : (
+              <button type="button" onClick={() => setAttrsSheetOpen(true)} aria-label={`Rate ${displayName}`} className="block h-full w-full transition-transform active:scale-95">
+                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
+              </button>
             )}
           </div>
-        ) : (
-          <div className="relative mx-auto -mt-[120px] flex items-center justify-center" style={{ width: 280, height: 280 }}>
-            {/* Score progress ring — exactly on the avatar border */}
-            <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 250 250">
-              <circle cx="125" cy="125" r="115" fill="none" stroke="#e8e5df" strokeWidth="8" />
-              <circle
-                cx="125" cy="125" r="115"
-                fill="none"
-                stroke={canactScore.label === 'TRUST' ? '#34d399' : canactScore.label === 'GOOD' ? '#4ade80' : canactScore.label === 'FAIR' ? '#fbbf24' : '#f87171'}
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 115}`}
-                strokeDashoffset={`${2 * Math.PI * 115 * (1 - Math.max(0.04, Math.min(1, canactScore.score / Math.max(canactScore.max, 1))))}`}
-                style={{ transition: 'stroke-dashoffset 0.6s ease' }}
-              />
-            </svg>
 
-            {/* The image underlaps the inner half of the score stroke. This
-                avoids a separator seam at every device pixel ratio. */}
-            <button
-              type="button"
-              onClick={() => setAttrsSheetOpen(true)}
-              className={`relative z-10 flex h-[254px] w-[254px] items-center justify-center overflow-hidden rounded-full bg-white transition-transform active:scale-95 ${isFavourite ? 'ring-4 ring-inset ring-[#E8B830] shadow-[0_0_24px_rgba(232,184,48,0.35)]' : ''}`}
-              aria-label={`View ${displayName}'s attributes`}
-            >
-              <Avatar src={userProfile.photoURL} name={displayName} size={254} />
-            </button>
-
-            {/* A local frosted lens keeps the score central without blurring
-                the whole portrait. Difference blending automatically flips
-                the glyphs for light and dark profile photos. */}
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-              <div className="flex w-[96px] flex-col items-center justify-center rounded-full aspect-square bg-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.34)] ring-1 ring-white/25 backdrop-blur-[14px] backdrop-saturate-150">
-                <span className="mix-blend-difference text-[30px] font-black leading-none tracking-[-.05em] text-white">{canactScore.score}</span>
-                <span className="mt-1 mix-blend-difference text-[9px] font-black uppercase tracking-[.16em] text-white">{canactScore.label}</span>
-              </div>
-            </div>
-
-            {/* Vote controls sit on the lower circular radius. */}
-            <button
-              type="button"
-              disabled={profileVoteBusy}
-              aria-label="Dislike"
-              aria-pressed={profileVote === 'dislike'}
-              onClick={() => onProfileVote('dislike')}
-              className={`absolute left-0 top-[72%] z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow-lg transition disabled:opacity-55 ${
-                profileVote === 'dislike' ? 'bg-rose-500 text-white' : 'bg-white text-rose-500 hover:bg-rose-50'
-              }`}
-            >
-              <ThumbsDown size={24} />
-            </button>
-
-            {/* Like button — mirrored on the lower-right radius. */}
-            <button
-              type="button"
-              disabled={profileVoteBusy}
-              aria-label="Like"
-              aria-pressed={profileVote === 'like'}
-              onClick={() => onProfileVote('like')}
-              className={`absolute right-0 top-[72%] z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white shadow-lg transition disabled:opacity-55 ${
-                profileVote === 'like' ? 'bg-emerald-500 text-white' : 'bg-white text-emerald-600 hover:bg-emerald-50'
-              }`}
-            >
-              <ThumbsUp size={24} />
-            </button>
-          </div>
-        )}
+          {receivedConnections.length ? <button type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="absolute bottom-[32px] z-30 grid h-[62px] w-[62px] place-items-center rounded-full border-2 border-white bg-[radial-gradient(circle_at_30%_20%,#61ad8e,#174f3f_68%)] text-white shadow-[0_10px_25px_rgba(19,69,53,.3)]" style={{ left: 'calc(50% - 92px)' }} aria-label={`${receivedConnections.length} connection cards received`}>
+            <Heart size={19} />
+            <span className="-mt-2 text-[9px] font-black">{receivedConnections.length}</span>
+          </button> : null}
+        </div>
 
         <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
         <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}</p>
         {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
 
-        <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} />
+        <div className="mt-6 grid grid-cols-3 gap-2 rounded-[24px] bg-white/55 px-2 pb-3 pt-4 shadow-[inset_0_0_0_1px_rgba(31,107,85,.06)]">
+          <ProfileAttributeGauge id={`${userProfile.uid}-behaviour`} label="Behaviour" positive={userProfile.attrs?.behaviour ?? 0} negative={userProfile.attrs?.rude ?? 0} />
+          <ProfileAttributeGauge id={`${userProfile.uid}-reliability`} label="Reliability" positive={userProfile.attrs?.reliability ?? 0} negative={userProfile.attrs?.unreliable ?? 0} />
+          <ProfileAttributeGauge id={`${userProfile.uid}-civic`} label="Civic sense" positive={userProfile.attrs?.civic_sense ?? 0} negative={userProfile.attrs?.uncivil ?? 0} />
+        </div>
+
+        {!isSelf ? <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1f6b55] font-black text-white shadow-[0_8px_22px_rgba(31,107,85,.18)]"><Star size={17} /> Rate Me</button> : null}
+
+        <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} showAttributes={false} connectionCards={receivedConnections} />
 
         <div className="mt-4 flex gap-3">
           {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className={`h-12 flex-1 rounded-full font-bold text-white transition ${isGoldButton ? 'bg-[#E8B830] shadow-[0_4px_16px_rgba(232,184,48,0.3)]' : 'bg-brand'}`}>{supportLabel}</button>}
@@ -796,24 +800,7 @@ function CanactPagesProfileUI({
               <div className="text-lg font-extrabold text-ink">{displayName}</div>
               <div className="text-sm text-ink/50">@{profileSlug(userProfile)}</div>
             </div>
-            {[
-              { pos: 'behaviour' as AttrKey, neg: 'rude' as AttrKey },
-              { pos: 'reliability' as AttrKey, neg: 'unreliable' as AttrKey },
-              { pos: 'civic_sense' as AttrKey, neg: 'uncivil' as AttrKey },
-            ].map(({ pos, neg }) => (
-              <AttributePairSlider
-                key={pos}
-                negative={neg}
-                positive={pos}
-                negativeCount={userProfile.attrs?.[neg] ?? 0}
-                positiveCount={userProfile.attrs?.[pos] ?? 0}
-                selectedValue={0}
-                busy={false}
-                cooldownMs={0}
-                readOnly
-                onCommit={() => {}}
-              />
-            ))}
+            <ProfileRecognitionFolders profile={userProfile} isSelf={false} showCards={false} />
             {(!userProfile.attrs || Object.values(userProfile.attrs).every((v) => !v)) && (
               <p className="text-center text-sm text-ink/40">No attributes yet.</p>
             )}

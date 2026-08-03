@@ -265,14 +265,28 @@ export function AttributePairSlider({
   );
 }
 
-export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHref, showAttributes = true }: { profile: UserProfile; isSelf: boolean; communityLeadersHref?: string; showAttributes?: boolean }) {
+export function ProfileRecognitionFolders({
+  profile,
+  isSelf,
+  communityLeadersHref,
+  showAttributes = true,
+  showCards = true,
+  connectionCards: suppliedConnectionCards,
+}: {
+  profile: UserProfile;
+  isSelf: boolean;
+  communityLeadersHref?: string;
+  showAttributes?: boolean;
+  showCards?: boolean;
+  connectionCards?: ConnectionCardGift[];
+}) {
   const { user } = useAuth();
   const viewingSelf = isSelf || !profile.uid || user?.uid === profile.uid;
   const [folder, setFolder] = useState<Folder | null>(null);
   const [mode, setMode] = useState<CardMode>('received');
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('received');
   const [received, setReceived] = useState<LifetimeCardGift[]>([]);
-  const [receivedConnections, setReceivedConnections] = useState<ConnectionCardGift[]>([]);
+  const [loadedConnections, setLoadedConnections] = useState<ConnectionCardGift[]>([]);
   const [inventory, setInventory] = useState<Record<LifetimeCardKind, LifetimeCardSlot>>(defaultLifetimeInventory);
   const [slide, setSlide] = useState(0);
   const [giftKind, setGiftKind] = useState<LifetimeCardKind | null>(null);
@@ -293,8 +307,14 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
   const [launchLabel, setLaunchLabel] = useState<string | null>(null);
   const [launchKind, setLaunchKind] = useState<'give' | 'take' | null>(null);
 
-  useEffect(() => listenReceivedLifetimeCards(profile.uid, setReceived), [profile.uid]);
-  useEffect(() => listenReceivedConnectionCards(profile.uid, setReceivedConnections), [profile.uid]);
+  useEffect(() => {
+    if (!showCards) return;
+    return listenReceivedLifetimeCards(profile.uid, setReceived);
+  }, [profile.uid, showCards]);
+  useEffect(() => {
+    if (!showCards || suppliedConnectionCards) return;
+    return listenReceivedConnectionCards(profile.uid, setLoadedConnections);
+  }, [profile.uid, showCards, suppliedConnectionCards]);
   useEffect(() => {
     if (viewingSelf) return listenLifetimeInventory(profile.uid, setInventory);
     if (user?.uid) return listenLifetimeInventory(user.uid, setInventory);
@@ -319,6 +339,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
     const timer = window.setInterval(() => setClock(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, [viewingSelf]);
+  const receivedConnections = suppliedConnectionCards ?? loadedConnections;
   const rewardCards = LIFETIME_CARD_KINDS.map((kind) => inventory[kind]);
   const availableCount = rewardCards.filter((item) => item.status === 'available').length;
   const connectionCards = CARD_KEYS.map((key) => ({ key }));
@@ -462,14 +483,38 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
 
   return (
     <>
-      <div className={styles.folderGrid} data-onboarding="recognition-folders">
-        <button type="button" className={styles.folderCard} aria-label="Open connection cards" onClick={() => openFolder('connections')}>
-          <ConnectionCardsFolderSVG count={connectionCount} />
-        </button>
-        <button type="button" className={styles.folderCard} aria-label="Open lifetime cards" onClick={() => openFolder('cards')}>
-          <CardsFolderSVG count={received.length} label="Lifetime cards" />
-        </button>
-      </div>
+      {showCards ? <section className={styles.connectionShowcase} data-onboarding="recognition-folders" aria-labelledby={`connection-cards-${profile.uid}`}>
+        <header className={styles.connectionShowcaseHeader}>
+          <div>
+            <strong id={`connection-cards-${profile.uid}`}>Connection cards</strong>
+            <small>{connectionCount ? `${connectionCount} received` : 'Recognition from your connections'}</small>
+          </div>
+          <button type="button" onClick={() => { openFolder('connections'); setConnectionMode('send'); }}>
+            <ArrowUp size={15} /> Give a card
+          </button>
+        </header>
+        {receivedConnections.length ? (
+          <button type="button" className={styles.connectionStack} aria-label={`View ${connectionCount} received connection cards`} onClick={() => openFolder('connections')}>
+            {receivedConnections.slice(0, 3).map((gift, index) => (
+              <span
+                key={gift.id}
+                className={styles.connectionPreviewCard}
+                data-connection-kind={gift.kind}
+                style={{ '--card-index': index } as React.CSSProperties}
+              >
+                <ConnectionCardIcon cardKey={gift.kind} />
+                <b>{CARD_LABELS[gift.kind]}</b>
+                <small>from {gift.fromName}</small>
+              </span>
+            ))}
+          </button>
+        ) : (
+          <button type="button" className={styles.connectionEmpty} onClick={() => { openFolder('connections'); setConnectionMode('send'); }}>
+            <Sparkles size={22} />
+            <span><strong>No cards yet</strong><small>Swipe up on a card to recognise someone.</small></span>
+          </button>
+        )}
+      </section> : null}
 
       {showAttributes ? <section className={styles.attributeSliders} aria-labelledby={`attribute-sliders-${profile.uid}`}>
         <header>
@@ -511,7 +556,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         </Link>
       ) : null}
 
-      <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost>
+      {showCards ? <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost>
         {folder === 'connections' ? (
           <div className={styles.gallery}>
             <div className={styles.tabs}>
@@ -559,7 +604,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
             )}
           </div>
         ) : null}
-      </Sheet>
+      </Sheet> : null}
 
       <RecipientPicker
         open={pickerOpen}
@@ -573,7 +618,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         onSent={finishGift}
       />
 
-      <ConnectionRecipientPicker
+      {showCards ? <ConnectionRecipientPicker
         open={connectionPickerOpen}
         kind={connectionKind}
         profile={profile}
@@ -582,7 +627,7 @@ export function ProfileRecognitionFolders({ profile, isSelf, communityLeadersHre
         onExited={finishConnectionClose}
         onSendingChange={(sending) => setSendingConnection(sending ? connectionKind : null)}
         onSent={finishConnectionSend}
-      />
+      /> : null}
 
       {launchLabel && launchKind ? <RocketLaunchOverlay label={launchLabel} kind={launchKind} onDone={() => { setLaunchLabel(null); setLaunchKind(null); }} /> : null}
     </>

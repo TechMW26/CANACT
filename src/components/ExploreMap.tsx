@@ -22,6 +22,7 @@ export type ExploreActivity = Point & {
   authorName?: string;
   label?: string;
   createdAt?: number;
+  commentCount?: number;
   /** Thumbnail URL for the pin image. Shown as a round avatar on the map. */
   thumbUrl?: string;
   /** Border color for the pin. Defaults based on kind if not set. */
@@ -519,6 +520,13 @@ export function ExploreMap({
       if (person.photoURL) portrait.style.backgroundImage = `url(${JSON.stringify(person.photoURL)})`;
       else portrait.textContent = person.name.slice(0, 1).toUpperCase();
       marker.appendChild(portrait);
+      const localContent = cluster.people.length === 1 ? contentForPerson.get(person.uid)?.[0] : undefined;
+      if (localContent && !preview) {
+        const activityLabel = document.createElement('span');
+        activityLabel.className = styles.personMarkerActivity;
+        activityLabel.textContent = localContent.kind === 'post' ? 'New post nearby' : `New ${localContent.kind} nearby`;
+        marker.appendChild(activityLabel);
+      }
       if (cluster.people.length > 1) {
         const count = document.createElement('span');
         count.className = styles.personMarkerCount;

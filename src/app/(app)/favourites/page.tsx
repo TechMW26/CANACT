@@ -14,7 +14,7 @@ import {
 } from '@/lib/services/friends';
 import type { AttrKey, FriendEdge, UserProfile } from '@/lib/types';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS } from '@/lib/types';
-import { AlignLeft, Filter, MapPin, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
+import { AlignLeft, Filter, MapPin, MessageCircle, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
 import { useGeo } from '@/lib/useGeo';
 import { useDistance } from '@/lib/distance';
 import { haversineMeters } from '@/lib/utils';
@@ -227,6 +227,7 @@ export default function FavouritesPage() {
         authorName: post.authorName,
         label: post.text || 'Post',
         createdAt: post.createdAt,
+        commentCount: post.commentCount ?? 0,
         thumbUrl: isVideo ? undefined : thumbUrl,
         color: '#1f6b55',  // brand green for regular posts
       }];
@@ -421,6 +422,8 @@ function ExploreMapSurface({
         <span><i className={styles.storyDot} /> Stories</span>
       </div>
 
+      <MapActivityRail activities={activities} currentLocation={currentLocation} hidden={sheetExpanded} />
+
       {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}><span>Enable location to center the map around you.</span></div> : null}
 
       <aside
@@ -476,6 +479,44 @@ function ExploreMapSurface({
         </div>
       </aside>
     </section>
+  );
+}
+
+function formatMapActivityAge(createdAt?: number) {
+  if (!createdAt) return 'Now';
+  const hours = Math.max(0, Math.floor((Date.now() - createdAt) / 3_600_000));
+  if (hours < 1) return 'Now';
+  return `${hours} hr${hours === 1 ? '' : 's'}`;
+}
+
+function MapActivityRail({
+  activities,
+  currentLocation,
+  hidden,
+}: {
+  activities: ExploreActivity[];
+  currentLocation: { lat: number; lng: number } | null;
+  hidden: boolean;
+}) {
+  const cards = activities.filter((activity) => activity.kind !== 'person' && activity.href).slice(0, 8);
+  if (!cards.length) return null;
+  return (
+    <nav className={styles.mapActivityRail} data-hidden={hidden} aria-label="Recent posts nearby">
+      {cards.map((activity) => {
+        const distance = currentLocation ? haversineMeters(currentLocation, activity) : null;
+        return (
+          <Link key={activity.id} href={activity.href!} className={styles.mapActivityCard}>
+            <span className={styles.mapActivityAge}>{formatMapActivityAge(activity.createdAt)}</span>
+            {activity.thumbUrl ? <img src={activity.thumbUrl} alt="" loading="lazy" /> : <span className={styles.mapActivityFallback}>{activity.kind}</span>}
+            <strong>{activity.label || `${activity.kind} nearby`}</strong>
+            <span className={styles.mapActivityMeta}>
+              <span><MessageCircle size={13} /> {activity.commentCount ?? 0} replies</span>
+              {distance !== null ? <span><MapPin size={13} /> {distance < 1000 ? `${Math.max(1, Math.round(distance))} m` : `${(distance / 1000).toFixed(1)} km`}</span> : null}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

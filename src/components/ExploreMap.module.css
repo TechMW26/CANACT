@@ -16,6 +16,25 @@
 .personMarker[data-has-local-content="true"] { background: conic-gradient(from 20deg, #f0c84c, #67dca7, #1f6b55, #8c62b7, #f0c84c); }
 .personMarker[data-has-local-content="true"] .personMarkerPhoto { box-shadow: inset 0 0 0 2px #fffdf7; }
 .personMarkerCount { position: absolute; right: -8px; bottom: -5px; z-index: 3; display: grid; min-width: 22px; height: 22px; place-items: center; border: 2px solid #fffdf7; border-radius: 999px; background: #143e32; padding: 0 5px; color: white; font-size: 10px; line-height: 1; }
+.personMarkerActivity {
+  position: absolute;
+  right: 28px;
+  bottom: 41px;
+  z-index: 4;
+  width: max-content;
+  max-width: 118px;
+  border: 1px solid rgba(31,107,85,.12);
+  border-radius: 999px;
+  background: rgba(250,248,242,.94);
+  padding: 5px 8px;
+  color: #173f34;
+  font-size: 8px;
+  font-weight: 850;
+  line-height: 1;
+  box-shadow: 0 7px 18px rgba(17,40,34,.12);
+  white-space: nowrap;
+}
+.personMarkerActivity::after { content: ""; position: absolute; right: 11px; bottom: -4px; width: 8px; height: 8px; background: rgba(250,248,242,.94); transform: rotate(45deg); }
 .personMarker[data-outside-radius="true"] { opacity: .42; filter: blur(3px) saturate(.55); }
 .personMarker[data-outside-radius="false"] { opacity: 1; filter: none; }
 .mapStatus { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: #e9e4cf; color: rgb(17 40 34 / 58%); font-size: 11px; font-weight: 800; letter-spacing: .02em; }

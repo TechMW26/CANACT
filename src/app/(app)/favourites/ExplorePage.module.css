@@ -65,6 +65,48 @@
 .postDot { background: #1f6b55; }
 .storyDot { background: #f2b72e; }
 
+.mapActivityRail {
+  position: fixed;
+  z-index: 20;
+  right: 0;
+  bottom: calc(clamp(180px, 28dvh, 260px) + 12px);
+  left: 0;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 10px max(20px, env(safe-area-inset-left)) 14px;
+  scroll-padding-inline: 20px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  transition: opacity 180ms ease, transform 260ms cubic-bezier(.22,.85,.3,1);
+}
+.mapActivityRail::-webkit-scrollbar { display: none; }
+.mapActivityRail[data-hidden="true"] { pointer-events: none; opacity: 0; transform: translateY(18px); }
+.mapActivityCard {
+  position: relative;
+  display: grid;
+  width: clamp(214px, 66vw, 286px);
+  min-width: clamp(214px, 66vw, 286px);
+  grid-template-rows: 124px auto auto;
+  gap: 8px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  border: 1px solid rgba(255,255,255,.76);
+  border-radius: 26px;
+  background: rgba(250,248,242,.96);
+  padding: 10px 10px 12px;
+  color: #152f28;
+  box-shadow: 0 16px 34px rgba(16,54,42,.14);
+  backdrop-filter: blur(16px);
+}
+.mapActivityCard > img, .mapActivityFallback { width: 100%; height: 124px; border-radius: 18px; object-fit: cover; background: linear-gradient(135deg,#dcece5,#eee6d2); }
+.mapActivityFallback { display: grid; place-items: center; color: #1f6b55; font-size: 12px; font-weight: 900; text-transform: capitalize; }
+.mapActivityAge { position: absolute; top: 7px; left: 9px; z-index: 2; border-radius: 999px; background: rgba(250,248,242,.94); padding: 5px 11px; color: #24483d; font-size: 10px; font-weight: 850; box-shadow: 0 3px 10px rgba(17,40,34,.08); }
+.mapActivityCard > strong { overflow: hidden; padding: 0 3px; font-size: 14px; font-weight: 850; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.mapActivityMeta { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 0 3px; color: rgba(21,47,40,.56); font-size: 10px; font-weight: 750; }
+.mapActivityMeta span { display: inline-flex; min-width: 0; align-items: center; gap: 4px; white-space: nowrap; }
+
 .locationNotice {
   position: fixed;
   z-index: 18;
@@ -207,6 +249,7 @@
   .legend { top: 126px; left: 276px; }
   .peopleSheet { right: 24px; bottom: 10px; left: auto; width: min(460px, calc(100vw - 288px)); border-radius: 30px; transform: translateY(calc(100% - clamp(180px, 28dvh, 260px))); padding-bottom: 24px; }
   .peopleSheetExpanded { transform: translateY(0); }
+  .mapActivityRail { right: 500px; left: 240px; bottom: 24px; }
 
 }
 

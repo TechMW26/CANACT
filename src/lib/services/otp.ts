@@ -10,6 +10,7 @@ import {
   RecaptchaVerifier,
   ConfirmationResult,
 } from 'firebase/auth';
+import { SDK_VERSION } from 'firebase/app';
 import { getFirebaseAuth } from '../firebase';
 
 type OTPChannel = 'firebase-sms';
@@ -203,7 +204,14 @@ async function sendOTPInternal(
     return { ok: true, channel: 'firebase-sms', expiresAt };
   } catch (error: any) {
     clearRecaptcha(containerId);
-    console.error('[OTP] Firebase SMS send failed', error?.code || 'unknown', error?.message || 'unknown');
+    const serverMessage = error?.customData?._serverResponse?.error?.message
+      || error?.customData?._serverResponse?.message;
+    console.error(
+      `[OTP] Firebase SMS send failed code=${error?.code || 'unknown'} sdk=${SDK_VERSION}`,
+      error?.message || 'unknown',
+      serverMessage ? `server=${serverMessage}` : '',
+      error?.stack || '',
+    );
     return { ok: false, error: firebaseSendError(error) };
   }
 }
@@ -273,6 +281,7 @@ function firebaseSendError(error: any) {
     case 'auth/captcha-check-failed':
     case 'auth/invalid-app-credential':
     case 'auth/missing-client-identifier': return 'Firebase could not verify this browser. Refresh the page and try again.';
+    case 'auth/internal-error': return 'Firebase could not start SMS delivery. Confirm Blaze billing, Phone sign-in, and the destination SMS region are enabled for this project.';
     case 'auth/network-request-failed': return 'Network error while contacting Firebase. Check your connection and try again.';
     default: return SEND_FAILURE_MESSAGE;
   }
