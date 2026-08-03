@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { Activity, ArrowUp, Heart, Sparkles, Users } from '@/components/icons';
+import { Activity, ArrowUp, Award, Check, Heart, HeartHandshake, MapPin, ShieldCheck, Sparkles, UserPlus, Users } from '@/components/icons';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { ExploreMap } from '@/components/ExploreMap';
 import { useAuth } from '@/lib/auth';
@@ -11,9 +12,16 @@ import { db } from '@/lib/firebase';
 import { useGeo } from '@/lib/useGeo';
 import { calculateCanactScore, getCanactScoreLabel } from '@/lib/canactScore';
 import { haptic } from '@/lib/haptics';
+import { useDistance } from '@/lib/distance';
+import { sendFriendRequest } from '@/lib/services/friends';
+import { toast } from '@/components/Toaster';
 import type { UserProfile } from '@/lib/types';
 import type { FriendMapPerson } from '@/components/FriendsWorldMap';
+import { formatDistance, haversineMeters } from '@/lib/utils';
 import styles from './CanactHome.module.css';
+
+type HomeProfile = UserProfile & { lastLocation?: { lat?: number; lng?: number } };
+type HomeSuggestion = { profile: HomeProfile; source: 'contact' | 'nearby'; distanceMeters?: number };
 
 function firstName(value?: string | null) {
   return String(value || 'there').trim().split(/\s+/)[0] || 'there';
@@ -23,6 +31,7 @@ export function CanactHome() {
   const { profile, user } = useAuth();
   const router = useRouter();
   const { coords } = useGeo();
+  const { radius } = useDistance();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scoreRef = useRef<HTMLDivElement | null>(null);
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
@@ -39,6 +48,15 @@ export function CanactHome() {
   const [exploreTransition, setExploreTransition] = useState(false);
   const [transitionOrigin, setTransitionOrigin] = useState<React.CSSProperties>();
   const [people, setPeople] = useState<FriendMapPerson[]>([]);
+  const [profiles, setProfiles] = useState<HomeProfile[]>([]);
+  const [contactUids, setContactUids] = useState<Set<string>>(() => new Set());
+  const [friendUids, setFriendUids] = useState<Set<string>>(() => new Set());
+  const [outgoingUids, setOutgoingUids] = useState<Set<string>>(() => new Set());
+  const [connectingUid, setConnectingUid] = useState<string | null>(null);
+  const [metricPage, setMetricPage] = useState(0);
+  const metricSwipeRef = useRef<{ x: number; y: number } | null>(null);
+  const metricSwipedRef = useRef(false);
+  const suggestionDay = useMemo(() => Math.floor(Date.now() / 86_400_000), []);
   const summary = useMemo(() => calculateCanactScore(profile), [profile]);
   const score = summary.score;
   const tier = getCanactScoreLabel(score);
@@ -46,16 +64,57 @@ export function CanactHome() {
   const likes = Math.max(0, profile?.likesCount || 0);
   const dislikes = Math.max(0, profile?.dislikesCount || 0);
   const goodActs = (profile?.helpStats?.resolved || 0) + (profile?.helpStats?.confirmed || 0);
+  const connectionCardCount = Object.values(profile?.cardsReceived ?? {}).reduce((sum, count) => sum + Number(count || 0), 0);
+  const badgeCount = new Set(profile?.badges ?? []).size;
+  const connectionCardsHref = user?.uid ? `/profile#connection-cards-${encodeURIComponent(user.uid)}` : '/profile';
+  const scoreMetrics = useMemo(() => [
+    { id: 'connections', label: 'Connection cards', displayLabel: 'Connection', value: connectionCardCount, suffix: 'cards', Icon: Award, tone: 'mint', href: connectionCardsHref },
+    { id: 'help', label: 'Helps done', displayLabel: 'Helps', value: goodActs, suffix: 'completed', Icon: HeartHandshake, tone: 'lavender', href: '/help' },
+    { id: 'badges', label: 'Badges received', displayLabel: 'Badges', value: badgeCount, suffix: 'received', Icon: ShieldCheck, tone: 'cream', href: '/profile' },
+    { id: 'reliability', label: 'Reliability', displayLabel: 'Reliability', value: Number(profile?.attrs?.reliability || 0), suffix: 'signals', Icon: ShieldCheck, tone: 'blue', href: '/profile' },
+    { id: 'civic', label: 'Civic sense', displayLabel: 'Civic sense', value: Number(profile?.attrs?.civic_sense || 0), suffix: 'signals', Icon: Sparkles, tone: 'yellow', href: '/profile' },
+    { id: 'behaviour', label: 'Behaviour', displayLabel: 'Behaviour', value: Number(profile?.attrs?.behaviour || 0), suffix: 'signals', Icon: Users, tone: 'coral', href: '/profile' },
+  ], [badgeCount, connectionCardCount, connectionCardsHref, goodActs, profile?.attrs?.behaviour, profile?.attrs?.civic_sense, profile?.attrs?.reliability]);
+  const metricPageCount = Math.ceil(scoreMetrics.length / 2);
+  const visibleScoreMetrics = [scoreMetrics[metricPage * 2], scoreMetrics[(metricPage * 2) + 1]];
 
-  const currentLocation = coords ? { lat: coords.lat, lng: coords.lng } : null;
+  const changeMetricPage = (direction: number) => {
+    setMetricPage((current) => (current + direction + metricPageCount) % metricPageCount);
+  };
+
+  const onMetricPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    metricSwipeRef.current = { x: event.clientX, y: event.clientY };
+    metricSwipedRef.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onMetricPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = metricSwipeRef.current;
+    metricSwipeRef.current = null;
+    if (!start) return;
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) < 34 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    metricSwipedRef.current = true;
+    changeMetricPage(deltaX < 0 ? 1 : -1);
+    haptic('selection');
+    window.setTimeout(() => { metricSwipedRef.current = false; }, 0);
+  };
+
+  const currentLocation = coords
+    ? { lat: coords.lat, lng: coords.lng }
+    : normalizedHomeLocation((profile as HomeProfile | null)?.lastLocation);
 
   // Load map-visible profiles. Distance styling in ExploreMap keeps the
   // immediate 15 m vicinity clear and de-emphasises everyone farther away.
   useEffect(() => {
-    if (!user) { setPeople([]); return; }
+    if (!user) { setPeople([]); setProfiles([]); return; }
     return onValue(ref(db, 'users'), (snapshot) => {
-      const profiles = snapshot.val() as Record<string, UserProfile & { lastLocation?: { lat?: number; lng?: number } }> | null;
-      const located = Object.entries(profiles ?? {}).flatMap<FriendMapPerson>(([uid, candidate]) => {
+      const value = snapshot.val() as Record<string, HomeProfile> | null;
+      const rows = Object.entries(value ?? {}).map(([uid, candidate]) => ({ ...candidate, uid: candidate.uid || uid }));
+      setProfiles(rows);
+      const located = rows.flatMap<FriendMapPerson>((candidate) => {
+        const uid = candidate.uid;
         const location = candidate?.lastLocation;
         if (uid === user.uid || typeof location?.lat !== 'number' || typeof location?.lng !== 'number') return [];
         return [{
@@ -71,6 +130,62 @@ export function CanactHome() {
       setPeople(located);
     });
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setContactUids(new Set());
+      setFriendUids(new Set());
+      setOutgoingUids(new Set());
+      return;
+    }
+    const listenKeys = (path: string, setter: (value: Set<string>) => void) => onValue(ref(db, path), (snapshot) => {
+      const next = new Set<string>();
+      snapshot.forEach((child) => { if (child.key) next.add(child.key); return undefined; });
+      setter(next);
+    });
+    const offContacts = listenKeys(`contacts/${user.uid}`, setContactUids);
+    const offFriends = listenKeys(`friends/${user.uid}`, setFriendUids);
+    const offOutgoing = listenKeys(`friendRequests/outgoing/${user.uid}`, setOutgoingUids);
+    return () => { offContacts(); offFriends(); offOutgoing(); };
+  }, [user?.uid]);
+
+  const suggestions = useMemo<HomeSuggestion[]>(() => {
+    if (!user?.uid) return [];
+    const now = Date.now();
+    const eligible = profiles.filter((candidate) => (
+      candidate.uid !== user.uid
+      && !friendUids.has(candidate.uid)
+      && (!candidate.underground || (Number(candidate.undergroundUntil || 0) > 0 && Number(candidate.undergroundUntil) <= now))
+    ));
+    const contacts = eligible
+      .filter((candidate) => contactUids.has(candidate.uid))
+      .sort((left, right) => suggestionHash(`${left.uid}:${user.uid}:${suggestionDay}`) - suggestionHash(`${right.uid}:${user.uid}:${suggestionDay}`))
+      .slice(0, 5)
+      .map((candidate): HomeSuggestion => ({ profile: candidate, source: 'contact' }));
+    const used = new Set(contacts.map((item) => item.profile.uid));
+    const nearby = currentLocation ? eligible.flatMap<HomeSuggestion>((candidate) => {
+      if (used.has(candidate.uid)) return [];
+      const location = normalizedHomeLocation(candidate.lastLocation);
+      if (!location) return [];
+      const distanceMeters = haversineMeters(currentLocation, location);
+      if (radius !== Infinity && distanceMeters > radius) return [];
+      return [{ profile: candidate, source: 'nearby', distanceMeters }];
+    }).sort((left, right) => (left.distanceMeters ?? Infinity) - (right.distanceMeters ?? Infinity)) : [];
+    return [...contacts, ...nearby].slice(0, 10);
+  }, [contactUids, currentLocation, friendUids, profiles, radius, suggestionDay, user?.uid]);
+
+  const connect = async (suggestion: HomeSuggestion) => {
+    if (!user || !profile || connectingUid || outgoingUids.has(suggestion.profile.uid)) return;
+    setConnectingUid(suggestion.profile.uid);
+    try {
+      await sendFriendRequest(
+        { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
+        { uid: suggestion.profile.uid, name: suggestion.profile.fullName || 'Canact user', photoURL: suggestion.profile.photoURL },
+      );
+      toast(`Connection request sent to ${suggestion.profile.firstName || suggestion.profile.fullName || 'this person'}`, 'success');
+    } catch (error: any) { toast(error?.message || 'Could not send connection request', 'error'); }
+    finally { setConnectingUid(null); }
+  };
 
   const handleScroll = useCallback(() => {
     if (rafRef.current) return;
@@ -228,6 +343,7 @@ export function CanactHome() {
     '--greeting-y': `${-32 * p}px`,
     '--circle-scale': 1 - (p * 0.36),
     '--circle-opacity': Math.max(0, 1 - (p * 1.3)),
+    '--metric-opacity': Math.max(0, 1 - (p * 1.3)),
   } as React.CSSProperties;
 
   return (
@@ -240,7 +356,42 @@ export function CanactHome() {
           </div>
         </div>
 
-        <div className={styles.scoreDock}>
+        <div
+          className={styles.scoreDock}
+          role="region"
+          aria-label="Score insights carousel"
+          onPointerDown={onMetricPointerDown}
+          onPointerUp={onMetricPointerUp}
+          onPointerCancel={() => { metricSwipeRef.current = null; }}
+        >
+          {visibleScoreMetrics.map((metric, index) => {
+            const Icon = metric.Icon;
+            const side = index === 0 ? 'left' : 'right';
+            return (
+              <Link
+                key={`${metricPage}-${metric.id}`}
+                href={metric.href}
+                prefetch
+                className={styles.metricCircle}
+                data-side={side}
+                data-tone={metric.tone}
+                aria-label={`${metric.label}: ${metric.value} ${metric.suffix}. Open details.`}
+                onClick={(event) => {
+                  if (metricSwipedRef.current) {
+                    metricSwipedRef.current = false;
+                    event.preventDefault();
+                    return;
+                  }
+                  haptic('selection');
+                }}
+              >
+                <span><Icon size={18} /></span>
+                <b>{metric.value}</b>
+                <strong>{metric.displayLabel}</strong>
+                <small>{metric.suffix}</small>
+              </Link>
+            );
+          })}
           <div ref={scoreRef} className={styles.scoreCircle} data-onboarding="score">
             <svg className={styles.scoreRing} viewBox="0 0 240 240" aria-hidden="true">
               <circle cx="120" cy="120" r="108" pathLength="100" />
@@ -252,6 +403,11 @@ export function CanactHome() {
               <small>{summary.delta >= 0 ? '↑' : '↓'} {Math.abs(summary.delta)} this month</small>
               <em>{tier}</em>
             </div>
+          </div>
+          <div className={styles.metricDots} aria-label="Insight pages">
+            {Array.from({ length: metricPageCount }, (_, index) => (
+              <button key={index} type="button" aria-label={`Show insight page ${index + 1}`} aria-current={metricPage === index ? 'page' : undefined} onClick={() => setMetricPage(index)} />
+            ))}
           </div>
         </div>
 
@@ -268,6 +424,26 @@ export function CanactHome() {
           <span><Activity /></span>
           <div><h3>{summary.delta >= 0 ? 'Your trust is trending upward' : 'Small reliable actions rebuild momentum'}</h3><p>Consistency, genuine interactions, and community help shape your score.</p></div>
         </div>
+
+        {suggestions.length ? (
+          <section className={styles.suggestions} aria-labelledby="people-you-may-know-title">
+            <div className={styles.suggestionHeading}>
+              <h2 id="people-you-may-know-title"><Users size={20} /> People you may know</h2>
+              <Link href="/search">See all</Link>
+            </div>
+            <div className={styles.suggestionRail}>
+              {suggestions.map((suggestion) => (
+                <PeopleSuggestionCard
+                  key={suggestion.profile.uid}
+                  suggestion={suggestion}
+                  requested={outgoingUids.has(suggestion.profile.uid)}
+                  busy={connectingUid === suggestion.profile.uid}
+                  onConnect={connect}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {/* Explore Map — always renders; live/stored location improves its centre. */}
         <div className={styles.mapStage}>
@@ -309,4 +485,53 @@ export function CanactHome() {
       ) : null}
     </section>
   );
+}
+
+function PeopleSuggestionCard({
+  suggestion,
+  requested,
+  busy,
+  onConnect,
+}: {
+  suggestion: HomeSuggestion;
+  requested: boolean;
+  busy: boolean;
+  onConnect: (suggestion: HomeSuggestion) => Promise<void>;
+}) {
+  const candidate = suggestion.profile;
+  const name = candidate.fullName || candidate.firstName || 'Canact user';
+  const score = calculateCanactScore(candidate).score;
+  return (
+    <article className={styles.suggestionCard}>
+      <Link href={`/profile/${encodeURIComponent(candidate.uid)}`} className={styles.suggestionProfile} aria-label={`Open ${name}'s profile`}>
+        <span className={styles.suggestionSource} data-source={suggestion.source}>
+          {suggestion.source === 'contact' ? <Users size={12} /> : <MapPin size={12} />}
+          {suggestion.source === 'contact' ? 'In your contacts' : suggestion.distanceMeters === undefined ? 'Nearby' : `${formatDistance(suggestion.distanceMeters)} away`}
+        </span>
+        {candidate.photoURL ? <img src={candidate.photoURL} alt="" loading="lazy" /> : <span className={styles.suggestionFallback}>{name.slice(0, 1).toUpperCase()}</span>}
+        <span className={styles.suggestionCopy}><strong>{name}</strong><small>{candidate.city || candidate.country || 'Canact community'}</small><b>{score} score</b></span>
+      </Link>
+      <div className={styles.suggestionActions}>
+        <Link href={`/profile/${encodeURIComponent(candidate.uid)}`}>View profile</Link>
+        <button type="button" disabled={busy || requested} onClick={() => void onConnect(suggestion)} aria-label={requested ? `Connection requested with ${name}` : `Connect with ${name}`}>
+          {requested ? <Check size={16} /> : <UserPlus size={16} />}
+          <span>{busy ? 'Sending…' : requested ? 'Requested' : 'Connect'}</span>
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function normalizedHomeLocation(value?: HomeProfile['lastLocation']) {
+  if (typeof value?.lat !== 'number' || typeof value.lng !== 'number') return null;
+  return { lat: value.lat, lng: value.lng };
+}
+
+function suggestionHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

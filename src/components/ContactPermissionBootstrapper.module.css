@@ -1,0 +1,47 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483560;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(12 29 24 / 48%);
+  padding: 18px;
+}
+
+.sheet {
+  position: relative;
+  width: min(100%, 480px);
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 32px;
+  background: #faf8f2;
+  padding: 28px 24px max(24px, env(safe-area-inset-bottom));
+  color: #112822;
+  box-shadow: 0 24px 70px rgb(9 31 24 / 24%);
+  animation: contactSheetIn 320ms cubic-bezier(.22,.85,.3,1);
+}
+
+.close { position: absolute; top: 18px; right: 18px; display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: #ece9df; color: #315247; }
+.icon { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 18px; background: #dcece5; color: #1f6b55; }
+.eyebrow { display: block; margin-top: 20px; color: #2e8068; font-size: 11px; font-weight: 900; letter-spacing: .17em; }
+.sheet h2 { max-width: 360px; margin: 7px 0 0; font-size: clamp(25px, 7vw, 34px); font-weight: 950; line-height: 1.03; letter-spacing: -.045em; }
+.sheet p { margin: 12px 0 22px; color: rgb(17 40 34 / 62%); font-size: 13px; font-weight: 620; line-height: 1.55; }
+.primary { display: flex; width: 100%; min-height: 54px; align-items: center; justify-content: center; gap: 9px; border-radius: 999px; background: #1f6b55; color: #fff; font-size: 14px; font-weight: 900; }
+.primary:disabled, .secondary:disabled, .later:disabled { opacity: .55; }
+.secondary, .later { display: block; width: 100%; min-height: 42px; color: #1f6b55; font-size: 12px; font-weight: 850; text-align: center; }
+.secondary { margin-top: 5px; }
+.later { color: rgb(17 40 34 / 48%); }
+.file { position: fixed; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
+@keyframes contactSheetIn {
+  from { opacity: 0; transform: translate3d(0, 28px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@media (min-width: 700px) {
+  .backdrop { align-items: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation-duration: 1ms; }
+}

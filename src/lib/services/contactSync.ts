@@ -18,6 +18,32 @@ export function isNativeContactSyncAvailable() {
   return Capacitor.isNativePlatform();
 }
 
+type ContactPickerNavigator = Navigator & {
+  contacts?: {
+    select: (
+      properties: Array<'name' | 'tel' | 'email'>,
+      options: { multiple: boolean },
+    ) => Promise<Array<{ name?: string[]; tel?: string[]; email?: string[] }>>;
+  };
+};
+
+export function isWebContactPickerAvailable() {
+  if (typeof navigator === 'undefined') return false;
+  return typeof (navigator as ContactPickerNavigator).contacts?.select === 'function';
+}
+
+/** The browser contact picker must be called directly from a user gesture. */
+export async function readWebContacts(): Promise<ContactSyncRecord[]> {
+  const picker = (navigator as ContactPickerNavigator).contacts;
+  if (!picker?.select) throw new Error('Import a contacts file to sync your address book on this browser.');
+  const contacts = await picker.select(['name', 'tel', 'email'], { multiple: true });
+  return contacts.map((contact) => ({
+    name: contact.name?.[0]?.trim() || undefined,
+    phones: unique(contact.tel ?? []),
+    emails: unique(contact.email ?? []),
+  })).filter((contact) => contact.phones.length || contact.emails.length);
+}
+
 export async function readAllDeviceContacts(): Promise<ContactSyncRecord[]> {
   if (!Capacitor.isNativePlatform()) throw new Error('Import a contacts file to sync your full address book on the web.');
   const { Contacts } = await import('@capacitor-community/contacts');

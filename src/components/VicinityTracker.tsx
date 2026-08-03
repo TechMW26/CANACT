@@ -137,9 +137,9 @@ function ProximityRatingPrompt({
                 key={key}
                 type="button"
                 aria-pressed={selected}
-                title={cooldown > 0 ? `Available in ${Math.ceil(cooldown / 3_600_000)}h` : given ? 'Tap to take back' : undefined}
+                title={given ? 'Tap to take back' : cooldown > 0 ? `Available in ${Math.ceil(cooldown / 3_600_000)}h` : undefined}
                 onClick={() => {
-                  if (cooldown > 0) {
+                  if (cooldown > 0 && !given) {
                     toast(`You already gave ${ATTR_LABELS[key]} · available in ${Math.ceil(cooldown / 3_600_000)}h`, 'error');
                     return;
                   }

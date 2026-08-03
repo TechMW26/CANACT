@@ -76,6 +76,11 @@ export function CameraCapture({
     }
   };
 
+  // Entering a composer is already an explicit camera intent. Start the
+  // preview immediately; browsers that require another gesture gracefully
+  // fall back to the native camera input without an extra enable step.
+  useEffect(() => { void startPreview(); }, []);
+
   // Cleanup stream on unmount
   useEffect(() => {
     return () => {
@@ -178,7 +183,10 @@ export function CameraCapture({
         <button type="button" onClick={onCancel} aria-label="Close media capture" className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white active:bg-white/10">
           <X size={24} />
         </button>
-        <div className="text-[17px] font-extrabold tracking-tight">Create</div>
+        <div className="text-center">
+          <div className="text-[17px] font-extrabold tracking-tight">Create</div>
+          <div className="text-[10px] font-semibold text-white/45">Photo or video</div>
+        </div>
         <button
           type="button"
           disabled={!shots.length || busy}
@@ -235,9 +243,10 @@ export function CameraCapture({
             <div className="w-full max-w-sm text-center">
               <button
                 type="button"
-                onClick={() => { if (previewReady) { openCamera(); } else if (!previewAttemptedRef.current) { startPreview(); } else { openCamera(); } }}
+                onClick={() => openCamera()}
                 disabled={busy}
-                className="group relative mx-auto flex aspect-[4/5] w-full max-w-[310px] flex-col items-center justify-center overflow-hidden rounded-[36px] ring-1 ring-white/14 transition active:scale-[.985]"
+                aria-label={mode === 'video' ? 'Open camera to record a video' : 'Open camera to take a photo'}
+                className="group relative mx-auto flex aspect-[4/5] w-full max-w-[330px] flex-col items-center justify-center overflow-hidden rounded-[28px] ring-1 ring-white/14 transition active:scale-[.985]"
               >
                 {/* Fallback gradient behind the video */}
                 <div className="absolute inset-0 bg-gradient-to-br from-[#173f34] via-[#0d201b] to-black" />
@@ -248,15 +257,21 @@ export function CameraCapture({
                   muted
                   className={`absolute inset-0 h-full w-full object-cover ${previewReady ? '' : 'hidden'}`}
                 />
-                {/* Overlay UI on top of preview */}
-                <span className="relative z-10 inline-flex h-20 w-20 items-center justify-center rounded-full bg-white text-ink shadow-[0_20px_60px_rgb(89_211_168_/_25%)] ring-1 ring-line">
-                  {busy || previewLoading ? <Loader2 size={30} className="animate-spin" /> : mode === 'video' ? <Film size={31} /> : <Aperture size={31} />}
-                </span>
-                <span className="relative z-10 mt-6 text-xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                  {previewLoading ? 'Starting camera…' : previewReady ? 'Tap to open camera' : 'Tap to enable camera'}
-                </span>
-                <span className="relative z-10 mt-2 max-w-[230px] text-sm font-medium leading-5 text-white/70 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
-                  {mode === 'video' ? `Record with your phone camera · up to ${maxVideoSec}s` : 'Take a photo with your phone camera'}
+                <div className={`absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/15 ${previewReady ? '' : 'opacity-60'}`} />
+                {!previewReady ? (
+                  <div className="relative z-10 flex flex-col items-center px-6">
+                    <span className="inline-flex h-18 w-18 items-center justify-center rounded-full bg-white text-ink shadow-[0_20px_60px_rgb(89_211_168_/_20%)] ring-1 ring-line">
+                      {busy || previewLoading ? <Loader2 size={28} className="animate-spin" /> : mode === 'video' ? <Film size={29} /> : <Aperture size={29} />}
+                    </span>
+                    <strong className="mt-5 text-lg font-black">{previewLoading ? 'Starting camera…' : mode === 'video' ? 'Record a video' : 'Take a photo'}</strong>
+                    <span className="mt-2 max-w-[240px] text-sm font-medium leading-5 text-white/65">
+                      {mode === 'video' ? `Use your phone camera · up to ${maxVideoSec}s` : 'Camera preview is unavailable, but your phone camera is ready.'}
+                    </span>
+                  </div>
+                ) : null}
+                <span className="absolute bottom-5 left-1/2 z-10 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-white px-5 text-sm font-extrabold text-[#10251f] shadow-[0_10px_30px_rgb(0_0_0_/_24%)]">
+                  {mode === 'video' ? <Film size={18} /> : <Aperture size={18} />}
+                  {mode === 'video' ? 'Record video' : 'Take photo'}
                 </span>
               </button>
             </div>
@@ -265,9 +280,9 @@ export function CameraCapture({
 
         {error && <div role="alert" className="mx-5 mb-3 rounded-2xl bg-[#391f20] px-4 py-3 text-center text-sm font-bold text-[#ffb7b7]">{error}</div>}
 
-        <div className="border-t border-line bg-white px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 text-ink">
+        <div className="border-t border-white/10 bg-[#101110] px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 text-white">
           {showModeToggle && (
-            <div className="mb-4 flex justify-center gap-8" role="tablist" aria-label="Media type">
+            <div className="mx-auto mb-3 grid w-full max-w-[220px] grid-cols-2 rounded-full bg-white/8 p-1" role="tablist" aria-label="Media type">
               {(['photo', 'video'] as const).map((item) => (
                 <button
                   key={item}
@@ -276,10 +291,9 @@ export function CameraCapture({
                   aria-selected={mode === item}
                   disabled={busy}
                   onClick={() => switchMode(item)}
-                  className={`relative px-2 py-2 text-xs font-black uppercase tracking-[.16em] transition ${mode === item ? 'text-white' : 'text-white/45'}`}
+                  className={`rounded-full px-2 py-2 text-[10px] font-black uppercase tracking-[.13em] transition ${mode === item ? 'bg-white text-[#10251f]' : 'text-white/48'}`}
                 >
                   {item}
-                  {mode === item && <span className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-white" />}
                 </button>
               ))}
             </div>
@@ -290,7 +304,7 @@ export function CameraCapture({
               type="button"
               onClick={() => libraryRef.current?.click()}
               disabled={busy}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-extrabold ring-1 ring-white/12 active:bg-white/15 disabled:opacity-50"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/8 px-4 text-sm font-extrabold ring-1 ring-white/12 active:bg-white/15 disabled:opacity-50"
             >
               <ImageIcon size={19} /> Library
             </button>
@@ -298,7 +312,7 @@ export function CameraCapture({
               type="button"
               onClick={() => shots.length ? onCapture(shots) : openCamera()}
               disabled={busy}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-extrabold text-[#10251f] active:scale-[.985] disabled:opacity-50"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#79d5b2] px-4 text-sm font-extrabold text-[#10251f] active:scale-[.985] disabled:opacity-50"
             >
               {shots.length ? <Check size={19} /> : mode === 'video' ? <Film size={19} /> : <Aperture size={19} />}
               {shots.length ? 'Next' : mode === 'video' ? 'Record' : 'Camera'}

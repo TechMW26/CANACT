@@ -487,6 +487,8 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-score-island-event small, .canact-score-island-event strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canact-score-island-event small { color: rgb(255 255 255 / 48%); font-size: 9px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
 .canact-score-island-event strong { margin-top: 4px; font-size: 13px; font-weight: 850; }
+.canact-score-reward-flight { position: fixed; z-index: 2147483200; display: grid; min-width: 66px; height: 42px; place-items: center; padding: 0 15px; translate: -50% -50%; border-radius: 999px; background: #0d3f32; color: #a9f1c9; font-size: 16px; font-weight: 950; box-shadow: 0 12px 30px rgba(13,63,50,.3),0 0 24px rgba(104,224,157,.35); pointer-events: none; animation: canactScoreRewardFlight 1.05s cubic-bezier(.3,.05,.2,1) forwards; }
+@keyframes canactScoreRewardFlight { 0% { opacity: 0; transform: translate3d(0,18px,0) scale(.75); } 18% { opacity: 1; transform: translate3d(0,0,0) scale(1.06); } 82% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--reward-x),var(--reward-y),0) scale(.36); } }
 .canact-score-island-value { display: flex; align-items: baseline; gap: 4px; }
 .canact-score-island-value b { font-size: 36px; font-weight: 950; letter-spacing: -.06em; line-height: 1; }
 .canact-score-island-value em { color: #8ce2b0; font-size: 11px; font-style: normal; font-weight: 900; }
@@ -537,6 +539,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 @media (prefers-reduced-motion: reduce) {
   .canact-score-island-shell, .canact-score-island-portal, .canact-score-island, .canact-score-island-compact, .canact-score-island-panel { transition-duration: 1ms !important; animation-duration: 1ms !important; }
   .canact-score-island-compact > i, .canact-score-island-event > i { animation: none !important; }
+  .canact-score-reward-flight { animation-duration: .2s; }
 }
 
 .canact-glass-dropdown {
@@ -667,6 +670,24 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 }
 .canact-create-nav-icon { transform-origin: center; transition: transform 320ms cubic-bezier(.22,.85,.3,1) !important; }
 .canact-create-nav-button-open .canact-create-nav-icon { transform: rotate(135deg); }
+
+.canact-feed-quick-create-button {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 50%;
+  background: #fff;
+  color: #1f6b55;
+  box-shadow: 0 10px 24px rgb(23 63 52 / 14%);
+  z-index: 58;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.canact-feed-quick-create-button:hover { box-shadow: 0 12px 28px rgb(23 63 52 / 19%); }
+.canact-feed-quick-create-button:active { transform: scale(.94); }
+.canact-feed-quick-create-button:focus-visible { outline: 3px solid rgb(140 226 176 / 68%); outline-offset: 3px; }
 
 .canact-radial-menu {
   position: fixed;
@@ -865,11 +886,13 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   inset: 0;
   z-index: 30;
   border: 0;
+  visibility: hidden;
+  background: transparent !important;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 220ms ease;
+  transition: opacity 220ms ease, visibility 0s linear 220ms;
 }
-.canact-score-island-backdrop[data-expanded="true"] { opacity: 1; pointer-events: auto; }
+.canact-score-island-backdrop[data-expanded="true"] { visibility: visible; background: var(--canact-popup-backdrop) !important; opacity: 1; pointer-events: auto; transition-delay: 0s; }
 .canact-liquid-sheet-panel {
   background: #fff !important;
 }
@@ -1286,10 +1309,10 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* iOS: reduce header/footer offset by 40% (notch/home-indicator already handled by safe-area-inset) */
+/* iOS safe-area spacing is resolved by AppShell; avoid adding a second header gap. */
 @supports (-webkit-touch-callout: none) {
   :root {
-    --canact-header-offset: 7px;
+    --canact-header-offset: 0px;
     --canact-footer-offset: 7px;
     --canact-ios-bottom-shift: 19px;
   }

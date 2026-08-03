@@ -23,6 +23,7 @@ export type ExploreActivity = Point & {
   authorName?: string;
   label?: string;
   createdAt?: number;
+  expiresAt?: number;
   commentCount?: number;
   /** Thumbnail URL for the pin image. Shown as a round avatar on the map. */
   thumbUrl?: string;

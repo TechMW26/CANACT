@@ -50,8 +50,8 @@ function SearchUserCard({ user, index }: { user: UserProfile; index: number }) {
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
-      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-ink">
-        <span className="max-w-[92px] truncate text-[9px] text-white/90">{handle}</span>
+      <div className="absolute left-2.5 top-2.5 flex min-h-6 max-w-[calc(100%_-_20px)] items-center rounded-full bg-white px-2.5 py-1 shadow-sm">
+        <span className="max-w-[110px] truncate text-[9px] font-bold text-[#1f6b55]">{handle}</span>
       </div>
 
       <div className="absolute bottom-2.5 left-3 right-2">

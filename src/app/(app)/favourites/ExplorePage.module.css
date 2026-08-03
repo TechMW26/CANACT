@@ -98,9 +98,13 @@
   color: #152f28;
   box-shadow: 0 16px 34px rgba(16,54,42,.14);
 }
+.mapActivityCard[data-has-media="false"] { grid-template-rows: 124px auto; }
 .mapActivityCard > img, .mapActivityFallback { width: 100%; height: 124px; border-radius: 18px; object-fit: cover; background: linear-gradient(135deg,#dcece5,#eee6d2); }
-.mapActivityFallback { display: grid; place-items: center; color: #1f6b55; font-size: 12px; font-weight: 900; text-transform: capitalize; }
-.mapActivityAge { position: absolute; top: 7px; left: 9px; z-index: 2; border-radius: 999px; background: rgba(250,248,242,.94); padding: 5px 11px; color: #24483d; font-size: 10px; font-weight: 850; box-shadow: 0 3px 10px rgba(17,40,34,.08); }
+.mapActivityFallback { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 40px 16px 16px; color: #173f34; }
+.mapActivityFallback small { overflow: hidden; color: rgb(23 63 52 / 58%); font-size: 10px; font-weight: 850; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.mapActivityFallback b { display: -webkit-box; overflow: hidden; font-size: 17px; font-weight: 900; line-height: 1.16; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.mapActivityAge { position: absolute; top: 7px; left: 9px; z-index: 2; display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: rgba(250,248,242,.94); padding: 5px 11px; color: #24483d; font-size: 10px; font-weight: 850; box-shadow: 0 3px 10px rgba(17,40,34,.08); }
+.mapActivityAge[data-expiry="true"] { background: #fff2e6; color: #d57822; }
 .mapActivityCard > strong { overflow: hidden; padding: 0 3px; font-size: 14px; font-weight: 850; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .mapActivityMeta { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 0 3px; color: rgba(21,47,40,.56); font-size: 10px; font-weight: 750; }
 .mapActivityMeta span { display: inline-flex; min-width: 0; align-items: center; gap: 4px; white-space: nowrap; }

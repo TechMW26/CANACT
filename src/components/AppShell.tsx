@@ -21,6 +21,7 @@ import { Splash } from './Splash';
 import { IncomingCallRinger } from './IncomingCallRinger';
 import { ScrollRestoration } from './ScrollRestoration';
 import NativePermissionsBootstrapper from './NativePermissionsBootstrapper';
+import ContactPermissionBootstrapper from './ContactPermissionBootstrapper';
 import NativeCallDeepLinkRouter from './NativeCallDeepLinkRouter';
 import { HelpAlertManager } from './HelpAlertManager';
 import { IncomingCardEnvelope } from './IncomingCardEnvelope';
@@ -32,7 +33,7 @@ import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type 
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
-  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, ChevronDown, X,
+  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, X,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
@@ -78,7 +79,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
-  const mobileHeaderInset = mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 1em)` : '1em';
+  const mobileHeaderInset = mobileHeaderTopInset ?? '1em';
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   const [navbarHrefs, setNavbarHrefs] = useState<{ tabs: string[]; plusIcon?: string; plusItems?: string[] } | null>(null);
   const prefetchedRoutesRef = useRef(new Set<string>());
@@ -223,6 +224,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <>
         <Splash message={loading ? 'Loading…' : profile?.profileComplete === false ? 'Finishing your registration…' : user ? 'Getting your profile…' : 'Loading…'} />
         <NativeCallDeepLinkRouter />
+        <ContactPermissionBootstrapper />
         {user ? <IncomingCallRinger /> : null}
       </>
     );
@@ -346,6 +348,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <IncomingCallRinger />
         <HelpAlertManager />
         <NativePermissionsBootstrapper />
+        <ContactPermissionBootstrapper />
         <NativeCallDeepLinkRouter />
       </main>
       </div>{/* /canact-app-content */}
@@ -397,6 +400,26 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       </div>{/* /canact-bottom-group */}
+      {pathname === '/feed' && (
+        <button
+          type="button"
+          data-canact-feed-create-button
+          aria-label="Open posting choices"
+          aria-haspopup="dialog"
+          onClick={() => {
+            haptic('strong');
+            setRadialCreateOpen(false);
+            setPlusOpen(true);
+          }}
+          className="canact-feed-quick-create-button fixed lg:hidden"
+          style={{
+            left: `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP + 12}px)`,
+            bottom: 'max(94px, calc(100px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))',
+          }}
+        >
+          <Plus className="canact-adaptive-icon" size={27} strokeWidth={2.4} aria-hidden="true" />
+        </button>
+      )}
       <button
         type="button"
         data-canact-create-button
@@ -597,7 +620,7 @@ function detailPopupItemFromPath(path: string | null): PostDetailSheetItem | nul
 
 function getMobileHeaderTopInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return null;
-  if (isIOSDevice()) return 'max(env(safe-area-inset-top, 0px), 12px)';
+  if (isIOSDevice()) return 'max(env(safe-area-inset-top, 0px), 1em)';
   const ua = navigator.userAgent || '';
   const isAndroid = /Android/i.test(ua);
   if (!isAndroid) return null;
@@ -607,7 +630,7 @@ function getMobileHeaderTopInset() {
     window.matchMedia?.('(display-mode: standalone)').matches ||
     window.matchMedia?.('(display-mode: fullscreen)').matches
   );
-  return nativeShell || androidWebView || standalone ? 'max(env(safe-area-inset-top, 0px), 24px)' : null;
+  return nativeShell || androidWebView || standalone ? 'calc(max(env(safe-area-inset-top, 0px), 24px) + 1em)' : null;
 }
 
 function isIOSDevice() {
@@ -650,9 +673,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [islandPortalMounted, setIslandPortalMounted] = useState(false);
   const [liveScore, setLiveScore] = useState(0);
   const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
-  const prevScoreRef = useRef(0);
+  const prevScoreRef = useRef<number | null>(null);
   const prevLikesRef = useRef<number | null>(null);
   const [scoreDelta, setScoreDelta] = useState(0);
+  const [scoreFlights, setScoreFlights] = useState<Array<{ id: number; points: number; style: React.CSSProperties }>>([]);
   const [islandMoment, setIslandMoment] = useState<{ icon: string; label: string; tone: 'positive' | 'negative' | 'neutral' } | null>(null);
   const islandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deltaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -663,10 +687,31 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
     islandTimerRef.current = setTimeout(() => { islandTimerRef.current = null; setIslandMoment(null); }, 2800);
   }, []);
 
+  const launchScoreFlight = useCallback((points: number) => {
+    if (points <= 0 || typeof window === 'undefined') return;
+    const target = document.querySelector<HTMLElement>('[data-canact-score-target]') ?? islandRef.current;
+    const targetRect = target?.getBoundingClientRect();
+    const startX = window.innerWidth / 2;
+    const startY = Math.min(window.innerHeight * .72, window.innerHeight - 150);
+    const endX = targetRect ? targetRect.left + targetRect.width / 2 : window.innerWidth / 2;
+    const endY = targetRect ? targetRect.top + targetRect.height / 2 : 60;
+    const id = Date.now() + Math.random();
+    setScoreFlights((current) => [...current, {
+      id,
+      points,
+      style: {
+        left: startX,
+        top: startY,
+        '--reward-x': `${endX - startX}px`,
+        '--reward-y': `${endY - startY}px`,
+      } as React.CSSProperties,
+    }]);
+  }, []);
+
   // Real-time score listener with delta tracking
   useEffect(() => {
     if (!user) return;
-    prevScoreRef.current = 0;
+    prevScoreRef.current = null;
     prevLikesRef.current = null;
     return onValue(dbRef(db, `users/${user.uid}`), (snap) => {
       const p = snap.val() as UserProfile | null;
@@ -675,11 +720,12 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         const prev = prevScoreRef.current;
         const previousLikes = prevLikesRef.current;
         const likeDelta = previousLikes === null ? 0 : Math.max(0, (p.likesCount || 0) - previousLikes);
-        if (prev !== 0 && s.score !== prev) {
+        if (prev !== null && s.score !== prev) {
           const diff = s.score - prev;
           setScoreDelta(diff);
           if (deltaTimerRef.current) clearTimeout(deltaTimerRef.current);
           deltaTimerRef.current = setTimeout(() => { deltaTimerRef.current = null; setScoreDelta(0); }, 2400);
+          if (diff > 0) launchScoreFlight(diff);
           if (!likeDelta) triggerIslandMoment(diff > 0 ? '↗' : '↘', `Score ${diff > 0 ? 'increased' : 'changed'} by ${Math.abs(diff)}`, diff > 0 ? 'positive' : 'negative');
         }
         if (likeDelta > 0) triggerIslandMoment('♥', `${likeDelta} new positive signal${likeDelta === 1 ? '' : 's'}`, 'positive');
@@ -689,7 +735,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         setLiveSummary(s);
       }
     });
-  }, [triggerIslandMoment, user?.uid]);
+  }, [launchScoreFlight, triggerIslandMoment, user?.uid]);
 
   useEffect(() => () => {
     if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
@@ -946,7 +992,6 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
               <strong>{liveScore}</strong>
               <span><small>CANACT</small><small>SCORE</small></span>
               <em>{scoreSummary.label}</em>
-              <ChevronDown size={15} aria-hidden="true" />
             </span>
             <span className="canact-score-island-panel">
               <span className="canact-score-island-hero">
@@ -978,6 +1023,20 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         </>,
         document.body,
       )}
+      {scoreFlights.length && typeof document !== 'undefined' ? createPortal(
+        scoreFlights.map((flight) => (
+          <div
+            key={flight.id}
+            className="canact-score-reward-flight"
+            style={flight.style}
+            onAnimationEnd={() => setScoreFlights((current) => current.filter((item) => item.id !== flight.id))}
+            aria-live="polite"
+          >
+            +{flight.points}
+          </div>
+        )),
+        document.body,
+      ) : null}
     </>
   );
 }

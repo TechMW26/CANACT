@@ -70,13 +70,11 @@ export function OnboardingTaskGuide() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const sentRef = useRef(new Set<string>());
-  const previousPointsRef = useRef<number | null>(null);
   const promptTimerRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<OnboardingTaskId | null>(null);
   const [tour, setTour] = useState<{ key: string; steps: TourStep[]; index: number } | null>(null);
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
-  const [reward, setReward] = useState<{ id: number; points: number; style: CSSProperties } | null>(null);
 
   const progress = profile?.onboarding?.version === 1 ? profile.onboarding as OnboardingProgress : null;
   const activeTask = activeTaskId ? ONBOARDING_TASKS.find((item) => item.id === activeTaskId) ?? null : null;
@@ -104,14 +102,6 @@ export function OnboardingTaskGuide() {
     if (profile?.profileVerified) void signal('verify-identity');
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') void signal('enable-notifications');
   }, [profile?.photoURL, profile?.profileComplete, profile?.profileVerified, progress?.version, user?.uid]);
-
-  useEffect(() => {
-    if (!progress) return;
-    const next = Number(progress.points || 0);
-    const previous = previousPointsRef.current;
-    previousPointsRef.current = next;
-    if (previous !== null && next > previous) launchReward(next - previous);
-  }, [progress?.points]);
 
   useEffect(() => {
     if (activeTaskId && progress?.completed?.[activeTaskId]) setActiveTaskId(null);
@@ -254,26 +244,6 @@ export function OnboardingTaskGuide() {
     setTour({ ...tour, index: tour.index + 1 });
   };
 
-  const launchReward = (points: number) => {
-    const target = findVisibleScoreTarget();
-    const targetRect = target?.getBoundingClientRect();
-    const startX = window.innerWidth / 2;
-    const startY = Math.min(window.innerHeight * 0.72, window.innerHeight - 150);
-    const endX = targetRect ? targetRect.left + targetRect.width / 2 : window.innerWidth / 2;
-    const endY = targetRect ? targetRect.top + targetRect.height / 2 : 60;
-    setReward({
-      id: Date.now(),
-      points,
-      style: {
-        left: startX,
-        top: startY,
-        '--reward-x': `${endX - startX}px`,
-        '--reward-y': `${endY - startY}px`,
-      } as CSSProperties,
-    });
-    window.dispatchEvent(new CustomEvent('canact:pill-emoji', { detail: { emoji: `+${points}` } }));
-  };
-
   return (
     <>
       {tour && spotlight && typeof document !== 'undefined' ? createPortal(
@@ -321,10 +291,6 @@ export function OnboardingTaskGuide() {
 
       <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard" aria-label="Import contacts file" onChange={(event) => void onContactFile(event.target.files?.[0])} />
 
-      {reward && typeof document !== 'undefined' ? createPortal(
-        <div key={reward.id} className={styles.reward} style={reward.style} onAnimationEnd={() => setReward(null)} aria-live="polite">+{reward.points}</div>,
-        document.body,
-      ) : null}
     </>
   );
 }
@@ -347,14 +313,6 @@ function routeTourKey(pathname: string) {
   if (pathname.startsWith('/profile')) return 'profile';
   if (pathname.startsWith('/help')) return 'help';
   return '';
-}
-
-function findVisibleScoreTarget() {
-  const targets = Array.from(document.querySelectorAll<HTMLElement>('[data-onboarding="score"], [data-canact-score-target]'));
-  return targets.find((element) => {
-    const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
-  }) || null;
 }
 
 function actionLabel(id: OnboardingTaskId) {

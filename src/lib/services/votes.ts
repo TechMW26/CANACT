@@ -202,23 +202,15 @@ export async function setAttribute(toUid: string, fromUid: string, attr: AttrKey
 }
 
 /**
- * Remove (take back) a specific attribute you previously gave. Each bipolar
- * pair has one 6h cooldown; the opposite side remains locked after removal.
+ * Remove (take back) a specific attribute you previously gave. Undo is always
+ * allowed, while the pair ledger keeps re-giving or switching locked for 6h.
  */
 export async function removeAttribute(toUid: string, fromUid: string, attr: AttrKey): Promise<AttributeMutationResult> {
   if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid attribute recipient');
   const changedAt = Date.now();
-  let waitMs = 0;
   let alreadyAbsent = false;
   const result = await runTransaction(ref(db, `votes/${toUid}/${fromUid}`), (current: any) => {
     if (!current?.attrs?.[attr]) { alreadyAbsent = true; return; }
-    const remaining = getAttributePairCooldownMs(
-      current.attrs ?? {},
-      current.attrCooldowns ?? {},
-      attr,
-      changedAt,
-    );
-    if (remaining > 0) { waitMs = remaining; return; }
     const attrs = { ...current.attrs };
     delete attrs[attr];
     return {
@@ -228,7 +220,7 @@ export async function removeAttribute(toUid: string, fromUid: string, attr: Attr
     };
   });
 
-  if (!result.committed) return alreadyAbsent ? { ok: true } : { ok: false, reason: 'cooldown', waitMs };
+  if (!result.committed) return alreadyAbsent ? { ok: true } : { ok: false };
 
   await runTransaction(ref(db, `users/${toUid}/attrs`), (a: any) => {
     if (a?.[attr]) a[attr] = Math.max(0, (a[attr] ?? 0) - 1);

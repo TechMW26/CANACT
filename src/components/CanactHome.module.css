@@ -48,13 +48,19 @@
 
 /* Score circle */
 .scoreDock {
+  position: relative;
   display: flex;
+  height: 286px;
+  align-items: flex-start;
   justify-content: center;
   margin-top: 10px;
+  isolation: isolate;
+  touch-action: pan-y;
 }
 
 .scoreCircle {
   position: relative;
+  z-index: 3;
   width: 264px;
   height: 264px;
   border-radius: 50%;
@@ -68,6 +74,73 @@
   transform: scale(var(--circle-scale, 1));
   transition: opacity .16s linear, transform .16s linear;
   will-change: transform, opacity;
+}
+
+.metricCircle {
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  width: 172px;
+  height: 172px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgb(31 107 85 / 10%);
+  border-radius: 50%;
+  background: #e4f2ec;
+  color: #174f3f;
+  opacity: var(--metric-opacity, 1);
+  box-shadow: 0 12px 32px rgb(31 56 47 / 10%);
+  transition: transform 440ms cubic-bezier(.22,.85,.3,1), opacity 160ms linear, background 240ms ease;
+  animation: metricCircleIn 360ms cubic-bezier(.22,.85,.3,1);
+  -webkit-tap-highlight-color: transparent;
+}
+.metricCircle[data-side="left"] { transform: translateX(-138%) scale(.84); }
+.metricCircle[data-side="right"] { transform: translateX(38%) scale(.84); }
+.metricCircle:active { filter: brightness(.98); }
+.metricCircle > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgb(255 255 255 / 72%); }
+.metricCircle b { margin-top: 7px; font-size: 29px; font-weight: 950; line-height: 1; letter-spacing: -.04em; }
+.metricCircle strong { width: 82px; margin-top: 5px; overflow: visible; font-size: 11px; font-weight: 900; line-height: 1.08; text-align: center; text-overflow: clip; white-space: normal; }
+.metricCircle small { width: 78px; margin-top: 3px; color: rgb(23 79 63 / 58%); font-size: 9px; font-weight: 800; line-height: 1.08; text-align: center; white-space: normal; }
+.metricCircle[data-tone="blue"] { background: #e2edf4; color: #285f78; }
+.metricCircle[data-tone="yellow"] { background: #fff0c8; color: #755600; }
+.metricCircle[data-tone="coral"] { background: #f6e2dc; color: #8a4d3f; }
+.metricCircle[data-tone="lavender"] { background: #ece5f6; color: #604a82; }
+.metricCircle[data-tone="cream"] { background: #f2ead8; color: #705a2e; }
+
+.metricDots {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+.metricDots button { width: 6px; height: 6px; border-radius: 999px; background: #d6ddd9; transition: width 220ms ease, background 220ms ease; }
+.metricDots button[aria-current="page"] { width: 19px; background: #2e8068; }
+
+@media (max-width: 520px) {
+  .scoreCircle { width: 244px; height: 244px; }
+  .metricCircle { top: 40px; width: 164px; height: 164px; }
+  .metricCircle[data-side="left"] > span,
+  .metricCircle[data-side="left"] > b,
+  .metricCircle[data-side="left"] > strong,
+  .metricCircle[data-side="left"] > small { transform: translateX(-14px); }
+  .metricCircle[data-side="right"] > span,
+  .metricCircle[data-side="right"] > b,
+  .metricCircle[data-side="right"] > strong,
+  .metricCircle[data-side="right"] > small { transform: translateX(14px); }
+  .metricCircle strong,
+  .metricCircle small { width: 66px; }
+}
+
+@keyframes metricCircleIn {
+  from { opacity: 0; }
 }
 
 .scoreRing {
@@ -202,6 +275,29 @@
 }
 .insight h3 { margin: 0 0 2px; font-size: 14px; line-height: 1.15; }
 .insight p { margin: 0; color: rgba(17,40,34,.58); font-size: 10px; line-height: 1.4; }
+
+/* Contact matches first, then people inside the selected nearby radius. */
+.suggestions { margin: 22px -24px 0; }
+.suggestionHeading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 24px; }
+.suggestionHeading h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: #112822; font-size: 17px; font-weight: 900; letter-spacing: -.025em; }
+.suggestionHeading h2 svg { color: #1f6b55; }
+.suggestionHeading > a { color: #1f6b55; font-size: 11px; font-weight: 850; }
+.suggestionRail { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; padding: 14px 24px 28px; scroll-padding-inline: 24px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.suggestionRail::-webkit-scrollbar { display: none; }
+.suggestionCard { width: min(72vw, 282px); min-width: min(72vw, 282px); overflow: hidden; scroll-snap-align: center; border: 1px solid rgb(31 107 85 / 10%); border-radius: 24px; background: #fff; box-shadow: 0 14px 30px rgb(25 58 47 / 12%); }
+.suggestionProfile { position: relative; display: block; color: #112822; }
+.suggestionProfile > img, .suggestionFallback { display: grid; width: 100%; height: 176px; place-items: center; object-fit: cover; background: linear-gradient(145deg, #dcece5, #efe5d2); color: #1f6b55; font-size: 46px; font-weight: 950; }
+.suggestionSource { position: absolute; top: 10px; left: 10px; z-index: 2; display: inline-flex; max-width: calc(100% - 20px); align-items: center; gap: 5px; border-radius: 999px; background: #faf8f2; padding: 6px 9px; color: #1f6b55; font-size: 9px; font-weight: 850; box-shadow: 0 5px 14px rgb(15 45 35 / 12%); }
+.suggestionSource[data-source="nearby"] { background: #fff4cd; color: #765a00; }
+.suggestionCopy { display: grid; gap: 1px; padding: 11px 14px 9px; }
+.suggestionCopy strong { overflow: hidden; font-size: 15px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.suggestionCopy small { overflow: hidden; color: rgb(17 40 34 / 52%); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.suggestionCopy b { margin-top: 3px; color: #1f6b55; font-size: 12px; }
+.suggestionActions { display: grid; grid-template-columns: .8fr 1fr; gap: 7px; padding: 0 10px 10px; }
+.suggestionActions a, .suggestionActions button { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; border-radius: 12px; font-size: 10px; font-weight: 850; }
+.suggestionActions a { background: #f0eee7; color: #315247; }
+.suggestionActions button { background: #1f6b55; color: #fff; }
+.suggestionActions button:disabled { background: #dcece5; color: #1f6b55; }
 
 /* Actions */
 .actions {

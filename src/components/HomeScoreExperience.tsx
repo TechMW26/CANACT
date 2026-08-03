@@ -798,11 +798,6 @@ export function HomeScoreExperience() {
     if (!user?.uid || !expandedCardUid) return;
     try {
       const current = expandedMyAttrVotes[k];
-      const cooldown = getAttributeCooldownMs(expandedMyAttrVotes, k);
-      if (current && cooldown > 0) {
-        toast(`You can update ${ATTR_LABELS[k]} in ${Math.ceil(cooldown / 3_600_000)}h`, 'error');
-        return;
-      }
       const result = current
         ? await removeAttribute(expandedCardUid, user.uid, k)
         : await setAttribute(expandedCardUid, user.uid, k);
@@ -1493,7 +1488,7 @@ function ExpandedCardModal({
               {POSITIVE_ATTRS.map((attr) => {
                 const selected = !!myAttrVotes[attr];
                 const cooldownLeft = getAttributeCooldownMs(myAttrVotes, attr);
-                const disabled = cooldownLeft > 0;
+                const disabled = cooldownLeft > 0 && !selected;
                 const count = personProfile?.attrs?.[attr] ?? 0;
                 return (
                   <button
@@ -1517,7 +1512,7 @@ function ExpandedCardModal({
               {NEGATIVE_ATTRS.map((attr) => {
                 const selected = !!myAttrVotes[attr];
                 const cooldownLeft = getAttributeCooldownMs(myAttrVotes, attr);
-                const disabled = cooldownLeft > 0;
+                const disabled = cooldownLeft > 0 && !selected;
                 const count = personProfile?.attrs?.[attr] ?? 0;
                 return (
                   <button

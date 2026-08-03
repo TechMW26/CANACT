@@ -14,7 +14,7 @@ import {
 } from '@/lib/services/friends';
 import type { AttrKey, FriendEdge, UserProfile } from '@/lib/types';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS } from '@/lib/types';
-import { AlignLeft, Filter, MapPin, MessageCircle, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
+import { AlignLeft, Clock, Filter, MapPin, MessageCircle, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
 import { useGeo } from '@/lib/useGeo';
 import { useDistance } from '@/lib/distance';
 import { haversineMeters } from '@/lib/utils';
@@ -191,10 +191,9 @@ export default function FavouritesPage() {
     return candidates.filter((person) => {
       if (typeof person.lat !== 'number' || typeof person.lng !== 'number') return false;
       const distance = haversineMeters(currentLocation, { lat: person.lat, lng: person.lng });
-      return Number.isFinite(radius) && distance <= radius;
+      return radius === Infinity || distance <= radius;
     });
   }, [tab, favouritePeople, allPeople, currentLocation, radius]);
-  const mapPeople = tab === 'favourites' ? favouritePeople : allPeople;
   const totalRequests = friendReqs.length + favReqs.length;
   const mapActivities = useMemo<ExploreActivity[]>(() => {
     const now = Date.now();
@@ -227,6 +226,7 @@ export default function FavouritesPage() {
         authorName: post.authorName,
         label: post.text || 'Post',
         createdAt: post.createdAt,
+        expiresAt: post.createdAt + 24 * 3600 * 1000,
         commentCount: post.commentCount ?? 0,
         thumbUrl: isVideo ? undefined : thumbUrl,
         color: '#1f6b55',  // brand green for regular posts
@@ -241,20 +241,27 @@ export default function FavouritesPage() {
       const lng = typeof story.lng === 'number' ? story.lng : person?.lng;
       if (typeof lat !== 'number' || typeof lng !== 'number') return [];
       seenStoryAuthors.add(story.uid);
-      return [{ id: `story-${story.id}`, kind: 'story' as const, lat, lng, weight: 1.25, href: '/feed', authorUid: story.uid, authorName: story.authorName, label: story.caption || 'Story', createdAt: story.createdAt, thumbUrl: story.mediaUrl }];
+      return [{ id: `story-${story.id}`, kind: 'story' as const, lat, lng, weight: 1.25, href: '/feed', authorUid: story.uid, authorName: story.authorName, label: story.caption || 'Story', createdAt: story.createdAt, expiresAt: story.expiresAt, commentCount: Object.keys(story.replies ?? {}).length, thumbUrl: story.mediaUrl }];
     });
     const pollActivity: ExploreActivity[] = polls.flatMap((poll) => {
       if (!isMapFresh(poll.createdAt) || typeof poll.lat !== 'number' || typeof poll.lng !== 'number') return [];
-      return [{ id: `poll-${poll.id}`, kind: 'poll' as const, lat: poll.lat, lng: poll.lng, weight: 1.1, href: `/poll/${poll.id}`, authorUid: poll.uid, authorName: poll.authorName, label: poll.question, createdAt: poll.createdAt, thumbUrl: poll.photoURL, color: '#5f7fce' }];
+      return [{ id: `poll-${poll.id}`, kind: 'poll' as const, lat: poll.lat, lng: poll.lng, weight: 1.1, href: `/poll/${poll.id}`, authorUid: poll.uid, authorName: poll.authorName, label: poll.question, createdAt: poll.createdAt, expiresAt: poll.endsAt, commentCount: poll.commentCount ?? 0, thumbUrl: poll.photoURL, color: '#5f7fce' }];
     });
     const reelActivity: ExploreActivity[] = reels.flatMap((reel) => {
       if (!isMapFresh(reel.createdAt) || typeof reel.lat !== 'number' || typeof reel.lng !== 'number') return [];
-      return [{ id: `reel-${reel.id}`, kind: 'reel' as const, lat: reel.lat, lng: reel.lng, weight: 1.15, href: `/reel/${reel.id}`, authorUid: reel.uid, authorName: reel.authorName, label: reel.caption || 'Reel', createdAt: reel.createdAt, thumbUrl: reel.posterUrl, color: '#8c62b7' }];
+      return [{ id: `reel-${reel.id}`, kind: 'reel' as const, lat: reel.lat, lng: reel.lng, weight: 1.15, href: `/reel/${reel.id}`, authorUid: reel.uid, authorName: reel.authorName, label: reel.caption || 'Reel', createdAt: reel.createdAt, expiresAt: reel.createdAt + 24 * 3600 * 1000, commentCount: reel.commentCount ?? 0, thumbUrl: reel.posterUrl, color: '#8c62b7' }];
     });
     const merged = [...peopleActivity, ...postActivity, ...storyActivity, ...pollActivity, ...reelActivity];
     merged.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     return merged;
   }, [allPeople, posts, stories, polls, reels]);
+  const nearbyMapActivities = useMemo(() => {
+    if (!currentLocation) return [];
+    return mapActivities.filter((activity) => {
+      const distance = haversineMeters(currentLocation, activity);
+      return radius === Infinity || distance <= radius;
+    });
+  }, [currentLocation, mapActivities, radius]);
   if (!user) return null;
   if (!liveCoords) {
     return <LocationRequiredPage pending={!locationError} onRetry={retryLocation} />;
@@ -265,10 +272,10 @@ export default function FavouritesPage() {
     return (
       <ExploreMapSurface
         firstName={profile?.firstName || profile?.fullName?.split(' ')[0] || 'there'}
-        mapPeople={mapPeople}
+        mapPeople={visiblePeople}
         people={visiblePeople}
         currentLocation={currentLocation}
-        activities={mapActivities}
+        activities={nearbyMapActivities}
         locationUnavailable={!!locationError && !currentLocation}
         tab={tab}
         filtersOpen={filtersOpen}
@@ -489,6 +496,15 @@ function formatMapActivityAge(createdAt?: number) {
   return `${hours} hr${hours === 1 ? '' : 's'}`;
 }
 
+function formatMapActivityExpiry(expiresAt?: number) {
+  if (!expiresAt) return null;
+  const remainingMinutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));
+  if (remainingMinutes <= 0) return 'Ended';
+  const hours = Math.floor(remainingMinutes / 60);
+  const minutes = remainingMinutes % 60;
+  return hours > 0 ? `${hours}h ${String(minutes).padStart(2, '0')}m left` : `${minutes}m left`;
+}
+
 function MapActivityRail({
   activities,
   currentLocation,
@@ -504,11 +520,23 @@ function MapActivityRail({
     <nav className={styles.mapActivityRail} data-hidden={hidden} aria-label="Recent posts nearby">
       {cards.map((activity) => {
         const distance = currentLocation ? haversineMeters(currentLocation, activity) : null;
+        const expiry = formatMapActivityExpiry(activity.expiresAt);
+        const hasMedia = Boolean(activity.thumbUrl);
         return (
-          <Link key={activity.id} href={activity.href!} className={styles.mapActivityCard}>
-            <span className={styles.mapActivityAge}>{formatMapActivityAge(activity.createdAt)}</span>
-            {activity.thumbUrl ? <img src={activity.thumbUrl} alt="" loading="lazy" /> : <span className={styles.mapActivityFallback}>{activity.kind}</span>}
-            <strong>{activity.label || `${activity.kind} nearby`}</strong>
+          <Link key={activity.id} href={activity.href!} className={styles.mapActivityCard} data-has-media={hasMedia}>
+            <span className={styles.mapActivityAge} data-expiry={Boolean(expiry && activity.kind === 'poll')}>
+              {expiry && activity.kind === 'poll' ? <Clock size={12} /> : null}
+              {expiry && activity.kind === 'poll' ? expiry : formatMapActivityAge(activity.createdAt)}
+            </span>
+            {activity.thumbUrl ? (
+              <img src={activity.thumbUrl} alt="" loading="lazy" />
+            ) : (
+              <span className={styles.mapActivityFallback}>
+                <small>{activity.authorName || `${activity.kind} nearby`}</small>
+                <b>{activity.label || `${activity.kind} nearby`}</b>
+              </span>
+            )}
+            {hasMedia ? <strong>{activity.label || `${activity.kind} nearby`}</strong> : null}
             <span className={styles.mapActivityMeta}>
               <span><MessageCircle size={13} /> {activity.commentCount ?? 0} replies</span>
               {distance !== null ? <span><MapPin size={13} /> {distance < 1000 ? `${Math.max(1, Math.round(distance))} m` : `${(distance / 1000).toFixed(1)} km`}</span> : null}

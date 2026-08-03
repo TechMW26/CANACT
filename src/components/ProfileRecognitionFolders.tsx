@@ -146,7 +146,7 @@ export function AttributePairSlider({
     ? `${Math.ceil(cooldownMs / 3_600_000)}h`
     : `${Math.max(1, Math.ceil(cooldownMs / 60_000))}m`;
   const label = ATTR_LABELS[positive];
-  const disabled = busy || (!readOnly && locked);
+  const disabled = busy || (!readOnly && locked && selectedValue === 0);
 
   // Measure pill + track to compute equal side margin matching top/bottom gap (5px)
   useEffect(() => {
@@ -217,6 +217,7 @@ export function AttributePairSlider({
     const pct = draftPct ?? committedPct;
     const v = valueFromPct(pct);
     setDraftPct(null);
+    if (locked && selectedValue !== 0 && v !== 0) return;
     if (v !== selectedValue) onCommit(v);
   };
 
@@ -245,7 +246,7 @@ export function AttributePairSlider({
         </div>
       </div>
       {busy ? <Loader2 className={styles.attributeSpinner} size={17} aria-label="Updating attribute" /> : null}
-      {!readOnly && locked ? <small className={styles.attributeLock}>Locked for {cooldownLabel}</small> : null}
+      {!readOnly && locked ? <small className={styles.attributeLock}>{selectedValue ? `Centre to take back · other changes in ${cooldownLabel}` : `Locked for ${cooldownLabel}`}</small> : null}
     </div>
   );
 }
@@ -341,8 +342,6 @@ export function ProfileRecognitionFolders({
     city: profile.city,
     categories: [],
   }), [profile.city, profile.firstName, profile.fullName, profile.photoURL, profile.uid]);
-  const attributeCooldown = (key: AttrKey): number => getAttributePairCooldownMs(myAttrVotes, myAttrCooldowns, key, clock);
-
   const givenAttrKeys = useMemo(() => new Set(Object.keys(myAttrVotes)), [myAttrVotes]);
 
   function openFolder(next: Folder) {
@@ -373,8 +372,9 @@ export function ProfileRecognitionFolders({
   async function addAttribute(key: AttrKey) {
     if (!user || viewingSelf || attributeBusy) return;
 
-    // Already given and past cooldown → take it back (minus).
-    if (givenAttrKeys.has(key) && attributeCooldown(key) === 0) {
+    // Taking a signal back is always allowed. The persisted pair ledger still
+    // prevents re-giving or switching sides until the cooldown expires.
+    if (givenAttrKeys.has(key)) {
       setAttributeBusy(key);
       const label = ATTR_LABELS[key];
       try {
@@ -390,13 +390,6 @@ export function ProfileRecognitionFolders({
       } finally {
         setAttributeBusy(null);
       }
-      return;
-    }
-
-    // Already given but still in cooldown → explain why.
-    if (givenAttrKeys.has(key)) {
-      const hrs = Math.ceil(attributeCooldown(key) / 3_600_000);
-      toast(`You gave ${ATTR_LABELS[key]}. You can take it back in ${hrs}h.`, 'error');
       return;
     }
 

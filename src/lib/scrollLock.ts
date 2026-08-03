@@ -69,6 +69,16 @@ export function lockPageScroll() {
     html.style.overflow = restoreState.htmlOverflow;
     html.style.overscrollBehavior = restoreState.htmlOverscrollBehavior;
     restoreState = null;
+    const isIOSWebKit = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (fixedBody && Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+    if (isIOSWebKit) {
+      // WKWebView/Safari can retain a composited strip from a fixed backdrop
+      // after overflow is restored. Reasserting the scroll position after two
+      // paints forces the visual viewport and safe-area layer to refresh.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (lockCount === 0) window.scrollTo(0, scrollY);
+      }));
+    }
   };
 }

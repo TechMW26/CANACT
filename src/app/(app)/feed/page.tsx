@@ -541,7 +541,7 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
   const coverLqip = post.mediaLqips?.[0] || undefined;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
-    <article className="overflow-hidden rounded-[34px] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
+    <article className="overflow-hidden rounded-3xl border border-[#E4E7E2] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
       <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpen(); }} className={`relative block w-full ${heightClass} overflow-hidden bg-[#e8e4d8] text-left cursor-pointer`}>
         {cover && isVideo ? (
           <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />

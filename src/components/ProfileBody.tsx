@@ -882,7 +882,7 @@ function CanactPagesProfileUI({
           </div>
         </div>
 
-        <h1 className="text-[26px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
+        <h1 className="mt-[1em] text-[26px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
         <p className="mt-1 text-[13px] font-semibold text-ink/48">@{profileSlug(userProfile)} · {role}</p>
         <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-ink/68">{profileInsight}</p>
         {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-ink/45">{userProfile.bio}</p> : null}
