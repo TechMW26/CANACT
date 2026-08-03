@@ -137,15 +137,15 @@ export default function ReelCreatePage() {
           <button
             onClick={retake}
             aria-label="Retake"
-            className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-2 text-xs font-bold backdrop-blur"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-xs font-bold text-ink"
           >
             <RotateCcw size={14} /> Retake
           </button>
-          <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold backdrop-blur">Tap video to pause</div>
+          <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-ink">Tap video to pause</div>
           <button
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Unmute' : 'Mute'}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink"
           >
             {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
@@ -159,7 +159,7 @@ export default function ReelCreatePage() {
             </div>
             <button
               onClick={() => setShowMusic(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur"
+              className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-ink"
             >
               <Music size={14} /> {music ? 'Music ✓' : 'Add music'}
             </button>
@@ -233,14 +233,14 @@ export default function ReelCreatePage() {
               type="button"
               onClick={() => setMuted((m) => !m)}
               aria-label={muted ? 'Unmute' : 'Mute'}
-              className="absolute left-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+              className="absolute left-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-ink"
             >
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
             <button
               type="button"
               onClick={() => setStep('preview')}
-              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur"
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-ink"
             >
               <Sparkles size={11} /> Edit
             </button>

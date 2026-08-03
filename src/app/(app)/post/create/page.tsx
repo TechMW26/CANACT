@@ -113,7 +113,7 @@ export default function PostCreatePage() {
               <div className="inline-flex items-center gap-2 text-sm font-bold text-white/55"><Loader2 size={18} className="animate-spin" /> Preparing media</div>
             )}
             {active && (
-              <button type="button" onClick={() => setFit((current) => current === 'cover' ? 'contain' : 'cover')} aria-label={fit === 'cover' ? 'Show full media' : 'Fill frame'} className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-xl ring-1 ring-white/15">
+              <button type="button" onClick={() => setFit((current) => current === 'cover' ? 'contain' : 'cover')} aria-label={fit === 'cover' ? 'Show full media' : 'Fill frame'} className="absolute bottom-4 left-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink ring-1 ring-line">
                 <Expand size={19} />
               </button>
             )}

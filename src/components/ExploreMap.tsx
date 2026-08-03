@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type maplibregl from 'maplibre-gl';
-import type { GeoJSONSource, MapGeoJSONFeature } from 'maplibre-gl';
+import type { GeoJSONSource, LayerSpecification, MapGeoJSONFeature } from 'maplibre-gl';
+import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection, Point as GeoJSONPoint } from 'geojson';
 import type { FriendMapPerson } from './FriendsWorldMap';
 import { MapPin } from '@/components/icons';
@@ -47,8 +48,59 @@ type MapPopup =
 const MAP_CONTENT_TTL = 24 * 3600 * 1000;
 const SAME_LOCATION_METERS = 1;
 const MARKER_CLUSTER_PIXELS = 52;
+const MAP_PITCH = 55;
+const MAP_MAX_PITCH = 65;
+const MAP_BEARING = -16;
+const BUILDING_LAYER_ID = 'canact-3d-buildings';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 let contentPinSequence = 0;
+
+function addThreeDimensionalBuildings(map: maplibregl.Map) {
+  if (map.getLayer(BUILDING_LAYER_ID)) return;
+  const layers = map.getStyle().layers ?? [];
+  const sourceLayer = layers.find((layer) => (
+    'source-layer' in layer
+    && layer['source-layer'] === 'building'
+    && 'source' in layer
+    && typeof layer.source === 'string'
+  ));
+  if (!sourceLayer || !('source' in sourceLayer) || typeof sourceLayer.source !== 'string' || !('source-layer' in sourceLayer)) return;
+  const firstLabel = layers.find((layer) => layer.type === 'symbol' && !!layer.layout?.['text-field']);
+  const height: ExpressionSpecification = [
+    'coalesce',
+    ['to-number', ['get', 'render_height']],
+    ['to-number', ['get', 'height']],
+    ['*', ['to-number', ['get', 'levels']], 3],
+    6,
+  ];
+  const base: ExpressionSpecification = [
+    'coalesce',
+    ['to-number', ['get', 'render_min_height']],
+    ['to-number', ['get', 'min_height']],
+    0,
+  ];
+
+  const buildingLayer: LayerSpecification = {
+    id: BUILDING_LAYER_ID,
+    type: 'fill-extrusion',
+    source: sourceLayer.source,
+    'source-layer': sourceLayer['source-layer'],
+    minzoom: 14,
+    paint: {
+      'fill-extrusion-color': [
+        'interpolate', ['linear'], height,
+        0, '#dce8e0',
+        20, '#b8cdbf',
+        80, '#789b87',
+      ],
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 14, 0, 15, height],
+      'fill-extrusion-base': base,
+      'fill-extrusion-opacity': 0.82,
+      'fill-extrusion-vertical-gradient': true,
+    },
+  };
+  map.addLayer(buildingLayer, firstLabel?.id);
+}
 
 function isLocatedPerson(person: FriendMapPerson): person is LocatedPerson {
   return typeof person.lat === 'number' && typeof person.lng === 'number';
@@ -316,13 +368,16 @@ export function ExploreMap({
         style: 'https://tiles.openfreemap.org/styles/bright',
         center,
         zoom: 20,
+        pitch: MAP_PITCH,
+        bearing: MAP_BEARING,
+        maxPitch: MAP_MAX_PITCH,
         attributionControl: false,
         cooperativeGestures: false,
         interactive: !preview,
       });
       map.on('zoomend', () => { if (!disposed) setMapZoom(map.getZoom()); });
       if (!preview) {
-        map.addControl(new library.NavigationControl({ showCompass: false }), 'top-right');
+        map.addControl(new library.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
         map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
         map.on('dragstart', () => interactionRef.current?.());
         map.on('zoomstart', () => interactionRef.current?.());
@@ -352,7 +407,15 @@ export function ExploreMap({
         });
       });
       resizeObserver.observe(containerRef.current);
-      map.once('load', () => { map.resize(); setReady(true); });
+      map.once('load', () => {
+        try {
+          addThreeDimensionalBuildings(map);
+        } catch (error) {
+          console.warn('[ExploreMap] 3D buildings are unavailable for this map style.', error);
+        }
+        map.resize();
+        setReady(true);
+      });
       map.once('error', () => { if (!map.loaded()) setLoadError(true); });
 
       // Suppress missing sprite warnings from the free tile style (reservoir, gate, lift_gate, etc.)

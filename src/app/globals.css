@@ -22,10 +22,7 @@
   display: none !important;
 }
 
-.canact-header-shell, .canact-profile-menu-popup{
-  backdrop-filter: blur(18px) saturate(1.18) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.18) !important;
-}
+.canact-header-shell, .canact-profile-menu-popup { background: #fff !important; }
 
 .canact-header-shell{
   border-radius: 9999px !important;
@@ -234,22 +231,26 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   margin-right: auto;
 }
 
-/* Borderless glass morphism. Tint variables are populated by the lightweight
-   runtime so existing semantic glass targets retain their intended colour. */
+/* Opaque surfaces keep navigation and controls crisp over moving content. */
 :root {
   --canact-header-lift: 7.6px;
   --canact-lg-panel-soft: rgb(250 248 242 / 42%);
   --canact-lg-shadow-light: rgb(255 255 255 / 72%);
   --canact-lg-shadow-dark: rgb(31 56 47 / 16%);
   --canact-lg-glow-rgb: 196, 237, 220;
+  --canact-popup-backdrop: rgb(9 29 23 / 38%);
+}
+
+.canact-popup-backdrop {
+  background: var(--canact-popup-backdrop) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 [data-liquid-glass]:not([data-liquid-glass="none"]) {
   isolation: isolate;
   border: 0 !important;
   outline: 0;
-  background: rgb(var(--canact-glass-tint-rgb, 250 248 242) / var(--canact-glass-tint-opacity, .18)) !important;
-  -webkit-backdrop-filter: blur(var(--canact-glass-blur, 20px)) saturate(1.34) contrast(1.03) brightness(1.06) !important;
-  backdrop-filter: blur(var(--canact-glass-blur, 20px)) saturate(1.34) contrast(1.03) brightness(1.06) !important;
+  background: #fff !important;
   box-shadow:
     inset 14px 14px 32px rgb(255 255 255 / 28%),
     inset -18px -16px 36px rgb(34 73 59 / 10%),
@@ -323,9 +324,7 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   height: 76px;
   border: 1px solid rgb(255 255 255 / 52%);
   border-radius: 999px !important;
-  background: rgb(250 248 242 / 20%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.14) !important;
-  backdrop-filter: blur(18px) saturate(1.14) !important;
+  background: #fff !important;
   overflow: hidden;
 }
 
@@ -347,8 +346,6 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   height: 100%;
   border-radius: 9999px;
   box-shadow: none;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
   line-height: 1;
 }
 .canact-figma-header > .canact-header-inner svg {
@@ -373,31 +370,30 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   left: 50%;
   z-index: 31;
   display: grid;
-  width: 98px;
-  height: 36px;
+  width: 172px;
+  height: 42px;
   place-items: start center;
-  transform: translate(-50%, -18px);
+  transform: translate(-50%, -21px);
   transition: opacity 140ms linear;
 }
 .canact-score-island-shell[data-home-hidden="true"] { pointer-events: none; }
 .canact-score-island-portal {
   position: fixed;
   z-index: 31;
-  width: 98px;
-  height: 36px;
+  width: 172px;
+  height: 42px;
+  background: transparent;
   transform: translateX(-50%);
   transform-origin: top center;
-  isolation: isolate;
   transition:
     width 540ms cubic-bezier(.22,1.22,.36,1),
     height 540ms cubic-bezier(.22,1.22,.36,1),
     border-radius 540ms cubic-bezier(.22,1.22,.36,1),
     opacity 140ms linear;
-  will-change: width, height;
 }
 .canact-score-island-portal[data-expanded="true"] {
   width: var(--canact-island-expanded-width, min(98vw, 408px));
-  height: 196px;
+  height: 325px;
 }
 .canact-score-island-portal[data-home-hidden="true"] { pointer-events: none; }
 
@@ -414,6 +410,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   pointer-events: auto !important;
 }
 .canact-score-island {
+  --canact-score-island-inset: 1.4em;
   position: relative;
   display: block;
   width: 100%;
@@ -421,21 +418,22 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  background: #050706;
+  background: #173f34;
+  background-clip: padding-box;
   padding: 0;
   color: #fff;
   text-align: left;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
-  transform: translateZ(0);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 11%), 0 7px 18px rgb(20 63 51 / 18%);
   transform-origin: top center;
   transition: border-radius 500ms cubic-bezier(.22,1.2,.36,1), box-shadow 300ms ease;
-  will-change: border-radius;
   touch-action: manipulation;
+  appearance: none;
+  -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
 }
 .canact-score-island[data-expanded="true"] {
-  border-radius: 38px;
-  box-shadow: 0 18px 44px rgb(0 0 0 / 34%), inset 0 0 0 1px rgb(255 255 255 / 9%), inset 0 -18px 28px rgb(0 0 0 / 42%);
+  border-radius: 30px;
+  box-shadow: 0 22px 54px rgb(15 48 38 / 30%), inset 0 0 0 1px rgb(255 255 255 / 10%);
 }
 .canact-score-island:focus-visible { outline: 3px solid rgb(140 226 176 / 48%); outline-offset: 3px; }
 .canact-score-island::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(70% 80% at 18% 0%,rgb(255 255 255 / 10%),transparent 70%); }
@@ -444,31 +442,44 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   inset: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
   opacity: 1;
   transform: scale(1);
   transition: opacity 120ms ease, transform 320ms cubic-bezier(.22,1.16,.36,1);
   will-change: transform, opacity;
 }
 .canact-score-island[data-expanded="true"] .canact-score-island-compact { opacity: 0; transform: scale(.72); }
-.canact-score-island-compact > i { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #8ce2b0; box-shadow: 0 0 9px #8ce2b0; animation: canactIslandLive 1.8s ease-in-out infinite !important; }
-.canact-score-island-compact strong { font-size: 13px; font-weight: 900; letter-spacing: -.02em; }
-.canact-score-island-compact small { color: rgb(255 255 255 / 52%); font-size: 7px; font-weight: 900; letter-spacing: .13em; }
+.canact-score-island-compact > i { display: grid; width: 30px; height: 30px; flex-shrink: 0; place-items: center; border-radius: 50%; background: #f8f6ef; color: #1f6b55; box-shadow: inset 0 0 0 1px rgb(23 63 52 / 7%); }
+.canact-score-island-compact > strong { font-size: 19px; font-weight: 950; letter-spacing: -.045em; }
+.canact-score-island-compact > span { display: grid; gap: 0; margin-left: -3px; }
+.canact-score-island-compact small { color: rgb(255 255 255 / 72%); font-size: 6px; font-weight: 900; letter-spacing: .1em; line-height: 1.1; }
+.canact-score-island-compact > em { margin-left: auto; border-radius: 999px; background: rgb(140 226 176 / 16%); padding: 5px 8px; color: #a9e9c2; font-size: 8px; font-style: normal; font-weight: 950; letter-spacing: .06em; }
+.canact-score-island-compact > svg { flex: none; color: rgb(255 255 255 / 72%); transition: transform 320ms cubic-bezier(.22,.85,.3,1); }
+.canact-score-island[data-expanded="true"] .canact-score-island-compact > svg { transform: rotate(180deg); }
 .canact-score-island-panel {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: minmax(0,1fr) auto;
-  grid-template-rows: auto 5px auto auto;
-  gap: 11px 14px;
-  padding: 20px 22px 17px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--canact-score-island-inset);
   opacity: 0;
   transform: translateY(9px) scale(.94);
   transition: opacity 170ms ease, transform 420ms cubic-bezier(.22,1.18,.36,1);
-  will-change: transform, opacity;
 }
 .canact-score-island[data-expanded="true"] .canact-score-island-panel { opacity: 1; transform: translateY(0) scale(1); transition-delay: 105ms; }
+.canact-score-island-hero { display: grid; min-height: 52px; grid-template-columns: 54px auto auto 1fr; align-items: center; gap: 8px; text-align: left; }
+.canact-score-island-hero > i { display: grid; width: 52px; height: 52px; place-items: center; border-radius: 50%; background: #f8f6ef; color: #1f6b55; font-style: normal; }
+.canact-score-island-hero > span { display: grid; align-self: center; }
+.canact-score-island-hero > span small { color: rgb(255 255 255 / 62%); font-size: 8px; font-weight: 900; letter-spacing: .12em; }
+.canact-score-island-hero > span strong { font-size: 42px; font-weight: 950; letter-spacing: -.06em; line-height: .95; }
+.canact-score-island-hero > b, .canact-score-island-hero > em { border: 1px solid rgb(140 226 176 / 30%); border-radius: 999px; padding: 6px 10px; color: #b3ecc9; font-size: 9px; font-style: normal; font-weight: 900; white-space: nowrap; }
+.canact-score-island-hero > em { justify-self: start; border-color: transparent; background: rgb(140 226 176 / 12%); }
+.canact-score-island-hero > em[data-positive="false"] { background: rgb(248 113 113 / 12%); color: #f8b4b4; }
+.canact-score-island-club { display: grid; gap: 8px; padding: 14px 0 16px; text-align: left; }
+.canact-score-island-club > strong { font-size: 14px; font-weight: 900; }
+.canact-score-island-club > small { color: rgb(255 255 255 / 55%); font-size: 9px; font-weight: 750; }
 .canact-score-island-event { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .canact-score-island-event > i { display: grid; width: 42px; height: 42px; flex: none; place-items: center; border-radius: 50%; background: rgb(140 226 176 / 14%); color: #8ce2b0; font-size: 18px; font-style: normal; animation: canactIslandMoment 520ms cubic-bezier(.2,1.4,.3,1) both !important; }
 .canact-score-island[data-tone="negative"] .canact-score-island-event > i { background: rgb(248 113 113 / 14%); color: #fca5a5; }
@@ -480,25 +491,24 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-score-island-value b { font-size: 36px; font-weight: 950; letter-spacing: -.06em; line-height: 1; }
 .canact-score-island-value em { color: #8ce2b0; font-size: 11px; font-style: normal; font-weight: 900; }
 .canact-score-island-value em[data-positive="false"] { color: #fca5a5; }
-.canact-score-island-meter { grid-column: 1 / -1; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 9%); }
-.canact-score-island-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#4eaf8d,#9ce8ba); box-shadow: 0 0 12px rgb(140 226 176 / 36%); transition: width 700ms cubic-bezier(.2,.8,.2,1); }
+.canact-score-island-meter { display: block; height: 8px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 13%); }
+.canact-score-island-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#67bd95,#c4edd1); box-shadow: 0 0 12px rgb(140 226 176 / 36%); transition: width 700ms cubic-bezier(.2,.8,.2,1); }
 .canact-score-island-meta { grid-column: 1 / -1; display: flex; justify-content: space-between; color: rgb(255 255 255 / 46%); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .canact-score-island-attributes {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 .canact-score-island-attributes > span {
-  display: flex;
+  display: grid;
   min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  border-radius: 11px;
-  background: rgb(140 226 176 / 10%);
-  padding: 7px 8px;
-  color: #a7e9c2;
+  place-items: center;
+  gap: 2px;
+  border: 1px solid rgb(23 63 52 / 10%);
+  border-radius: 13px;
+  background: #f5f6f1;
+  padding: 8px 5px;
+  color: #1f6b55;
 }
 .canact-score-island-attributes > span[data-positive="false"] {
   background: rgb(248 113 113 / 9%);
@@ -506,8 +516,8 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 }
 .canact-score-island-attributes small {
   overflow: hidden;
-  color: rgb(255 255 255 / 60%);
-  font-size: 8.5px;
+  color: rgb(23 63 52 / 72%);
+  font-size: 8px;
   font-weight: 750;
   letter-spacing: -.01em;
   text-overflow: ellipsis;
@@ -515,9 +525,13 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 }
 .canact-score-island-attributes b {
   flex: none;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
 }
+.canact-score-island-attribute-panel { display: grid; gap: 9px; margin: 0 calc(var(--canact-score-island-inset) * -1) calc(var(--canact-score-island-inset) * -1); border-radius: 0 0 30px 30px; background: #faf8f2; padding: var(--canact-score-island-inset); color: #173f34; }
+.canact-score-island-attribute-panel > small { font-size: 8px; font-weight: 950; letter-spacing: .15em; text-align: left; }
+.canact-score-island-impact { display: flex; align-items: center; gap: 8px; border-radius: 999px; background: #edf3ef; padding: 7px 10px; color: #2a5a49; font-size: 9px; font-weight: 800; }
+.canact-score-island-impact i { display: grid; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: #1f6b55; color: white; font-size: 10px; font-style: normal; }
 @keyframes canactIslandLive { 50% { opacity: .55; transform: scale(.72); } }
 @keyframes canactIslandMoment { from { opacity: 0; transform: scale(.45); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
@@ -526,7 +540,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 }
 
 .canact-glass-dropdown {
-  background: transparent !important;
+  background: #fff !important;
   box-shadow: 0 12px 32px rgb(20 54 42 / 10%);
 }
 
@@ -534,11 +548,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   text-shadow: 0 1px 0 rgb(255 255 255 / 80%);
 }
 
-.canact-profile-menu-popup {
-  background: rgb(250 248 242 / 76%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  backdrop-filter: blur(24px) saturate(1.2);
-}
+.canact-profile-menu-popup { background: #fff !important; }
 
 .canact-bottom-nav-shell {
   height: 76px;
@@ -551,7 +561,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   height: 100%;
   border-radius: 9999px;
   overflow: visible;
-  background: rgba(255,255,255,0.72);
+  background: #fff;
   border: 1px solid rgb(255 255 255 / 52%);
   box-shadow: none;
   --gx: 50%;
@@ -582,7 +592,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   background: radial-gradient(240px 150px at var(--gx) var(--gy), rgba(var(--canact-lg-glow-rgb), var(--ga)) 0%, rgba(var(--canact-lg-glow-rgb), 0) 74%);
   transition: background 0.18s ease;
 }
-.canact-bottom-tab-indicator {
+.canact-bottom-tab-indicator[data-liquid-glass="switcher"] {
   position: absolute;
   left: 8px;
   top: 8px;
@@ -593,11 +603,11 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   pointer-events: none;
   transform-origin: center;
   will-change: left, transform;
-  background: transparent;
-  box-shadow: none;
+  background: rgb(235 244 239 / 72%) !important;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 76%), inset 0 10px 18px rgb(255 255 255 / 34%), 0 6px 16px rgb(20 54 42 / 10%);
   transition: left .24s cubic-bezier(.2,.9,.22,1), transform .25s ease, background-color .25s ease, box-shadow .25s ease;
 }
-.canact-bottom-tab-indicator.interacting { z-index: 6; transform: scale(1.5); background: transparent; }
+.canact-bottom-tab-indicator[data-liquid-glass="switcher"].interacting { z-index: 1; transform: scale(1.5); }
 .canact-figma-bottom-nav.dragging .canact-bottom-tab-indicator { transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease; }
 
 .canact-figma-bottom-nav .canact-bottom-tab {
@@ -669,13 +679,10 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-radial-menu-open { visibility: visible; pointer-events: auto; transition-delay: 0s; }
 .canact-radial-dismiss {
   position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
-  background: rgb(18 40 33 / 0%); opacity: 0;
-  backdrop-filter: blur(0);
-  -webkit-mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%);
-          mask-image: radial-gradient(circle at 92% 92%, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%);
-  transition: opacity 220ms ease, backdrop-filter 260ms ease;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0) 0%, rgb(255 255 255 / .58) 42%, #fff 76%, #fff 100%); opacity: 0;
+  transition: opacity 220ms ease;
 }
-.canact-radial-menu-open .canact-radial-dismiss { opacity: 1; backdrop-filter: blur(6px); }
+.canact-radial-menu-open .canact-radial-dismiss { opacity: 1; }
 
 /* Radial items — diagonal arc fan-out from bottom-right trigger.
    Closed: items hide at trigger center (right=trigger-right, bottom=trigger-bottom).
@@ -698,9 +705,7 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   overflow: hidden;
   border-radius: 50%;
   border: 1px solid rgb(255 255 255 / 82%);
-  background: rgb(248 244 232 / 62%);
-  -webkit-backdrop-filter: blur(12px) saturate(1.18);
-  backdrop-filter: blur(12px) saturate(1.18);
+  background: #fff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 68%);
 
   opacity: 0;
@@ -849,21 +854,28 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 
 /* ---------- Plus sheet: slide-up + body scale-down ---------- */
 .canact-sheet-backdrop {
-  background: transparent !important;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: var(--canact-popup-backdrop) !important;
   opacity: 0;
   animation: canactBackdropIn 220ms ease-out forwards;
   will-change: opacity;
 }
+
+.canact-score-island-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+.canact-score-island-backdrop[data-expanded="true"] { opacity: 1; pointer-events: auto; }
 .canact-liquid-sheet-panel {
-  background: transparent !important;
-  box-shadow: none !important;
+  background: #fff !important;
 }
 .canact-liquid-sheet-panel,
 .canact-sheet-slide[data-liquid-glass]:not([data-liquid-glass="none"]) {
-  --canact-glass-blur: 26px !important;
-  --canact-glass-tint-opacity: .34 !important;
+  --canact-glass-tint-opacity: 1 !important;
 }
 .canact-sheet-panel {
   opacity: 0;
@@ -905,14 +917,6 @@ body.canact-story-open {
   background: #000 !important;
 }
 
-/* Android WebView can stutter while compositing a live camera stream behind
-   backdrop-filter controls. Keep the same dark translucent controls, but
-   drop the blur work only inside the Android camera overlay. */
-.canact-android-camera .backdrop-blur,
-.canact-android-camera .backdrop-blur-xl {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-}
 @keyframes canactBackdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes canactSheetIn {
   0%   { opacity: 0; transform: translate3d(0, 100%, 0); }
@@ -923,8 +927,10 @@ body.canact-story-open {
    sibling of that wrapper and must not be pulled into the transform's
    containing block (which would cause it to vanish during sheet open/close). */
 #canact-app-content {
-  transition: transform 320ms cubic-bezier(.22,.85,.3,1), filter 320ms ease-out, border-radius 320ms ease-out;
+  transition: transform 320ms cubic-bezier(.22,.85,.3,1), filter 320ms ease-out, border-radius 320ms ease-out, clip-path 320ms cubic-bezier(.22,.85,.3,1);
   transform-origin: 50% 0%;
+  clip-path: inset(0 round 0);
+  backface-visibility: hidden;
 }
 
 .ExplorePage_peopleSheet__Y8R8V, .ExplorePage_peopleSheetExpanded__TnADW{
@@ -946,14 +952,14 @@ body.canact-story-open {
 .canact-sheet-zoom-out {
   transform: scale(0.9);
   border-radius: 24px;
-  overflow: hidden;
-  will-change: transform;
+  clip-path: inset(0 round 24px);
+  will-change: transform, clip-path;
 }
 #canact-app-content[data-disable-sheet-zoom="true"].canact-sheet-zoom-out {
   transform: none;
   filter: none;
   border-radius: 0;
-  overflow: visible;
+  clip-path: inset(0 round 0);
   will-change: auto;
 }
 
@@ -1182,7 +1188,6 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 .canact-profile-header-icon {
   border: 1px solid #D9DDE5;
   background-color: transparent;
-  backdrop-filter: none;
 }
 
 .canact-profile-header-icon:hover {
@@ -1193,7 +1198,6 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 .canact-profile-header-select {
   border: 1px solid rgb(var(--canact-profile-top-ink) / 0.16) !important;
   background-color: transparent !important;
-  backdrop-filter: none;
 }
 
 .canact-profile-footer-chrome .canact-bottom-tab-inactive {
@@ -1251,8 +1255,6 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav] {
 
   .canact-profile-header-icon,
   .canact-profile-header-select {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 }
 

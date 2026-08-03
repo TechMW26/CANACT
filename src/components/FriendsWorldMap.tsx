@@ -280,7 +280,7 @@ export function FriendsWorldMap({
       ) : null}
 
       {locatedFriends.length === 0 ? (
-        <div className="absolute left-4 right-4 top-1/2 z-30 -translate-y-1/2 rounded-3xl border border-white/80 bg-white/90 px-4 py-5 text-center backdrop-blur">
+        <div className="absolute left-4 right-4 top-1/2 z-30 -translate-y-1/2 rounded-3xl border border-white bg-white px-4 py-5 text-center">
           <div className="text-sm font-extrabold text-ink">{emptyTitle}</div>
           <div className="mt-1 text-xs font-semibold text-ink/55">{emptyBody}</div>
         </div>
@@ -311,7 +311,7 @@ function MapMarkerCluster({
   const marker = (
     <>
       {showMarkerNames ? (
-        <span className="max-w-[150px] truncate rounded-full border border-white/90 bg-white/95 px-2.5 py-1 text-[11px] font-extrabold text-ink shadow-sm backdrop-blur">
+        <span className="max-w-[150px] truncate rounded-full border border-white bg-white px-2.5 py-1 text-[11px] font-extrabold text-ink shadow-sm">
           {label}
         </span>
       ) : null}
@@ -393,7 +393,7 @@ function StackedPeoplePanel({ cluster, onClose, onPersonSelect }: { cluster: Mar
       <button
         type="button"
         aria-label="Close people list"
-        className="fixed inset-0 z-[34] bg-white/22 backdrop-blur-[10px] transition-opacity duration-200 ease-out"
+        className="canact-popup-backdrop fixed inset-0 z-[34] transition-opacity duration-200 ease-out"
         style={{ opacity: overlayVisible ? 1 : 0 }}
         onClick={requestClose}
       />

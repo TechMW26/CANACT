@@ -17,7 +17,7 @@
 
 .crown {
   position: absolute;
-  top: 22px;
+  top: 0;
   left: 50%;
   z-index: 3;
   width: 42px;
@@ -28,9 +28,9 @@
 }
 
 .place { position: absolute; bottom: 0; display: flex; flex-direction: column; align-items: center; }
-.place1 { left: 32%; z-index: 2; width: 36%; }
-.place2 { left: 2%; z-index: 1; width: 31%; }
-.place3 { right: 2%; z-index: 1; width: 31%; }
+.place1 { left: 32%; z-index: 2; width: 36%; --podium-cube-height: 214px; }
+.place2 { left: 2%; z-index: 1; width: 31%; --podium-cube-height: 156px; }
+.place3 { right: 2%; z-index: 1; width: 31%; --podium-cube-height: 142px; }
 
 .podiumAvatar {
   position: absolute;
@@ -41,11 +41,11 @@
   background: #e7eee8;
 }
 .podiumAvatar img, .podiumAvatar > div { width: 100% !important; height: 100% !important; }
-.place1 .podiumAvatar { bottom: 222px; width: 96px; height: 96px; }
-.place2 .podiumAvatar, .place3 .podiumAvatar { bottom: 164px; width: 72px; height: 72px; }
+.place1 .podiumAvatar { bottom: calc(var(--podium-cube-height) + 36px); width: 96px; height: 96px; }
+.place2 .podiumAvatar, .place3 .podiumAvatar { bottom: calc(var(--podium-cube-height) + 36px); width: 72px; height: 72px; }
 .podiumName {
   position: absolute;
-  bottom: 130px;
+  bottom: calc(var(--podium-cube-height) + 10px);
   z-index: 5;
   max-width: 94%;
   overflow: hidden;
@@ -56,10 +56,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.place1 .podiumName { bottom: 188px; font-size: 14px; }
+.place1 .podiumName { font-size: 14px; }
 .avatarPlaceholder { position: absolute; z-index: 4; border-radius: 50%; background: #e2e8e2; }
-.place1 .avatarPlaceholder { bottom: 222px; width: 96px; height: 96px; }
-.place2 .avatarPlaceholder, .place3 .avatarPlaceholder { bottom: 164px; width: 72px; height: 72px; }
+.place1 .avatarPlaceholder { bottom: calc(var(--podium-cube-height) + 36px); width: 96px; height: 96px; }
+.place2 .avatarPlaceholder, .place3 .avatarPlaceholder { bottom: calc(var(--podium-cube-height) + 36px); width: 72px; height: 72px; }
 
 .cube {
   position: relative;
@@ -169,10 +169,11 @@
 
 @media (max-width: 370px) {
   .podium { height: 330px; }
-  .place1 .podiumAvatar { bottom: 202px; width: 82px; height: 82px; }
-  .place2 .podiumAvatar, .place3 .podiumAvatar { bottom: 148px; width: 64px; height: 64px; }
-  .place1 .podiumName { bottom: 174px; }
-  .place2 .podiumName, .place3 .podiumName { bottom: 118px; }
+  .place1 { --podium-cube-height: 194px; }
+  .place2 { --podium-cube-height: 140px; }
+  .place3 { --podium-cube-height: 130px; }
+  .place1 .podiumAvatar { width: 82px; height: 82px; }
+  .place2 .podiumAvatar, .place3 .podiumAvatar { width: 64px; height: 64px; }
   .cube1 { height: 194px; }
   .cube2 { height: 140px; }
   .cube3 { height: 130px; }

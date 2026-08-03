@@ -128,9 +128,7 @@
   gap: 7px;
   padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(24,60,50,.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: #183c32;
   color: #fff;
   opacity: var(--pill-opacity, 0);
   transform: translateX(-50%);

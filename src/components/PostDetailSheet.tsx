@@ -257,7 +257,7 @@ function FullBleedMediaHeader({
           <Link href={`/profile/${authorUid}`} className="block truncate text-sm font-extrabold text-white drop-shadow">{authorName}</Link>
           <div className="text-[11px] font-semibold text-white/85 drop-shadow">{subline}</div>
         </div>
-        <button type="button" onClick={onShare} aria-label="Share" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/85 text-ink backdrop-blur">
+        <button type="button" onClick={onShare} aria-label="Share" className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink">
           <Share2 size={17} />
         </button>
         {onDelete ? <PostMenu isOwner onDelete={onDelete} variant="dark" /> : null}

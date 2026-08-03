@@ -57,13 +57,13 @@ function sortLeaderboard(rows: UserProfile[]) {
 }
 
 export function listenLeaderboard(scope: LeaderScope, me: UserProfile | null, cb: (rows: UserProfile[]) => void) {
-  if (scope === 'favourites' && me) {
+  if ((scope === 'favourites' || scope === 'contacts') && me) {
     let unsub1: (() => void) | null = null;
     let unsub2: (() => void) | null = null;
     let users: Map<string, UserProfile> = new Map();
-    let favs: Set<string> = new Set();
+    let includedUids: Set<string> = new Set();
     const emit = () => {
-      const rows = sortLeaderboard(Array.from(users.values()).filter((u) => favs.has(u.uid)));
+      const rows = sortLeaderboard(Array.from(users.values()).filter((u) => includedUids.has(u.uid)));
       cb(rows);
     };
     unsub1 = onValue(ref(db, 'users'), (snap) => {
@@ -74,9 +74,9 @@ export function listenLeaderboard(scope: LeaderScope, me: UserProfile | null, cb
       });
       emit();
     });
-    unsub2 = onValue(ref(db, `favourites/${me.uid}`), (snap) => {
-      favs.clear();
-      snap.forEach((c) => { favs.add(c.key as string); });
+    unsub2 = onValue(ref(db, `${scope === 'contacts' ? 'contacts' : 'favourites'}/${me.uid}`), (snap) => {
+      includedUids.clear();
+      snap.forEach((c) => { includedUids.add(c.key as string); });
       emit();
     });
     return () => { unsub1?.(); unsub2?.(); };

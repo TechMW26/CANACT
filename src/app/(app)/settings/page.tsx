@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/auth';
@@ -9,12 +9,20 @@ import { ConfirmDialog } from '@/components/Modal';
 import { toast } from '@/components/Toaster';
 import { enableWebPush, pushSupported } from '@/lib/services/push';
 import { GlassSwitch } from '@/components/GlassSwitch';
+import {
+  isNativeContactSyncAvailable,
+  parseVCardContacts,
+  readAllDeviceContacts,
+  syncContactRecords,
+} from '@/lib/services/contactSync';
 
 export default function SettingsPage() {
   const { user, profile, signOut, updateMyProfile, deleteAccount } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [contactsBusy, setContactsBusy] = useState(false);
+  const contactFileRef = useRef<HTMLInputElement | null>(null);
   const [pushState, setPushState] = useState<'unknown' | 'granted' | 'denied' | 'default' | 'unsupported'>('unknown');
 
   useEffect(() => {
@@ -35,6 +43,35 @@ export default function SettingsPage() {
         setPushState((Notification.permission as any) || 'denied');
       }
     } finally { setPushBusy(false); }
+  }
+
+  async function syncContacts() {
+    if (!isNativeContactSyncAvailable()) { contactFileRef.current?.click(); return; }
+    setContactsBusy(true);
+    try {
+      const result = await syncContactRecords(await readAllDeviceContacts(), profile?.countryCode);
+      toast(`${result.synced} contacts synced · ${result.matched} already on Canact`, 'success');
+    } catch (error: any) {
+      toast(error?.message || 'Could not sync contacts', 'error');
+    } finally {
+      setContactsBusy(false);
+    }
+  }
+
+  async function importContacts(file?: File) {
+    if (!file) return;
+    setContactsBusy(true);
+    try {
+      const contacts = parseVCardContacts(await file.text());
+      if (!contacts.length) throw new Error('No contacts were found in that file.');
+      const result = await syncContactRecords(contacts, profile?.countryCode);
+      toast(`${result.synced} contacts synced · ${result.matched} already on Canact`, 'success');
+    } catch (error: any) {
+      toast(error?.message || 'Could not sync contacts', 'error');
+    } finally {
+      setContactsBusy(false);
+      if (contactFileRef.current) contactFileRef.current.value = '';
+    }
   }
 
   if (!user || !profile) return null;
@@ -65,6 +102,23 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+      </Card>
+      <Card>
+        <h3 className="font-bold">Contact discovery</h3>
+        <p className="mt-1 text-xs text-ink/60">
+          Sync your address book to find people you know. Contact names are not stored; phone and email identifiers are protected before matching.
+        </p>
+        <div className="mt-3">
+          <Button onClick={syncContacts} disabled={contactsBusy}>{contactsBusy ? 'Syncing…' : 'Sync address book'}</Button>
+        </div>
+        <input
+          ref={contactFileRef}
+          type="file"
+          accept=".vcf,.vcard,text/vcard"
+          className="sr-only"
+          aria-label="Import full address book"
+          onChange={(event) => void importContacts(event.target.files?.[0])}
+        />
       </Card>
       <Card>
         <h3 className="font-bold">Account</h3>

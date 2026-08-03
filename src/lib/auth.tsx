@@ -7,7 +7,7 @@ import {
   reload,
   type User as FbUser,
 } from 'firebase/auth';
-import { onValue, ref, update, get, remove } from 'firebase/database';
+import { equalTo, get, limitToFirst, onValue, orderByChild, query, ref, remove, update } from 'firebase/database';
 import { db, getFirebaseAuth } from './firebase';
 import { getActiveOTPSession, getPhoneLinkStatus, sendOTP, verifyOTP, resetOTP, type OTPSession } from './services/otp';
 import { UserProfile } from './types';
@@ -25,6 +25,7 @@ interface AuthCtx {
   profile: UserProfile | null;
   loading: boolean;
   requestOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
+  signInLocally: (phone: string) => Promise<{ ok: boolean; error?: string; isNewUser?: boolean; nextPath?: '/' | '/onboard' }>;
   confirmOTP: (code: string) => Promise<{ ok: boolean; error?: string; isNewUser?: boolean; nextPath?: '/' | '/onboard' }>;
   requestPhoneLinkOTP: (phone: string, forceNew?: boolean) => Promise<{ ok: boolean; channel?: string; error?: string; reused?: boolean; expiresAt?: number }>;
   phoneLinkStatus: (phone: string) => Promise<'available' | 'current' | 'other' | 'unknown'>;
@@ -36,6 +37,7 @@ interface AuthCtx {
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
+const LOCAL_PHONE_SESSION_KEY = 'canact:local-phone-session:v1';
 
 const LOCKED_PROFILE_KEYS: (keyof UserProfile)[] = [
   'fullName',
@@ -74,7 +76,9 @@ function fallbackDisplayName(u: Pick<FbUser, 'displayName' | 'email'>): string {
   return 'Canact user';
 }
 
-function registrationProfile(u: FbUser): UserProfile {
+type ProfileSeedUser = Pick<SessionUser, 'uid' | 'email' | 'displayName' | 'photoURL' | 'phoneNumber'>;
+
+function registrationProfile(u: ProfileSeedUser): UserProfile {
   const fullName = u.phoneNumber || fallbackDisplayName(u);
   const { firstName, lastName, middleName } = splitNameParts(fullName);
   return {
@@ -111,7 +115,7 @@ function cleanProfilePatch(profile: Partial<UserProfile>) {
 
 /** Seed a minimal profile after first sign-in. Profile is marked incomplete so
  * registration can continue. `update` keeps concurrent registration fields. */
-async function seedProfileIfMissing(u: FbUser) {
+async function seedProfileIfMissing(u: ProfileSeedUser) {
   const snap = await get(ref(db, `users/${u.uid}`));
   if (snap.exists()) return;
   const seed = registrationProfile(u);
@@ -138,7 +142,7 @@ function profileBackfillFromAuth(u: SessionUser, profile: UserProfile | null): P
   return patch;
 }
 
-async function routeAfterSignIn(u: FbUser) {
+async function routeAfterSignIn(u: ProfileSeedUser) {
   await seedProfileIfMissing(u);
   const snap = await get(ref(db, `users/${u.uid}/profileComplete`));
   return snap.val() === false ? '/onboard' : '/';
@@ -146,11 +150,58 @@ async function routeAfterSignIn(u: FbUser) {
 
 /** Fire-and-forget seed. Errors are logged but never thrown so they cannot
  * stall the auth listener or block routing. */
-function seedInBackground(u: FbUser) {
+function seedInBackground(u: ProfileSeedUser) {
   seedProfileIfMissing(u).catch((err) => {
     // eslint-disable-next-line no-console
     console.warn('[auth] seedProfileIfMissing failed', err);
   });
+}
+
+function localPhoneLoginEnabled() {
+  if (typeof window === 'undefined') return false;
+  return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
+}
+
+function readLocalPhoneSession(): SessionUser | null {
+  if (!localPhoneLoginEnabled()) return null;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(LOCAL_PHONE_SESSION_KEY) || 'null') as SessionUser | null;
+    return value?.uid && value.phoneNumber ? value : null;
+  } catch {
+    window.localStorage.removeItem(LOCAL_PHONE_SESSION_KEY);
+    return null;
+  }
+}
+
+function writeLocalPhoneSession(value: SessionUser | null) {
+  if (typeof window === 'undefined') return;
+  if (value) window.localStorage.setItem(LOCAL_PHONE_SESSION_KEY, JSON.stringify(value));
+  else window.localStorage.removeItem(LOCAL_PHONE_SESSION_KEY);
+}
+
+function normalizedPhone(value: unknown) {
+  return typeof value === 'string' ? value.replace(/\D/g, '') : '';
+}
+
+async function findLocalProfileByPhone(phone: string): Promise<[string, UserProfile] | null> {
+  try {
+    const indexedMatch = await get(query(ref(db, 'users'), orderByChild('mobile'), equalTo(phone), limitToFirst(1)));
+    if (indexedMatch.exists()) {
+      return Object.entries(indexedMatch.val() as Record<string, UserProfile>)[0] ?? null;
+    }
+  } catch (error: any) {
+    // Local databases may allow reads but omit the optional mobile index.
+    // Fall through to a localhost-only client-side lookup instead of blocking login.
+    if (!String(error?.message || '').includes('Index not defined')) throw error;
+  }
+
+  const usersSnapshot = await get(ref(db, 'users'));
+  if (!usersSnapshot.exists()) return null;
+  const target = normalizedPhone(phone);
+  return Object.entries(usersSnapshot.val() as Record<string, UserProfile>).find(([, profile]) => (
+    normalizedPhone(profile.mobile) === target
+    || normalizedPhone((profile as UserProfile & { phoneNumber?: string }).phoneNumber) === target
+  )) ?? null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -160,6 +211,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Auth state listener
   useEffect(() => {
+    const localSession = readLocalPhoneSession();
+    if (localSession) {
+      setUser(localSession);
+      setLoading(false);
+      seedInBackground(localSession);
+      return;
+    }
     const auth = getFirebaseAuth();
     const unsub = onAuthStateChanged(
       auth,
@@ -226,6 +284,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     requestOTP: async (phone: string, forceNew = false) => {
       return sendOTP(phone, 'recaptcha-container', 'signin', forceNew);
     },
+    signInLocally: async (phone: string) => {
+      if (!localPhoneLoginEnabled()) return { ok: false, error: 'Local phone login is unavailable.' };
+      try {
+        const existing = await findLocalProfileByPhone(phone);
+        const existingProfile = existing?.[1];
+        const session: SessionUser = existing ? {
+          uid: existing[0],
+          email: existingProfile?.email ?? null,
+          displayName: existingProfile?.fullName ?? null,
+          photoURL: existingProfile?.photoURL ?? null,
+          phoneNumber: phone,
+        } : {
+          uid: `local_${crypto.randomUUID().replaceAll('-', '')}`,
+          email: null,
+          displayName: null,
+          photoURL: null,
+          phoneNumber: phone,
+        };
+        const nextPath = await routeAfterSignIn(session);
+        writeLocalPhoneSession(session);
+        setUser(session);
+        return { ok: true, isNewUser: !existing, nextPath };
+      } catch (error) {
+        console.error('[auth] Local Firebase profile lookup failed', error instanceof Error ? error.message : 'unknown');
+        return { ok: false, error: 'Could not read this phone profile from Firebase.' };
+      }
+    },
     confirmOTP: async (code: string) => {
       const result = await verifyOTP(code);
       if (!result.ok) return result;
@@ -258,6 +343,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     pendingOTP: (mode) => getActiveOTPSession(undefined, mode),
     signOut: async () => {
       resetOTP();
+      const localSession = readLocalPhoneSession();
+      if (localSession?.uid === user?.uid) {
+        writeLocalPhoneSession(null);
+        setUser(null);
+        setProfile(null);
+        return;
+      }
       await fbSignOut(getFirebaseAuth());
       setUser(null);
       setProfile(null);
@@ -275,6 +367,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await update(ref(db, `users/${user.uid}`), cleaned);
     },
     deleteAccount: async () => {
+      const localSession = readLocalPhoneSession();
+      const localUid = localSession?.uid;
+      if (localUid && localUid === user?.uid) {
+        await remove(ref(db, `users/${localUid}`));
+        writeLocalPhoneSession(null);
+        setUser(null);
+        setProfile(null);
+        return;
+      }
       const auth = getFirebaseAuth();
       const u = auth.currentUser;
       if (!u) throw new Error('Not signed in');

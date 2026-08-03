@@ -56,7 +56,7 @@ export function MusicPicker({ open, onClose, onPick }: Props) {
 
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center" role="dialog" aria-modal="true">
-      <button aria-label="Close music" onClick={onClose} className="absolute inset-0 bg-transparent backdrop-blur-sm" />
+      <button aria-label="Close music" onClick={onClose} className="canact-popup-backdrop absolute inset-0" />
       <div
         ref={swipeRef}
         style={{ maxHeight: '80svh', paddingBottom: 'var(--canact-popup-bottom-inset)' }}

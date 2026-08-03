@@ -268,7 +268,7 @@ export default function AdminDashboardPage() {
         </aside>
 
         <section className="ml-[240px] min-w-0 pt-[120px] lg:ml-[280px] lg:pt-[124px]">
-          <header className="fixed left-[240px] right-0 top-0 z-20 border-b border-[#E8DDD4] bg-[#F7F4EF]/95 px-4 py-4 backdrop-blur sm:px-6 lg:left-[280px] lg:px-8">
+          <header className="fixed left-[240px] right-0 top-0 z-20 border-b border-[#E8DDD4] bg-[#F7F4EF] px-4 py-4 sm:px-6 lg:left-[280px] lg:px-8">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <div className="text-xs font-extrabold uppercase tracking-wide text-brand">Canact admin</div>
@@ -643,6 +643,7 @@ const PLUS_ICON_OPTIONS: Array<{ id: string; label: string; Icon: LucideIcon }> 
 
 const ALL_PLUS_PAGES = [
   { href: '/help',          label: 'Help',     Icon: HandHeart },
+  { href: '/mood',          label: 'Mood',     Icon: Activity },
   { href: '/story/create',  label: 'Story',    Icon: Sparkles },
   { href: '/post/create',   label: 'Post',     Icon: Camera },
   { href: '/reel/create',   label: 'Reel',     Icon: Film },
@@ -661,7 +662,7 @@ const ALL_PLUS_PAGES = [
 const DEFAULT_NAVBAR: NavbarConfig = {
   tabs: ['/', '/favourites', '/feed', '/leaderboard'],
   plusIcon: 'Plus',
-  plusItems: ['/help', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'],
+  plusItems: ['/help', '/mood', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'],
 };
 
 const ALL_TABS = [

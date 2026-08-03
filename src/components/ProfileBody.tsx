@@ -20,6 +20,8 @@ import { deleteStory, listenUserStories } from '@/lib/services/stories';
 import { toast } from '@/components/Toaster';
 import { PostMenu } from '@/components/PostMenu';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
+import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
+import { MoodIcon } from '@/components/MoodIcon';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenFavourites, requestFollow } from '@/lib/services/favourites';
 import { listenReceivedConnectionCards } from '@/lib/services/connectionCards';
@@ -31,10 +33,12 @@ import {
   sendFriendRequest,
   unfriend,
 } from '@/lib/services/friends';
-import { calculateCanactScore } from '@/lib/canactScore';
 import { useGeo } from '@/lib/useGeo';
 import { haversineMeters } from '@/lib/utils';
+import { calculateCanactScore } from '@/lib/canactScore';
 import { lockPageScroll } from '@/lib/scrollLock';
+import { uploadMedia } from '@/lib/uploadMedia';
+import { getMoodDefinition } from '@/lib/moodTracker';
 import {
   Award,
   CheckCircle2,
@@ -46,6 +50,7 @@ import {
   Camera,
   Film,
   Heart,
+  HandHeart,
   BarChart3,
   Pencil,
   Star,
@@ -63,6 +68,11 @@ import {
   Smile,
   Zap,
 } from '@/components/icons';
+
+function isLocalhostLocationBypass() {
+  if (typeof window === 'undefined') return false;
+  return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
+}
 
 export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const { user, profile: me } = useAuth();
@@ -233,11 +243,11 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
     }
   };
 
-  const score = calculateCanactScore(u);
   const theirLoc = (u as any).lastLocation as { lat?: number; lng?: number } | undefined;
-  const outOfRange = !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
+  const bypassLocationGate = isLocalhostLocationBypass();
+  const outOfRange = !bypassLocationGate && !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
     && haversineMeters(myCoords, { lat: theirLoc.lat!, lng: theirLoc.lng! }) > 15;
-  const accessBlockReason: 'location' | 'range' | null = viewingSelf
+  const accessBlockReason: 'location' | 'range' | null = viewingSelf || bypassLocationGate
     ? null
     : !myCoords ? 'location' : outOfRange ? 'range' : null;
 
@@ -248,7 +258,6 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
       isSelf={viewingSelf}
       isVerified={isVerified}
       locationText={locationText}
-      canactScore={score}
       accessBlockReason={accessBlockReason}
       locationError={locationError}
       onRetryLocation={retryLocation}
@@ -522,7 +531,7 @@ function ProfileVotePill({
   };
 
   return (
-    <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/18 p-1 backdrop-blur-md">
+    <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full border border-line bg-white p-1 text-ink">
       <button
         type="button"
         disabled={busy}
@@ -557,6 +566,40 @@ function ConnectionOrbitIcon({ kind }: { kind: CardKey }) {
   return <Sparkles size={19} />;
 }
 
+const CONNECTION_TRAITS: Record<CardKey, string> = {
+  understanding: 'deeply understanding',
+  humour: 'full of humour',
+  goodVibes: 'uplifting',
+  confidence: 'quietly confident',
+  cooperative: 'easy to work with',
+  intelligence: 'thoughtful and perceptive',
+  creativity: 'imaginative',
+  daring: 'brave when it matters',
+};
+
+function buildProfileInsight(profile: UserProfile, cards: ConnectionCardGift[]) {
+  const cardCounts = new Map<CardKey, number>();
+  for (const card of cards) cardCounts.set(card.kind, (cardCounts.get(card.kind) ?? 0) + 1);
+  const leadingCards = Array.from(cardCounts.entries())
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 2)
+    .map(([kind]) => CONNECTION_TRAITS[kind]);
+  const positiveSignals = [
+    ['behaviour', 'kind in everyday moments'],
+    ['reliability', 'someone people can rely on'],
+    ['civic_sense', 'considerate of the community'],
+  ] as const;
+  const strongestSignal = positiveSignals
+    .map(([key, copy]) => ({ copy, count: Number(profile.attrs?.[key]) || 0 }))
+    .sort((left, right) => right.count - left.count)[0];
+
+  if (leadingCards.length >= 2) return `${leadingCards[0]}, ${leadingCards[1]}, and recognised by their connections.`;
+  if (leadingCards.length === 1 && strongestSignal?.count) return `${leadingCards[0]}, ${strongestSignal.copy}, and recognised by their connections.`;
+  if (leadingCards.length === 1) return `${leadingCards[0]}, with connections beginning to tell their story.`;
+  if (strongestSignal?.count) return `Known as ${strongestSignal.copy}, with more of their story still unfolding.`;
+  return profile.bio?.trim() || 'Building meaningful connections, one genuine interaction at a time.';
+}
+
 function ProfileAttributeGauge({
   id,
   label,
@@ -569,26 +612,40 @@ function ProfileAttributeGauge({
   negative: number;
 }) {
   const total = positive + negative;
-  const ratio = total ? positive / total : .5;
-  const angle = -80 + ratio * 160;
+  const balance = total ? (positive - negative) / total : 0;
+  const angle = balance * 72;
+  const [displayAngle, setDisplayAngle] = useState(0);
+  const neutral = total === 0 || positive === negative;
+  const state = neutral ? 'Neutral' : balance > 0 ? `+${positive - negative}` : `${positive - negative}`;
+  const needleColor = neutral ? '#8f8aa8' : balance > 0 ? '#6fa98d' : '#d58b82';
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setDisplayAngle(angle));
+    return () => cancelAnimationFrame(frame);
+  }, [angle]);
+
   return (
-    <div className="min-w-0 text-center">
-      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[118px] overflow-visible" aria-label={`${label}: ${positive} positive and ${negative} negative`}>
+    <div className="min-w-0 rounded-[18px] bg-white/55 px-1.5 pb-3 pt-2 text-center shadow-[inset_0_0_0_1px_rgba(31,107,85,.05)]">
+      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[112px] overflow-visible" role="img" aria-label={`${label}: ${positive} positive, ${negative} negative, ${state}`}>
         <defs>
           <linearGradient id={`profile-gauge-${id}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#df5c54" />
-            <stop offset=".48" stopColor="#e5b93f" />
-            <stop offset="1" stopColor="#43a66d" />
+            <stop offset="0" stopColor="#efb2aa" />
+            <stop offset=".5" stopColor="#eee4c5" />
+            <stop offset="1" stopColor="#afd9c2" />
           </linearGradient>
+          <filter id={`profile-gauge-shadow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#173f34" floodOpacity=".13" />
+          </filter>
         </defs>
-        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke="#e9e3d7" strokeWidth="9" strokeLinecap="round" />
-        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke={`url(#profile-gauge-${id})`} strokeWidth="7" strokeLinecap="round" />
-        <g style={{ transform: `rotate(${angle}deg)`, transformOrigin: '60px 59px', transition: 'transform 500ms cubic-bezier(.2,.8,.2,1)' }}>
-          <path d="M58.5 59 60 23 61.5 59Z" fill="#163f33" />
+        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke="#eeeae0" strokeWidth="11" strokeLinecap="round" />
+        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke={`url(#profile-gauge-${id})`} strokeWidth="8" strokeLinecap="round" opacity=".96" />
+        <path d="M60 13v6" stroke="#d1caba" strokeWidth="2" strokeLinecap="round" />
+        <g style={{ transform: `rotate(${displayAngle}deg)`, transformOrigin: '60px 59px', transition: 'transform 720ms cubic-bezier(.2,.9,.25,1.2)' }} filter={`url(#profile-gauge-shadow-${id})`}>
+          <path d="M57.7 58.5 60 25l2.3 33.5Z" fill={needleColor} style={{ transition: 'fill 360ms ease' }} />
         </g>
-        <circle cx="60" cy="59" r="5" fill="#173f34" stroke="#faf8f2" strokeWidth="2" />
+        <circle cx="60" cy="59" r="6" fill={needleColor} stroke="#fffdf8" strokeWidth="2.5" style={{ transition: 'fill 360ms ease' }} />
       </svg>
-      <strong className="-mt-1 block truncate text-[11px] font-black text-[#173f34]">{label}</strong>
+      <strong className="-mt-0.5 block truncate text-[10px] font-black text-[#173f34] sm:text-[11px]">{label}</strong>
     </div>
   );
 }
@@ -598,7 +655,6 @@ function CanactPagesProfileUI({
   isSelf,
   isVerified,
   locationText,
-  canactScore,
   tab,
   setTab,
   posts,
@@ -622,7 +678,6 @@ function CanactPagesProfileUI({
   isSelf: boolean;
   isVerified: boolean;
   locationText: string;
-  canactScore: ReturnType<typeof calculateCanactScore>;
   accessBlockReason: 'location' | 'range' | null;
   locationError: string | null;
   onRetryLocation: () => void;
@@ -642,8 +697,13 @@ function CanactPagesProfileUI({
   friendStatus: 'none' | 'requested' | 'incoming' | 'friends';
   isFavourite: boolean;
 }) {
+  const { updateMyProfile } = useAuth();
   const [attrsSheetOpen, setAttrsSheetOpen] = useState(false);
   const [receivedConnections, setReceivedConnections] = useState<ConnectionCardGift[]>([]);
+  const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profilePhotoEditorOpen, setProfilePhotoEditorOpen] = useState(false);
+  const [profilePhotoBusy, setProfilePhotoBusy] = useState(false);
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
   useAdaptiveProfileChrome(null);
@@ -679,72 +739,163 @@ function CanactPagesProfileUI({
       .sort((left, right) => right.count - left.count || right.latest - left.latest)
       .slice(0, 4);
   }, [receivedConnections]);
+  const profileInsight = useMemo(() => buildProfileInsight(userProfile, receivedConnections), [receivedConnections, userProfile]);
+  const scoreSummary = useMemo(() => calculateCanactScore(userProfile), [userProfile]);
+  const helpCount = Math.max(0, (userProfile.helpStats?.resolved ?? 0) + (userProfile.helpStats?.confirmed ?? 0));
+  const currentMood = getMoodDefinition(userProfile.currentMood?.kind);
+  const scoreProgress = Math.max(0, Math.min(100,
+    (scoreSummary.score / Math.max(1, scoreSummary.max)) * 100,
+  ));
 
   useEffect(() => listenReceivedConnectionCards(userProfile.uid, setReceivedConnections), [userProfile.uid]);
+
+  const closeProfilePhotoEditor = () => {
+    if (profilePhotoBusy) return;
+    setProfilePhotoEditorOpen(false);
+    setProfilePhotoFile(null);
+    if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
+  };
+
+  const pickProfilePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      event.target.value = '';
+      toast('Choose an image for your profile photo', 'error');
+      return;
+    }
+    setProfilePhotoFile(file);
+    setProfilePhotoEditorOpen(true);
+  };
+
+  const applyProfilePhoto = async (blob: Blob) => {
+    const previousUrl = userProfile.photoURL;
+    setProfilePhotoBusy(true);
+    try {
+      const { url } = await uploadMedia(blob, { kind: 'avatar', uid: userProfile.uid });
+      await updateMyProfile({ photoURL: url });
+      if (previousUrl && typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+        try { navigator.serviceWorker.controller.postMessage({ type: 'INVALIDATE_MEDIA', urls: [previousUrl] }); } catch { /* best effort */ }
+      }
+      setProfilePhotoEditorOpen(false);
+      setProfilePhotoFile(null);
+      if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
+      toast('Profile photo updated', 'success');
+    } catch (error: any) {
+      toast(error?.message || 'Could not update profile photo', 'error');
+    } finally {
+      setProfilePhotoBusy(false);
+    }
+  };
 
   return (
     <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
-      <section className="relative px-5 pb-5 pt-5 text-center">
-        <div className="mx-auto inline-flex h-9 items-center gap-2 rounded-full bg-[#173f34] px-4 text-white shadow-[0_8px_20px_rgba(20,63,51,.14)]">
-          <span className="h-2 w-2 rounded-full bg-[#68c986]" />
-          <strong className="text-sm font-black">{canactScore.score}</strong>
-          <span className="text-[9px] font-black uppercase tracking-[.14em] text-white/65">{canactScore.label}</span>
-        </div>
-
-        <div className="relative mx-auto mt-2 h-[300px] w-full max-w-[360px]">
+      <section className="relative mx-auto w-full max-w-[440px] px-5 pb-5 pt-[calc(var(--canact-header-top-inset,0px)+78px+1em)] text-center lg:pt-5">
+        <div className="relative mx-auto h-[228px] w-full max-w-[330px]">
           {connectionHighlights.length ? (
-            <svg className="pointer-events-none absolute inset-x-4 top-3 h-[222px] w-auto text-[#173f34]/55" viewBox="0 0 328 222" aria-hidden="true">
-              <path d="M58 46C95 45 112 61 135 90" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
-              <path d="M270 46C232 45 216 61 193 90" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
-              <path d="M47 158C92 158 108 143 134 128" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
-              <path d="M281 158C236 158 220 143 194 128" fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+            <svg className="pointer-events-none absolute inset-x-4 top-0 h-[190px] w-auto text-[#173f34]/45" viewBox="0 0 328 222" aria-hidden="true">
+              {[
+                'M58 46C95 45 112 61 135 90',
+                'M270 46C232 45 216 61 193 90',
+                'M47 158C92 158 108 143 134 128',
+                'M281 158C236 158 220 143 194 128',
+              ].slice(0, connectionHighlights.length).map((path) => (
+                <path key={path} d={path} fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+              ))}
             </svg>
           ) : null}
 
           {connectionHighlights.map((item, index) => {
-            const positions = ['left-0 top-4', 'right-0 top-4', 'left-0 top-[55%]', 'right-0 top-[55%]'];
+            const positions = ['left-0 top-1', 'right-0 top-1', 'left-0 top-[52%]', 'right-0 top-[52%]'];
             return (
-              <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[76px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
-                <span className="grid h-12 w-12 place-items-center rounded-full border border-[#173f34]/10 bg-[#faf8f2] text-[#1f6b55] shadow-[0_8px_22px_rgba(20,63,51,.11)]"><ConnectionOrbitIcon kind={item.kind} /></span>
+              <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[68px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
+                <span className="grid h-10 w-10 place-items-center rounded-full border border-[#173f34]/10 bg-[#faf8f2] text-[#1f6b55] shadow-[0_8px_22px_rgba(20,63,51,.11)]"><ConnectionOrbitIcon kind={item.kind} /></span>
                 <span className="max-w-full truncate text-[9px] font-bold text-[#173f34]/65">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
               </button>
             );
           })}
 
-          <div className={`absolute left-1/2 top-[42%] z-10 h-[204px] w-[204px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border-[5px] bg-white shadow-[0_18px_45px_rgba(16,54,42,.16)] ${isFavourite ? 'border-[#E8B830]' : 'border-[#faf8f2]'}`}>
-            {isSelf ? (stories.length ? (
-              <button type="button" onClick={() => onOpenStory(0)} aria-label="View your stories" className="block h-full w-full">
-                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
-              </button>
-            ) : (
-              <Link href="/story/create" aria-label="Create a story" className="block h-full w-full">
-                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
-              </Link>
-            )) : (
-              <button type="button" onClick={() => setAttrsSheetOpen(true)} aria-label={`Rate ${displayName}`} className="block h-full w-full transition-transform active:scale-95">
-                <Avatar src={userProfile.photoURL} name={displayName} size={194} />
-              </button>
-            )}
+          <div className="absolute left-1/2 top-[43%] z-10 h-[172px] w-[172px] -translate-x-1/2 -translate-y-1/2">
+            <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible drop-shadow-[0_10px_22px_rgba(20,70,54,.14)]" viewBox="0 0 172 172" role="img" aria-label={`Canact score ${scoreSummary.score}, ${Math.round(scoreProgress)}% of the ${scoreSummary.max} maximum`}>
+              <path d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57" pathLength="79.5" fill="none" stroke="rgba(31,107,85,.12)" strokeWidth="7" strokeLinecap="round" />
+              <path
+                d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57"
+                pathLength="79.5"
+                fill="none"
+                stroke="#2b8065"
+                strokeWidth="7"
+                strokeLinecap="round"
+                strokeDasharray={`${scoreProgress * 0.795} 100`}
+                className="transition-[stroke-dasharray] duration-700 ease-out"
+              />
+            </svg>
+            <div className={`absolute inset-[11px] overflow-hidden rounded-full border-[3px] bg-white shadow-[0_14px_34px_rgba(16,54,42,.14)] ${isFavourite ? 'border-[#E8B830]' : 'border-[#faf8f2]'}`}>
+              {isSelf ? (
+                <button type="button" onClick={() => profilePhotoInputRef.current?.click()} aria-label="Change profile photo" className="relative block h-full w-full transition-transform active:scale-95">
+                  <Avatar src={userProfile.photoURL} name={displayName} size={150} />
+                </button>
+              ) : (
+                <button type="button" onClick={() => setAttrsSheetOpen(true)} aria-label={`Rate ${displayName}`} className="block h-full w-full transition-transform active:scale-95">
+                  <Avatar src={userProfile.photoURL} name={displayName} size={150} />
+                </button>
+              )}
+            </div>
+            {isSelf ? (
+              <span className="pointer-events-none absolute right-0 top-5 z-30 grid h-8 w-8 place-items-center rounded-full border-[3px] border-[#faf8f2] bg-[#174f3f] text-white shadow-[0_6px_16px_rgba(20,66,52,.28)]" aria-hidden="true">
+                <Camera size={14} />
+              </span>
+            ) : null}
+            <div className="absolute bottom-[-40px] left-1/2 z-20 flex h-9 -translate-x-1/2 overflow-hidden rounded-full border-2 border-[#faf8f2] shadow-[0_8px_20px_rgba(20,66,52,.24)]">
+              {isSelf ? (
+                <Link
+                  href="/mood"
+                  prefetch
+                  className="flex h-full min-w-[66px] items-center justify-center gap-1.5 border-r border-[#faf8f2]/75 px-2 transition-[filter] active:brightness-95"
+                  style={{ background: currentMood?.soft ?? '#e2f2e9', color: currentMood?.accent ?? '#1f6b55' }}
+                  aria-label={currentMood ? `Current mood: ${currentMood.label}. Change mood` : 'Select your mood'}
+                >
+                  {currentMood ? <MoodIcon kind={currentMood.id} size={14} /> : <Smile size={14} />}
+                  <strong className="max-w-[42px] truncate text-[8px] font-black uppercase tracking-[.04em]">{currentMood?.label ?? 'Mood'}</strong>
+                </Link>
+              ) : currentMood ? (
+                <span
+                  className="flex h-full min-w-[66px] items-center justify-center gap-1.5 border-r border-[#faf8f2]/75 px-2"
+                  style={{ background: currentMood.soft, color: currentMood.accent }}
+                  role="status"
+                  aria-label={`${displayName} feels ${currentMood.label}, intensity ${userProfile.currentMood?.intensity ?? 3} of 5`}
+                >
+                  <MoodIcon kind={currentMood.id} size={14} />
+                  <strong className="max-w-[42px] truncate text-[8px] font-black uppercase tracking-[.04em]">{currentMood.label}</strong>
+                </span>
+              ) : null}
+              <span className="flex h-full min-w-[112px] items-center justify-center gap-2 bg-[#174f3f] px-3 text-white">
+                <strong className="text-[17px] font-black leading-none tracking-[-.04em]">{scoreSummary.score}</strong>
+                <span className="text-left text-[6px] font-black uppercase leading-[1.05] tracking-[.11em] text-white/70">Canact<br />score</span>
+              </span>
+              <span className="flex h-full min-w-[58px] items-center justify-center gap-1 border-l border-[#faf8f2]/75 bg-[#f1c84b] px-2 text-[#513d0a]" aria-label={`${helpCount} confirmed helps`}>
+                <HandHeart size={12} strokeWidth={2.4} />
+                <strong className="text-[13px] font-black leading-none">{helpCount}</strong>
+                <small className="text-[6px] font-black uppercase tracking-[.08em]">Help</small>
+              </span>
+            </div>
           </div>
-
-          {receivedConnections.length ? <button type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="absolute bottom-[32px] z-30 grid h-[62px] w-[62px] place-items-center rounded-full border-2 border-white bg-[radial-gradient(circle_at_30%_20%,#61ad8e,#174f3f_68%)] text-white shadow-[0_10px_25px_rgba(19,69,53,.3)]" style={{ left: 'calc(50% - 92px)' }} aria-label={`${receivedConnections.length} connection cards received`}>
-            <Heart size={19} />
-            <span className="-mt-2 text-[9px] font-black">{receivedConnections.length}</span>
-          </button> : null}
         </div>
 
-        <h1 className="mt-2 text-[28px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
-        <p className="mt-1 text-sm font-medium text-ink/50">@{profileSlug(userProfile)} · {role}</p>
-        {userProfile.bio ? <p className="mx-auto mt-3 max-w-sm whitespace-pre-wrap text-sm leading-6 text-ink/65">{userProfile.bio}</p> : null}
+        <h1 className="text-[26px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
+        <p className="mt-1 text-[13px] font-semibold text-ink/48">@{profileSlug(userProfile)} · {role}</p>
+        <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-ink/68">{profileInsight}</p>
+        {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-ink/45">{userProfile.bio}</p> : null}
 
-        <div className="mt-6 grid grid-cols-3 gap-2 rounded-[24px] bg-white/55 px-2 pb-3 pt-4 shadow-[inset_0_0_0_1px_rgba(31,107,85,.06)]">
+        <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-[24px] bg-[#f5f1e8]/75 p-2 shadow-[inset_0_0_0_1px_rgba(31,107,85,.05)]">
           <ProfileAttributeGauge id={`${userProfile.uid}-behaviour`} label="Behaviour" positive={userProfile.attrs?.behaviour ?? 0} negative={userProfile.attrs?.rude ?? 0} />
           <ProfileAttributeGauge id={`${userProfile.uid}-reliability`} label="Reliability" positive={userProfile.attrs?.reliability ?? 0} negative={userProfile.attrs?.unreliable ?? 0} />
           <ProfileAttributeGauge id={`${userProfile.uid}-civic`} label="Civic sense" positive={userProfile.attrs?.civic_sense ?? 0} negative={userProfile.attrs?.uncivil ?? 0} />
         </div>
 
-        {!isSelf ? <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#1f6b55] font-black text-white shadow-[0_8px_22px_rgba(31,107,85,.18)]"><Star size={17} /> Rate Me</button> : null}
+        {!isSelf ? (
+          <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#dcece4] font-black text-[#1f6b55] shadow-[inset_0_0_0_1px_rgba(31,107,85,.08)]"><Star size={16} /> Give attributes</button>
+        ) : null}
 
         <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} showAttributes={false} connectionCards={receivedConnections} />
 
@@ -785,20 +936,35 @@ function CanactPagesProfileUI({
 
       <ProfileAccessGate reason={accessBlockReason} locationError={locationError} onRetryLocation={onRetryLocation} />
 
-      {/* Attributes bottom-sheet — shows on avatar tap for third-party profiles */}
+      {isSelf ? (
+        <>
+          <input ref={profilePhotoInputRef} type="file" accept="image/*" className="sr-only" aria-label="Choose profile photo" onChange={pickProfilePhoto} />
+          <ProfileImageEditorSheet
+            file={profilePhotoFile}
+            open={profilePhotoEditorOpen}
+            busy={profilePhotoBusy}
+            onClose={closeProfilePhotoEditor}
+            onApply={applyProfilePhoto}
+          />
+        </>
+      ) : null}
+
+      {/* Attribute sliders — opened by the CTA or avatar on third-party profiles. */}
       {!isSelf && (
         <Sheet open={attrsSheetOpen} onClose={() => setAttrsSheetOpen(false)} title={`${displayName}'s attributes`}>
           <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 rounded-[20px] bg-[#edf3ef] p-3">
             {userProfile.photoURL ? (
-              <img src={userProfile.photoURL} alt={displayName} className="w-full h-auto aspect-square rounded-2xl object-cover bg-brand-light" />
+              <img src={userProfile.photoURL} alt={displayName} className="h-16 w-16 shrink-0 rounded-full object-cover bg-brand-light" />
             ) : (
-              <div className="flex w-full aspect-square items-center justify-center rounded-2xl bg-brand-light text-5xl font-extrabold text-brand">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-light text-2xl font-extrabold text-brand">
                 {(displayName || '?')[0]?.toUpperCase()}
               </div>
             )}
-            <div className="text-center">
+            <div className="min-w-0 text-left">
               <div className="text-lg font-extrabold text-ink">{displayName}</div>
               <div className="text-sm text-ink/50">@{profileSlug(userProfile)}</div>
+            </div>
             </div>
             <ProfileRecognitionFolders profile={userProfile} isSelf={false} showCards={false} />
             {(!userProfile.attrs || Object.values(userProfile.attrs).every((v) => !v)) && (
@@ -844,10 +1010,10 @@ function ProfileAccessGate({
       aria-modal="true"
       aria-labelledby="out-of-range-profile-message"
     >
-      <div className="absolute inset-0 bg-black/[0.03]" aria-hidden="true" />
+      <div className="canact-popup-backdrop absolute inset-0" aria-hidden="true" />
       <div
         id="out-of-range-profile-message"
-        className="relative w-full max-w-sm rounded-[28px] bg-[#202221]/95 px-7 py-6 text-center text-[16px] font-bold leading-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+        className="relative w-full max-w-sm rounded-[28px] bg-[#202221] px-7 py-6 text-center text-[16px] font-bold leading-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.28)]"
       >
         <MapPin size={24} className="mx-auto mb-3" aria-hidden="true" />
         {needsLocation ? (

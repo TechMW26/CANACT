@@ -32,7 +32,7 @@ import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type 
 import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
-  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, X,
+  Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, ChevronDown, X,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
@@ -49,6 +49,7 @@ const SIDE_LINKS = [
   { href: '/feed',         label: 'Feed',          Icon: Compass },
   { href: '/inbox',        label: 'Inbox',         Icon: MessageSquare },
   { href: '/help',         label: 'Help',          Icon: HeartHandshake },
+  { href: '/mood',         label: 'Mood Board',    Icon: Activity },
   { href: '/leaderboard',  label: 'Leaderboard',   Icon: Trophy },
   { href: '/notifications',label: 'Notifications', Icon: Bell },
   { href: '/favourites',   label: 'Favourites',    Icon: Heart },
@@ -77,6 +78,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
+  const mobileHeaderInset = mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 1em)` : '1em';
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   const [navbarHrefs, setNavbarHrefs] = useState<{ tabs: string[]; plusIcon?: string; plusItems?: string[] } | null>(null);
   const prefetchedRoutesRef = useRef(new Set<string>());
@@ -143,13 +145,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--canact-header-top-inset', mobileHeaderTopInset ?? '0px');
-    root.style.setProperty('--canact-map-header-fade-start', mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 55px)` : '55px');
+    root.style.setProperty('--canact-header-top-inset', mobileHeaderInset);
+    root.style.setProperty('--canact-map-header-fade-start', `calc(${mobileHeaderInset} + 55px)`);
     return () => {
       root.style.removeProperty('--canact-header-top-inset');
       root.style.removeProperty('--canact-map-header-fade-start');
     };
-  }, [mobileHeaderTopInset]);
+  }, [mobileHeaderInset]);
 
   useEffect(() => {
     if (loading) return;
@@ -291,7 +293,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar — fixed to the viewport so it's always in view
           regardless of how far the main column scrolls. Hidden under lg
           (tablet portrait still gets the floating mobile header + bottom nav). */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white/60 lg:backdrop-blur lg:border-r lg:border-line lg:z-[2147482600]">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-60 lg:gap-1 lg:py-6 lg:px-4 lg:overflow-y-auto lg:bg-white lg:border-r lg:border-line lg:z-[2147482600]">
         <div className="px-3 py-2 mb-2">
           <Brand size={32} href="/" />
         </div>
@@ -335,10 +337,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderTopInset} />
+        <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderInset} />
         <div
           className={`canact-col ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
-          style={!headerOverContent ? { paddingTop: mobileHeaderTopInset ? `calc(${mobileHeaderTopInset} + 92px)` : '92px' } : undefined}
+          style={!headerOverContent ? { paddingTop: `calc(${mobileHeaderInset} + 92px)` } : undefined}
         ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />
         <IncomingCallRinger />
@@ -368,7 +370,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-center"
               style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 60px)`, gap: '10px' }}>
               <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
-              <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.08" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
+              <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.14" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
               {visibleTabs.map(({ href, label, Icon, isFab }, tabIndex) => {
                 const active = isNavLinkActive(pathname, href, user.uid);
                 const onTap = () => {
@@ -620,6 +622,7 @@ function titleFor(path: string | null) {
   if (path === '/') return 'Home';
   if (path.startsWith('/feed')) return 'Feed';
   if (path.startsWith('/help')) return 'Help';
+  if (path.startsWith('/mood')) return 'Mood Board';
   if (path.startsWith('/create')) return 'Create';
   if (path.startsWith('/leaderboard')) return 'Leaderboard';
   if (path.startsWith('/profile')) return 'Profile';
@@ -740,7 +743,11 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   }));
   const islandExpanded = islandOpen || !!islandMoment;
   const scoreSummary = liveSummary ?? calculateCanactScore(profile);
-  const scorePercent = Math.max(4, Math.min(100, (liveScore / Math.max(scoreSummary.max, 1)) * 100));
+  const nextClub = scoreSummary.clubMax;
+  const pointsToNextClub = Math.max(0, nextClub - liveScore);
+  const scorePercent = liveScore >= scoreSummary.max
+    ? 100
+    : Math.max(4, Math.min(100, ((liveScore - scoreSummary.clubMin) / Math.max(1, scoreSummary.clubMax - scoreSummary.clubMin)) * 100));
 
   useEffect(() => setIslandPortalMounted(true), []);
 
@@ -815,7 +822,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
                 <>
                   {/* Backdrop — fades in/out */}
                   <div
-                    className={`fixed inset-0 z-[2147482600] bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${sidebarEntered ? 'opacity-100' : 'opacity-0'}`}
+                    className={`canact-popup-backdrop fixed inset-0 z-[2147482600] transition-opacity duration-300 ${sidebarEntered ? 'opacity-100' : 'opacity-0'}`}
                     onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
                     aria-hidden="true"
                   />
@@ -890,6 +897,19 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
       </div>
       </header>
       {islandPortalMounted && islandAnchor && createPortal(
+        <>
+        <button
+          type="button"
+          className="canact-score-island-backdrop canact-popup-backdrop"
+          data-expanded={islandExpanded}
+          aria-label="Close Canact score details"
+          tabIndex={islandExpanded ? 0 : -1}
+          onClick={() => {
+            setIslandOpen(false);
+            setIslandMoment(null);
+            if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
+          }}
+        />
         <div
           ref={islandPortalRef}
           className="canact-score-island-portal"
@@ -922,29 +942,40 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
             }}
           >
             <span className="canact-score-island-compact">
-              <i />
+              <i><Activity size={17} /></i>
               <strong>{liveScore}</strong>
-              <small>{scoreDelta ? `${scoreDelta > 0 ? '+' : '−'}${Math.abs(scoreDelta)}` : 'GOOD'}</small>
+              <span><small>CANACT</small><small>SCORE</small></span>
+              <em>{scoreSummary.label}</em>
+              <ChevronDown size={15} aria-hidden="true" />
             </span>
             <span className="canact-score-island-panel">
-              <span className="canact-score-island-event">
-                <i>{islandMoment?.icon ?? <Activity size={16} />}</i>
-                <span><small>{islandMoment ? 'Live update' : 'Canact score'}</small><strong>{islandMoment?.label ?? `${scoreSummary.club} club`}</strong></span>
+              <span className="canact-score-island-hero">
+                <i>{islandMoment?.icon ?? <Activity size={24} />}</i>
+                <span><small>CANACT SCORE</small><strong>{liveScore}</strong></span>
+                <b>{scoreSummary.label}</b>
+                {scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)} earned</em> : null}
               </span>
-              <span className="canact-score-island-value"><b>{liveScore}</b>{scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)}</em> : null}</span>
-              <span className="canact-score-island-meter"><i style={{ width: `${scorePercent}%` }} /></span>
-              <span className="canact-score-island-meta"><small>{scoreSummary.club} club</small><small>{attrs.reduce((sum, attr) => sum + attr.count, 0)} attribute signals</small></span>
-              <span className="canact-score-island-attributes">
-                {attrs.map((attr) => (
+              <span className="canact-score-island-club">
+                <strong>{scoreSummary.club} Club</strong>
+                <span className="canact-score-island-meter"><i style={{ width: `${scorePercent}%` }} /></span>
+                <small>{pointsToNextClub ? `${pointsToNextClub} points to ${nextClub} Club` : 'Highest club reached'}</small>
+              </span>
+              <span className="canact-score-island-attribute-panel">
+                <small>ATTRIBUTE GAINS</small>
+                <span className="canact-score-island-attributes">
+                {attrs.filter((attr) => attr.positive).map((attr) => (
                   <span key={attr.key} data-positive={attr.positive}>
                     <small>{attr.label}</small>
-                    <b>{attr.count}</b>
+                    <b>+{attr.count}</b>
                   </span>
                 ))}
+                </span>
+                <span className="canact-score-island-impact"><i>✓</i>{islandMoment?.label ?? 'Your positive impact was recognised.'}</span>
               </span>
             </span>
           </button>
-        </div>,
+        </div>
+        </>,
         document.body,
       )}
     </>

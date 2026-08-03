@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CountryCode } from 'libphonenumber-js';
-import { ArrowLeft, ArrowRight, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MessageCircle, Monitor } from 'lucide-react';
 import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components/PhoneInput';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
@@ -25,9 +25,10 @@ function Progress({ step = 1 }: { step?: number }) {
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { user, profile, loading, requestOTP, confirmOTP, pendingOTP, signOut } = useAuth();
+  const { user, profile, loading, requestOTP, signInLocally, confirmOTP, pendingOTP, signOut } = useAuth();
   const [busy, setBusy] = useState(false);
   const [profileTimedOut, setProfileTimedOut] = useState(false);
+  const [localPhoneLogin, setLocalPhoneLogin] = useState(false);
 
   // Phone input state
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>('IN');
@@ -40,9 +41,17 @@ export default function WelcomePage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  useEffect(() => {
+    setLocalPhoneLogin(['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname));
+  }, []);
+
   // Restore an unexpired verification after navigation/reload. The Firebase
   // verification ID is kept in sessionStorage, never the code itself.
   useEffect(() => {
+    if (localPhoneLogin) {
+      setOtpSent(false);
+      return;
+    }
     const session = pendingOTP('signin');
     if (!session) return;
     const restored = splitStoredPhone(session.phone);
@@ -51,7 +60,7 @@ export default function WelcomePage() {
     setOtpSent(true);
     const elapsedSeconds = Math.floor((Date.now() - (session.expiresAt - 5 * 60 * 1000)) / 1000);
     setResendCooldown(Math.max(0, 30 - elapsedSeconds));
-  }, [pendingOTP]);
+  }, [localPhoneLogin, pendingOTP]);
 
   // Timer for resend cooldown
   useEffect(() => {
@@ -102,6 +111,16 @@ export default function WelcomePage() {
     if (!phoneValid) return toast('Enter a valid phone number', 'error');
     setBusy(true);
     try {
+      if (localPhoneLogin) {
+        const result = await signInLocally(fullPhone);
+        if (!result.ok) {
+          toast(result.error || 'Local phone login is unavailable.', 'error');
+          return;
+        }
+        toast(result.isNewUser ? 'Local account created' : 'Welcome back', 'success');
+        router.replace(result.nextPath ?? (result.isNewUser ? '/onboard' : '/'));
+        return;
+      }
       const result = await requestOTP(fullPhone);
       if (!result.ok) {
         toast(result.error || OTP_SEND_MESSAGE, 'error');
@@ -289,8 +308,8 @@ export default function WelcomePage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', marginTop: 8, color: 'rgba(17,40,34,0.5)', fontSize: 13 }}>
-              <MessageCircle size={14} />
-              <span>A verification code will be sent via SMS.</span>
+              {localPhoneLogin ? <Monitor size={14} /> : <MessageCircle size={14} />}
+              <span>{localPhoneLogin ? 'Local development login — no OTP will be sent.' : 'A verification code will be sent via SMS.'}</span>
             </div>
 
             <div id="recaptcha-container" className={styles.recaptcha} />
@@ -302,7 +321,7 @@ export default function WelcomePage() {
             disabled={busy || !phoneValid}
             onClick={handleSendOTP}
           >
-            <span>{busy ? 'Sending…' : 'Get OTP'}</span>
+            <span>{busy ? (localPhoneLogin ? 'Signing in…' : 'Sending…') : (localPhoneLogin ? 'Continue' : 'Get OTP')}</span>
             <span className={styles.primaryIcon}><ArrowRight /></span>
           </button>
 

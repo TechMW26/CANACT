@@ -95,7 +95,7 @@ export function StoryEditor({
             type="button"
             onClick={onCancel}
             aria-label="Back"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink"
           >
             <ArrowLeft size={18} />
           </button>
@@ -104,14 +104,14 @@ export function StoryEditor({
               type="button"
               onClick={() => setShowFilters((v) => !v)}
               aria-pressed={showFilters}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold backdrop-blur ${showFilters ? 'bg-white text-ink' : 'bg-white/15'}`}
+              className={`inline-flex items-center gap-1 rounded-full bg-white px-3 py-2 text-xs font-bold text-ink ${showFilters ? 'ring-2 ring-brand/20' : ''}`}
             >
               <Sparkles size={14} /> Filters
             </button>
             <button
               type="button"
               onClick={addText}
-              className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-xs font-bold backdrop-blur"
+              className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-2 text-xs font-bold text-ink"
             >
               <Type size={14} /> Add text
             </button>
@@ -162,7 +162,7 @@ export function StoryEditor({
               value={editing.text}
               onChange={(e) => updateOverlay(editing.id, { text: e.target.value })}
               placeholder="Type something…"
-              className="w-full rounded-2xl bg-white/15 px-4 py-3 text-base font-bold text-white placeholder:text-white/60 backdrop-blur outline-none"
+              className="w-full rounded-2xl bg-white px-4 py-3 text-base font-bold text-ink placeholder:text-ink/45 outline-none"
             />
             <div className="flex flex-wrap items-center gap-2">
               {COLORS.map((c) => (
@@ -213,13 +213,13 @@ export function StoryEditor({
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 placeholder="Add a caption (optional)"
-                className="flex-1 rounded-full bg-white/15 px-4 py-3 text-sm text-white placeholder:text-white/60 backdrop-blur outline-none"
+                className="flex-1 rounded-full bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/45 outline-none"
               />
               <button
                 type="button"
                 onClick={addText}
                 aria-label="Add text"
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+                className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-ink"
               >
                 <Plus size={18} />
               </button>

@@ -18,7 +18,6 @@ function syncGlassVariables(element: HTMLElement) {
 
   element.style.setProperty('--canact-glass-tint-rgb', tint);
   element.style.setProperty('--canact-glass-tint-opacity', String(opacity));
-  element.style.setProperty('--canact-glass-blur', isSwitcher ? '14px' : '20px');
   if (!element.classList.contains('canact-glass-positioned') && getComputedStyle(element).position === 'static') {
     element.classList.add('canact-glass-positioned');
   }

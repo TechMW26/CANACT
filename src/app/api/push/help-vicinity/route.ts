@@ -89,7 +89,7 @@ export async function POST(req: Request) {
   // Build candidate UID set based on audience.
   let candidateUids: string[] = [];
   if (aud === 'contacts') {
-    const snap = await dbAdm.ref(`friends/${fromUid}`).get();
+    const snap = await dbAdm.ref(`contacts/${fromUid}`).get();
     snap.forEach((c) => { if (c.key) candidateUids.push(c.key); return undefined; });
   } else if (aud === 'favourites') {
     const snap = await dbAdm.ref(`favourites/${fromUid}`).get();

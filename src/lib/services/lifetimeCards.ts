@@ -81,16 +81,17 @@ export async function loadGiftCandidates(me: LocatedProfile): Promise<GiftCandid
   const candidates: GiftCandidate[] = [];
   usersSnap.forEach((child) => {
     const profile = child.val() as LocatedProfile;
-    if (!profile || profile.uid === me.uid || profile.underground) return;
+    const uid = String(profile?.uid || child.key || '').trim();
+    if (!profile || !uid || uid === me.uid || profile.underground) return;
     const categories: GiftCandidateCategory[] = [];
-    if (interacted.has(profile.uid)) categories.push('interacted');
-    if (friends.has(profile.uid)) categories.push('friends');
-    if (favourites.has(profile.uid)) categories.push('favourites');
-    if (contacts.has(profile.uid)) categories.push('contacts');
+    if (interacted.has(uid)) categories.push('interacted');
+    if (friends.has(uid)) categories.push('friends');
+    if (favourites.has(uid)) categories.push('favourites');
+    if (contacts.has(uid)) categories.push('contacts');
     const theirLocation = validLocation(profile.lastLocation);
     if (myLocation && theirLocation && haversineMeters(myLocation, theirLocation) <= 25_000) categories.push('nearby');
     if (!categories.length) return;
-    candidates.push({ uid: profile.uid, name: profile.fullName || 'Canact user', photoURL: profile.photoURL, city: profile.city, categories });
+    candidates.push({ uid, name: profile.fullName || 'Canact user', photoURL: profile.photoURL, city: profile.city, categories });
   });
   return candidates.sort((a, b) => b.categories.length - a.categories.length || a.name.localeCompare(b.name));
 }

@@ -77,20 +77,19 @@ export function useTopScrollSwipeDismiss({
     }
     gesture.active = false;
     element.style.transition = dismiss
-      ? 'transform 220ms cubic-bezier(.32,.72,0,1), opacity 180ms ease-out'
+      ? 'transform 220ms cubic-bezier(.32,.72,0,1)'
       : 'transform 300ms cubic-bezier(.2,.9,.25,1.15)';
     // Preserve the exact finger position as the first animation frame, then
     // either continue off-screen or spring back to the sheet's resting place.
     requestAnimationFrame(() => {
       element.style.transform = dismiss ? 'translate3d(0, 105dvh, 0)' : 'translate3d(0, 0, 0)';
-      if (dismiss) element.style.opacity = '0.96';
     });
 
     const finish = () => {
       element.removeEventListener('transitionend', finish);
-      clearInlineMotion(element);
       release();
       if (dismiss) closeRef.current();
+      else clearInlineMotion(element);
     };
     element.addEventListener('transitionend', finish, { once: true });
   }, [clearInlineMotion, release]);

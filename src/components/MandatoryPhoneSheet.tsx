@@ -96,7 +96,7 @@ export function MandatoryPhoneSheet() {
 
   return createPortal(
     <div className="fixed inset-0 z-[2147483200] flex items-end justify-center" role="presentation">
-      <div className="absolute inset-0 bg-[#082d24]/35 backdrop-blur-md" />
+      <div className="canact-popup-backdrop absolute inset-0" />
       <section
         role="dialog"
         aria-modal="true"

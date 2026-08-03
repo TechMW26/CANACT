@@ -112,7 +112,7 @@ export function VideoPreview({
               setMuted((m) => !m);
             }}
             aria-label={muted ? 'Unmute' : 'Mute'}
-            className="absolute right-2 top-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+            className="absolute right-2 top-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-ink"
           >
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </span>
@@ -127,7 +127,7 @@ export function VideoPreview({
               showHint || !playing ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur">
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-ink">
               {playing ? <Pause size={22} /> : <Play size={22} />}
             </span>
           </span>

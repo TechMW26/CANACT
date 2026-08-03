@@ -1,16 +1,24 @@
+.guideLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+}
+.taskBackdrop {
+  position: absolute;
+  inset: 0;
+  animation: backdropEnter .28s ease-out both;
+}
 .guide {
   position: fixed;
-  z-index: 84;
+  z-index: 1;
   left: 50%;
   bottom: calc(var(--canact-bottom-nav-height, 104px) + env(safe-area-inset-bottom, 0px) + 12px);
   width: min(calc(100vw - 24px), 430px);
   transform: translateX(-50%);
   overflow: hidden;
   border-radius: 28px;
-  background: rgba(250, 248, 242, .94);
+  background: #faf8f2;
   box-shadow: 0 18px 55px rgba(13, 55, 43, .16);
-  backdrop-filter: blur(24px) saturate(1.1);
-  -webkit-backdrop-filter: blur(24px) saturate(1.1);
   color: #102f27;
   animation: enter .38s cubic-bezier(.2,.8,.2,1) both;
 }
@@ -31,7 +39,7 @@
 .file { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 .tutorial { position: fixed; inset: 0; z-index: 2147483100; color: #10372d; }
-.mask { z-index: 0; background: rgba(247, 244, 236, .5); backdrop-filter: blur(8px) saturate(.8); -webkit-backdrop-filter: blur(8px) saturate(.8); }
+.mask { z-index: 0; background: var(--canact-popup-backdrop); }
 .focusRing { position: fixed; z-index: 1; pointer-events: none; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 0 0 1px rgba(31,113,89,.16), 0 14px 45px rgba(13,55,43,.18); transition: top .36s cubic-bezier(.2,.8,.2,1), left .36s cubic-bezier(.2,.8,.2,1), width .36s cubic-bezier(.2,.8,.2,1), height .36s cubic-bezier(.2,.8,.2,1); }
 .tutorialCard { position: fixed; z-index: 2; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); width: min(calc(100vw - 24px), 430px); min-height: 284px; padding: 22px; transform: translateX(-50%); border-radius: 30px; background: rgba(252,250,245,.97); box-shadow: 0 20px 70px rgba(13,55,43,.2); animation: cardEnter .46s cubic-bezier(.2,.8,.2,1) both; }
 .tutorialCard[data-placement="top"] { top: max(14px, env(safe-area-inset-top)); bottom: auto; }
@@ -49,6 +57,7 @@
 .reward { position: fixed; z-index: 2147483200; display: grid; place-items: center; min-width: 66px; height: 42px; padding: 0 15px; translate: -50% -50%; border-radius: 999px; background: #0d3f32; color: #a9f1c9; font-size: 16px; font-weight: 950; box-shadow: 0 12px 30px rgba(13,63,50,.3), 0 0 24px rgba(104,224,157,.35); pointer-events: none; animation: rewardFlight 1.05s cubic-bezier(.3,.05,.2,1) forwards; }
 
 @keyframes enter { from { opacity: 0; transform: translate(-50%, 18px) scale(.98); } }
+@keyframes backdropEnter { from { opacity: 0; } }
 @keyframes cardEnter { from { opacity: 0; transform: translate(-50%, 24px) scale(.985); } }
 @keyframes rewardFlight { 0% { opacity: 0; transform: translate3d(0,18px,0) scale(.75); } 18% { opacity: 1; transform: translate3d(0,0,0) scale(1.06); } 82% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--reward-x),var(--reward-y),0) scale(.36); } }
 @media (min-width: 1024px) { .guide { bottom: 24px; left: calc(50% + 120px); } .tutorialCard { left: calc(50% + 120px); } }

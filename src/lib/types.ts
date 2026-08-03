@@ -84,6 +84,15 @@ export type HelpStatus = 'open' | 'inProcess' | 'closed';
 export type HelpAudience = 'public' | 'favourites' | 'contacts';
 export type HelpChannel = 'chat' | 'call' | 'inPerson';
 
+export type MoodState = 'balanced' | 'low' | 'vulnerable';
+export type MoodKind = 'joyful' | 'calm' | 'grateful' | 'tired' | 'drained' | 'numb' | 'sad' | 'anxious' | 'lonely';
+
+export interface PublicMood {
+  kind: MoodKind;
+  intensity: number;
+  updatedAt: number;
+}
+
 export interface UserProfile {
   uid: string;
   fullName: string;
@@ -101,6 +110,10 @@ export interface UserProfile {
   address?: string;
   dateOfBirth?: string;
   bio?: string;
+  /** The user's current public mood. Private mood history remains on-device. */
+  currentMood?: PublicMood | null;
+  /** Last mood publish/removal time, used to enforce the two-hour update cooldown. */
+  moodUpdatedAt?: number;
   photoURL?: string;
   coverPhoto?: string;
   profileVerified?: boolean;

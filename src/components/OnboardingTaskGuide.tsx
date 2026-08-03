@@ -15,16 +15,19 @@ import {
   markOnboardingTour,
   recordOnboardingActivity,
   recordOnboardingSignal,
-  saveContactSync,
   snoozeOnboardingTask,
   type OnboardingProgress,
   type OnboardingTaskId,
 } from '@/lib/services/onboarding';
+import {
+  isNativeContactSyncAvailable,
+  parseVCardContacts,
+  readAllDeviceContacts,
+  syncContactRecords,
+} from '@/lib/services/contactSync';
 import { toast } from './Toaster';
 import styles from './OnboardingTaskGuide.module.css';
 
-type ContactRecord = { name?: string[]; tel?: string[]; email?: string[] };
-type ContactsNavigator = Navigator & { contacts?: { select: (properties: string[], options: { multiple: boolean }) => Promise<ContactRecord[]> } };
 type TourStep = { selector: string; eyebrow: string; title: string; body: string };
 type SpotlightRect = { top: number; left: number; width: number; height: number; radius: number };
 
@@ -174,15 +177,15 @@ export function OnboardingTaskGuide() {
   const performAction = async () => {
     if (!activeTask) return;
     if (activeTask.id === 'sync-contacts') {
-      const contactsApi = (navigator as ContactsNavigator).contacts;
-      if (!contactsApi?.select) { fileRef.current?.click(); return; }
+      if (!isNativeContactSyncAvailable()) { fileRef.current?.click(); return; }
       setBusy(true);
       try {
-        const contacts = await contactsApi.select(['name', 'tel', 'email'], { multiple: true });
+        const contacts = await readAllDeviceContacts();
         if (!contacts.length) return;
-        const count = await saveContactSync(user.uid, contacts);
-        toast(`${count} contact${count === 1 ? '' : 's'} synced · +${activeTask.points} points`, 'success');
-      } catch (error: any) { if (error?.name !== 'AbortError') toast('Could not sync contacts', 'error'); }
+        const result = await syncContactRecords(contacts, profile?.countryCode);
+        await signal('sync-contacts');
+        toast(`${result.synced} contacts synced · ${result.matched} already on Canact · +${activeTask.points} points`, 'success');
+      } catch (error: any) { if (error?.name !== 'AbortError') toast(error?.message || 'Could not sync contacts', 'error'); }
       finally { setBusy(false); }
       return;
     }
@@ -223,10 +226,11 @@ export function OnboardingTaskGuide() {
     if (!file) return;
     setBusy(true);
     try {
-      const contacts = parseVCard(await file.text());
+      const contacts = parseVCardContacts(await file.text());
       if (!contacts.length) throw new Error('No contacts were found in that file');
-      const count = await saveContactSync(user.uid, contacts);
-      toast(`${count} contacts synced`, 'success');
+      const result = await syncContactRecords(contacts, profile?.countryCode);
+      await signal('sync-contacts');
+      toast(`${result.synced} contacts synced · ${result.matched} already on Canact`, 'success');
     } catch (error: any) { toast(error?.message || 'Could not import contacts', 'error'); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
@@ -293,22 +297,26 @@ export function OnboardingTaskGuide() {
         document.body,
       ) : null}
 
-      {activeTask ? (
-        <aside className={styles.guide} aria-live="polite" aria-label="Canact onboarding task">
-          <div className={styles.progress}><span style={{ width: `${(Number(progress.points || 0) / ONBOARDING_MAX_POINTS) * 100}%` }} /></div>
-          <div className={styles.taskHeader}>
-            <span>{completedCount + 1} of {ONBOARDING_TASKS.length}</span>
-            <button type="button" onClick={() => void snooze()}>Not now</button>
-          </div>
-          <div className={styles.body}>
-            <div className={styles.points}>+{activeTask.points}</div>
-            <div className={styles.copy}>
-              <strong>{activeTask.title}</strong><p>{activeTask.description}</p>
-              <div className={styles.meta}>{progress.points}/{ONBOARDING_MAX_POINTS} setup points</div>
+      {activeTask && typeof document !== 'undefined' ? createPortal(
+        <div className={styles.guideLayer}>
+          <div className={`${styles.taskBackdrop} canact-popup-backdrop`} aria-hidden="true" />
+          <aside className={styles.guide} role="dialog" aria-modal="true" aria-live="polite" aria-label="Canact onboarding task">
+            <div className={styles.progress}><span style={{ width: `${(Number(progress.points || 0) / ONBOARDING_MAX_POINTS) * 100}%` }} /></div>
+            <div className={styles.taskHeader}>
+              <span>{completedCount + 1} of {ONBOARDING_TASKS.length}</span>
+              <button type="button" onClick={() => void snooze()}>Not now</button>
             </div>
-            <button type="button" className={styles.action} disabled={busy} onClick={() => void performAction()}>{busy ? 'Working…' : actionLabel(activeTask.id)} <span>→</span></button>
-          </div>
-        </aside>
+            <div className={styles.body}>
+              <div className={styles.points}>+{activeTask.points}</div>
+              <div className={styles.copy}>
+                <strong>{activeTask.title}</strong><p>{activeTask.description}</p>
+                <div className={styles.meta}>{progress.points}/{ONBOARDING_MAX_POINTS} setup points</div>
+              </div>
+              <button type="button" className={styles.action} disabled={busy} onClick={() => void performAction()}>{busy ? 'Working…' : actionLabel(activeTask.id)} <span>→</span></button>
+            </div>
+          </aside>
+        </div>,
+        document.body,
       ) : null}
 
       <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard" aria-label="Import contacts file" onChange={(event) => void onContactFile(event.target.files?.[0])} />
@@ -350,7 +358,7 @@ function findVisibleScoreTarget() {
 }
 
 function actionLabel(id: OnboardingTaskId) {
-  if (id === 'sync-contacts') return 'Choose contacts';
+  if (id === 'sync-contacts') return 'Sync contacts';
   if (id === 'enable-notifications' || id === 'enable-location') return 'Allow';
   if (id === 'verify-identity') return 'Verify';
   if (id === 'offer-help') return 'See requests';
@@ -373,13 +381,4 @@ async function requestLocation() {
     reject,
     { enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 },
   ));
-}
-
-function parseVCard(source: string): ContactRecord[] {
-  return source.split(/END:VCARD/i).map((block) => {
-    const name = block.match(/(?:^|\n)FN[^:]*:([^\r\n]+)/i)?.[1]?.trim();
-    const tel = block.match(/(?:^|\n)TEL[^:]*:([^\r\n]+)/i)?.[1]?.trim();
-    const email = block.match(/(?:^|\n)EMAIL[^:]*:([^\r\n]+)/i)?.[1]?.trim();
-    return { name: name ? [name] : undefined, tel: tel ? [tel] : undefined, email: email ? [email] : undefined };
-  }).filter((contact) => contact.name || contact.tel || contact.email);
 }

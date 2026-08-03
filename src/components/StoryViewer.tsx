@@ -261,7 +261,7 @@ export function StoryViewer({
                 onClick={(e) => { e.stopPropagation(); setVidMuted((m) => !m); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={vidMuted ? 'Unmute' : 'Mute'}
-                className="absolute right-3 top-3 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+                className="absolute right-3 top-3 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-ink"
               >
                 {vidMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
@@ -307,7 +307,7 @@ export function StoryViewer({
           />
 
           {story.caption ? (
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-black/45 px-4 py-2 text-sm leading-6 backdrop-blur">
+            <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-2xl bg-white px-4 py-2 text-sm leading-6 text-ink">
               {story.caption}
             </div>
           ) : null}
@@ -317,11 +317,11 @@ export function StoryViewer({
         <div className="mt-3 px-1">
           {isMine ? (
             <div className="flex gap-2">
-              <button type="button" onClick={() => setShowViewers(true)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white/15 px-4 py-3 text-sm font-bold backdrop-blur">
+              <button type="button" onClick={() => setShowViewers(true)} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-ink">
                 <Eye size={16} /> {viewers.length} {viewers.length === 1 ? 'view' : 'views'}
                 {likeCount > 0 ? <span className="ml-2 inline-flex items-center gap-1 text-pink-300"><Heart size={14} fill="currentColor" /> {likeCount}</span> : null}
               </button>
-              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"><Share2 size={18} /></button>
+              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink"><Share2 size={18} /></button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -334,13 +334,13 @@ export function StoryViewer({
                   if (e.key === 'Enter') void sendReply();
                 }}
                 placeholder={`Reply to ${story.authorName.split(' ')[0]}…`}
-                className="flex-1 rounded-full bg-white/15 px-4 py-3 text-sm text-white placeholder:text-white/60 backdrop-blur outline-none"
+                className="flex-1 rounded-full bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/45 outline-none"
               />
               <button
                 type="button"
                 onClick={() => void toggleStoryLike(story.uid, story.id, meUid, !liked)}
                 aria-label={liked ? 'Unlike' : 'Like'}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink"
               >
                 <Heart size={18} className={liked ? 'text-pink-400' : ''} fill={liked ? 'currentColor' : 'none'} />
               </button>
@@ -353,7 +353,7 @@ export function StoryViewer({
               >
                 <Send size={16} />
               </button>
-              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 backdrop-blur"><Share2 size={18} /></button>
+              <button type="button" onClick={shareStory} aria-label="Share story outside Canact" className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink"><Share2 size={18} /></button>
             </div>
           )}
         </div>
@@ -361,7 +361,7 @@ export function StoryViewer({
 
       {/* Viewers sheet (owner) */}
       {showViewers && isMine ? (
-        <div className="absolute inset-0 z-[110] flex items-end bg-transparent backdrop-blur-sm" onClick={() => setShowViewers(false)}>
+        <div className="canact-popup-backdrop absolute inset-0 z-[110] flex items-end" onClick={() => setShowViewers(false)}>
           <div
             ref={(el) => { viewersSheetRef.current = el; (viewersSwipeRef as any).current = el; }}
             onClick={(e) => e.stopPropagation()}

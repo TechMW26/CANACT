@@ -119,8 +119,6 @@ export function Sheet({
       releasePopupOpen();
       unlockScroll();
       window.removeEventListener('keydown', onKey);
-      releaseZoomRef.current?.();
-      releaseZoomRef.current = null;
     };
   }, [mounted]);
 
@@ -128,13 +126,13 @@ export function Sheet({
     releaseZoomRef.current?.();
     releaseZoomRef.current = null;
     const shell = document.getElementById('canact-app-content');
-    if (!shell || !entered) return;
+    if (!shell || !mounted) return;
     releaseZoomRef.current = pushCanactSheetZoom(shell);
     return () => {
       releaseZoomRef.current?.();
       releaseZoomRef.current = null;
     };
-  }, [entered]);
+  }, [mounted]);
 
   if (!mounted) return null;
   if (typeof document === 'undefined') return null;
@@ -145,7 +143,7 @@ export function Sheet({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity duration-[320ms] ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
+        className={`canact-popup-backdrop absolute inset-0 transition-opacity duration-[320ms] ease-out ${entered ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         ref={swipeRef}

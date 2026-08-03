@@ -477,7 +477,7 @@ export function SelfieVerifier({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_34%,rgba(0,0,0,.20)_52%,rgba(0,0,0,.62)_100%)]" />
 
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent p-6 safe-top">
-          <button type="button" onClick={onCancel} className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur" aria-label="Cancel verification">✕</button>
+          <button type="button" onClick={onCancel} className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink" aria-label="Cancel verification">✕</button>
         </div>
 
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-20">
@@ -487,7 +487,7 @@ export function SelfieVerifier({
         </div>
 
         <div className="absolute left-1/2 top-[calc(50%+140px)] w-[min(88vw,410px)] -translate-x-1/2 text-center">
-          <div className={`inline-flex max-w-full items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white backdrop-blur-md ${guidanceTone === 'success' ? 'bg-emerald-600/75' : guidanceTone === 'warning' ? 'bg-amber-600/75' : 'bg-black/55'}`} role="status" aria-live="polite">
+          <div className={`inline-flex max-w-full items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${guidanceTone === 'success' ? 'bg-emerald-600 text-white' : guidanceTone === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-white text-ink'}`} role="status" aria-live="polite">
             <Sparkles size={15} className={step === 'loading' ? 'animate-pulse' : ''} />
             <span>{guidance}</span>
           </div>

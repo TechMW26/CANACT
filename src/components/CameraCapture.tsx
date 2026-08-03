@@ -202,11 +202,11 @@ export function CameraCapture({
                       type="button"
                       aria-label={`Remove photo ${index + 1}`}
                       onClick={() => setShots((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                      className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur"
+                      className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-ink"
                     >
                       <X size={15} />
                     </button>
-                    <span className="absolute bottom-2 left-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-black/65 px-2 text-xs font-bold backdrop-blur">
+                    <span className="absolute bottom-2 left-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-2 text-xs font-bold text-ink">
                       {index + 1}
                     </span>
                   </div>
@@ -249,7 +249,7 @@ export function CameraCapture({
                   className={`absolute inset-0 h-full w-full object-cover ${previewReady ? '' : 'hidden'}`}
                 />
                 {/* Overlay UI on top of preview */}
-                <span className="relative z-10 inline-flex h-20 w-20 items-center justify-center rounded-full bg-black/30 text-white shadow-[0_20px_60px_rgb(89_211_168_/_25%)] backdrop-blur-md ring-1 ring-white/20">
+                <span className="relative z-10 inline-flex h-20 w-20 items-center justify-center rounded-full bg-white text-ink shadow-[0_20px_60px_rgb(89_211_168_/_25%)] ring-1 ring-line">
                   {busy || previewLoading ? <Loader2 size={30} className="animate-spin" /> : mode === 'video' ? <Film size={31} /> : <Aperture size={31} />}
                 </span>
                 <span className="relative z-10 mt-6 text-xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
@@ -265,7 +265,7 @@ export function CameraCapture({
 
         {error && <div role="alert" className="mx-5 mb-3 rounded-2xl bg-[#391f20] px-4 py-3 text-center text-sm font-bold text-[#ffb7b7]">{error}</div>}
 
-        <div className="border-t border-white/10 bg-black/70 px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+        <div className="border-t border-line bg-white px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 text-ink">
           {showModeToggle && (
             <div className="mb-4 flex justify-center gap-8" role="tablist" aria-label="Media type">
               {(['photo', 'video'] as const).map((item) => (

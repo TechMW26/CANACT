@@ -41,7 +41,7 @@ export default function HelpFeed() {
   return (
     <div className="space-y-3 pt-4">
       {/* Sticky single CTA */}
-      <div className="sticky top-[68px] z-20 -mx-4 md:-mx-6 px-4 md:px-6 pt-1 pb-2 bg-candy/85 backdrop-blur-md">
+      <div className="sticky top-[68px] z-20 -mx-4 bg-white px-4 pb-2 pt-1 md:-mx-6 md:px-6">
         <Link href="/help/create" className="block">
           <button className="w-full h-12 rounded-full bg-brand text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-brand-dark active:scale-[0.99] transition">
             <HeartHandshake size={20} strokeWidth={2.4} /> Request Help

@@ -11,7 +11,7 @@ export const ONBOARDING_TASKS = [
   { id: 'complete-profile', title: 'Complete your profile', description: 'Add your real details so trusted connections can recognise you.', points: 25, href: '/edit-profile', contexts: ['/', '/profile', '/edit-profile'], minAge: 0 },
   { id: 'face-identity', title: 'Add your profile identity', description: 'Use a clear profile photo so people you meet can recognise you.', points: 20, href: '/edit-profile', contexts: ['/', '/profile', '/edit-profile'], minAge: 0 },
   { id: 'verify-identity', title: 'Verify your identity', description: 'Complete DigiLocker verification to secure your profile and unlock trusted features.', points: 40, href: '/settings', contexts: ['/', '/profile', '/settings'], minAge: 0 },
-  { id: 'sync-contacts', title: 'Find people you already know', description: 'Allow contact access and choose up to 10 people to discover on Canact.', points: 30, contexts: ['/', '/search', '/profile'], minAge: 30 * 60 * 1000 },
+  { id: 'sync-contacts', title: 'Find people you already know', description: 'Allow contact access to securely sync your address book and discover people already on Canact.', points: 30, contexts: ['/', '/search', '/profile'], minAge: 30 * 60 * 1000 },
   { id: 'enable-notifications', title: 'Stay in the loop', description: 'Enable notifications for ratings, favourites, Help and nearby activity.', points: 15, contexts: ['/', '/feed', '/inbox'], minAge: 2 * HOUR },
   { id: 'enable-location', title: 'Discover your community', description: 'Allow location access for vicinity cards and the live Explore map.', points: 20, href: '/favourites', contexts: ['/', '/favourites'], minAge: 30 * 60 * 1000 },
   { id: 'rate-profile', title: 'Recognise someone', description: 'Like someone or add an honest attribute after a real interaction.', points: 30, href: '/favourites', contexts: ['/favourites', '/profile'], minAge: 2 * HOUR },
@@ -150,16 +150,4 @@ export async function recordOnboardingActivity(uid: string, pathname: string) {
 export async function markOnboardingTour(uid: string, routeKey: string, outcome: 'completed' | 'skipped') {
   const now = Date.now();
   await update(ref(db, `users/${uid}/onboarding/tours/${routeKey}`), outcome === 'completed' ? { completedAt: now } : { skippedAt: now });
-}
-
-export async function saveContactSync(uid: string, contacts: Array<{ name?: string[]; tel?: string[]; email?: string[] }>) {
-  const selected = contacts.slice(0, 10);
-  const entries = Object.fromEntries(selected.map((contact, index) => [`c${index}`, {
-    name: contact.name?.[0] || '',
-    tel: contact.tel?.[0] || '',
-    email: contact.email?.[0] || '',
-  }]));
-  await update(ref(db, `contactSyncs/${uid}`), { syncedAt: Date.now(), count: selected.length, entries });
-  await recordOnboardingSignal(uid, 'sync-contacts');
-  return selected.length;
 }

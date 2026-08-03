@@ -13,7 +13,7 @@ export function Modal({ open, onClose, title, children, footer }: { open: boolea
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-transparent p-0 backdrop-blur-sm lg:items-center lg:p-4" onClick={onClose}>
+    <div className="canact-popup-backdrop fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none p-0 lg:items-center lg:p-4" onClick={onClose}>
       <div ref={swipe.ref as React.RefObject<HTMLDivElement | null>} className="max-h-[90svh] w-[100vw] max-w-[100vw] overflow-hidden overscroll-contain rounded-t-2xl border border-line bg-white will-change-transform lg:w-full lg:max-w-md lg:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         {title && <div className="px-5 py-4 border-b border-line text-lg font-bold">{title}</div>}
         <div ref={scrollRef} className="max-h-[calc(90svh-8rem)] overflow-y-auto overscroll-contain p-5 [-webkit-overflow-scrolling:touch]">{children}</div>

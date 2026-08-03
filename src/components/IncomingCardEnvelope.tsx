@@ -7,12 +7,12 @@ import { CARD_LABELS, LIFETIME_CARD_LABELS, type ConnectionCardGift, type Lifeti
 import { Check, Crown, Heart, Sparkles } from './icons';
 import { LifetimeCardSendAnimation } from './LifetimeCardSendAnimation';
 import cardStyles from './ProfileRecognitionFolders.module.css';
+import { ConnectionCardContent } from './ConnectionAttributeCard';
 
 type IncomingGift =
   | { family: 'connection'; gift: ConnectionCardGift }
   | { family: 'lifetime'; gift: LifetimeCardGift };
 
-const CONNECTION_COPY = 'A quality someone genuinely values in you.';
 const LIFETIME_COPY = {
   life_saver: 'For the person who showed up when it truly mattered.',
   golden_person: 'For someone whose presence made life meaningfully better.',
@@ -102,9 +102,7 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
   };
   const isLifetime = current.family === 'lifetime';
   const title = isLifetime ? LIFETIME_CARD_LABELS[current.gift.kind] : CARD_LABELS[current.gift.kind];
-  const copy = isLifetime
-    ? current.gift.customText || LIFETIME_COPY[current.gift.kind]
-    : CONNECTION_COPY;
+  const copy = isLifetime ? current.gift.customText || LIFETIME_COPY[current.gift.kind] : '';
 
   return (
     <LifetimeCardSendAnimation
@@ -122,20 +120,28 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
           style={style}
           aria-hidden="true"
         >
-          <span className={cardStyles.cardIcon}>
-            {isLifetime
-              ? current.gift.kind === 'life_saver' ? <Heart size={28} fill="currentColor" /> : current.gift.kind === 'golden_person' ? <Crown size={29} /> : <Sparkles size={28} />
-              : <Sparkles size={29} />}
-          </span>
-          <div className={cardStyles.cardCopy}>
-            <small>{isLifetime ? 'Given forever by' : 'Connection card from'} {current.gift.fromName}</small>
-            <h3>{title}</h3>
-            <p>{copy}</p>
-          </div>
-          <div className={cardStyles.giftHint}>
-            <span>{isLifetime ? `Received ${new Date(current.gift.sentAt).toLocaleDateString()}` : 'Now part of your collection'}</span>
-            {isLifetime ? <Check size={18} /> : null}
-          </div>
+          {current.family === 'connection' ? (
+            <ConnectionCardContent
+              cardKey={current.gift.kind}
+              footer={<><b>Given by:</b> {current.gift.fromName} · {new Date(current.gift.sentAt).toLocaleDateString()}</>}
+              trailing={<Check size={18} />}
+            />
+          ) : (
+            <>
+              <span className={cardStyles.cardIcon}>
+                {current.gift.kind === 'life_saver' ? <Heart size={28} fill="currentColor" /> : current.gift.kind === 'golden_person' ? <Crown size={29} /> : <Sparkles size={28} />}
+              </span>
+              <div className={cardStyles.cardCopy}>
+                <small>Given forever by {current.gift.fromName}</small>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </div>
+              <div className={cardStyles.giftHint}>
+                <span>Received {new Date(current.gift.sentAt).toLocaleDateString()}</span>
+                <Check size={18} />
+              </div>
+            </>
+          )}
         </article>
       )}
     />

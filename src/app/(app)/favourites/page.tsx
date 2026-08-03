@@ -547,7 +547,7 @@ function RelationshipToggle({
 function MapToolbar({ tab, people, view, onViewChange }: { tab: Exclude<Tab, 'requests'>; people: PeoplePerson[]; view: PeopleView; onViewChange: (view: PeopleView) => void }) {
   const locatedCount = people.filter(hasLocation).length;
   return (
-    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.16" className="pointer-events-auto sticky top-[calc(var(--canact-header-top-inset,0px)+var(--canact-header-offset,0px)+92px)] z-10 mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white/60 bg-transparent pl-6 pr-2 py-2 shadow-sm backdrop-blur-xl">
+    <div data-liquid-glass="surface" data-liquid-radius="999" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.16" className="pointer-events-auto sticky top-[calc(var(--canact-header-top-inset,0px)+var(--canact-header-offset,0px)+92px)] z-10 mx-auto mt-2 flex w-[min(calc(100vw-24px),540px)] items-center justify-between gap-2 rounded-[100px] border border-white bg-white pl-6 pr-2 py-2 shadow-sm">
       <div className="min-w-0">
         <h3 className="truncate text-base font-extrabold text-ink">{tab === 'friends' ? 'People nearby' : 'My favourites'}</h3>
         <div className="mt-0.5 truncate text-xs font-semibold text-ink/50">{locatedCount} of {people.length} visible on map</div>

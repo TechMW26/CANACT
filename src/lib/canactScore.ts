@@ -2,7 +2,8 @@ import { CARD_KEYS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type UserProfile } from './t
 
 export const CANACT_SCORE_MIN = 0;
 export const CANACT_SCORE_BASELINE = 0;
-export const CANACT_SCORE_MAX = 950;
+export const CANACT_SCORE_MAX = 900;
+export const CANACT_CLUB_STARTS = [1, 100, 200, 300, 400, 500, 600, 700, 800] as const;
 
 export type CanactScoreSummary = {
   score: number;
@@ -11,6 +12,8 @@ export type CanactScoreSummary = {
   delta: number;
   label: 'TRUST' | 'GOOD' | 'FAIR' | 'LOW';
   club: number;
+  clubMin: number;
+  clubMax: number;
 };
 
 export function calculateCanactScore(profile?: UserProfile | null): CanactScoreSummary {
@@ -171,14 +174,28 @@ export function getCanactScoreLabel(score: number): CanactScoreSummary['label'] 
 
 function makeSummary(rawScore: number, baseline = CANACT_SCORE_BASELINE, min = CANACT_SCORE_MIN): CanactScoreSummary {
   const score = Math.round(clampNumber(rawScore, min, CANACT_SCORE_MAX));
+  const club = getCanactClub(score);
+  const clubIndex = CANACT_CLUB_STARTS.indexOf(club as (typeof CANACT_CLUB_STARTS)[number]);
+  const clubMin = club;
+  const clubMax = clubIndex === CANACT_CLUB_STARTS.length - 1
+    ? CANACT_SCORE_MAX
+    : CANACT_CLUB_STARTS[clubIndex + 1]!;
   return {
     score,
     baseline,
     max: CANACT_SCORE_MAX,
     delta: score - baseline,
     label: getCanactScoreLabel(score),
-    club: Math.max(min, Math.floor(score / 50) * 50),
+    club,
+    clubMin,
+    clubMax,
   };
+}
+
+export function getCanactClub(score: number): number {
+  const bounded = clampNumber(Math.round(score), CANACT_SCORE_MIN, CANACT_SCORE_MAX);
+  if (bounded < 100) return 1;
+  return Math.min(800, Math.floor(bounded / 100) * 100);
 }
 
 function confidenceFromCount(count: number, fullConfidenceAt: number) {

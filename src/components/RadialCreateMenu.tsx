@@ -16,6 +16,7 @@ type RadialItem = {
 
 const ALL_RADIAL_ITEMS: Record<string, RadialItem> = {
   '/help':          { href: '/help',          label: 'Help',     Icon: HandHeart,      className: 'help' },
+  '/mood':          { href: '/mood',          label: 'Mood',     Icon: Activity,       className: '' },
   '/story/create':  { href: '/story/create',  label: 'Story',    Icon: Sparkles,       className: '' },
   '/post/create':   { href: '/post/create',   label: 'Post',     Icon: Camera,         className: '' },
   '/reel/create':   { href: '/reel/create',   label: 'Reel',     Icon: Film,           className: '' },
@@ -31,7 +32,7 @@ const ALL_RADIAL_ITEMS: Record<string, RadialItem> = {
   '/underground':   { href: '/underground',   label: 'Underground', Icon: Globe2,      className: '' },
 };
 
-const DEFAULT_PLUS_ITEMS = ['/help', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'];
+const DEFAULT_PLUS_ITEMS = ['/help', '/mood', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'];
 const ITEM_SIZE = 56;
 
 export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; onClose: () => void; plusItems?: string[] }) {
@@ -42,14 +43,17 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   const closeTimer = useRef(0);
   const rotationRef = useRef(0);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
-  const dragRef = useRef<{ startRotation: number; lastAngle: number; ts: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; lastAngle: number; ts: number; distance: number } | null>(null);
   const velocityRef = useRef(0);
+  const inertiaActiveRef = useRef(false);
+  const inertiaTimeRef = useRef(0);
+  const suppressClickUntilRef = useRef(0);
   const animRef = useRef(0);
   const hasDragged = useRef(false);
 
   const items = useMemo(() => {
     const configured = plusItems?.length ? plusItems : DEFAULT_PLUS_ITEMS;
-    const hrefs = ['/help', ...configured.filter((href) => href !== '/help')];
+    const hrefs = ['/help', '/mood', ...configured.filter((href) => href !== '/help' && href !== '/mood')];
     return hrefs.map((h) => ALL_RADIAL_ITEMS[h]).filter(Boolean);
   }, [plusItems]);
 
@@ -88,6 +92,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     setClosing(true);
     setVisible(false);
     cancelAnimationFrame(animRef.current);
+    inertiaActiveRef.current = false;
     clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => {
       setClosing(false);
@@ -119,7 +124,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     let previousTime = performance.now();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const autoRotate = (now: number) => {
-      if (!dragRef.current && !hasDragged.current) {
+      if (!dragRef.current && !inertiaActiveRef.current) {
         const elapsed = Math.min(50, now - previousTime);
         applyRotation(rotationRef.current + elapsed * 0.015);
       }
@@ -140,10 +145,17 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   }, [open, onClose]);
 
   // Inertia animation
-  const applyInertia = useCallback(() => {
-    if (Math.abs(velocityRef.current) < 0.3) { velocityRef.current = 0; return; }
-    applyRotation(rotationRef.current + velocityRef.current);
-    velocityRef.current *= 0.94;
+  const applyInertia = useCallback((now: number) => {
+    const previous = inertiaTimeRef.current || now;
+    const elapsed = Math.min(34, Math.max(1, now - previous));
+    inertiaTimeRef.current = now;
+    if (Math.abs(velocityRef.current) < 0.002) {
+      velocityRef.current = 0;
+      inertiaActiveRef.current = false;
+      return;
+    }
+    applyRotation(rotationRef.current + velocityRef.current * elapsed);
+    velocityRef.current *= Math.exp(-elapsed / 210);
     animRef.current = requestAnimationFrame(applyInertia);
   }, [applyRotation]);
 
@@ -151,36 +163,46 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!center) return;
     cancelAnimationFrame(animRef.current);
+    inertiaActiveRef.current = false;
     hasDragged.current = false;
     velocityRef.current = 0;
     const dx = e.clientX - center.x;
     const dy = e.clientY - center.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    dragRef.current = { startRotation: rotationRef.current, lastAngle: angle, ts: performance.now() };
+    dragRef.current = { pointerId: e.pointerId, lastAngle: angle, ts: performance.now(), distance: 0 };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current || !center) return;
-    hasDragged.current = true;
     const dx = e.clientX - center.x;
     const dy = e.clientY - center.y;
+    if (Math.hypot(dx, dy) < 28) return;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
     const delta = angle - dragRef.current.lastAngle;
     // Normalize delta for wraparound
     const normalized = delta > 180 ? delta - 360 : delta < -180 ? delta + 360 : delta;
+    if (Math.abs(normalized) > 42) return;
+    dragRef.current.distance += Math.abs(normalized);
+    if (dragRef.current.distance > 2.5) hasDragged.current = true;
     applyRotation(rotationRef.current + normalized);
     // Track velocity
     const now = performance.now();
-    const dt = Math.max(16, now - dragRef.current.ts);
-    velocityRef.current = normalized / dt * 16;
+    const dt = Math.max(4, now - dragRef.current.ts);
+    const instantVelocity = Math.max(-0.75, Math.min(0.75, normalized / dt));
+    velocityRef.current = velocityRef.current * .68 + instantVelocity * .32;
     dragRef.current.lastAngle = angle;
     dragRef.current.ts = now;
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (drag && e.currentTarget.hasPointerCapture(drag.pointerId)) e.currentTarget.releasePointerCapture(drag.pointerId);
     dragRef.current = null;
-    if (Math.abs(velocityRef.current) > 0.3) {
+    if (hasDragged.current) suppressClickUntilRef.current = performance.now() + 240;
+    if (Math.abs(velocityRef.current) > 0.015) {
+      inertiaActiveRef.current = true;
+      inertiaTimeRef.current = 0;
       animRef.current = requestAnimationFrame(applyInertia);
     }
   };
@@ -197,32 +219,29 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     borderRadius: '50%',
     border: '1px solid rgb(255 255 255 / 82%)',
     background: '#fff',
-    backdropFilter: 'blur(14px) saturate(1.2)',
-    WebkitBackdropFilter: 'blur(14px) saturate(1.2)',
     boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 68%), 0 4px 16px rgb(0 0 0 / .14)',
-    transition: 'opacity 0.3s ease, transform 0.3s ease',
+    transition: 'opacity 0.22s ease',
+    willChange: 'transform, opacity',
     pointerEvents: 'none',
     touchAction: 'none',
   };
 
   return (
     <>
-      {/* Backdrop with radial spreading blur */}
+      {/* Opaque lower surface fading cleanly into the page. */}
       <div
         className="fixed inset-0 transition-opacity duration-300"
         style={{
           zIndex: 54,
           opacity: visible ? 1 : 0,
           touchAction: 'none',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          ...(center ? {
-            WebkitMaskImage: `radial-gradient(circle at ${center.x}px ${center.y}px, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%)`,
-            maskImage: `radial-gradient(circle at ${center.x}px ${center.y}px, #000 0%, #000 18%, rgb(0 0 0 / .65) 42%, transparent 78%)`,
-          } : {}),
-          background: 'rgb(18 40 33 / 0%)',
+          background: 'linear-gradient(180deg, rgb(255 255 255 / 0) 0%, rgb(255 255 255 / .58) 42%, #fff 76%, #fff 100%)',
         }}
         onClick={(e) => {
+          if (performance.now() < suppressClickUntilRef.current || hasDragged.current) {
+            hasDragged.current = false;
+            return;
+          }
           if (!center) { handleClose(); return; }
           const cx = e.clientX - center.x;
           const cy = e.clientY - center.y;

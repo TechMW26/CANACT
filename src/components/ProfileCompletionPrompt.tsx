@@ -145,7 +145,7 @@ export function ProfileCompletionPrompt() {
 
   return (
     <>
-      <div className="fixed inset-x-4 bottom-[calc(var(--canact-floating-bottom-clearance)+10px)] z-[85] mx-auto max-w-md rounded-[24px] border border-[#E4E7E2] bg-white/95 p-3 shadow-[0_18px_50px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+      <div className="fixed inset-x-4 bottom-[calc(var(--canact-floating-bottom-clearance)+10px)] z-[85] mx-auto max-w-md rounded-[24px] border border-[#E4E7E2] bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.16)]">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-extrabold text-ink">Complete your profile</div>

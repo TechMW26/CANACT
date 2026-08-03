@@ -57,11 +57,11 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
       {/* Header — soft top fade, no hard line */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-32 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
       <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between p-4 safe-top">
-        <Link href="/feed" aria-label="Back" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15">
+        <Link href="/feed" aria-label="Back" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink ring-1 ring-line">
           <ArrowLeft size={18} />
         </Link>
-        <div className="rounded-full bg-black/45 px-3 py-1 text-xs font-extrabold backdrop-blur ring-1 ring-white/15">Reels</div>
-        <Link href="/reel/create" aria-label="Create" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur ring-1 ring-white/15">
+        <div className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-ink ring-1 ring-line">Reels</div>
+        <Link href="/reel/create" aria-label="Create" className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink ring-1 ring-line">
           <Plus size={18} />
         </Link>
       </div>
@@ -184,7 +184,7 @@ function ReelTile({
       {/* Pause indicator */}
       {paused && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur">
+          <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-white text-ink">
             <Play size={26} />
           </span>
         </div>
@@ -213,7 +213,7 @@ function ReelTile({
           </Link>
           {reel.caption && <div className="mt-2 text-sm leading-snug">{reel.caption}</div>}
           {reel.music && (
-            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[11px] font-bold backdrop-blur">
+            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-ink">
               <Music size={12} /> {reel.music.title} · {reel.music.artist}
             </div>
           )}
@@ -226,7 +226,7 @@ function ReelTile({
             className="flex flex-col items-center gap-1"
             aria-label="Like"
           >
-            <span className={`flex h-12 w-12 items-center justify-center rounded-full backdrop-blur ${liked ? 'bg-brand text-white' : 'bg-black/40 text-white'}`}>
+            <span className={`flex h-12 w-12 items-center justify-center rounded-full ${liked ? 'bg-brand text-white' : 'bg-white text-ink'}`}>
               <Heart size={22} fill={liked ? 'currentColor' : 'none'} />
             </span>
             <span className="text-xs font-bold">{likeCount}</span>
@@ -237,7 +237,7 @@ function ReelTile({
             className="flex flex-col items-center gap-1"
             aria-label="Comment"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-ink">
               <MessageCircle size={22} />
             </span>
             <span className="text-xs font-bold">{reel.commentCount ?? 0}</span>
@@ -248,7 +248,7 @@ function ReelTile({
             className="flex flex-col items-center gap-1"
             aria-label="Share"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-ink">
               <Send size={22} />
             </span>
           </button>
@@ -301,7 +301,7 @@ function CommentsSheet({
 
   return (
     <div data-canact-popup="true" className="absolute inset-0 z-40" onClick={onClose}>
-      <div className="absolute inset-0 bg-transparent backdrop-blur-sm canact-sheet-backdrop" />
+      <div className="canact-popup-backdrop canact-sheet-backdrop absolute inset-0" />
       <div
         ref={swipeRef}
         data-liquid-glass="surface"

@@ -899,7 +899,7 @@ export function InAppCallSheet({
 
         {/* We asked the peer — show a small waiting chip. */}
         {waitingForPeer && (
-          <div className="absolute inset-x-4 bottom-32 z-[5] flex items-center justify-between gap-3 rounded-full bg-white/15 px-4 py-2 text-xs text-white backdrop-blur">
+          <div className="absolute inset-x-4 bottom-32 z-[5] flex items-center justify-between gap-3 rounded-full bg-white px-4 py-2 text-xs text-ink">
             <span className="inline-flex items-center gap-2">
               <Loader2 size={14} className="animate-spin" />
               Waiting for {peer.name} to accept video…
@@ -921,7 +921,7 @@ export function InAppCallSheet({
           <button
             type="button"
             onClick={toggleMute}
-            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${muted ? 'bg-amber-100 text-amber-700' : 'bg-white/10 text-white'} backdrop-blur`}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${muted ? 'bg-amber-100 text-amber-700' : 'bg-white text-ink'}`}
             aria-label={muted ? 'Unmute' : 'Mute'}
           >
             {muted ? <MicOff size={22} /> : <Mic size={22} />}
@@ -929,7 +929,7 @@ export function InAppCallSheet({
           <button
             type="button"
             onClick={toggleSpeaker}
-            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${speakerOn ? 'bg-brand text-white' : 'bg-white/10 text-white'} backdrop-blur`}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${speakerOn ? 'bg-brand text-white' : 'bg-white text-ink'}`}
             aria-label={speakerOn ? 'Speaker on — tap for earpiece' : 'Earpiece — tap for speaker'}
             aria-pressed={speakerOn}
           >
@@ -943,7 +943,7 @@ export function InAppCallSheet({
             type="button"
             onClick={flipKind}
             disabled={waitingForPeer}
-            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${isVideo ? 'bg-brand text-white' : 'bg-white/10 text-white'} backdrop-blur disabled:opacity-50`}
+            className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${isVideo ? 'bg-brand text-white' : 'bg-white text-ink'} disabled:opacity-50`}
             aria-label={isVideo ? 'Switch to voice' : 'Switch to video'}
           >
             {isVideo ? <Phone size={22} /> : <Video size={22} />}
@@ -953,7 +953,7 @@ export function InAppCallSheet({
               <button
                 type="button"
                 onClick={toggleCamera}
-                className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${cameraOff ? 'bg-amber-100 text-amber-700' : 'bg-white/10 text-white'} backdrop-blur`}
+                className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${cameraOff ? 'bg-amber-100 text-amber-700' : 'bg-white text-ink'}`}
                 aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
               >
                 {cameraOff ? <VideoOff size={22} /> : <Video size={22} />}
@@ -961,7 +961,7 @@ export function InAppCallSheet({
               <button
                 type="button"
                 onClick={switchCamera}
-                className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur"
+                className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-ink"
                 aria-label="Flip camera"
               >
                 <SwitchCamera size={22} />

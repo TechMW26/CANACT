@@ -180,7 +180,7 @@ export function HelpAlertManager() {
       aria-modal="true"
       aria-labelledby="help-alert-title"
     >
-      <div className="absolute inset-0 bg-transparent backdrop-blur-sm" aria-hidden="true" />
+      <div className="canact-popup-backdrop absolute inset-0" aria-hidden="true" />
       <div className="relative w-full max-w-sm rounded-3xl bg-white ring-1 ring-black/5 overflow-hidden">
         {current.kind === 'request' ? (
           <>

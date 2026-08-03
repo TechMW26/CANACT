@@ -457,7 +457,7 @@ function MediaOverlayTile({
 
         <div className="absolute left-3 top-3 right-3 flex items-start justify-between gap-2">
           <div onClick={(e) => e.stopPropagation()} className="pointer-events-auto">
-            <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-2 rounded-full bg-white/90 backdrop-blur pl-1 pr-3 py-1 max-w-[60vw]">
+            <Link href={`/profile/${authorUid}`} className="inline-flex items-center gap-2 rounded-full bg-white pl-1 pr-3 py-1 max-w-[60vw]">
               <span className="inline-block h-6 w-6 rounded-full overflow-hidden ring-2 ring-[#2E8068]">
                 <Avatar src={authorPhoto} name={authorName} size={24} />
               </span>
@@ -553,17 +553,19 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
             <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
           </div>
         )}
-        <Link href={`/profile/${post.uid}`} onClick={(event) => event.stopPropagation()} className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full bg-white/90 py-1.5 pl-1.5 pr-3 backdrop-blur" aria-label={`View ${post.authorName}'s profile`}>
-          <Avatar src={post.authorPhoto} name={post.authorName} size={28} />
-          <span className="max-w-[180px] truncate text-xs font-bold text-ink">{post.authorName}</span>
+        <Link href={`/profile/${post.uid}`} onClick={(event) => event.stopPropagation()} className="absolute left-3 top-3 inline-flex max-w-[60vw] items-center gap-2 rounded-full bg-white py-1 pl-1 pr-3" aria-label={`View ${post.authorName}'s profile`}>
+          <span className="inline-block h-6 w-6 overflow-hidden rounded-full ring-2 ring-[#2E8068]">
+            <Avatar src={post.authorPhoto} name={post.authorName} size={24} />
+          </span>
+          <span className="max-w-[180px] truncate text-[11px] font-medium text-neutral-800">{post.authorName}</span>
         </Link>
-        {post.uid === myUid ? <span className="absolute right-4 top-4" onClick={(event) => event.stopPropagation()}><PostMenu isOwner onDelete={async () => { await deletePost(post.id, myUid); }} /></span> : null}
+        {post.uid === myUid ? <span className="absolute right-3 top-3" onClick={(event) => event.stopPropagation()}><PostMenu isOwner onDelete={async () => { await deletePost(post.id, myUid); }} /></span> : null}
       </div>
-      <div className="px-7 pb-7 pt-6">
+      <div className="p-3">
         <button type="button" onClick={onOpen} className="block w-full text-left">
           <h2 className="whitespace-pre-wrap text-[21px] font-extrabold leading-[1.2] tracking-[-0.025em] text-black">{post.text || "What's Happening"}</h2>
         </button>
-        <div className="mt-5 flex items-center gap-2.5">
+        <div className="mt-3 flex items-center gap-2.5">
           <button type="button" aria-label="Love" onClick={() => reactWha(post.id, myUid, 'love')} className={`inline-flex h-10 w-11 items-center justify-center rounded-full ${liked ? 'bg-brand text-white' : 'bg-[#faf8f2] text-black'}`}><Heart size={17} fill={liked ? 'currentColor' : 'none'} /></button>
           <button type="button" aria-label="Comments" onClick={onOpen} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><MessageCircle size={17} /></button>
           <button type="button" aria-label="Share" onClick={() => onShare({ kind: 'post', postId: post.id })} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><Share2 size={17} /></button>
@@ -614,7 +616,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
                   type="button"
                   disabled={locked}
                   onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!locked) votePoll(poll.id, myUid, option.id); }}
-                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold backdrop-blur disabled:opacity-75 ${selected ? 'bg-[#2E8068] text-white' : 'bg-white/90 text-neutral-800'}`}
+                  className={`block max-w-full truncate rounded-full px-2 py-1 text-left text-[10px] font-bold disabled:opacity-75 ${selected ? 'bg-[#2E8068] text-white' : 'bg-white text-neutral-800'}`}
                 >
                   {option.text} · {pct}%
                 </button>

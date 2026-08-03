@@ -41,8 +41,8 @@ export function PostMenu({
   }, [open]);
 
   const trigger = variant === 'dark'
-    ? 'bg-black/45 text-white ring-1 ring-white/15 backdrop-blur'
-    : 'bg-white/85 text-ink/70 ring-1 ring-line backdrop-blur';
+    ? 'bg-white text-ink ring-1 ring-line'
+    : 'bg-white text-ink/70 ring-1 ring-line';
 
   const runDelete = async () => {
     if (busy || !onDelete || !confirm('Delete this? This cannot be undone.')) return;

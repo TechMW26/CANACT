@@ -403,7 +403,7 @@ export default function InboxThreadPage() {
       {/* Composer — floating pill */}
       <div className="safe-bottom px-3 pb-[1em] pt-2" style={{ paddingBottom: 'calc(1em + env(safe-area-inset-bottom, 0px))' }}>
         {pendingAttachment && (
-          <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-white/90 px-2 py-1.5 text-xs backdrop-blur">
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-white px-2 py-1.5 text-xs">
             <span className="font-extrabold text-brand">
               {pendingAttachment.kind === 'post' ? '📎 Sharing a post' : '🎬 Sharing a reel'}
             </span>
@@ -411,7 +411,7 @@ export default function InboxThreadPage() {
           </div>
         )}
         {replyTo && (
-          <div className="mb-2 flex items-start gap-2 rounded-xl border-l-2 border-brand bg-brand-light/40 px-2 py-1.5 text-xs backdrop-blur">
+          <div className="mb-2 flex items-start gap-2 rounded-xl border-l-2 border-brand bg-white px-2 py-1.5 text-xs">
             <CornerUpLeft size={14} className="mt-0.5 text-brand" />
             <div className="min-w-0 flex-1"><div className="font-extrabold text-brand">Replying to {replyTo.fromUid === user.uid ? 'yourself' : other?.fullName ?? 'them'}</div><div className="line-clamp-2 text-ink/70">{replyTo.text || 'Attachment'}</div></div>
             <button type="button" onClick={() => setReplyTo(null)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"><X size={14} /></button>
@@ -424,7 +424,7 @@ export default function InboxThreadPage() {
               <span className="flex-1 text-sm font-extrabold text-red-600">Recording {recordingSec}s — release to send</span>
             </div>
           ) : (
-            <div className="flex-1 flex items-center rounded-[100px] border border-[#D4D9D2] bg-white/90 px-1 py-1 shadow-[0_2px_12px_rgba(0,0,0,.04)] backdrop-blur">
+            <div className="flex-1 flex items-center rounded-[100px] border border-[#D4D9D2] bg-white px-1 py-1 shadow-[0_2px_12px_rgba(0,0,0,.04)]">
               <textarea
                 ref={inputRef}
                 value={text}

@@ -243,7 +243,7 @@ export default function EditProfilePage() {
             type="button"
             onClick={() => coverFileRef.current?.click()}
             aria-label="Change cover"
-            className="absolute bottom-2 right-2 inline-flex h-8 items-center gap-1 rounded-full bg-black/35 px-2.5 text-xs font-semibold text-white backdrop-blur-sm"
+            className="absolute bottom-2 right-2 inline-flex h-8 items-center gap-1 rounded-full bg-white px-2.5 text-xs font-semibold text-ink"
           >
             <Camera size={13} /> Change
           </button>
@@ -336,7 +336,7 @@ export default function EditProfilePage() {
 
       {/* Save bar */}
       <div className="sticky bottom-3 z-10 mx-auto max-w-2xl">
-        <div className="flex gap-2 rounded-2xl bg-white/95 p-2 ring-1 ring-line backdrop-blur">
+        <div className="flex gap-2 rounded-2xl bg-white p-2 ring-1 ring-line">
           <Button variant="ghost" full size="lg" onClick={() => router.back()}>Cancel</Button>
           <Button full size="lg" loading={busy} onClick={onSave}>Save changes</Button>
         </div>

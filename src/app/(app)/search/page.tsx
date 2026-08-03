@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { RatingPill } from '@/components/Avatar';
 import { Search } from '@/components/icons';
+import { useAuth } from '@/lib/auth';
 import { listenLeaderboard, searchUsers } from '@/lib/services/leaderboard';
 import type { UserProfile } from '@/lib/types';
 
@@ -49,7 +50,7 @@ function SearchUserCard({ user, index }: { user: UserProfile; index: number }) {
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
-      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/30 px-2 py-0.5 backdrop-blur-sm">
+      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-ink">
         <span className="max-w-[92px] truncate text-[9px] text-white/90">{handle}</span>
       </div>
 
@@ -69,13 +70,24 @@ function SearchUserCard({ user, index }: { user: UserProfile; index: number }) {
 }
 
 export default function SearchPage() {
+  const { profile } = useAuth();
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [discoverRows, setDiscoverRows] = useState<UserProfile[]>([]);
+  const [contactRows, setContactRows] = useState<UserProfile[]>([]);
   const [searchRows, setSearchRows] = useState<UserProfile[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
 
   useEffect(() => listenLeaderboard('app', null, (rows) => setDiscoverRows(rows.slice(0, 200))), []);
+  useEffect(() => {
+    if (!profile) { setContactRows([]); return; }
+    return listenLeaderboard('contacts', profile, setContactRows);
+  }, [profile?.uid]);
+
+  const suggestedRows = useMemo(() => {
+    const contactUids = new Set(contactRows.map((user) => user.uid));
+    return [...contactRows, ...discoverRows.filter((user) => !contactUids.has(user.uid))];
+  }, [contactRows, discoverRows]);
 
   useEffect(() => {
     const text = query.trim();
@@ -97,7 +109,7 @@ export default function SearchPage() {
 
   const filters = useMemo(() => {
     const seen = new Set<string>();
-    const dynamic = discoverRows.flatMap((user) => [user.tags?.[0], user.city, user.country])
+    const dynamic = suggestedRows.flatMap((user) => [user.tags?.[0], user.city, user.country])
       .filter((item): item is string => !!item && item.trim().length > 0)
       .filter((item) => {
         const key = item.toLowerCase();
@@ -106,17 +118,21 @@ export default function SearchPage() {
         return true;
       })
       .slice(0, 6);
-    return ['All', ...dynamic];
-  }, [discoverRows]);
+    return ['All', ...(contactRows.length ? ['Contacts'] : []), ...dynamic];
+  }, [contactRows.length, suggestedRows]);
 
   const visibleRows = useMemo(() => {
-    const base = query.trim() ? searchRows : discoverRows;
+    const base = query.trim() ? searchRows : suggestedRows;
     if (activeFilter === 'All') return base;
+    if (activeFilter === 'Contacts') {
+      const contactUids = new Set(contactRows.map((user) => user.uid));
+      return base.filter((user) => contactUids.has(user.uid));
+    }
     const needle = activeFilter.toLowerCase();
     return base.filter((user) => [user.tags?.[0], user.city, user.country]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase() === needle));
-  }, [activeFilter, discoverRows, query, searchRows]);
+  }, [activeFilter, contactRows, query, searchRows, suggestedRows]);
 
   const leftCol = visibleRows.filter((_, index) => index % 2 === 0);
   const rightCol = visibleRows.filter((_, index) => index % 2 === 1);

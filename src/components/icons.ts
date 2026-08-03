@@ -104,4 +104,5 @@ export {
   Expand,
   Activity,
   TrendingUp,
+  BatteryLow,
 } from 'lucide-react';

@@ -87,7 +87,7 @@ function ProximityRatingPrompt({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/20 backdrop-blur-sm p-3 md:items-center">
+    <div className="canact-popup-backdrop fixed inset-0 z-[60] flex items-end justify-center p-3 md:items-center">
       <div ref={swipe.ref as React.RefObject<HTMLDivElement | null>} className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl will-change-transform">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">

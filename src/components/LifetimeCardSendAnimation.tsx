@@ -6,10 +6,24 @@ import { gsap } from 'gsap';
 import styles from './LifetimeCardSendAnimation.module.css';
 
 type CardRect = { left: number; top: number; width: number; height: number; naturalWidth: number; naturalHeight: number };
+type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  gravity: number;
+  width: number;
+  height: number;
+  rotation: number;
+  rotationSpeed: number;
+  color: string;
+  circle: boolean;
+  opacity: number;
+};
 
-// ── Module-level audio cache: preload & decode once, play instantly ──
 const audioCache = new Map<string, AudioBuffer>();
 let sharedAudioCtx: AudioContext | null = null;
+
 function getAudioCtx(): AudioContext | null {
   try {
     if (!sharedAudioCtx) {
@@ -17,45 +31,53 @@ function getAudioCtx(): AudioContext | null {
       if (Ctor) sharedAudioCtx = new Ctor();
     }
     return sharedAudioCtx;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function preloadAudio(url: string): Promise<AudioBuffer | null> {
   if (audioCache.has(url)) return audioCache.get(url)!;
-  const ctx = getAudioCtx();
-  if (!ctx) return null;
+  const context = getAudioCtx();
+  if (!context) return null;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = await ctx.decodeAudioData(await res.arrayBuffer());
-    audioCache.set(url, buf);
-    return buf;
-  } catch { return null; }
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const buffer = await context.decodeAudioData(await response.arrayBuffer());
+    audioCache.set(url, buffer);
+    return buffer;
+  } catch {
+    return null;
+  }
 }
 
-function playAudioBuffer(buffer: AudioBuffer, volume = 0.7) {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') void ctx.resume();
-  const src = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  src.buffer = buffer;
-  gain.gain.value = volume;
-  src.connect(gain).connect(ctx.destination);
-  src.start();
+function playCardSound(url: string) {
+  const play = (buffer: AudioBuffer) => {
+    const context = getAudioCtx();
+    if (!context) return;
+    if (context.state === 'suspended') void context.resume();
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = .64;
+    source.connect(gain).connect(context.destination);
+    source.start();
+  };
+  const cached = audioCache.get(url);
+  if (cached) play(cached);
+  else void preloadAudio(url).then((buffer) => { if (buffer) play(buffer); });
 }
 
-// Preload both sounds eagerly (non-blocking)
 if (typeof window !== 'undefined') {
-  preloadAudio('/sounds/lifetime-card.mp3');
-  preloadAudio('/sounds/connection-card.mp3');
+  void preloadAudio('/sounds/lifetime-card.mp3');
+  void preloadAudio('/sounds/connection-card.mp3');
 }
 
 export function LifetimeCardSendAnimation({
   sourceRect,
   renderCard,
   onComplete,
-  ariaLabel = 'Sending lifetime card',
+  ariaLabel = 'Sending card',
   tone = 'connection',
   direction = 'send',
 }: {
@@ -66,328 +88,213 @@ export function LifetimeCardSendAnimation({
   tone?: 'connection' | 'lifetime';
   direction?: 'send' | 'receive';
 }) {
-  const mailerRef = useRef<HTMLDivElement | null>(null);
-  const envelopeRef = useRef<HTMLDivElement | null>(null);
-  const flapRef = useRef<HTMLDivElement | null>(null);
-  const cardBehindRef = useRef<HTMLDivElement | null>(null);
-  const shadowRef = useRef<HTMLDivElement | null>(null);
-  const trailsRef = useRef<HTMLDivElement | null>(null);
-  const raysRef = useRef<HTMLDivElement | null>(null);
-  const shineRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const glowRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const dismissReceiveRef = useRef<(() => void) | null>(null);
+  const dismissRef = useRef<(() => void) | null>(null);
+  const completeRef = useRef(onComplete);
+  const completedRef = useRef(false);
   const [receiveReady, setReceiveReady] = useState(false);
+
+  useEffect(() => { completeRef.current = onComplete; }, [onComplete]);
 
   const geometry = useMemo(() => {
     const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
     const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
-    const initialMailerY = Math.max(viewportHeight * .72, 520);
-    const envelopeWidth = Math.min(Math.max(240, sourceRect.width), Math.max(240, viewportWidth - 32));
-    const envelopeHeight = sourceRect.height * (envelopeWidth / Math.max(sourceRect.width, 1)) * 1.2;
-    const sourceCenterX = sourceRect.left + sourceRect.width / 2;
-    const sourceCenterY = sourceRect.top + sourceRect.height / 2;
+    const naturalWidth = Math.max(1, sourceRect.naturalWidth);
+    const naturalHeight = Math.max(1, sourceRect.naturalHeight);
+    const displayWidth = Math.min(620, viewportWidth - 28, naturalWidth);
     return {
-      initialMailerY,
-      envelopeWidth,
-      envelopeHeight,
-      sourceX: sourceCenterX - viewportWidth / 2,
-      sourceY: sourceCenterY - viewportHeight / 2 - initialMailerY,
+      naturalWidth,
+      naturalHeight,
+      targetScale: displayWidth / naturalWidth,
+      sourceScale: sourceRect.width / naturalWidth,
+      sourceX: sourceRect.left + sourceRect.width / 2 - viewportWidth / 2,
+      sourceY: sourceRect.top + sourceRect.height / 2 - viewportHeight / 2,
+      viewportHeight,
     };
   }, [sourceRect]);
 
-  const initialCardStyle = {
-    width: sourceRect.naturalWidth,
-    height: sourceRect.naturalHeight,
-    transform: `translate(-50%, -50%) translate3d(${geometry.sourceX}px, ${geometry.sourceY}px, 0) scale(${sourceRect.width / sourceRect.naturalWidth})`,
-  } satisfies CSSProperties;
-
   useEffect(() => {
-    setReceiveReady(false);
-    const mailer = mailerRef.current;
-    const envelope = envelopeRef.current;
-    const flap = flapRef.current;
-    const cardBehind = cardBehindRef.current?.firstElementChild as HTMLElement | null;
-    const groundShadow = shadowRef.current;
-    const speedTrails = trailsRef.current;
-    const rays = raysRef.current;
-    const shine = shineRef.current;
+    const overlay = overlayRef.current;
+    const card = cardRef.current;
+    const glow = glowRef.current;
     const canvas = canvasRef.current;
-    if (!mailer || !envelope || !flap || !cardBehind || !groundShadow || !speedTrails || !rays || !shine || !canvas) return;
+    if (!overlay || !card || !glow || !canvas) return;
 
-    const cards = [cardBehind];
+    completedRef.current = false;
+    setReceiveReady(false);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const duration = (normal: number) => reducedMotion ? .01 : normal;
-    const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
-    const initialMailerY = Math.max(viewportHeight * .72, 520);
-    const sourceCenterY = sourceRect.top + sourceRect.height / 2;
-    const targetEnvelopeCenterY = direction === 'receive'
-      ? viewportHeight / 2
-      : Math.min(viewportHeight * .62, sourceRect.top + sourceRect.height + 72);
-    const restingMailerY = targetEnvelopeCenterY - viewportHeight / 2;
-    const cardRestingLocalY = sourceCenterY - targetEnvelopeCenterY;
-    const sourceX = sourceRect.left + sourceRect.width / 2 - viewportWidth / 2;
-    const sourceY = sourceCenterY - viewportHeight / 2 - initialMailerY;
-    const sourceScale = sourceRect.width / sourceRect.naturalWidth;
-    const fullScale = geometry.envelopeWidth / sourceRect.naturalWidth;
-    const insideScale = fullScale * .94;
-    const revealLift = Math.max(108, geometry.envelopeHeight * .62);
-    const launchHeight = Math.max(viewportHeight, 720);
-    let confettiFrame = 0;
-    let particles: Array<{ x: number; y: number; width: number; height: number; vx: number; vy: number; gravity: number; rotation: number; rotationSpeed: number; sway: number; swayOffset: number; color: string; circle: boolean; opacity: number }> = [];
+    const duration = (value: number) => reducedMotion ? .01 : value;
     const context = canvas.getContext('2d');
+    let confettiFrame = 0;
+    let particles: Particle[] = [];
     const colors = tone === 'lifetime'
       ? ['#fff7c9', '#f8d15a', '#d99a16', '#fff0a1', '#bd7410', '#ffffff']
       : ['#1f6b55', '#8ab9a5', '#e7e1d1', '#d9ad45', '#7560a8', '#ffffff'];
 
-    let lastCanvasW = 0;
-    let lastCanvasH = 0;
-    function resizeCanvas() {
+    const finishOnce = () => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      completeRef.current();
+    };
+
+    const resizeCanvas = () => {
       if (!context) return;
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      if (w === lastCanvasW && h === lastCanvasH) return; // skip no-op resizes
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas!.width = Math.round(w * ratio);
-      canvas!.height = Math.round(h * ratio);
-      canvas!.style.width = `${w}px`;
-      canvas!.style.height = `${h}px`;
+      canvas.width = Math.round(window.innerWidth * ratio);
+      canvas.height = Math.round(window.innerHeight * ratio);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      lastCanvasW = w;
-      lastCanvasH = h;
-    }
+    };
 
-    function createParticle(index = 0) {
-      return {
-        x: Math.random() * window.innerWidth,
-        y: -30 - Math.random() * 180 - index * .9,
-        width: 5 + Math.random() * 7,
-        height: 8 + Math.random() * 11,
-        vx: -1.15 + Math.random() * 2.3,
-        vy: 2.35 + Math.random() * 3.7,
-        gravity: .012 + Math.random() * .018,
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: -.13 + Math.random() * .26,
-        sway: .5 + Math.random() * 1.4,
-        swayOffset: Math.random() * Math.PI * 2,
-        color: colors[Math.floor(Math.random() * colors.length)]!,
-        circle: Math.random() > .78,
-        opacity: .82 + Math.random() * .18,
-      };
-    }
-
-    function stopConfetti() {
+    const stopConfetti = () => {
       cancelAnimationFrame(confettiFrame);
       confettiFrame = 0;
       particles = [];
       context?.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    }
+    };
 
-    function startConfetti(onFinished?: () => void) {
-      if (!context) { onFinished?.(); return; }
+    const startConfetti = () => {
+      if (!context) return;
       stopConfetti();
-      // Reduce particle count on mobile / lower-DPI devices for smooth 60fps
-      const isMobile = window.innerWidth < 768 || ('ontouchstart' in window);
-      const count = reducedMotion ? 28 : isMobile ? 72 : 120;
-      particles = Array.from({ length: count }, (_, index) => createParticle(index));
+      const count = reducedMotion ? 24 : window.innerWidth < 768 ? 70 : 110;
+      const centreX = window.innerWidth / 2;
+      const centreY = window.innerHeight / 2;
+      particles = Array.from({ length: count }, (_, index) => {
+        const angle = Math.PI * (1.08 + Math.random() * .84);
+        const speed = 2.8 + Math.random() * 6.4;
+        return {
+          x: centreX + (Math.random() - .5) * Math.min(260, window.innerWidth * .55),
+          y: centreY + (Math.random() - .5) * 38 + (index % 3) * 3,
+          vx: Math.cos(angle) * speed + (Math.random() - .5) * 1.8,
+          vy: Math.sin(angle) * speed - 1.8,
+          gravity: .075 + Math.random() * .065,
+          width: 5 + Math.random() * 7,
+          height: 7 + Math.random() * 10,
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: -.16 + Math.random() * .32,
+          color: colors[Math.floor(Math.random() * colors.length)]!,
+          circle: Math.random() > .8,
+          opacity: .84 + Math.random() * .16,
+        };
+      });
       const startedAt = performance.now();
       const draw = (now: number) => {
         context.clearRect(0, 0, window.innerWidth, window.innerHeight);
         const elapsed = now - startedAt;
-        const timeScale = now * .004;
-        // Batch-draw all particles with minimal context switches
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i]!;
-          p.vy += p.gravity;
-          p.y += p.vy;
-          p.x += p.vx + Math.sin(timeScale + p.swayOffset) * p.sway;
-          p.rotation += p.rotationSpeed;
+        for (const particle of particles) {
+          particle.vy += particle.gravity;
+          particle.x += particle.vx;
+          particle.y += particle.vy;
+          particle.rotation += particle.rotationSpeed;
           context.save();
-          context.globalAlpha = p.opacity;
-          context.translate(p.x, p.y);
-          context.rotate(p.rotation);
-          context.fillStyle = p.color;
-          if (p.circle) {
+          context.globalAlpha = particle.opacity * Math.max(0, 1 - elapsed / 1650);
+          context.translate(particle.x, particle.y);
+          context.rotate(particle.rotation);
+          context.fillStyle = particle.color;
+          if (particle.circle) {
             context.beginPath();
-            context.arc(0, 0, p.width * .52, 0, Math.PI * 2);
+            context.arc(0, 0, particle.width * .52, 0, Math.PI * 2);
             context.fill();
           } else {
-            context.fillRect(-p.width / 2, -p.height / 2, p.width, p.height);
+            context.fillRect(-particle.width / 2, -particle.height / 2, particle.width, particle.height);
           }
           context.restore();
-          if (p.y > window.innerHeight + 40 && elapsed < 2350) {
-            particles[i] = createParticle(i % 18);
-            particles[i]!.y = -25 - Math.random() * 65;
-          }
         }
-        if (elapsed < 3000) confettiFrame = requestAnimationFrame(draw);
-        else { stopConfetti(); onFinished?.(); }
+        if (elapsed < 1650) confettiFrame = requestAnimationFrame(draw);
+        else stopConfetti();
       };
       confettiFrame = requestAnimationFrame(draw);
-    }
-
-    function playSwish() {
-      if (reducedMotion || direction !== 'send') return;
-      try {
-        const ctx = getAudioCtx();
-        if (!ctx) return;
-        if (ctx.state === 'suspended') void ctx.resume();
-        const length = Math.floor(ctx.sampleRate * .34);
-        const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-        const channel = buffer.getChannelData(0);
-        for (let index = 0; index < length; index += 1) channel[index] = (Math.random() * 2 - 1) * (1 - index / length);
-        const source = ctx.createBufferSource();
-        const filter = ctx.createBiquadFilter();
-        const gain = ctx.createGain();
-        source.buffer = buffer;
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(420, ctx.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(3400, ctx.currentTime + .25);
-        filter.Q.value = .7;
-        gain.gain.setValueAtTime(.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(.16, ctx.currentTime + .045);
-        gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + .34);
-        source.connect(filter).connect(gain).connect(ctx.destination);
-        source.start();
-      } catch { /* Audio is enhancement-only */ }
-    }
+    };
 
     resizeCanvas();
-    gsap.set(mailer, { xPercent: -50, yPercent: -50, x: 0, y: initialMailerY, rotation: 0, scale: 1, opacity: 1, visibility: 'visible', force3D: true });
-    gsap.set(cards, { xPercent: -50, yPercent: -50, x: sourceX, y: sourceY, scale: sourceScale, rotation: 0, opacity: 1, visibility: 'visible', force3D: true });
-    gsap.set(cardBehind, { opacity: direction === 'receive' ? 0 : 1 });
-    gsap.set(envelope, { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, force3D: true });
-    gsap.set(flap, { rotateX: 180, transformOrigin: 'top center', zIndex: 10, force3D: true });
-    // Position ground shadow below the envelope at its resting spot
-    gsap.set(groundShadow, { xPercent: -50, yPercent: -50, x: 0, y: geometry.envelopeHeight / 2 + 16, scaleX: .42, scaleY: .7, opacity: 0, force3D: true });
-    gsap.set(speedTrails, { opacity: 0, scaleY: .4, y: 20, force3D: true });
-    gsap.set(rays, { opacity: 0, scale: .35, rotation: -12, force3D: true });
-    gsap.set(shine, { opacity: direction === 'receive' ? 1 : 0 });
+    const sound = tone === 'lifetime' ? '/sounds/lifetime-card.mp3' : '/sounds/connection-card.mp3';
+    const timeline = gsap.timeline({ paused: true, defaults: { overwrite: 'auto' } });
+    gsap.set(overlay, { opacity: 0, visibility: 'visible' });
+    gsap.set(glow, { opacity: 0, scale: .55, force3D: true });
 
-    let motionFinished = false;
-    let confettiFinished = direction === 'receive';
-    const finishSendWhenComplete = () => {
-      if (direction === 'send' && motionFinished && confettiFinished) onComplete();
-    };
-
-    // Play card sound on animation start – use pre-decoded buffer for zero-lag playback
     if (direction === 'receive') {
-      const audioSrc = tone === 'lifetime' ? '/sounds/lifetime-card.mp3' : '/sounds/connection-card.mp3';
-      const cached = audioCache.get(audioSrc);
-      if (cached) {
-        playAudioBuffer(cached, 0.7);
-      } else {
-        // Fallback: load & cache on first miss
-        preloadAudio(audioSrc).then((buf) => { if (buf) playAudioBuffer(buf, 0.7); });
-      }
-    }
-
-    const timeline = gsap.timeline({
-      paused: true,
-      defaults: { overwrite: 'auto' },
-      onComplete: () => {
-        if (direction === 'receive') setReceiveReady(true);
-        else { motionFinished = true; finishSendWhenComplete(); }
-      },
-    });
-    if (direction === 'receive') {
-      // Cache envelope parts from refs instead of DOM queries – avoids forced reflows
-      const envelopeBack = envelope.querySelector(`.${styles.envelopeBack}`);
-      const envelopeRight = envelope.querySelector(`.${styles.right}`);
-      const envelopeBottom = envelope.querySelector(`.${styles.bottom}`);
-      const envelopeLeft = envelope.querySelector(`.${styles.left}`);
-      const envelopeParts = [envelopeBack, flap, envelopeRight, envelopeBottom, envelopeLeft, shine].filter(Boolean) as (HTMLElement | HTMLDivElement)[];
-      gsap.set(mailer, { y: -launchHeight * .72, opacity: 0, scale: .82 });
-      gsap.set(cards, { x: 0, y: 12, scale: insideScale, opacity: 0 });
-      gsap.set(flap, { rotateX: 0, zIndex: 10 });
+      gsap.set(card, {
+        xPercent: -50,
+        yPercent: -50,
+        x: 0,
+        y: 22,
+        scale: geometry.targetScale * .82,
+        rotation: -1.5,
+        opacity: 0,
+        force3D: true,
+      });
       timeline
-        .to(mailer, { duration: duration(.42), y: restingMailerY, opacity: 1, scale: 1, rotation: 0, ease: 'power3.out' })
-        .to(groundShadow, { duration: duration(.3), opacity: 1, scaleX: 1, scaleY: 1, ease: 'power2.out' }, '<.08')
-        .to(shine, { duration: duration(.12), opacity: 0, ease: 'power1.out' })
-        .to(flap, { duration: duration(.36), rotateX: 180, zIndex: 2, ease: 'power2.inOut' })
-        .set(cardBehind, { opacity: 1 })
-        .to(cardBehind, { duration: duration(.5), y: -revealLift, scale: fullScale, ease: 'power3.out' })
-        .to(envelopeParts, { duration: duration(.24), y: 34, opacity: 0, ease: 'power2.in' }, '<.3')
-        .to(groundShadow, { duration: duration(.24), opacity: 0, scaleX: .5, ease: 'power2.in' }, '<')
-        .to(cardBehind, { duration: duration(.34), y: 0, ease: 'power2.inOut' }, '<.08')
-        .call(() => startConfetti());
+        .to(overlay, { duration: duration(.18), opacity: 1, ease: 'power1.out' })
+        .call(() => { playCardSound(sound); startConfetti(); }, undefined, '<.02')
+        .to(glow, { duration: duration(.48), opacity: 1, scale: 1, ease: 'power2.out' }, '<')
+        .to(card, { duration: duration(.52), y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1, ease: 'back.out(1.35)' }, '<.03')
+        .call(() => setReceiveReady(true));
 
-      dismissReceiveRef.current = () => {
+      dismissRef.current = () => {
         setReceiveReady(false);
-        gsap.timeline({ defaults: { overwrite: 'auto' }, onComplete })
-          .to(envelopeParts, { duration: duration(.24), y: 0, opacity: 1, ease: 'power2.out' })
-          .to(cardBehind, { duration: duration(.42), y: 10, scale: insideScale, ease: 'power3.inOut' }, '<')
-          .to(flap, { duration: duration(.32), rotateX: 0, zIndex: 10, ease: 'power2.inOut' })
-          .set(cardBehind, { opacity: 0 })
-          .to(speedTrails, { duration: duration(.08), opacity: .8, scaleY: 1, y: 0, ease: 'power1.out' })
-          .call(playSwish)
-          .to(mailer, { duration: duration(.44), y: -launchHeight, scale: .8, opacity: 0, ease: 'power3.in' })
-          .to(speedTrails, { duration: duration(.2), opacity: 0, scaleY: 1.6, ease: 'power2.in' }, '<.12');
+        gsap.timeline({ defaults: { overwrite: 'auto' }, onComplete: finishOnce })
+          .to(card, { duration: duration(.24), y: 18, scale: geometry.targetScale * .94, opacity: 0, ease: 'power2.in' })
+          .to(glow, { duration: duration(.2), opacity: 0, scale: 1.12, ease: 'power1.in' }, '<')
+          .to(overlay, { duration: duration(.18), opacity: 0, ease: 'power1.in' }, '<.05');
       };
     } else {
+      gsap.set(card, {
+        xPercent: -50,
+        yPercent: -50,
+        x: geometry.sourceX,
+        y: geometry.sourceY,
+        scale: geometry.sourceScale,
+        rotation: 0,
+        opacity: 1,
+        force3D: true,
+      });
       timeline
-        .to({}, { duration: duration(.08) })
-        .to(mailer, { duration: duration(.56), y: restingMailerY, ease: 'power3.out' })
-        .to(cards, { duration: duration(.56), y: cardRestingLocalY, ease: 'power3.out' }, '<')
-        .to(groundShadow, { duration: duration(.38), opacity: 1, scaleX: 1, scaleY: 1, ease: 'power2.out' }, '<.1')
-        .set(cardBehind, { opacity: 1 })
-        .to(cards, { duration: duration(.2), y: cardRestingLocalY - 20, scale: Math.min(sourceScale, insideScale), ease: 'power2.out' })
-        .to(cards, { duration: duration(.48), y: 10, scale: insideScale, ease: 'power3.inOut' })
-        .to(flap, { duration: duration(.36), rotateX: 0, zIndex: 10, ease: 'power2.inOut' })
-        .set(cards, { opacity: 0 })
-        .to(shine, { duration: duration(.16), opacity: 1, ease: 'power1.out' })
-        .to(rays, { duration: duration(.28), opacity: tone === 'lifetime' ? .9 : .34, scale: 1, rotation: 4, ease: 'power2.out' }, '<')
-        .call(() => startConfetti(() => {
-          confettiFinished = true;
-          finishSendWhenComplete();
-        }))
-        .call(playSwish)
-        .to(speedTrails, { duration: duration(.08), opacity: .86, scaleY: 1, y: 0, ease: 'power1.out' })
-        .to(mailer, { duration: duration(.46), y: -launchHeight, rotation: 0, scale: .78, opacity: 0, ease: 'power3.in' })
-        .to(speedTrails, { duration: duration(.25), opacity: 0, scaleY: 1.7, ease: 'power2.in' }, '<.12')
-        .to(rays, { duration: duration(.3), opacity: 0, scale: 1.35, ease: 'power2.in' }, '<')
-        .to(groundShadow, { duration: duration(.22), opacity: 0, scaleX: .2, scaleY: .2, ease: 'power2.in' }, '<')
-        .to({}, { duration: duration(.35) });
+        .to(overlay, { duration: duration(.12), opacity: 1, ease: 'power1.out' })
+        .to(card, { duration: duration(.36), x: 0, y: 0, scale: geometry.targetScale, ease: 'power3.out' }, '<')
+        .to(glow, { duration: duration(.28), opacity: 1, scale: 1, ease: 'power2.out' }, '<.08')
+        .call(() => { playCardSound(sound); startConfetti(); })
+        .to(card, { duration: duration(.46), y: -geometry.viewportHeight * .72, scale: geometry.targetScale * .74, rotation: -3, opacity: 0, ease: 'power3.in' }, '+=.12')
+        .to(glow, { duration: duration(.34), opacity: 0, scale: 1.3, ease: 'power2.in' }, '<')
+        .to(overlay, { duration: duration(.16), opacity: 0, ease: 'power1.in' }, '<.18')
+        .call(finishOnce);
     }
 
-    // Double rAF ensures layout/paint is fully settled before animation starts – eliminates startup jank
     requestAnimationFrame(() => requestAnimationFrame(() => timeline.play(0)));
     return () => {
-      dismissReceiveRef.current = null;
+      dismissRef.current = null;
       timeline.kill();
       stopConfetti();
-      gsap.killTweensOf([cards, mailer, envelope, flap, groundShadow, speedTrails, rays]);
+      gsap.killTweensOf([overlay, card, glow]);
     };
-  }, [direction, geometry.envelopeHeight, geometry.envelopeWidth, onComplete, sourceRect, tone]);
+  }, [direction, geometry, tone]);
 
-  const dismissReceive = useCallback(() => dismissReceiveRef.current?.(), []);
+  const dismissReceive = useCallback(() => dismissRef.current?.(), []);
 
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className={styles.overlay} data-tone={tone} role="status" aria-live="polite" aria-label={ariaLabel}>
-      <canvas ref={canvasRef} className={styles.confetti} />
+    <div
+      ref={overlayRef}
+      className={styles.overlay}
+      data-tone={tone}
+      data-direction={direction}
+      role="status"
+      aria-live="polite"
+      aria-label={ariaLabel}
+      onClick={(event) => { if (direction === 'receive' && event.target === event.currentTarget) dismissReceive(); }}
+    >
+      <canvas ref={canvasRef} className={styles.confetti} aria-hidden="true" />
       <div className={styles.stage}>
-        <div ref={shadowRef} className={styles.groundShadow} />
+        <div ref={glowRef} className={styles.glow} aria-hidden="true" />
         <div
-          ref={mailerRef}
-          className={styles.mailer}
-          style={{
-            width: geometry.envelopeWidth,
-            height: geometry.envelopeHeight,
-            transform: `translate(-50%, -50%) translate3d(0, ${geometry.initialMailerY}px, 0)`,
-          }}
+          ref={cardRef}
+          className={styles.cardHost}
+          style={{ width: geometry.naturalWidth, height: geometry.naturalHeight }}
         >
-          <div ref={raysRef} className={styles.rays} aria-hidden="true" style={{ width: Math.max(520, geometry.envelopeWidth * 1.3), height: Math.max(520, geometry.envelopeWidth * 1.3) }} />
-          <div ref={trailsRef} className={styles.speedTrails} aria-hidden="true"><span /><span /><span /><span /><span /></div>
-          <div ref={envelopeRef} className={styles.envelope}>
-            <div className={styles.envelopeBack} />
-            <div ref={flapRef} className={styles.flap} />
-            <div ref={cardBehindRef}>{renderCard(`${styles.cardLayer} ${styles.cardBehind}`, initialCardStyle)}</div>
-            <div className={styles.right} />
-            <div className={styles.bottom} />
-            <div className={styles.left} />
-            <div ref={shineRef} className={styles.envelopeShine} />
-          </div>
+          {renderCard(styles.cardLayer, { width: geometry.naturalWidth, height: geometry.naturalHeight })}
         </div>
       </div>
       {direction === 'receive' && receiveReady ? (

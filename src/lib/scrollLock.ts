@@ -3,6 +3,7 @@
 let lockCount = 0;
 let restoreState: {
   scrollY: number;
+  fixedBody: boolean;
   bodyOverflow: string;
   bodyPosition: string;
   bodyTop: string;
@@ -24,6 +25,7 @@ export function lockPageScroll() {
     const scrollY = window.scrollY || html.scrollTop || 0;
     restoreState = {
       scrollY,
+      fixedBody: !keepFixedFooterStable,
       bodyOverflow: body.style.overflow,
       bodyPosition: body.style.position,
       bodyTop: body.style.top,
@@ -56,6 +58,7 @@ export function lockPageScroll() {
     const body = document.body;
     const html = document.documentElement;
     const scrollY = restoreState.scrollY;
+    const fixedBody = restoreState.fixedBody;
     body.style.overflow = restoreState.bodyOverflow;
     body.style.position = restoreState.bodyPosition;
     body.style.top = restoreState.bodyTop;
@@ -66,6 +69,6 @@ export function lockPageScroll() {
     html.style.overflow = restoreState.htmlOverflow;
     html.style.overscrollBehavior = restoreState.htmlOverscrollBehavior;
     restoreState = null;
-    window.scrollTo(0, scrollY);
+    if (fixedBody && Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
   };
 }
