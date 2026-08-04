@@ -1360,7 +1360,7 @@
 .expandedBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 34;
+  z-index: var(--canact-z-popup);
   pointer-events: none;
   opacity: 0;
   background: rgba(255, 255, 255, .78);
@@ -1395,7 +1395,7 @@
   position: fixed;
   left: 50%;
   bottom: calc(var(--canact-floating-bottom-clearance) + 1em);
-  z-index: 36;
+  z-index: var(--canact-z-popup-nested);
   width: min(calc(100vw - 24px), 430px);
   min-height: 168px;
   max-height: var(--expanded-modal-max-height);

@@ -8,9 +8,10 @@ import { useAuth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import {
   isNativeContactSyncAvailable,
+  isIOSWebContactImport,
   isWebContactPickerAvailable,
-  parseVCardContacts,
   readAllDeviceContacts,
+  readVCardFiles,
   readWebContacts,
   syncContactRecords,
   type ContactSyncRecord,
@@ -27,8 +28,12 @@ export default function ContactPermissionBootstrapper() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [webPickerAvailable, setWebPickerAvailable] = useState(false);
+  const [iosWebImport, setIOSWebImport] = useState(false);
 
-  useEffect(() => setWebPickerAvailable(isWebContactPickerAvailable()), []);
+  useEffect(() => {
+    setWebPickerAvailable(isWebContactPickerAvailable());
+    setIOSWebImport(isIOSWebContactImport());
+  }, []);
 
   useEffect(() => {
     if (!user?.uid || profile?.profileComplete === false) return;
@@ -50,6 +55,9 @@ export default function ContactPermissionBootstrapper() {
           await recordOnboardingSignal(user.uid, 'sync-contacts').catch(() => {});
           if (!cancelled) toast(`${result.synced} contacts synced · ${result.matched} people found`, 'success');
         } catch (error: any) {
+          if (!/not granted|denied|AbortError/i.test(`${error?.name || ''} ${error?.message || ''}`)) {
+            localStorage.removeItem(askedKey);
+          }
           if (!cancelled && error?.name !== 'AbortError') toast(error?.message || 'Could not sync contacts', 'error');
         }
         return;
@@ -90,11 +98,11 @@ export default function ContactPermissionBootstrapper() {
     finally { setBusy(false); }
   };
 
-  const importFile = async (file?: File) => {
-    if (!file) return;
+  const importFiles = async (files?: FileList | null) => {
+    if (!files?.length) return;
     setBusy(true);
     try {
-      const contacts = parseVCardContacts(await file.text());
+      const contacts = await readVCardFiles(files);
       if (!contacts.length) throw new Error('No contacts were found in that file.');
       await finishSync(contacts);
     } catch (error: any) { toast(error?.message || 'Could not import contacts', 'error'); }
@@ -115,9 +123,11 @@ export default function ContactPermissionBootstrapper() {
             <span className={styles.icon}><Users size={26} /></span>
             <span className={styles.eyebrow}>PEOPLE YOU MAY KNOW</span>
             <h2 id="contact-permission-title">Find your people on Canact</h2>
-            <p>Sync your address book to find existing Canact accounts. Contact names are not uploaded, and phone numbers and emails are protected before matching.</p>
+            <p>{iosWebImport
+              ? 'Safari cannot grant websites direct address-book access. Export or share contacts as vCard files, then choose them here. Phone numbers and emails are protected before matching.'
+              : 'Sync your address book to find existing Canact accounts. Contact names are not uploaded, and phone numbers and emails are protected before matching.'}</p>
             <button type="button" className={styles.primary} disabled={busy} onClick={() => void selectContacts()}>
-              <CloudUpload size={19} /> {busy ? 'Syncing…' : webPickerAvailable ? 'Choose contacts' : 'Import address book'}
+              <CloudUpload size={19} /> {busy ? 'Syncing…' : webPickerAvailable ? 'Choose contacts' : iosWebImport ? 'Choose vCard files' : 'Import address book'}
             </button>
             {webPickerAvailable ? <button type="button" className={styles.secondary} disabled={busy} onClick={() => fileRef.current?.click()}>Import a .vcf file instead</button> : null}
             <button type="button" className={styles.later} disabled={busy} onClick={dismiss}>Not now</button>
@@ -125,7 +135,7 @@ export default function ContactPermissionBootstrapper() {
         </div>,
         document.body,
       ) : null}
-      <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard" aria-label="Import address book" onChange={(event) => void importFile(event.target.files?.[0])} />
+      <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard,text/x-vcard" multiple aria-label="Import address book" onChange={(event) => void importFiles(event.target.files)} />
     </>
   );
 }

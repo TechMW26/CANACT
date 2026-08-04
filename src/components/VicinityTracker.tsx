@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { startVicinity, listenPendingRatings, dismissPendingRating } from '@/lib/services/vicinity';
 import { getAttributeCooldownMs, listenAttributeVotes, removeAttribute, setAttribute, setLikeDislike, type AttributeVoteMap } from '@/lib/services/votes';
@@ -86,8 +87,10 @@ function ProximityRatingPrompt({
     try { await onSkip(); } finally { setBusy(false); }
   };
 
-  return (
-    <div className="canact-popup-backdrop fixed inset-0 z-[60] flex items-end justify-center p-3 md:items-center">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div data-canact-popup="true" className="canact-popup-backdrop canact-popup-layer fixed inset-0 flex items-end justify-center p-3 md:items-center">
       <div ref={swipe.ref as React.RefObject<HTMLDivElement | null>} className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl will-change-transform">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -169,6 +172,7 @@ function ProximityRatingPrompt({
           Skip
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

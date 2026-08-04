@@ -515,44 +515,52 @@ function ProfileVotePill({
   vote,
   busy,
   onVote,
-  topTone,
 }: {
   vote?: 'like' | 'dislike';
   busy: boolean;
   onVote: (kind: 'like' | 'dislike') => Promise<void>;
-  topTone: ChromeTone;
 }) {
-  const lightTop = topTone === 'light';
   const buttonClass = (kind: 'like' | 'dislike') => {
     const active = vote === kind;
-    if (active && kind === 'like') return 'bg-white text-emerald-600';
-    if (active && kind === 'dislike') return 'bg-white text-rose-600';
-    return 'text-white/80 hover:bg-white/12 active:bg-white/18';
+    if (active && kind === 'like') return 'bg-[#dcece4] text-[#1f6b55] shadow-[inset_0_0_0_1px_rgba(31,107,85,.12)]';
+    if (active && kind === 'dislike') return 'bg-[#f6dfdc] text-[#a14f49] shadow-[inset_0_0_0_1px_rgba(161,79,73,.12)]';
+    return 'bg-white text-[#35564d] hover:bg-[#f5f7f5] active:scale-95';
   };
 
-  return (
-    <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 rounded-full border border-line bg-white p-1 text-ink">
-      <button
-        type="button"
-        disabled={busy}
-        aria-label="Dislike profile"
-        aria-pressed={vote === 'dislike'}
-        onClick={() => onVote('dislike')}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('dislike')}`}
-      >
-        <ThumbsDown size={17} />
-      </button>
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      data-canact-profile-votes="true"
+      className="fixed z-[58] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/80 bg-white p-1.5 shadow-[0_12px_28px_rgba(23,63,52,.16)] lg:hidden"
+      style={{
+        left: 'calc(var(--canact-create-button-left, calc(100% - 50px)) + 38px)',
+        bottom: 'calc(var(--canact-create-button-bottom, 12px) + 88px)',
+      }}
+      role="group"
+      aria-label="Rate profile"
+    >
       <button
         type="button"
         disabled={busy}
         aria-label="Like profile"
         aria-pressed={vote === 'like'}
-        onClick={() => onVote('like')}
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('like')}`}
+        onClick={() => void onVote('like')}
+        className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('like')}`}
       >
-        <ThumbsUp size={17} />
+        <ThumbsUp size={18} />
       </button>
-    </div>
+      <button
+        type="button"
+        disabled={busy}
+        aria-label="Dislike profile"
+        aria-pressed={vote === 'dislike'}
+        onClick={() => void onVote('dislike')}
+        className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition disabled:opacity-55 ${buttonClass('dislike')}`}
+      >
+        <ThumbsDown size={18} />
+      </button>
+    </div>,
+    document.body,
   );
 }
 
@@ -625,8 +633,8 @@ function ProfileAttributeGauge({
   }, [angle]);
 
   return (
-    <div className="min-w-0 rounded-[18px] bg-white/55 px-1.5 pb-3 pt-2 text-center shadow-[inset_0_0_0_1px_rgba(31,107,85,.05)]">
-      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[112px] overflow-visible" role="img" aria-label={`${label}: ${positive} positive, ${negative} negative, ${state}`}>
+    <div className="flex min-w-0 flex-col justify-center rounded-[20px] bg-white px-1 pb-3 pt-2.5 text-center shadow-[0_8px_18px_rgba(7,37,28,.12)]">
+      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[128px] overflow-visible" role="img" aria-label={`${label}: ${positive} positive, ${negative} negative, ${state}`}>
         <defs>
           <linearGradient id={`profile-gauge-${id}`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor="#efb2aa" />
@@ -645,7 +653,7 @@ function ProfileAttributeGauge({
         </g>
         <circle cx="60" cy="59" r="6" fill={needleColor} stroke="#fffdf8" strokeWidth="2.5" style={{ transition: 'fill 360ms ease' }} />
       </svg>
-      <strong className="-mt-0.5 block truncate text-[10px] font-black text-[#173f34] sm:text-[11px]">{label}</strong>
+      <strong className="-mt-0.5 block truncate text-[11px] font-black text-[#173f34] sm:text-[12px]">{label}</strong>
     </div>
   );
 }
@@ -791,10 +799,11 @@ function CanactPagesProfileUI({
   return (
     <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
-      <section className="relative mx-auto w-full max-w-[440px] px-5 pb-5 pt-[calc(var(--canact-header-top-inset,0px)+78px+1em)] text-center lg:pt-5">
+      <section className="relative mx-auto w-full max-w-[440px] px-5 pb-5 text-center">
+        <div className="relative -mx-5 rounded-b-[34px] bg-[#1f6b55] px-5 pb-5 pt-[calc(var(--canact-header-top-inset,0px)+78px+1em)] shadow-[0_14px_30px_rgba(22,67,53,.16)] lg:pt-5">
         <div className="relative mx-auto h-[228px] w-full max-w-[330px]">
           {connectionHighlights.length ? (
-            <svg className="pointer-events-none absolute inset-x-4 top-0 h-[190px] w-auto text-[#173f34]/45" viewBox="0 0 328 222" aria-hidden="true">
+            <svg className="pointer-events-none absolute inset-x-4 top-0 h-[190px] w-auto text-white/40" viewBox="0 0 328 222" aria-hidden="true">
               {[
                 'M58 46C95 45 112 61 135 90',
                 'M270 46C232 45 216 61 193 90',
@@ -810,27 +819,27 @@ function CanactPagesProfileUI({
             const positions = ['left-0 top-1', 'right-0 top-1', 'left-0 top-[52%]', 'right-0 top-[52%]'];
             return (
               <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[68px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
-                <span className="grid h-10 w-10 place-items-center rounded-full border border-[#173f34]/10 bg-[#faf8f2] text-[#1f6b55] shadow-[0_8px_22px_rgba(20,63,51,.11)]"><ConnectionOrbitIcon kind={item.kind} /></span>
-                <span className="max-w-full truncate text-[9px] font-bold text-[#173f34]/65">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
+                <span className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white text-[#1f6b55] shadow-[0_8px_22px_rgba(8,39,30,.22)]"><ConnectionOrbitIcon kind={item.kind} /></span>
+                <span className="max-w-full truncate text-[9px] font-bold text-white/72">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
               </button>
             );
           })}
 
           <div className="absolute left-1/2 top-[43%] z-10 h-[172px] w-[172px] -translate-x-1/2 -translate-y-1/2">
             <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible drop-shadow-[0_10px_22px_rgba(20,70,54,.14)]" viewBox="0 0 172 172" role="img" aria-label={`Canact score ${scoreSummary.score}, ${Math.round(scoreProgress)}% of the ${scoreSummary.max} maximum`}>
-              <path d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57" pathLength="79.5" fill="none" stroke="rgba(31,107,85,.12)" strokeWidth="7" strokeLinecap="round" />
+              <path d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57" pathLength="79.5" fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="7" strokeLinecap="round" />
               <path
                 d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57"
                 pathLength="79.5"
                 fill="none"
-                stroke="#2b8065"
+                stroke="#9de1c1"
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray={`${scoreProgress * 0.795} 100`}
                 className="transition-[stroke-dasharray] duration-700 ease-out"
               />
             </svg>
-            <div className={`absolute inset-[11px] overflow-hidden rounded-full border-[3px] bg-white shadow-[0_14px_34px_rgba(16,54,42,.14)] ${isFavourite ? 'border-[#E8B830]' : 'border-[#faf8f2]'}`}>
+            <div className={`absolute inset-[11px] overflow-hidden rounded-full border-[3px] bg-white shadow-[0_14px_34px_rgba(7,37,28,.28)] ${isFavourite ? 'border-[#E8B830]' : 'border-white'}`}>
               {isSelf ? (
                 <button type="button" onClick={() => profilePhotoInputRef.current?.click()} aria-label="Change profile photo" className="relative block h-full w-full transition-transform active:scale-95">
                   <Avatar src={userProfile.photoURL} name={displayName} size={150} />
@@ -842,11 +851,11 @@ function CanactPagesProfileUI({
               )}
             </div>
             {isSelf ? (
-              <span className="pointer-events-none absolute right-0 top-5 z-30 grid h-8 w-8 place-items-center rounded-full border-[3px] border-[#faf8f2] bg-[#174f3f] text-white shadow-[0_6px_16px_rgba(20,66,52,.28)]" aria-hidden="true">
+              <button type="button" onClick={() => profilePhotoInputRef.current?.click()} aria-label="Change profile photo" className="absolute bottom-2 right-1 z-30 grid h-9 w-9 place-items-center rounded-full border-[3px] border-[#1f6b55] bg-white text-[#1f6b55] shadow-[0_6px_16px_rgba(7,37,28,.28)] transition-transform active:scale-95">
                 <Camera size={14} />
-              </span>
+              </button>
             ) : null}
-            <div className="absolute bottom-[-40px] left-1/2 z-20 flex h-9 -translate-x-1/2 overflow-hidden rounded-full border-2 border-[#faf8f2] shadow-[0_8px_20px_rgba(20,66,52,.24)]">
+            <div className="absolute bottom-[-40px] left-1/2 z-20 flex h-9 -translate-x-1/2 overflow-hidden rounded-full shadow-[0_8px_20px_rgba(7,37,28,.3)]">
               {isSelf ? (
                 <Link
                   href="/mood"
@@ -882,20 +891,26 @@ function CanactPagesProfileUI({
           </div>
         </div>
 
-        <h1 className="mt-[1em] text-[26px] font-black tracking-[-.04em] text-ink">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-brand">✓</span> : null}</h1>
-        <p className="mt-1 text-[13px] font-semibold text-ink/48">@{profileSlug(userProfile)} · {role}</p>
-        <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-ink/68">{profileInsight}</p>
-        {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-ink/45">{userProfile.bio}</p> : null}
+        {isSelf ? (
+          <Link href="/mood" prefetch className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-white/80 bg-white px-7 text-[12px] font-black text-[#1f6b55] shadow-[0_7px_16px_rgba(7,37,28,.22),inset_0_1px_0_rgba(255,255,255,.18)] transition-[transform,box-shadow,background-color] hover:bg-[#f1f7f3] active:translate-y-px active:scale-[.97] active:shadow-[0_3px_8px_rgba(7,37,28,.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            Update mood
+          </Link>
+        ) : null}
+        <h1 className="mt-6 text-[26px] font-black tracking-[-.04em] text-white">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-[#9de1c1]">✓</span> : null}</h1>
+        <p className="mt-1 text-[13px] font-semibold text-white/65">@{profileSlug(userProfile)} · {role}</p>
+        <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-white/80">{profileInsight}</p>
+        {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-white/60">{userProfile.bio}</p> : null}
 
-        <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-[24px] bg-[#f5f1e8]/75 p-2 shadow-[inset_0_0_0_1px_rgba(31,107,85,.05)]">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           <ProfileAttributeGauge id={`${userProfile.uid}-behaviour`} label="Behaviour" positive={userProfile.attrs?.behaviour ?? 0} negative={userProfile.attrs?.rude ?? 0} />
           <ProfileAttributeGauge id={`${userProfile.uid}-reliability`} label="Reliability" positive={userProfile.attrs?.reliability ?? 0} negative={userProfile.attrs?.unreliable ?? 0} />
           <ProfileAttributeGauge id={`${userProfile.uid}-civic`} label="Civic sense" positive={userProfile.attrs?.civic_sense ?? 0} negative={userProfile.attrs?.uncivil ?? 0} />
         </div>
 
         {!isSelf ? (
-          <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#dcece4] font-black text-[#1f6b55] shadow-[inset_0_0_0_1px_rgba(31,107,85,.08)]"><Star size={16} /> Give attributes</button>
+          <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white font-black text-[#1f6b55] shadow-[0_7px_16px_rgba(7,37,28,.2)] transition-transform active:scale-[.98]"><Star size={16} /> Give attributes</button>
         ) : null}
+        </div>
 
         <ProfileRecognitionFolders profile={userProfile} isSelf={isSelf} showAttributes={false} connectionCards={receivedConnections} />
 
@@ -933,6 +948,8 @@ function CanactPagesProfileUI({
         </div>
       </section>
       </div>{/* end blur wrapper */}
+
+      {!isSelf && !accessBlockReason ? <ProfileVotePill vote={profileVote} busy={profileVoteBusy} onVote={onProfileVote} /> : null}
 
       <ProfileAccessGate reason={accessBlockReason} locationError={locationError} onRetryLocation={onRetryLocation} />
 

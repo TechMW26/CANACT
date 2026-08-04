@@ -88,7 +88,7 @@ export function StoryEditor({
 
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black text-white">
+    <div data-canact-popup="true" className="canact-popup-layer fixed inset-0 bg-black text-white">
       <div className="relative mx-auto flex h-full max-w-md flex-col">
         <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4 pt-4 safe-top">
           <button

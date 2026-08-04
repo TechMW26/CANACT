@@ -173,7 +173,7 @@ export function StoryViewer({
 
   return (
     <PortalWrap>
-      <div className="canact-story-viewer fixed inset-0 z-[100] bg-black text-white">
+      <div data-canact-popup="true" className="canact-story-viewer canact-popup-layer fixed inset-0 bg-black text-white">
       <div className="mx-auto flex h-full max-w-md flex-col px-2 pb-3 pt-2 safe-top safe-bottom">
         {/* Segmented progress — only the CURRENT user's stories show up
             as bars, so the counter at the top accurately reflects "how

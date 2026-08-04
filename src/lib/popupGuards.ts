@@ -2,7 +2,7 @@
 
 let openPopupCount = 0;
 let activePopupGestureCount = 0;
-let sheetZoomCount = 0;
+const sheetZoomStates = new Map<symbol, { shell: HTMLElement; progress: number; immediate: boolean }>();
 
 function updatePopupFlags() {
   if (typeof document === 'undefined') return;
@@ -47,21 +47,52 @@ export function isCanactPopupInteractionActive(target?: EventTarget | null) {
   return false;
 }
 
+function applyCanactSheetZoom(shell: HTMLElement) {
+  const states = [...sheetZoomStates.values()].filter((state) => state.shell === shell);
+  const progress = states.reduce((maximum, state) => Math.max(maximum, state.progress), 0);
+  const immediate = states.some((state) => state.immediate);
+  shell.style.setProperty('--canact-sheet-open-progress', String(progress));
+  shell.style.setProperty('--canact-sheet-scale', String(1 - progress * 0.1));
+  shell.style.setProperty('--canact-sheet-radius', `${progress * 24}px`);
+  shell.classList.toggle('canact-sheet-zoom-out', states.length > 0);
+  shell.classList.toggle('canact-sheet-zoom-dragging', immediate);
+}
+
 export function pushCanactSheetZoom(shell: HTMLElement | null) {
-  if (!shell) return () => {};
+  if (!shell) return { setProgress: (_progress: number, _immediate?: boolean) => {}, release: () => {} };
+  const id = Symbol('canact-sheet-zoom');
   let released = false;
-  sheetZoomCount += 1;
-  shell.classList.add('canact-sheet-zoom-out');
-  return () => {
-    if (released) return;
-    released = true;
-    sheetZoomCount = Math.max(0, sheetZoomCount - 1);
-    if (sheetZoomCount === 0) shell.classList.remove('canact-sheet-zoom-out');
+  sheetZoomStates.set(id, { shell, progress: 0, immediate: false });
+  applyCanactSheetZoom(shell);
+  return {
+    setProgress(progress: number, immediate = false) {
+      if (released) return;
+      const state = sheetZoomStates.get(id);
+      if (!state) return;
+      state.progress = Math.max(0, Math.min(1, progress));
+      state.immediate = immediate;
+      applyCanactSheetZoom(shell);
+    },
+    release() {
+      if (released) return;
+      released = true;
+      sheetZoomStates.delete(id);
+      applyCanactSheetZoom(shell);
+      if (![...sheetZoomStates.values()].some((state) => state.shell === shell)) {
+        shell.style.removeProperty('--canact-sheet-open-progress');
+        shell.style.removeProperty('--canact-sheet-scale');
+        shell.style.removeProperty('--canact-sheet-radius');
+      }
+    },
   };
 }
 
 export function clearCanactSheetZoom(shell: HTMLElement | null) {
   if (!shell) return;
-  sheetZoomCount = 0;
+  for (const [id, state] of sheetZoomStates) if (state.shell === shell) sheetZoomStates.delete(id);
   shell.classList.remove('canact-sheet-zoom-out');
+  shell.classList.remove('canact-sheet-zoom-dragging');
+  shell.style.removeProperty('--canact-sheet-open-progress');
+  shell.style.removeProperty('--canact-sheet-scale');
+  shell.style.removeProperty('--canact-sheet-radius');
 }

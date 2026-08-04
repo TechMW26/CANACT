@@ -116,7 +116,7 @@ export default function ReelCreatePage() {
       }
     };
     const ui = (
-      <div className="fixed inset-0 z-[100] bg-black text-white">
+      <div data-canact-popup="true" className="canact-popup-layer fixed inset-0 bg-black text-white">
         <video
           ref={previewRef}
           src={videoUrl}

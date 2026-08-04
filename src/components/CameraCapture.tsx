@@ -150,7 +150,7 @@ export function CameraCapture({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[2147482000] flex min-h-[100dvh] flex-col bg-[#0b0c0b] text-white">
+    <div data-canact-popup="true" className="canact-popup-layer fixed inset-0 flex min-h-[100dvh] flex-col bg-[#0b0c0b] text-white">
       <input
         ref={photoCameraRef}
         type="file"

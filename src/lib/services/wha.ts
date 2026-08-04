@@ -2,6 +2,7 @@ import { onValue, push, ref, remove, runTransaction, set, update, get, query, or
 import { db } from '../firebase';
 import { WhaPost } from '../types';
 import { recordOnboardingSignal } from './onboarding';
+import { recordScoreActivity } from './scoreActivity';
 
 function notify(receiverUid: string, kind: 'react' | 'comment', title: string, body: string, url: string) {
   Promise.all([import('./sendPush'), import('./notifications')]).then(([{ sendPush }, { pushNotification }]) => {
@@ -26,6 +27,7 @@ export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'e
   await set(node, post);
   await set(ref(db, `userPosts/${input.uid}/${post.id}`), post.createdAt);
   await recordOnboardingSignal(input.uid, 'create-post');
+  await recordScoreActivity(input.uid);
   return post;
 }
 
@@ -136,7 +138,10 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
     const emoji = { cool: '😎', love: '❤️', wow: '😮', sad: '😢', angry: '😡' }[kind];
     notify(authorUid, 'react', `${emoji} Someone reacted to your post`, 'Tap to see the reaction.', `/post/${postId}`);
   }
-  if (cur !== kind) await recordOnboardingSignal(uid, 'engage-post');
+  if (cur !== kind) {
+    await recordOnboardingSignal(uid, 'engage-post');
+    await recordScoreActivity(uid);
+  }
 }
 
 export async function addComment(postId: string, uid: string, name: string, text: string) {
@@ -144,6 +149,7 @@ export async function addComment(postId: string, uid: string, name: string, text
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
   await recordOnboardingSignal(uid, 'engage-post');
+  await recordScoreActivity(uid);
 
   // T4 + notify the post author.
   try {

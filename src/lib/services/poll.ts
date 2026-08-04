@@ -1,29 +1,13 @@
 import { onValue, push, ref, runTransaction, set, get, query, orderByChild, limitToLast, remove } from 'firebase/database';
 import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
-import { uid as rid, dayKey } from '../utils';
+import { uid as rid } from '../utils';
 import { recordOnboardingSignal } from './onboarding';
+import { recordScoreActivity } from './scoreActivity';
 
 /** Bump the poll author's contentLikes or contentDislikes (T4). */
 async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
   await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
-}
-
-/** Bump the voter's engagement score (+0.50 per interaction, capped +10/day). */
-async function bumpVoterEngagement(voterUid: string) {
-  await runTransaction(ref(db, `users/${voterUid}`), (u: any) => {
-    if (!u) return u;
-    const today = dayKey();
-    if (u.contentEngagementDayKey !== today) {
-      u.contentEngagementDayKey = today;
-      u.contentEngagementDayCount = 1;
-    } else {
-      const count = (u.contentEngagementDayCount ?? 0) + 1;
-      u.contentEngagementDayCount = Math.min(count, 20); // 20 × 0.5 = +10/day max
-    }
-    u.contentEngagementScore = (u.contentEngagementScore ?? 0) + 0.5;
-    return u;
-  });
 }
 
 function normalizeOptions(raw: any): PollOption[] {
@@ -66,6 +50,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
   await set(node, poll);
   await set(ref(db, `userPolls/${input.uid}/${poll.id}`), poll.createdAt);
   await recordOnboardingSignal(input.uid, 'create-post');
+  await recordScoreActivity(input.uid);
   return poll;
 }
 
@@ -110,7 +95,7 @@ export async function votePoll(pollId: string, uid: string, optionId: string) {
     const authorUid = (pollSnap.val() as Poll | null)?.uid;
     if (authorUid && authorUid !== uid) {
       await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      await bumpVoterEngagement(uid);
+      await recordScoreActivity(uid);
     }
   } catch { /* non-fatal */ }
 }
@@ -159,7 +144,7 @@ export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dis
   }
 
   // T4: Voter engagement reward
-  if (uid !== authorUid) await bumpVoterEngagement(uid);
+  if (uid !== authorUid && prev !== kind) await recordScoreActivity(uid);
   if (prev !== kind) await recordOnboardingSignal(uid, 'engage-post');
 }
 
@@ -175,7 +160,7 @@ export async function commentPoll(pollId: string, uid: string, name: string, tex
     const authorUid = (pollSnap.val() as Poll | null)?.uid;
     if (authorUid && authorUid !== uid) {
       await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      await bumpVoterEngagement(uid);
+      await recordScoreActivity(uid);
     }
   } catch { /* non-fatal */ }
 }

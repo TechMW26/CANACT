@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
@@ -168,14 +169,15 @@ export function HelpAlertManager() {
     }
   }, [current?.id]);
 
-  if (!user || !profile || !current) return null;
+  if (!user || !profile || !current || typeof document === 'undefined') return null;
 
   const dismiss = () => setQueue((q) => q.slice(1));
   const view = () => { router.push(`/help/${current.helpId}`); dismiss(); };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[180] flex items-center justify-center px-4"
+      data-canact-popup="true"
+      className="canact-popup-layer fixed inset-0 flex items-center justify-center px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="help-alert-title"
@@ -241,6 +243,7 @@ export function HelpAlertManager() {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

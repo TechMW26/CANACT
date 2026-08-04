@@ -7,6 +7,7 @@ import { useTopScrollSwipeDismiss } from '@/lib/useTopScrollSwipeDismiss';
 import { X } from './icons';
 
 const ANIM_MS = 320;
+type SheetZoomController = ReturnType<typeof pushCanactSheetZoom>;
 
 /**
  * Bottom-sheet popup with the standardized Canact treatment:
@@ -51,9 +52,10 @@ export function Sheet({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number[]>([]);
   const closeTimerRef = useRef<number | null>(null);
-  const releaseZoomRef = useRef<(() => void) | null>(null);
+  const zoomRef = useRef<SheetZoomController | null>(null);
   const swipeDismissHandlers = useTopScrollSwipeDismiss({
     onClose,
+    onProgress: (progress, immediate) => zoomRef.current?.setProgress(progress, immediate),
     getScrollElement: () => scrollRef.current,
     enabled: mounted,
   });
@@ -82,6 +84,7 @@ export function Sheet({
     // Close: flip entered → false to trigger the exit transition, then
     // unmount after the transition duration so the slide-out is visible.
     setEntered(false);
+    zoomRef.current?.setProgress(0);
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       setMounted(false);
@@ -105,6 +108,7 @@ export function Sheet({
       // away the intermediate frame and the transition never fires.
       void document.body.offsetHeight;
       setEntered(true);
+      zoomRef.current?.setProgress(1);
     });
     return () => cancelAnimationFrame(frame);
   }, [mounted]);
@@ -123,14 +127,14 @@ export function Sheet({
   }, [mounted]);
 
   useEffect(() => {
-    releaseZoomRef.current?.();
-    releaseZoomRef.current = null;
+    zoomRef.current?.release();
+    zoomRef.current = null;
     const shell = document.getElementById('canact-app-content');
     if (!shell || !mounted) return;
-    releaseZoomRef.current = pushCanactSheetZoom(shell);
+    zoomRef.current = pushCanactSheetZoom(shell);
     return () => {
-      releaseZoomRef.current?.();
-      releaseZoomRef.current = null;
+      zoomRef.current?.release();
+      zoomRef.current = null;
     };
   }, [mounted]);
 
@@ -138,7 +142,7 @@ export function Sheet({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div data-canact-popup="true" className={`fixed inset-0 ${topmost ? 'z-[2147483000]' : 'z-[120]'} flex items-end justify-center overflow-hidden overscroll-none`} role="dialog" aria-modal="true">
+    <div data-canact-popup="true" className={`canact-popup-layer ${topmost ? 'canact-popup-layer-nested' : ''} fixed inset-0 flex items-end justify-center overflow-hidden overscroll-none`} role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="Close"

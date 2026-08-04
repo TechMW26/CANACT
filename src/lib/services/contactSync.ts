@@ -32,6 +32,12 @@ export function isWebContactPickerAvailable() {
   return typeof (navigator as ContactPickerNavigator).contacts?.select === 'function';
 }
 
+export function isIOSWebContactImport() {
+  if (typeof navigator === 'undefined' || Capacitor.isNativePlatform()) return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 /** The browser contact picker must be called directly from a user gesture. */
 export async function readWebContacts(): Promise<ContactSyncRecord[]> {
   const picker = (navigator as ContactPickerNavigator).contacts;
@@ -47,7 +53,13 @@ export async function readWebContacts(): Promise<ContactSyncRecord[]> {
 export async function readAllDeviceContacts(): Promise<ContactSyncRecord[]> {
   if (!Capacitor.isNativePlatform()) throw new Error('Import a contacts file to sync your full address book on the web.');
   const { Contacts } = await import('@capacitor-community/contacts');
-  const permission = await Contacts.requestPermissions();
+  const permission = await Contacts.requestPermissions().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    if (/AndroidManifest|WRITE_CONTACTS|READ_CONTACTS/i.test(message)) {
+      throw new Error('This app build is missing contact access support. Install the latest Canact build and try again.');
+    }
+    throw error;
+  });
   if (permission.contacts !== 'granted' && permission.contacts !== 'limited') {
     throw new Error('Contact access was not granted. Enable it in your device settings and try again.');
   }
@@ -61,9 +73,8 @@ export async function readAllDeviceContacts(): Promise<ContactSyncRecord[]> {
     emails: unique(contact.emails?.map((email) => email.address || '') ?? []),
   })).filter((contact) => contact.phones.length || contact.emails.length);
 
-  if (permission.contacts === 'limited') {
-    throw new Error('Only selected contacts are available. Allow full contact access in device settings to sync the complete address book.');
-  }
+  // iOS 18 can grant limited access. Sync the contacts the person selected
+  // instead of treating a privacy-preserving permission choice as failure.
   return records;
 }
 
@@ -98,6 +109,17 @@ export function parseVCardContacts(source: string): ContactSyncRecord[] {
     const emails = Array.from(block.matchAll(/(?:^|\n)EMAIL[^:]*:([^\r\n]+)/gi), (match) => decodeVCardValue(match[1]));
     return { name: name || undefined, phones: unique(phones), emails: unique(emails) };
   }).filter((contact) => contact.phones.length || contact.emails.length);
+}
+
+export async function readVCardFiles(files: Iterable<File>): Promise<ContactSyncRecord[]> {
+  const sources = await Promise.all(Array.from(files, (file) => file.text()));
+  const seen = new Set<string>();
+  return sources.flatMap(parseVCardContacts).filter((contact) => {
+    const key = `${contact.phones.slice().sort().join('|')}::${contact.emails.slice().sort().join('|')}`;
+    if (!key || key === '::' || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function decodeVCardValue(value?: string) {

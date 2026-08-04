@@ -64,24 +64,78 @@
 .postDot { background: #1f6b55; }
 .storyDot { background: #f2b72e; }
 
-.mapActivityRail {
+.mapActivityDock {
   position: fixed;
   z-index: 20;
   right: 0;
   bottom: calc(clamp(180px, 28dvh, 260px) + 12px);
   left: 0;
+  height: 220px;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 260ms cubic-bezier(.22,.85,.3,1);
+}
+.mapActivityDock[data-hidden="true"] { opacity: 0; transform: translateY(18px); }
+.mapActivityDock[data-hidden="true"] .mapActivityRail,
+.mapActivityDock[data-hidden="true"] .mapActivityToggle { pointer-events: none; }
+.mapActivityRail {
+  position: absolute;
+  inset: 0;
   display: flex;
   gap: 14px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  padding: 10px max(20px, env(safe-area-inset-left)) 14px;
+  padding: 10px max(62px, env(safe-area-inset-right)) 14px max(20px, env(safe-area-inset-left));
   scroll-padding-inline: 20px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  transition: opacity 180ms ease, transform 260ms cubic-bezier(.22,.85,.3,1);
+  pointer-events: auto;
+  transform: translate3d(0,0,0);
+  transition: opacity 360ms ease, transform 520ms cubic-bezier(.22,.85,.3,1);
 }
 .mapActivityRail::-webkit-scrollbar { display: none; }
-.mapActivityRail[data-hidden="true"] { pointer-events: none; opacity: 0; transform: translateY(18px); }
+.mapActivityDock[data-minimized="true"] .mapActivityRail {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(calc(100% + 28px),0,0);
+  animation: mapActivityTuckRight 560ms cubic-bezier(.22,.85,.3,1) both;
+}
+.mapActivityToggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  z-index: 3;
+  display: grid;
+  width: 44px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid rgb(31 107 85 / 13%);
+  border-radius: 18px;
+  background: #fff;
+  color: #1f6b55;
+  box-shadow: 0 10px 28px rgb(16 54 42 / 18%);
+  pointer-events: auto;
+  transform: translateY(-50%);
+  transition: right 420ms cubic-bezier(.22,.85,.3,1), border-radius 420ms cubic-bezier(.22,.85,.3,1), transform 180ms ease;
+}
+.mapActivityToggle:active { transform: translateY(-50%) scale(.94); }
+.mapActivityToggle:focus-visible { outline: 3px solid rgb(31 107 85 / 28%); outline-offset: 3px; }
+.mapActivityToggle small { position: absolute; right: 5px; bottom: 5px; display: grid; min-width: 16px; height: 16px; place-items: center; border-radius: 999px; background: #1f6b55; color: #fff; font-size: 8px; font-weight: 900; }
+.mapActivityDock[data-minimized="true"] .mapActivityToggle {
+  right: -1px;
+  border-radius: 18px 0 0 18px;
+  animation: mapActivityEdgeTug 6.8s 1.6s ease-in-out infinite;
+}
+@keyframes mapActivityTuckRight {
+  from { opacity: 1; transform: translate3d(0,0,0); }
+  to { opacity: 0; transform: translate3d(calc(100% + 28px),0,0); }
+}
+@keyframes mapActivityEdgeTug {
+  0%, 72%, 100% { transform: translate3d(0,-50%,0); }
+  78% { transform: translate3d(-9px,-50%,0); }
+  82% { transform: translate3d(-3px,-50%,0); }
+  86% { transform: translate3d(-7px,-50%,0); }
+  90% { transform: translate3d(0,-50%,0); }
+}
 .mapActivityCard {
   position: relative;
   display: grid;
@@ -251,11 +305,11 @@
   .legend { top: 126px; left: 276px; }
   .peopleSheet { right: 24px; bottom: 10px; left: auto; width: min(460px, calc(100vw - 288px)); border-radius: 30px; transform: translateY(calc(100% - clamp(180px, 28dvh, 260px))); padding-bottom: 24px; }
   .peopleSheetExpanded { transform: translateY(0); }
-  .mapActivityRail { right: 500px; left: 240px; bottom: 24px; }
+  .mapActivityDock { right: 500px; left: 240px; bottom: 24px; }
 
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .exploreScreen, .mapTopFade, .mapHeading, .legend, .locationNotice, .peopleSheet { animation: none; }
-  .peopleSheet, .mapHeading, .legend { transition-duration: 1ms; }
+  .exploreScreen, .mapTopFade, .mapHeading, .legend, .locationNotice, .peopleSheet, .mapActivityRail, .mapActivityToggle { animation: none !important; }
+  .peopleSheet, .mapHeading, .legend, .mapActivityDock, .mapActivityRail, .mapActivityToggle { transition-duration: 1ms; }
 }

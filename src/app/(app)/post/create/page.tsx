@@ -93,7 +93,7 @@ export default function PostCreatePage() {
   if (step === 'edit' && typeof document !== 'undefined') {
     const active = shots[Math.min(selectedShot, Math.max(0, shots.length - 1))];
     return createPortal(
-      <div className="fixed inset-0 z-[2147482000] flex min-h-[100dvh] flex-col bg-[#0b0c0b] text-white">
+      <div data-canact-popup="true" className="canact-popup-layer fixed inset-0 flex min-h-[100dvh] flex-col bg-[#0b0c0b] text-white">
         <header className="flex items-center justify-between border-b border-white/10 px-3 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
           <button type="button" aria-label="Back to camera" onClick={() => setStep('capture')} className="inline-flex h-11 w-11 items-center justify-center rounded-full active:bg-white/10">
             <ArrowLeft size={24} />

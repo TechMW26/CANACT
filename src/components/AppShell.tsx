@@ -129,10 +129,22 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const BUTTON_SIZE = 76;
   const BUTTON_GAP = 24;
   const combinedWidth = navWidth + BUTTON_GAP + BUTTON_SIZE;
+  const createButtonLeft = `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP}px)`;
+  const createButtonBottom = 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))';
 
   const liquidNav = useLiquidNavSlider(pathname, user?.uid, router, visibleTabs);
 
   useEffect(() => { setPageBlendChrome(false); setRadialCreateOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--canact-create-button-left', createButtonLeft);
+    root.style.setProperty('--canact-create-button-bottom', createButtonBottom);
+    return () => {
+      root.style.removeProperty('--canact-create-button-left');
+      root.style.removeProperty('--canact-create-button-bottom');
+    };
+  }, [createButtonLeft, createButtonBottom]);
 
   const prefetchRoute = useCallback((href: string) => {
     if (href === '/create' || prefetchedRoutesRef.current.has(href)) return;
@@ -438,8 +450,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         onClick={() => { haptic('strong'); setRadialCreateOpen((value) => !value); }}
         className={`canact-create-nav-button fixed ${radialCreateOpen ? 'canact-create-nav-button-open' : ''} lg:hidden`}
         style={{
-          left: `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP}px)`,
-          bottom: 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))',
+          left: 'var(--canact-create-button-left)',
+          bottom: 'var(--canact-create-button-bottom)',
         }}
       >
         {radialCreateOpen ? <X className="canact-adaptive-icon" size={29} strokeWidth={2.3} style={{ color: '#1f6b55' }} /> : renderPlusIcon(plusIconName)}
@@ -660,6 +672,43 @@ function titleFor(path: string | null) {
   return '';
 }
 
+type ScoreMotion = {
+  delta: number;
+  targetScore: number;
+  summary: ReturnType<typeof calculateCanactScore>;
+  icon: string;
+  label: string;
+  tone: 'positive' | 'negative';
+};
+
+function totalProfileValues(record?: Record<string, number> | null) {
+  return Object.values(record ?? {}).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+}
+
+function describeScoreMotion(previous: UserProfile, next: UserProfile, delta: number): Omit<ScoreMotion, 'targetScore' | 'summary'> {
+  const positive = delta > 0;
+  const changed = (key: keyof UserProfile) => Number(next[key] || 0) - Number(previous[key] || 0);
+  const onboardingDelta = Number(next.onboarding?.points || 0) - Number(previous.onboarding?.points || 0);
+  const positiveAttrDelta = POSITIVE_ATTRS.reduce((sum, key) => sum + Number(next.attrs?.[key] || 0) - Number(previous.attrs?.[key] || 0), 0);
+  const negativeAttrDelta = NEGATIVE_ATTRS.reduce((sum, key) => sum + Number(next.attrs?.[key] || 0) - Number(previous.attrs?.[key] || 0), 0);
+  const cardDelta = totalProfileValues(next.cardsReceived) - totalProfileValues(previous.cardsReceived);
+  const helpDelta = totalProfileValues(next.helpStats as Record<string, number> | undefined) - totalProfileValues(previous.helpStats as Record<string, number> | undefined);
+  const profileSelfieCompleted = !previous.onboarding?.completed?.['face-identity'] && !!next.onboarding?.completed?.['face-identity'];
+
+  if (changed('likesCount') > 0) return { delta, icon: '♥', label: 'Good rating received', tone: 'positive' };
+  if (changed('dislikesCount') > 0) return { delta, icon: '↘', label: 'Community feedback changed your score', tone: 'negative' };
+  if (positiveAttrDelta > 0) return { delta, icon: '✦', label: 'Positive attribute received', tone: 'positive' };
+  if (negativeAttrDelta > 0) return { delta, icon: '↘', label: 'Attribute feedback received', tone: 'negative' };
+  if (changed('contentLikes') > 0) return { delta, icon: '♥', label: 'Positive reaction on your content', tone: 'positive' };
+  if (changed('contentDislikes') > 0) return { delta, icon: '↘', label: 'Content feedback changed your score', tone: 'negative' };
+  if (changed('activityScorePoints') > 0) return { delta, icon: '✦', label: 'Community activity added to your score', tone: 'positive' };
+  if (cardDelta > 0) return { delta, icon: '✦', label: 'Connection card received', tone: 'positive' };
+  if (helpDelta !== 0) return { delta, icon: positive ? '♥' : '↘', label: positive ? 'Your help was recognised' : 'A help outcome changed your score', tone: positive ? 'positive' : 'negative' };
+  if (profileSelfieCompleted) return { delta, icon: '✓', label: 'Profile selfie added', tone: 'positive' };
+  if (onboardingDelta > 0) return { delta, icon: '✓', label: 'Setup milestone completed', tone: 'positive' };
+  return { delta, icon: positive ? '↗' : '↘', label: `Score ${positive ? 'increased' : 'changed'} by ${Math.abs(delta)}`, tone: positive ? 'positive' : 'negative' };
+}
+
 function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false, leaderboard = false, topInset }: { home?: boolean; profileChrome?: boolean; fadeChrome?: boolean; leaderboard?: boolean; topInset?: string | null }) {
   const { radiusIdx, setRadiusIdx } = useDistance();
   const { user, profile } = useAuth();
@@ -674,22 +723,28 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [liveScore, setLiveScore] = useState(0);
   const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
   const prevScoreRef = useRef<number | null>(null);
-  const prevLikesRef = useRef<number | null>(null);
+  const prevScoreProfileRef = useRef<UserProfile | null>(null);
   const [scoreDelta, setScoreDelta] = useState(0);
   const [scoreFlights, setScoreFlights] = useState<Array<{ id: number; points: number; style: React.CSSProperties }>>([]);
+  const [pillImpact, setPillImpact] = useState(false);
   const [islandMoment, setIslandMoment] = useState<{ icon: string; label: string; tone: 'positive' | 'negative' | 'neutral' } | null>(null);
   const islandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const deltaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const motionQueueRef = useRef<ScoreMotion[]>([]);
+  const motionBusyRef = useRef(false);
+  const motionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const processMotionRef = useRef<() => void>(() => {});
 
   const triggerIslandMoment = useCallback((icon: string, label: string, tone: 'positive' | 'negative' | 'neutral' = 'neutral') => {
     setIslandMoment({ icon, label, tone });
     if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
-    islandTimerRef.current = setTimeout(() => { islandTimerRef.current = null; setIslandMoment(null); }, 2800);
+    islandTimerRef.current = setTimeout(() => { islandTimerRef.current = null; setIslandMoment(null); }, 3400);
   }, []);
 
   const launchScoreFlight = useCallback((points: number) => {
-    if (points <= 0 || typeof window === 'undefined') return;
-    const target = document.querySelector<HTMLElement>('[data-canact-score-target]') ?? islandRef.current;
+    if (points === 0 || typeof window === 'undefined') return;
+    const target = document.querySelector<HTMLElement>('.canact-score-island-portal [data-canact-score-target]')
+      ?? document.querySelector<HTMLElement>('[data-canact-header] [data-canact-score-target]')
+      ?? islandRef.current;
     const targetRect = target?.getBoundingClientRect();
     const startX = window.innerWidth / 2;
     const startY = Math.min(window.innerHeight * .72, window.innerHeight - 150);
@@ -708,38 +763,83 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
     }]);
   }, []);
 
+  const processScoreMotion = useCallback(() => {
+    if (motionBusyRef.current) return;
+    const motion = motionQueueRef.current.shift();
+    if (!motion) return;
+    motionBusyRef.current = true;
+    launchScoreFlight(motion.delta);
+
+    const impactTimer = setTimeout(() => {
+      motionTimersRef.current.delete(impactTimer);
+      setPillImpact(true);
+      setLiveScore(motion.targetScore);
+      setLiveSummary(motion.summary);
+      setScoreDelta(motion.delta);
+      const revealTimer = setTimeout(() => {
+        motionTimersRef.current.delete(revealTimer);
+        triggerIslandMoment(motion.icon, motion.label, motion.tone);
+      }, 520);
+      motionTimersRef.current.add(revealTimer);
+      const settleTimer = setTimeout(() => {
+        motionTimersRef.current.delete(settleTimer);
+        setPillImpact(false);
+      }, 720);
+      motionTimersRef.current.add(settleTimer);
+    }, 1320);
+    motionTimersRef.current.add(impactTimer);
+
+    const finishTimer = setTimeout(() => {
+      motionTimersRef.current.delete(finishTimer);
+      setScoreDelta(0);
+      motionBusyRef.current = false;
+      processMotionRef.current();
+    }, 5200);
+    motionTimersRef.current.add(finishTimer);
+  }, [launchScoreFlight, triggerIslandMoment]);
+  processMotionRef.current = processScoreMotion;
+
+  const enqueueScoreMotion = useCallback((motion: ScoreMotion) => {
+    motionQueueRef.current.push(motion);
+    processMotionRef.current();
+  }, []);
+
   // Real-time score listener with delta tracking
   useEffect(() => {
     if (!user) return;
     prevScoreRef.current = null;
-    prevLikesRef.current = null;
+    prevScoreProfileRef.current = null;
     return onValue(dbRef(db, `users/${user.uid}`), (snap) => {
       const p = snap.val() as UserProfile | null;
       if (p) {
         const s = calculateCanactScore(p);
         const prev = prevScoreRef.current;
-        const previousLikes = prevLikesRef.current;
-        const likeDelta = previousLikes === null ? 0 : Math.max(0, (p.likesCount || 0) - previousLikes);
-        if (prev !== null && s.score !== prev) {
+        const previousProfile = prevScoreProfileRef.current;
+        if (prev !== null && previousProfile && s.score !== prev) {
           const diff = s.score - prev;
-          setScoreDelta(diff);
-          if (deltaTimerRef.current) clearTimeout(deltaTimerRef.current);
-          deltaTimerRef.current = setTimeout(() => { deltaTimerRef.current = null; setScoreDelta(0); }, 2400);
-          if (diff > 0) launchScoreFlight(diff);
-          if (!likeDelta) triggerIslandMoment(diff > 0 ? '↗' : '↘', `Score ${diff > 0 ? 'increased' : 'changed'} by ${Math.abs(diff)}`, diff > 0 ? 'positive' : 'negative');
+          enqueueScoreMotion({
+            targetScore: s.score,
+            summary: s,
+            ...describeScoreMotion(previousProfile, p, diff),
+          });
+        } else if (prev === null) {
+          setLiveScore(s.score);
+          setLiveSummary(s);
+        } else if (!motionBusyRef.current && motionQueueRef.current.length === 0) {
+          setLiveSummary(s);
         }
-        if (likeDelta > 0) triggerIslandMoment('♥', `${likeDelta} new positive signal${likeDelta === 1 ? '' : 's'}`, 'positive');
         prevScoreRef.current = s.score;
-        prevLikesRef.current = p.likesCount || 0;
-        setLiveScore(s.score);
-        setLiveSummary(s);
+        prevScoreProfileRef.current = p;
       }
     });
-  }, [launchScoreFlight, triggerIslandMoment, user?.uid]);
+  }, [enqueueScoreMotion, user?.uid]);
 
   useEffect(() => () => {
     if (islandTimerRef.current) clearTimeout(islandTimerRef.current);
-    if (deltaTimerRef.current) clearTimeout(deltaTimerRef.current);
+    motionTimersRef.current.forEach((timer) => clearTimeout(timer));
+    motionTimersRef.current.clear();
+    motionQueueRef.current = [];
+    motionBusyRef.current = false;
   }, []);
 
   // Listen for micro-events from other components
@@ -850,8 +950,26 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
           <Brand size={38} href="/" />
 
-          {/* Anchor for portal positioning */}
-          <div ref={islandRef} className="canact-score-island-shell" />
+          {/* The compact pill belongs to the header layout. Only its expanded
+              dialog is portalled, so scrolling can never make the pill lag
+              behind or move independently from the header. */}
+          <div ref={islandRef} className="canact-score-island-shell" data-expanded={islandExpanded} data-impact={pillImpact}>
+            <button
+              type="button"
+              className="canact-score-island canact-score-island-inline"
+              data-canact-score-target
+              aria-label={`Canact score ${liveScore}`}
+              aria-expanded={islandExpanded}
+              onClick={() => { haptic('subtle'); setIslandOpen(true); }}
+            >
+              <span className="canact-score-island-compact">
+                <i><Activity size={17} /></i>
+                <strong>{liveScore}</strong>
+                <span><small>CANACT</small><small>SCORE</small></span>
+                <em>{scoreSummary.label}</em>
+              </span>
+            </button>
+          </div>
 
           <div className="ml-auto inline-flex items-center gap-3">
             {/* Avatar — opens sidebar with range selector + profile link */}
@@ -946,7 +1064,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         <>
         <button
           type="button"
-          className="canact-score-island-backdrop canact-popup-backdrop"
+          className="canact-score-island-backdrop canact-popup-backdrop canact-popup-layer"
           data-expanded={islandExpanded}
           aria-label="Close Canact score details"
           tabIndex={islandExpanded ? 0 : -1}
@@ -958,8 +1076,9 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         />
         <div
           ref={islandPortalRef}
-          className="canact-score-island-portal"
+          className="canact-score-island-portal canact-popup-layer-nested"
           data-expanded={islandExpanded}
+          data-canact-popup="true"
           style={{
             top: islandAnchor.top,
             left: islandAnchor.left,
@@ -967,6 +1086,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           } as React.CSSProperties}
           role={islandExpanded ? 'dialog' : undefined}
           aria-label={islandExpanded ? 'Canact score details' : undefined}
+          aria-hidden={!islandExpanded}
         >
           <button
             type="button"
@@ -974,8 +1094,9 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
             data-expanded={islandExpanded}
             data-tone={islandMoment?.tone ?? 'neutral'}
             data-canact-score-target
-            aria-label={islandExpanded ? 'Close Canact score details' : `Canact score ${liveScore}`}
-            aria-expanded={islandExpanded}
+            aria-label="Close Canact score details"
+            aria-expanded="true"
+            tabIndex={islandExpanded ? 0 : -1}
             onClick={() => {
               haptic('subtle');
               if (islandExpanded) {
@@ -987,7 +1108,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
               }
             }}
           >
-            <span className="canact-score-island-compact">
+            <span className="canact-score-island-compact" aria-hidden="true">
               <i><Activity size={17} /></i>
               <strong>{liveScore}</strong>
               <span><small>CANACT</small><small>SCORE</small></span>
@@ -1028,11 +1149,12 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
           <div
             key={flight.id}
             className="canact-score-reward-flight"
+            data-positive={flight.points > 0}
             style={flight.style}
             onAnimationEnd={() => setScoreFlights((current) => current.filter((item) => item.id !== flight.id))}
             aria-live="polite"
           >
-            +{flight.points}
+            {flight.points > 0 ? '+' : '−'}{Math.abs(flight.points)}
           </div>
         )),
         document.body,

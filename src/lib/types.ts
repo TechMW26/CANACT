@@ -189,6 +189,10 @@ export interface UserProfile {
   contentEngagementScore?: number;
   contentEngagementDayKey?: string;
   contentEngagementDayCount?: number;
+  /** Durable +1 community activity points, capped at 10 per day and 50 total. */
+  activityScorePoints?: number;
+  activityScoreDayKey?: string;
+  activityScoreDayCount?: number;
   gender?: 'female' | 'male' | 'nonbinary' | 'other';
   createdAt: number;
 }

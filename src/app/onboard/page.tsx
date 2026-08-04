@@ -13,7 +13,6 @@ import { PhoneInput, isPhoneValid, splitStoredPhone, toE164 } from '@/components
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
 import { useAuth } from '@/lib/auth';
-import { uploadMedia } from '@/lib/uploadMedia';
 import styles from '@/components/AuthFlow.module.css';
 
 type Gender = 'female' | 'male';
@@ -86,7 +85,6 @@ export default function OnboardPage() {
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
   const [selfieData, setSelfieData] = useState('');
-  const [uploadedSelfie, setUploadedSelfie] = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -114,12 +112,12 @@ export default function OnboardPage() {
       setMonth(savedMonth || '');
       setDay(savedDay || '');
     }
-    setUploadedSelfie(profile.photoURL || user.photoURL || '');
   }, [profile, user]);
 
   const dob = year && month && day ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : '';
   const daysInMonth = useMemo(() => year && month ? new Date(Number(year), Number(month), 0).getDate() : 31, [month, year]);
-  const selfieSrc = selfieData || uploadedSelfie || profile?.photoURL || user?.photoURL || '';
+  const selfieVerified = !!profile?.selfieVerifiedAt;
+  const selfieReady = !!selfieData || selfieVerified;
 
   useEffect(() => {
     if (day && Number(day) > daysInMonth) setDay(String(daysInMonth));
@@ -130,7 +128,7 @@ export default function OnboardPage() {
     if (screen === 'name' && !firstName.trim()) return 'First name is required';
     if (screen === 'gender' && !gender) return 'Choose how you identify';
     if (screen === 'birthday' && (!dob || !isOldEnough(dob))) return 'Enter a valid birthday (you must be at least 13)';
-    if (screen === 'selfie' && !selfieSrc) return 'Take a selfie to continue';
+    if (screen === 'selfie' && !selfieReady) return 'Take a verification selfie to continue';
     return '';
   };
 
@@ -153,13 +151,10 @@ export default function OnboardPage() {
       } else if (screen === 'birthday') {
         await updateMyProfile({ dateOfBirth: dob });
       } else if (screen === 'selfie' && selfieData) {
-        const photoURL = (await uploadMedia(selfieData, { kind: 'avatar', uid: user.uid })).url;
         await updateMyProfile({
-          photoURL,
           selfieVerifiedAt: Date.now(),
           selfieVerificationMethod: 'blink-liveness-v1',
         });
-        setUploadedSelfie(photoURL);
         setSelfieData('');
       } else if (screen === 'complete') {
         await updateMyProfile({ profileComplete: true });
@@ -262,14 +257,14 @@ export default function OnboardPage() {
             <RegistrationArt compact />
             <div className={styles.registerBody}>
               <h1 className={styles.title}>Verify it&apos;s really you</h1>
-              <p className={styles.subtitle}>Take a live photo to verify a real person is creating this profile.<br />This helps keep Canact safer from fake profiles.</p>
-              <button type="button" className={styles.selfieScan} onClick={() => setCameraOpen(true)} aria-label={selfieSrc ? 'Retake verification' : 'Start verification'}>
-                {selfieSrc ? <img src={selfieSrc} alt="Your verified selfie" /> : <><UserRound /><span>Tap to verify</span></>}
+              <p className={styles.subtitle}>Take a live photo to verify a real person is creating this profile.<br />You will choose your public profile photo separately.</p>
+              <button type="button" className={styles.selfieScan} onClick={() => setCameraOpen(true)} aria-label={selfieReady ? 'Retake verification' : 'Start verification'}>
+                {selfieData ? <img src={selfieData} alt="Verification selfie preview" /> : selfieVerified ? <><ShieldCheck /><span>Identity verified</span></> : <><UserRound /><span>Tap to verify</span></>}
                 <i className={styles.scanCornerA} /><i className={styles.scanCornerB} /><i className={styles.scanCornerC} /><i className={styles.scanCornerD} />
               </button>
               <div className={styles.trustPills}>
                 <span><Eye size={14} /> Live camera capture</span>
-                <span><ShieldCheck size={14} /> Saved as your profile photo</span>
+                <span><ShieldCheck size={14} /> Not used as your profile photo</span>
                 <span><Sparkles size={14} /> Blink &amp; liveness check</span>
               </div>
               <RegistrationProgress screen={screen} />
@@ -295,7 +290,7 @@ export default function OnboardPage() {
 
         <footer className={styles.registerFooter}>
           <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void goNext()}>
-            <span>{busy ? 'Saving…' : screen === 'complete' ? 'Continue' : screen === 'selfie' && !selfieSrc ? 'Verify identity' : 'Continue'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
+            <span>{busy ? 'Saving…' : screen === 'complete' ? 'Continue' : screen === 'selfie' && !selfieReady ? 'Verify identity' : 'Continue'}</span><span className={styles.primaryIcon}><ArrowRight /></span>
           </button>
         </footer>
       </section>

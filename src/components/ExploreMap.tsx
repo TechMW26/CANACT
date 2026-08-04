@@ -379,7 +379,15 @@ export function ExploreMap({
       map.on('zoomend', () => { if (!disposed) setMapZoom(map.getZoom()); });
       if (!preview) {
         map.addControl(new library.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
-        map.addControl(new library.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showAccuracyCircle: true, showUserLocation: true }), 'top-right');
+        // Keep the familiar locate control, but do not let MapLibre render or
+        // continuously track a second raw GPS marker. The Canact marker below
+        // is driven by the shared accuracy-weighted location filter.
+        map.addControl(new library.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true, maximumAge: 2_000, timeout: 20_000 },
+          trackUserLocation: false,
+          showAccuracyCircle: false,
+          showUserLocation: false,
+        }), 'top-right');
         map.on('dragstart', () => interactionRef.current?.());
         map.on('zoomstart', () => interactionRef.current?.());
         map.on('rotatestart', () => interactionRef.current?.());

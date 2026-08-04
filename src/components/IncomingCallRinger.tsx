@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { listenIncomingCalls, setCallStatus, clearIncoming, CallRecord } from '@/lib/services/calls';
 import { Avatar } from './Avatar';
@@ -114,7 +115,7 @@ export function IncomingCallRinger() {
     );
   }
 
-  if (!pending) return null;
+  if (!pending || typeof document === 'undefined') return null;
 
   const reject = async () => {
     await setCallStatus(pending.id, 'rejected').catch(() => {});
@@ -123,8 +124,8 @@ export function IncomingCallRinger() {
   };
   const accept = () => { setAccepted(pending); setPending(null); };
 
-  return (
-    <div className="fixed inset-0 z-[200] bg-ink/95 text-white flex flex-col items-center justify-between py-16 px-6">
+  return createPortal(
+    <div data-canact-popup="true" className="canact-popup-layer canact-popup-layer-critical fixed inset-0 bg-ink/95 text-white flex flex-col items-center justify-between py-16 px-6">
       <div className="text-center">
         <div className="text-xs uppercase tracking-widest opacity-60">Incoming {pending.kind === 'video' ? 'video call' : 'call'}</div>
         <div className="mt-2 text-base opacity-80 flex items-center justify-center gap-1">
@@ -155,6 +156,7 @@ export function IncomingCallRinger() {
           <PhoneCall size={26} />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

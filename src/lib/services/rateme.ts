@@ -2,6 +2,7 @@ import { get, onValue, push, ref, remove, runTransaction, set, update, query, or
 import { db } from '../firebase';
 import { RateMeSession } from '../types';
 import { recordOnboardingSignal } from './onboarding';
+import { recordProfileRating, recordScoreActivity } from './scoreActivity';
 
 export async function startRateMe(input: { uid: string; authorName: string; photoURL?: string; lqip?: string; hours: number }) {
   const node = push(ref(db, 'ratemeSessions'));
@@ -18,6 +19,7 @@ export async function startRateMe(input: { uid: string; authorName: string; phot
   await set(node, session);
   await update(ref(db, `users/${input.uid}`), { rateMeOn: true, rateMeUntil: session.endsAt });
   await recordOnboardingSignal(input.uid, 'create-post');
+  await recordScoreActivity(input.uid);
   return session;
 }
 
@@ -112,12 +114,20 @@ export async function voteRateMe(sessionId: string, voterUid: string, kind: 'lik
     return s;
   });
   if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
+  const session = result.snapshot.val() as RateMeSession | null;
+  if (session?.uid) {
+    await Promise.all([
+      recordProfileRating(session.uid, kind),
+      recordScoreActivity(voterUid),
+    ]);
+  }
 }
 
 export async function commentRateMe(sessionId: string, uid: string, name: string, text: string) {
   const node = push(ref(db, `ratemeComments/${sessionId}`));
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `ratemeSessions/${sessionId}/commentCount`), (count: number) => (count ?? 0) + 1);
+  await recordScoreActivity(uid);
 }
 
 export function listenRateMeComments(sessionId: string, cb: (items: any[]) => void) {

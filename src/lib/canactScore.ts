@@ -19,14 +19,11 @@ export type CanactScoreSummary = {
 export function calculateCanactScore(profile?: UserProfile | null): CanactScoreSummary {
   if (!profile) return makeSummary(0, 0);
 
-  const isOnboardingAccount = profile.onboarding?.version === 1;
-  if (!isOnboardingAccount) return makeSummary(0, 0);
-
-  const startingScore = Math.max(0, Math.min(300, Number(profile.onboarding?.points || 0)));
-  // Setup is an intentional 0 → 300 progression. Reputation signals begin
-  // affecting the score only after all onboarding tasks have completed.
-  if (!profile.onboarding?.completedAt) return makeSummary(startingScore, startingScore);
-
+  const startingScore = profile.onboarding?.version === 1
+    ? Math.max(0, Math.min(300, Number(profile.onboarding?.points || 0)))
+    : 0;
+  // Setup and reputation progress together. A real rating or community action
+  // must move the score even while the user is still completing onboarding.
   const adjustment = calculateCanactAdjustment(profile) - Number(profile.scoreAdjustmentOffset || 0);
   return makeSummary(startingScore + adjustment, startingScore);
 }
@@ -148,6 +145,10 @@ export function calculateCanactAdjustment(profile: UserProfile): number {
   if (engagementScore > 0) {
     adjustment += Math.min(10, engagementScore);
   }
+
+  // Meaningful in-app participation: +1 per action, capped at 10/day by the
+  // writer and 50 total here so engagement cannot overwhelm trust signals.
+  adjustment += Math.min(50, nonNegative(profile.activityScorePoints));
 
   // ===================================================================
   // T5 — CARDS (positive-only: max +25)

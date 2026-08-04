@@ -5,33 +5,27 @@
  */
 import { ref, set, update, remove, onDisconnect, onValue } from 'firebase/database';
 import { db } from '../firebase';
+import { subscribeGeoFix } from '../useGeo';
 
 export interface LivePoint { lat: number; lng: number; at: number }
 
 export function startLiveLocationShare(helpId: string, uid: string) {
-  if (typeof navigator === 'undefined' || !navigator.geolocation) return () => {};
+  if (typeof navigator === 'undefined') return () => {};
   const path = `help/${helpId}/live/${uid}`;
   const r = ref(db, path);
   onDisconnect(r).remove().catch(() => {});
 
   let last = 0;
-  const watchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      const now = Date.now();
-      if (now - last < 8000) return; // throttle to ~8s
-      last = now;
-      update(r, {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        at: now,
-      }).catch(() => {});
-    },
-    () => { /* permission denied — silent */ },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
-  );
+  const stopGeo = subscribeGeoFix((fix) => {
+    if (!fix || fix.accuracy > 65) return;
+    const now = Date.now();
+    if (now - last < 8000) return;
+    last = now;
+    update(r, { lat: fix.lat, lng: fix.lng, at: now }).catch(() => {});
+  });
 
   return () => {
-    try { navigator.geolocation.clearWatch(watchId); } catch {}
+    stopGeo();
     remove(r).catch(() => {});
   };
 }

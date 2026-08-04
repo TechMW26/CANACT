@@ -4,6 +4,7 @@ import { pushCanactPopupGesture } from './popupGuards';
 
 type Options = {
   onClose: () => void;
+  onProgress?: (progress: number, immediate: boolean) => void;
   getScrollElement?: () => HTMLElement | null;
   enabled?: boolean;
   threshold?: number;
@@ -35,18 +36,21 @@ const EMPTY_GESTURE: GestureState = {
 
 export function useTopScrollSwipeDismiss({
   onClose,
+  onProgress,
   getScrollElement,
   enabled = true,
   threshold = 74,
 }: Options) {
   const elementRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
+  const progressRef = useRef(onProgress);
   const getScrollElementRef = useRef(getScrollElement);
   const enabledRef = useRef(enabled);
   const thresholdRef = useRef(threshold);
   const gestureRef = useRef<GestureState>({ ...EMPTY_GESTURE });
 
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => { progressRef.current = onProgress; }, [onProgress]);
   useEffect(() => { getScrollElementRef.current = getScrollElement; }, [getScrollElement]);
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
   useEffect(() => { thresholdRef.current = threshold; }, [threshold]);
@@ -76,9 +80,8 @@ export function useTopScrollSwipeDismiss({
       return;
     }
     gesture.active = false;
-    element.style.transition = dismiss
-      ? 'transform 220ms cubic-bezier(.32,.72,0,1)'
-      : 'transform 300ms cubic-bezier(.2,.9,.25,1.15)';
+    progressRef.current?.(dismiss ? 0 : 1, false);
+    element.style.transition = 'transform 320ms cubic-bezier(.22,.85,.3,1)';
     // Preserve the exact finger position as the first animation frame, then
     // either continue off-screen or spring back to the sheet's resting place.
     requestAnimationFrame(() => {
@@ -144,7 +147,13 @@ export function useTopScrollSwipeDismiss({
       gesture.lastAt = performance.now();
       el.style.transition = 'none';
       el.style.transform = `translate3d(0, ${deltaY}px, 0)`;
-      el.style.setProperty('--canact-sheet-drag-progress', String(Math.min(1, deltaY / Math.max(1, window.innerHeight))));
+      // Map the page scale to the sheet's own travelled distance. Shorter
+      // sheets therefore restore the page at exactly the point they leave
+      // the viewport instead of lagging behind a viewport-based ratio.
+      const travelHeight = Math.max(1, el.getBoundingClientRect().height);
+      const dragProgress = Math.min(1, deltaY / travelHeight);
+      el.style.setProperty('--canact-sheet-drag-progress', String(dragProgress));
+      progressRef.current?.(1 - dragProgress, true);
     };
 
     const handleTouchEnd = (e: TouchEvent) => {

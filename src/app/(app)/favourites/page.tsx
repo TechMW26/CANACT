@@ -14,7 +14,7 @@ import {
 } from '@/lib/services/friends';
 import type { AttrKey, FriendEdge, UserProfile } from '@/lib/types';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS } from '@/lib/types';
-import { AlignLeft, Clock, Filter, MapPin, MessageCircle, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
+import { AlignLeft, ChevronLeft, ChevronRight, Clock, Filter, MapPin, MessageCircle, Star, ThumbsDown, ThumbsUp, Users } from '@/components/icons';
 import { useGeo } from '@/lib/useGeo';
 import { useDistance } from '@/lib/distance';
 import { haversineMeters } from '@/lib/utils';
@@ -382,6 +382,7 @@ function ExploreMapSurface({
   myPhotoURL?: string | null;
 }) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [activityMinimized, setActivityMinimized] = useState(true);
   const [dragOffset, setDragOffset] = useState(0);
   const dragStart = useRef<number | null>(null);
 
@@ -429,7 +430,13 @@ function ExploreMapSurface({
         <span><i className={styles.storyDot} /> Stories</span>
       </div>
 
-      <MapActivityRail activities={activities} currentLocation={currentLocation} hidden={sheetExpanded} />
+      <MapActivityRail
+        activities={activities}
+        currentLocation={currentLocation}
+        hidden={sheetExpanded}
+        minimized={activityMinimized}
+        onToggle={() => setActivityMinimized((value) => !value)}
+      />
 
       {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}><span>Enable location to center the map around you.</span></div> : null}
 
@@ -509,42 +516,61 @@ function MapActivityRail({
   activities,
   currentLocation,
   hidden,
+  minimized,
+  onToggle,
 }: {
   activities: ExploreActivity[];
   currentLocation: { lat: number; lng: number } | null;
   hidden: boolean;
+  minimized: boolean;
+  onToggle: () => void;
 }) {
   const cards = activities.filter((activity) => activity.kind !== 'person' && activity.href).slice(0, 8);
   if (!cards.length) return null;
   return (
-    <nav className={styles.mapActivityRail} data-hidden={hidden} aria-label="Recent posts nearby">
-      {cards.map((activity) => {
-        const distance = currentLocation ? haversineMeters(currentLocation, activity) : null;
-        const expiry = formatMapActivityExpiry(activity.expiresAt);
-        const hasMedia = Boolean(activity.thumbUrl);
-        return (
-          <Link key={activity.id} href={activity.href!} className={styles.mapActivityCard} data-has-media={hasMedia}>
-            <span className={styles.mapActivityAge} data-expiry={Boolean(expiry && activity.kind === 'poll')}>
-              {expiry && activity.kind === 'poll' ? <Clock size={12} /> : null}
-              {expiry && activity.kind === 'poll' ? expiry : formatMapActivityAge(activity.createdAt)}
-            </span>
-            {activity.thumbUrl ? (
-              <img src={activity.thumbUrl} alt="" loading="lazy" />
-            ) : (
-              <span className={styles.mapActivityFallback}>
-                <small>{activity.authorName || `${activity.kind} nearby`}</small>
-                <b>{activity.label || `${activity.kind} nearby`}</b>
+    <div className={styles.mapActivityDock} data-hidden={hidden} data-minimized={minimized} aria-hidden={hidden}>
+      <nav id="canact-nearby-posts" className={styles.mapActivityRail} aria-label="Recent posts nearby" aria-hidden={minimized || hidden}>
+        {cards.map((activity) => {
+          const distance = currentLocation ? haversineMeters(currentLocation, activity) : null;
+          const expiry = formatMapActivityExpiry(activity.expiresAt);
+          const hasMedia = Boolean(activity.thumbUrl);
+          return (
+            <Link key={activity.id} href={activity.href!} tabIndex={minimized || hidden ? -1 : undefined} className={styles.mapActivityCard} data-has-media={hasMedia}>
+              <span className={styles.mapActivityAge} data-expiry={Boolean(expiry && activity.kind === 'poll')}>
+                {expiry && activity.kind === 'poll' ? <Clock size={12} /> : null}
+                {expiry && activity.kind === 'poll' ? expiry : formatMapActivityAge(activity.createdAt)}
               </span>
-            )}
-            {hasMedia ? <strong>{activity.label || `${activity.kind} nearby`}</strong> : null}
-            <span className={styles.mapActivityMeta}>
-              <span><MessageCircle size={13} /> {activity.commentCount ?? 0} replies</span>
-              {distance !== null ? <span><MapPin size={13} /> {distance < 1000 ? `${Math.max(1, Math.round(distance))} m` : `${(distance / 1000).toFixed(1)} km`}</span> : null}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+              {activity.thumbUrl ? (
+                <img src={activity.thumbUrl} alt="" loading="lazy" />
+              ) : (
+                <span className={styles.mapActivityFallback}>
+                  <small>{activity.authorName || `${activity.kind} nearby`}</small>
+                  <b>{activity.label || `${activity.kind} nearby`}</b>
+                </span>
+              )}
+              {hasMedia ? <strong>{activity.label || `${activity.kind} nearby`}</strong> : null}
+              <span className={styles.mapActivityMeta}>
+                <span><MessageCircle size={13} /> {activity.commentCount ?? 0} replies</span>
+                {distance !== null ? <span><MapPin size={13} /> {distance < 1000 ? `${Math.max(1, Math.round(distance))} m` : `${(distance / 1000).toFixed(1)} km`}</span> : null}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+      <button
+        type="button"
+        className={styles.mapActivityToggle}
+        data-minimized={minimized}
+        onClick={onToggle}
+        tabIndex={hidden ? -1 : 0}
+        aria-controls="canact-nearby-posts"
+        aria-expanded={!minimized}
+        aria-label={minimized ? `Show ${cards.length} nearby posts` : 'Minimize nearby posts'}
+      >
+        {minimized ? <ChevronLeft size={22} strokeWidth={2.5} /> : <ChevronRight size={22} strokeWidth={2.5} />}
+        {minimized ? <small>{cards.length}</small> : null}
+      </button>
+    </div>
   );
 }
 

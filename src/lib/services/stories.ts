@@ -1,8 +1,9 @@
-import { onValue, ref, set, remove, update, push, child } from 'firebase/database';
+import { onValue, ref, set, remove, update, push, child, runTransaction } from 'firebase/database';
 import { db } from '../firebase';
 import type { StoryItem, StoryOverlay, StoryReply } from '../types';
 import { recordOnboardingSignal } from './onboarding';
 import { pushNotification } from './notifications';
+import { recordScoreActivity } from './scoreActivity';
 
 /** Recursively strip undefined values; Firebase RTDB rejects them and that's
  * the most common cause of "Share story" silently throwing. */
@@ -43,6 +44,7 @@ export async function addStory(
   });
   await set(storyRef, story);
   await recordOnboardingSignal(input.uid, 'create-post');
+  await recordScoreActivity(input.uid);
   return story;
 }
 
@@ -161,12 +163,19 @@ export async function toggleStoryLike(
     [`viewers/${viewerUid}/liked`]: liked,
   });
   if (liked && authorUid !== viewerUid) {
+    await Promise.all([
+      recordScoreActivity(viewerUid),
+      runTransaction(ref(db, `users/${authorUid}/contentLikes`), (count: number | null) => Number(count || 0) + 1),
+    ]);
     await pushNotification(authorUid, {
       kind: 'react',
       title: 'Someone liked your story',
       body: 'Open your profile to see your active stories.',
       data: { url: `/profile/${authorUid}` },
     });
+  }
+  if (!liked && authorUid !== viewerUid) {
+    await runTransaction(ref(db, `users/${authorUid}/contentLikes`), (count: number | null) => Math.max(0, Number(count || 0) - 1));
   }
 }
 
@@ -178,6 +187,7 @@ export async function replyToStory(
   const replyRef = push(child(ref(db), `${storyPath(authorUid, storyId)}/replies`));
   const item: StoryReply = { ...reply, id: replyRef.key as string, createdAt: Date.now() };
   await set(replyRef, item);
+  await recordScoreActivity(reply.fromUid);
   if (authorUid !== reply.fromUid) {
     await pushNotification(authorUid, {
       kind: 'comment',

@@ -21,8 +21,8 @@ export function GlassSwitch({ checked, onChange, label, disabled, className }: P
       data-liquid-glass="surface"
       data-liquid-radius="999"
       data-liquid-blur="0"
-      data-liquid-tint={checked ? '31,107,85' : '250,248,242'}
-      data-liquid-tint-opacity={checked ? '0.20' : '0.10'}
+      data-liquid-tint="31,107,85"
+      data-liquid-tint-opacity={checked ? '0.28' : '0.20'}
       className={clsx('canact-glass-switch', checked && 'canact-glass-switch-active', className)}
       onClick={() => onChange(!checked)}
     >

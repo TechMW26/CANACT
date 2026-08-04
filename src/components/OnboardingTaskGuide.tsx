@@ -21,8 +21,8 @@ import {
 } from '@/lib/services/onboarding';
 import {
   isNativeContactSyncAvailable,
-  parseVCardContacts,
   readAllDeviceContacts,
+  readVCardFiles,
   syncContactRecords,
 } from '@/lib/services/contactSync';
 import { toast } from './Toaster';
@@ -212,11 +212,11 @@ export function OnboardingTaskGuide() {
     }
   };
 
-  const onContactFile = async (file?: File) => {
-    if (!file) return;
+  const onContactFile = async (files?: FileList | null) => {
+    if (!files?.length) return;
     setBusy(true);
     try {
-      const contacts = parseVCardContacts(await file.text());
+      const contacts = await readVCardFiles(files);
       if (!contacts.length) throw new Error('No contacts were found in that file');
       const result = await syncContactRecords(contacts, profile?.countryCode);
       await signal('sync-contacts');
@@ -289,7 +289,7 @@ export function OnboardingTaskGuide() {
         document.body,
       ) : null}
 
-      <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard" aria-label="Import contacts file" onChange={(event) => void onContactFile(event.target.files?.[0])} />
+      <input ref={fileRef} className={styles.file} type="file" accept=".vcf,.vcard,text/vcard,text/x-vcard" multiple aria-label="Import contacts file" onChange={(event) => void onContactFile(event.target.files)} />
 
     </>
   );

@@ -53,7 +53,7 @@ export function ReelsScroller({ initialReelId }: { initialReelId?: string }) {
   if (!mounted) return null;
 
   const ui = (
-    <div className="fixed inset-0 z-[60] bg-black text-white">
+    <div data-canact-popup="true" className="canact-popup-layer fixed inset-0 bg-black text-white">
       {/* Header — soft top fade, no hard line */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-32 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
       <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between p-4 safe-top">
