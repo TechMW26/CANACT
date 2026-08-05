@@ -250,6 +250,7 @@ export function ExploreMap({
   onInteraction,
   preview = false,
   myPhotoURL,
+  onActivityClick,
 }: {
   people: FriendMapPerson[];
   currentLocation: Point | null;
@@ -258,12 +259,15 @@ export function ExploreMap({
   preview?: boolean;
   /** Current user's profile photo — shown as their map pin with a distinct gold border. */
   myPhotoURL?: string | null;
+  /** Called when a content activity (post/story/reel/poll) is tapped. Return true to prevent default navigation. */
+  onActivityClick?: (activity: ExploreActivity) => boolean | void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const libraryRef = useRef<typeof import('maplibre-gl') | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const interactionRef = useRef(onInteraction);
+  const onActivityClickRef = useRef(onActivityClick);
   const locationRef = useRef(currentLocation);
   const router = useRouter();
   const routerRef = useRef(router);
@@ -274,6 +278,7 @@ export function ExploreMap({
   const [mapZoom, setMapZoom] = useState(() => currentLocation ? 20 : 13);
   const hasCurrentLocation = currentLocation !== null;
   interactionRef.current = onInteraction;
+  onActivityClickRef.current = onActivityClick;
   locationRef.current = currentLocation;
   routerRef.current = router;
 
@@ -530,6 +535,8 @@ export function ExploreMap({
       });
       const openContent = (event: maplibregl.MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
         const href = event.features?.[0]?.properties?.href;
+        const kind = event.features?.[0]?.properties?.kind;
+        if (onActivityClickRef.current?.({ kind, href } as ExploreActivity)) return;
         if (typeof href === 'string' && href) openActivityHref(href);
       };
       map.on('click', 'canact-content-pins', openContent);
@@ -651,6 +658,7 @@ export function ExploreMap({
           event.preventDefault();
           event.stopPropagation();
           el.blur();
+          if (onActivityClick?.(activity)) return;
           if (activity.href) openActivityHref(activity.href);
         };
         el.onmouseenter = () => { el.style.transform = 'scale(1.12)'; };
@@ -709,7 +717,7 @@ export function ExploreMap({
                 <b>›</b>
               </button>
             )) : popup.activities.map((activity) => (
-              <button type="button" key={activity.id} className={styles.mapPopupContent} onClick={() => { setPopup(null); if (activity.href) openActivityHref(activity.href); }}>
+              <button type="button" key={activity.id} className={styles.mapPopupContent} onClick={() => { setPopup(null); if (onActivityClick?.(activity)) return; if (activity.href) openActivityHref(activity.href); }}>
                 <span className={styles.mapPopupThumb} style={activity.thumbUrl ? { backgroundImage: `url(${activity.thumbUrl})` } : { backgroundColor: activity.color ?? '#1f6b55' }} />
                 <span><strong>{activity.label || activity.kind}</strong><small>{activity.kind} · posted here</small></span>
                 <b>›</b>

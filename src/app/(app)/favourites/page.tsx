@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { get, onValue, ref, remove as fbRemove, set as fbSet } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
@@ -25,6 +25,8 @@ import { listenWhaFeed } from '@/lib/services/wha';
 import { listenActiveStories } from '@/lib/services/stories';
 import { listenPollFeed } from '@/lib/services/poll';
 import { listenReels } from '@/lib/services/reels';
+import { deleteStory } from '@/lib/services/stories';
+import { StoryViewer } from '@/components/StoryViewer';
 import type { Poll, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import styles from './ExplorePage.module.css';
 
@@ -52,6 +54,7 @@ export default function FavouritesPage() {
   const [favs, setFavs] = useState<FriendProfile[]>([]);
   const [allProfiles, setAllProfiles] = useState<FriendProfile[]>([]);
   const [favReqs, setFavReqs] = useState<FavouriteRequest[]>([]);
+  const [storyViewerIndex, setStoryViewerIndex] = useState<number | null>(null);
   const homeMapHandoffRef = useRef(false);
   const knownProfiles = useMemo(() => [
     ...allProfiles,
@@ -262,6 +265,28 @@ export default function FavouritesPage() {
       return radius === Infinity || distance <= radius;
     });
   }, [currentLocation, mapActivities, radius]);
+
+  // Flat story list for the StoryViewer.
+  const orderedStories = useMemo(() => {
+    const groups = new Map<string, StoryItem[]>();
+    for (const story of stories) {
+      const list = groups.get(story.uid) ?? [];
+      list.push(story);
+      groups.set(story.uid, list);
+    }
+    return Array.from(groups.values()).flatMap((items) => items);
+  }, [stories]);
+
+  const handleActivityClick = useCallback((activity: ExploreActivity) => {
+    if (activity.kind !== 'story') return false;
+    // activity.id is "story-{storyId}"
+    const storyId = activity.id.startsWith('story-') ? activity.id.slice(6) : activity.id;
+    const idx = orderedStories.findIndex((s) => s.id === storyId);
+    if (idx === -1) return false;
+    setStoryViewerIndex(idx);
+    return true;
+  }, [orderedStories]);
+
   if (!user) return null;
   if (!liveCoords) {
     return <LocationRequiredPage pending={!locationError} onRetry={retryLocation} />;
@@ -269,7 +294,7 @@ export default function FavouritesPage() {
 
   // Map view renders outside the transformed container so position:fixed works correctly.
   if (tab !== 'requests' && peopleView === 'map') {
-    return (
+    return (<>
       <ExploreMapSurface
         firstName={profile?.firstName || profile?.fullName?.split(' ')[0] || 'there'}
         mapPeople={visiblePeople}
@@ -294,11 +319,28 @@ export default function FavouritesPage() {
           catch (error: any) { toast(error?.message ?? 'Could not update attribute', 'error'); }
         }}
         myPhotoURL={profile?.photoURL}
+        onActivityClick={handleActivityClick}
+        onOpenStory={handleActivityClick}
       />
-    );
+      {storyViewerIndex !== null && stories[storyViewerIndex] && user && profile ? (
+        <StoryViewer
+          stories={orderedStories}
+          startIndex={storyViewerIndex}
+          meUid={user.uid}
+          meName={profile.fullName}
+          mePhoto={profile.photoURL}
+          onClose={() => setStoryViewerIndex(null)}
+          onDelete={async (authorUid, storyId) => {
+            await deleteStory(authorUid, storyId);
+            setStoryViewerIndex(null);
+            toast('Story removed', 'success');
+          }}
+        />
+      ) : null}
+    </>);
   }
 
-  return (
+  return (<>
     <div className="relative left-1/2 min-h-[calc(var(--canact-viewport-height)-8.5rem)] w-screen -translate-x-1/2 bg-[#FAF8F2] px-5 pb-20 lg:min-h-[calc(var(--canact-viewport-height)-3rem)] lg:px-8 overflow-hidden" style={{ paddingTop: 'calc(var(--canact-header-top-inset, 0px) + var(--canact-header-offset, 0px) + 92px)' }}>
       {tab === 'requests' ? (
         <RequestsSurface
@@ -328,7 +370,22 @@ export default function FavouritesPage() {
 
       {peopleView === 'list' && tab !== 'requests' ? <div className="mx-auto mt-4 w-full max-w-[540px]"><MapToolbar tab={tab} people={visiblePeople} view={peopleView} onViewChange={setPeopleView} /></div> : null}
     </div>
-  );
+    {storyViewerIndex !== null && stories[storyViewerIndex] && user && profile ? (
+      <StoryViewer
+        stories={orderedStories}
+        startIndex={storyViewerIndex}
+        meUid={user.uid}
+        meName={profile.fullName}
+        mePhoto={profile.photoURL}
+        onClose={() => setStoryViewerIndex(null)}
+        onDelete={async (authorUid, storyId) => {
+          await deleteStory(authorUid, storyId);
+          setStoryViewerIndex(null);
+          toast('Story removed', 'success');
+        }}
+      />
+    ) : null}
+  </>);
 }
 
 function LocationRequiredPage({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
@@ -362,6 +419,8 @@ function ExploreMapSurface({
   onVote,
   onAttr,
   myPhotoURL,
+  onActivityClick,
+  onOpenStory,
 }: {
   firstName: string;
   mapPeople: PeoplePerson[];
@@ -380,6 +439,8 @@ function ExploreMapSurface({
   onVote: (person: PeoplePerson, kind: 'like' | 'dislike') => Promise<void> | void;
   onAttr: (person: PeoplePerson, attr: AttrKey) => Promise<void> | void;
   myPhotoURL?: string | null;
+  onActivityClick?: (activity: ExploreActivity) => boolean | void;
+  onOpenStory?: (activity: ExploreActivity) => boolean | void;
 }) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [activityMinimized, setActivityMinimized] = useState(true);
@@ -412,6 +473,7 @@ function ExploreMapSurface({
         currentLocation={currentLocation}
         activities={activities}
         myPhotoURL={myPhotoURL}
+        onActivityClick={onActivityClick}
       />
       <div className={styles.mapTopFade} aria-hidden="true" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }} />
 
@@ -436,6 +498,7 @@ function ExploreMapSurface({
         hidden={sheetExpanded}
         minimized={activityMinimized}
         onToggle={() => setActivityMinimized((value) => !value)}
+        onOpenStory={onOpenStory}
       />
 
       {locationUnavailable ? <div data-liquid-glass="surface" data-liquid-radius="14" data-liquid-tint="250,248,242" data-liquid-tint-opacity="0.20" className={styles.locationNotice}><span>Enable location to center the map around you.</span></div> : null}
@@ -518,12 +581,14 @@ function MapActivityRail({
   hidden,
   minimized,
   onToggle,
+  onOpenStory,
 }: {
   activities: ExploreActivity[];
   currentLocation: { lat: number; lng: number } | null;
   hidden: boolean;
   minimized: boolean;
   onToggle: () => void;
+  onOpenStory?: (activity: ExploreActivity) => boolean | void;
 }) {
   const cards = activities.filter((activity) => activity.kind !== 'person' && activity.href).slice(0, 8);
   if (!cards.length) return null;
@@ -534,8 +599,10 @@ function MapActivityRail({
           const distance = currentLocation ? haversineMeters(currentLocation, activity) : null;
           const expiry = formatMapActivityExpiry(activity.expiresAt);
           const hasMedia = Boolean(activity.thumbUrl);
-          return (
-            <Link key={activity.id} href={activity.href!} tabIndex={minimized || hidden ? -1 : undefined} className={styles.mapActivityCard} data-has-media={hasMedia}>
+          const isStory = activity.kind === 'story';
+
+          const inner = (
+            <>
               <span className={styles.mapActivityAge} data-expiry={Boolean(expiry && activity.kind === 'poll')}>
                 {expiry && activity.kind === 'poll' ? <Clock size={12} /> : null}
                 {expiry && activity.kind === 'poll' ? expiry : formatMapActivityAge(activity.createdAt)}
@@ -553,6 +620,27 @@ function MapActivityRail({
                 <span><MessageCircle size={13} /> {activity.commentCount ?? 0} replies</span>
                 {distance !== null ? <span><MapPin size={13} /> {distance < 1000 ? `${Math.max(1, Math.round(distance))} m` : `${(distance / 1000).toFixed(1)} km`}</span> : null}
               </span>
+            </>
+          );
+
+          if (isStory && onOpenStory) {
+            return (
+              <button
+                key={activity.id}
+                type="button"
+                onClick={() => onOpenStory(activity)}
+                tabIndex={minimized || hidden ? -1 : undefined}
+                className={styles.mapActivityCard}
+                data-has-media={hasMedia}
+              >
+                {inner}
+              </button>
+            );
+          }
+
+          return (
+            <Link key={activity.id} href={activity.href!} tabIndex={minimized || hidden ? -1 : undefined} className={styles.mapActivityCard} data-has-media={hasMedia}>
+              {inner}
             </Link>
           );
         })}
