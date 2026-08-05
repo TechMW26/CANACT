@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { BarChart3, Camera, ChevronRight, Eye, Film, HeartHandshake, Sparkles } from './icons';
+import { BarChart3, Camera, ChevronRight, Eye, Film, HeartHandshake, MapPin, Sparkles } from './icons';
 import { Sheet } from './Sheet';
 import type { LucideIcon } from 'lucide-react';
 
@@ -14,6 +14,7 @@ type Item = {
 const ITEMS: Item[] = [
   { href: '/story/create', title: 'Story',      desc: 'Capture, customise and share for 24h.',  Icon: Sparkles },
   { href: '/post/create',  title: 'Post',       desc: 'Photo, video or carousel.',               Icon: Camera },
+  { href: '/post/create?context=nearby', title: "What's happening around", desc: 'Share something with your nearby community.', Icon: MapPin },
   { href: '/reel/create',  title: 'Reel',       desc: 'Record, edit and share a vertical clip.', Icon: Film },
   { href: '/rateme/start', title: 'Rate Me',    desc: 'Front-camera selfie. Live for hours.',    Icon: Eye },
   { href: '/poll/create',  title: 'Poll · Ask', desc: 'Quick read from your area.',              Icon: BarChart3 },

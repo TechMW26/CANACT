@@ -251,6 +251,8 @@ export function ExploreMap({
   preview = false,
   myPhotoURL,
   onActivityClick,
+  friendUids,
+  favouriteUids,
 }: {
   people: FriendMapPerson[];
   currentLocation: Point | null;
@@ -261,6 +263,10 @@ export function ExploreMap({
   myPhotoURL?: string | null;
   /** Called when a content activity (post/story/reel/poll) is tapped. Return true to prevent default navigation. */
   onActivityClick?: (activity: ExploreActivity) => boolean | void;
+  /** UIDs of friends — shown with green ring, never blurred. */
+  friendUids?: Set<string>;
+  /** UIDs of favourites — shown with gold ring, never blurred. */
+  favouriteUids?: Set<string>;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -534,9 +540,11 @@ export function ExploreMap({
         },
       });
       const openContent = (event: maplibregl.MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
-        const href = event.features?.[0]?.properties?.href;
-        const kind = event.features?.[0]?.properties?.kind;
-        if (onActivityClickRef.current?.({ kind, href } as ExploreActivity)) return;
+        const props = event.features?.[0]?.properties;
+        const id = props?.id as string | undefined;
+        const href = props?.href as string | undefined;
+        const kind = props?.kind as string | undefined;
+        if (onActivityClickRef.current?.({ id, kind, href } as ExploreActivity)) return;
         if (typeof href === 'string' && href) openActivityHref(href);
       };
       map.on('click', 'canact-content-pins', openContent);
@@ -587,10 +595,14 @@ export function ExploreMap({
       const marker = document.createElement('button');
       marker.type = 'button';
       marker.className = styles.personMarker;
-      const outsideImmediateRadius = currentLocation
+      const isFriend = friendUids?.has(person.uid) ?? false;
+      const isFavourite = favouriteUids?.has(person.uid) ?? false;
+      const outsideImmediateRadius = (isFriend || isFavourite) ? false : (currentLocation
         ? cluster.people.every((entry) => haversineMeters(currentLocation, entry) > 15)
-        : false;
+        : false);
       marker.dataset.outsideRadius = String(outsideImmediateRadius);
+      marker.dataset.friend = String(isFriend);
+      marker.dataset.favourite = String(isFavourite);
       marker.dataset.hasLocalContent = String(cluster.people.some((entry) => (contentForPerson.get(entry.uid)?.length ?? 0) > 0));
       marker.dataset.cluster = String(cluster.people.length > 1);
       marker.setAttribute('aria-label', cluster.people.length > 1 ? `Choose from ${cluster.people.length} people here` : `Open ${person.name}`);

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Aperture, Check, Film, ImageIcon, Loader2, Plus, X } from './icons';
+import { Aperture, Check, Film, Loader2, Plus, X } from './icons';
 
 type Mode = 'photo' | 'video';
 type Facing = 'user' | 'environment';
@@ -40,58 +40,13 @@ export function CameraCapture({
 }: CameraCaptureProps) {
   const photoCameraRef = useRef<HTMLInputElement | null>(null);
   const videoCameraRef = useRef<HTMLInputElement | null>(null);
-  const libraryRef = useRef<HTMLInputElement | null>(null);
-  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const [mode, setMode] = useState<Mode>(() => initialMode === 'video' && allowVideo ? 'video' : 'photo');
   const [shots, setShots] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewReady, setPreviewReady] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const previewAttemptedRef = useRef(false);
-
-  // Start live camera preview — must be triggered by a user gesture on mobile
-  const startPreview = async () => {
-    if (previewReady || previewLoading || previewAttemptedRef.current) return;
-    previewAttemptedRef.current = true;
-    setPreviewLoading(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: defaultFacing, width: { ideal: 720 }, height: { ideal: 1280 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (previewVideoRef.current) {
-        previewVideoRef.current.srcObject = stream;
-        await previewVideoRef.current.play();
-        setPreviewReady(true);
-      } else {
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    } catch {
-      setPreviewReady(false);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  // Entering a composer is already an explicit camera intent. Start the
-  // preview immediately; browsers that require another gesture gracefully
-  // fall back to the native camera input without an extra enable step.
-  useEffect(() => { void startPreview(); }, []);
-
-  // Cleanup stream on unmount
-  useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-  }, []);
 
   const photoEnabled = allowPhoto;
   const videoEnabled = allowVideo;
-  const showModeToggle = photoEnabled && videoEnabled;
 
   const resetInput = (input: HTMLInputElement) => {
     input.value = '';
@@ -140,10 +95,11 @@ export function CameraCapture({
     else photoCameraRef.current?.click();
   };
 
-  const switchMode = (nextMode: Mode) => {
-    if (nextMode === mode) return;
+  const chooseMode = (nextMode: Mode) => {
     setMode(nextMode);
-    // The click remains inside the user's gesture, which is required by iOS.
+    // Keep the native picker launch in this gesture. iOS and Android then use
+    // the device camera's highest configured capture quality; video processing
+    // preserves up to 1080p/60fps when the device supplies it.
     openCamera(nextMode);
   };
 
@@ -169,23 +125,13 @@ export function CameraCapture({
         tabIndex={-1}
         onChange={(event) => void readFiles(event.target.files, 'video', event.currentTarget)}
       />
-      <input
-        ref={libraryRef}
-        type="file"
-        accept={mode === 'video' ? 'video/*' : 'image/*'}
-        multiple={mode === 'photo' && multiple}
-        className="sr-only"
-        tabIndex={-1}
-        onChange={(event) => void readFiles(event.target.files, mode, event.currentTarget)}
-      />
-
       <header className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <button type="button" onClick={onCancel} aria-label="Close media capture" className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white active:bg-white/10">
           <X size={24} />
         </button>
         <div className="text-center">
           <div className="text-[17px] font-extrabold tracking-tight">Create</div>
-          <div className="text-[10px] font-semibold text-white/45">Photo or video</div>
+          <div className="text-[10px] font-semibold text-white/45">Choose a capture format</div>
         </div>
         <button
           type="button"
@@ -222,15 +168,15 @@ export function CameraCapture({
                 {shots.length < maxPhotos && (
                   <button
                     type="button"
-                    onClick={() => libraryRef.current?.click()}
+                    onClick={() => openCamera('photo')}
                     disabled={busy}
-                    aria-label="Add more media"
+                    aria-label="Take another photo"
                     className="group flex aspect-[4/5] min-h-0 flex-col items-center justify-center rounded-[22px] border border-dashed border-white/25 bg-white/[0.06] text-white transition active:scale-[.98] active:bg-white/10 disabled:opacity-50"
                   >
                     <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15 transition group-active:scale-95">
                       {busy ? <Loader2 size={24} className="animate-spin" /> : <Plus size={28} />}
                     </span>
-                    <span className="mt-3 text-sm font-extrabold">Add media</span>
+                    <span className="mt-3 text-sm font-extrabold">Add photo</span>
                     <span className="mt-1 text-[11px] font-semibold text-white/45">
                       {maxPhotos - shots.length} remaining
                     </span>
@@ -240,85 +186,69 @@ export function CameraCapture({
               <div className="mt-3 text-center text-xs font-semibold text-white/55">{shots.length} of {maxPhotos} selected</div>
             </div>
           ) : (
-            <div className="w-full max-w-sm text-center">
-              <button
-                type="button"
-                onClick={() => openCamera()}
-                disabled={busy}
-                aria-label={mode === 'video' ? 'Open camera to record a video' : 'Open camera to take a photo'}
-                className="group relative mx-auto flex aspect-[4/5] w-full max-w-[330px] flex-col items-center justify-center overflow-hidden rounded-[28px] ring-1 ring-white/14 transition active:scale-[.985]"
-              >
-                {/* Fallback gradient behind the video */}
-                <div className="absolute inset-0 bg-gradient-to-br from-[#173f34] via-[#0d201b] to-black" />
-                {/* Live camera preview — always mounted, hidden until ready */}
-                <video
-                  ref={previewVideoRef}
-                  playsInline
-                  muted
-                  className={`absolute inset-0 h-full w-full object-cover ${previewReady ? '' : 'hidden'}`}
-                />
-                <div className={`absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/15 ${previewReady ? '' : 'opacity-60'}`} />
-                {!previewReady ? (
-                  <div className="relative z-10 flex flex-col items-center px-6">
-                    <span className="inline-flex h-18 w-18 items-center justify-center rounded-full bg-white text-ink shadow-[0_20px_60px_rgb(89_211_168_/_20%)] ring-1 ring-line">
-                      {busy || previewLoading ? <Loader2 size={28} className="animate-spin" /> : mode === 'video' ? <Film size={29} /> : <Aperture size={29} />}
+            <div className="w-full max-w-md text-center">
+              <span className="text-[10px] font-black uppercase tracking-[.18em] text-[#79d5b2]">New capture</span>
+              <h1 className="mt-2 text-[26px] font-black tracking-[-.04em]">What are you sharing?</h1>
+              <p className="mx-auto mt-2 max-w-[290px] text-sm font-medium leading-5 text-white/55">Choose a format to open your phone camera directly.</p>
+              <div className={`mx-auto mt-7 grid max-w-sm gap-3 ${photoEnabled && videoEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {photoEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => chooseMode('photo')}
+                    disabled={busy}
+                    className="group flex min-h-44 flex-col items-center justify-center rounded-[28px] bg-white px-4 text-[#10251f] shadow-[0_18px_46px_rgba(0,0,0,.22)] transition-transform active:scale-[.97] disabled:opacity-50"
+                  >
+                    <span className="grid h-16 w-16 place-items-center rounded-full bg-[#e2f2e9] text-[#1f6b55] transition-transform group-active:scale-95">
+                      {busy && mode === 'photo' ? <Loader2 size={27} className="animate-spin" /> : <Aperture size={28} />}
                     </span>
-                    <strong className="mt-5 text-lg font-black">{previewLoading ? 'Starting camera…' : mode === 'video' ? 'Record a video' : 'Take a photo'}</strong>
-                    <span className="mt-2 max-w-[240px] text-sm font-medium leading-5 text-white/65">
-                      {mode === 'video' ? `Use your phone camera · up to ${maxVideoSec}s` : 'Camera preview is unavailable, but your phone camera is ready.'}
-                    </span>
-                  </div>
+                    <strong className="mt-4 text-lg font-black">Photo</strong>
+                    <span className="mt-1 text-[11px] font-semibold text-[#10251f]/55">Highest available quality</span>
+                  </button>
                 ) : null}
-                <span className="absolute bottom-5 left-1/2 z-10 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-white px-5 text-sm font-extrabold text-[#10251f] shadow-[0_10px_30px_rgb(0_0_0_/_24%)]">
-                  {mode === 'video' ? <Film size={18} /> : <Aperture size={18} />}
-                  {mode === 'video' ? 'Record video' : 'Take photo'}
-                </span>
-              </button>
+                {videoEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => chooseMode('video')}
+                    disabled={busy}
+                    className="group flex min-h-44 flex-col items-center justify-center rounded-[28px] bg-[#79d5b2] px-4 text-[#10251f] shadow-[0_18px_46px_rgba(16,92,68,.2)] transition-transform active:scale-[.97] disabled:opacity-50"
+                  >
+                    <span className="grid h-16 w-16 place-items-center rounded-full bg-white text-[#1f6b55] transition-transform group-active:scale-95">
+                      {busy && mode === 'video' ? <Loader2 size={27} className="animate-spin" /> : <Film size={28} />}
+                    </span>
+                    <strong className="mt-4 text-lg font-black">Video</strong>
+                    <span className="mt-1 text-[11px] font-semibold text-[#10251f]/55">Up to 60 FPS · {maxVideoSec}s</span>
+                  </button>
+                ) : null}
+              </div>
+              <p className="mt-5 text-[11px] font-semibold text-white/35">Availability depends on your camera hardware and device settings.</p>
             </div>
           )}
         </div>
 
         {error && <div role="alert" className="mx-5 mb-3 rounded-2xl bg-[#391f20] px-4 py-3 text-center text-sm font-bold text-[#ffb7b7]">{error}</div>}
 
+        {shots.length ? (
         <div className="border-t border-white/10 bg-[#101110] px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 text-white">
-          {showModeToggle && (
-            <div className="mx-auto mb-3 grid w-full max-w-[220px] grid-cols-2 rounded-full bg-white/8 p-1" role="tablist" aria-label="Media type">
-              {(['photo', 'video'] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === item}
-                  disabled={busy}
-                  onClick={() => switchMode(item)}
-                  className={`rounded-full px-2 py-2 text-[10px] font-black uppercase tracking-[.13em] transition ${mode === item ? 'bg-white text-[#10251f]' : 'text-white/48'}`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => libraryRef.current?.click()}
+              onClick={() => openCamera('photo')}
               disabled={busy}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/8 px-4 text-sm font-extrabold ring-1 ring-white/12 active:bg-white/15 disabled:opacity-50"
             >
-              <ImageIcon size={19} /> Library
+              <Plus size={19} /> Add photo
             </button>
             <button
               type="button"
-              onClick={() => shots.length ? onCapture(shots) : openCamera()}
+              onClick={() => onCapture(shots)}
               disabled={busy}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#79d5b2] px-4 text-sm font-extrabold text-[#10251f] active:scale-[.985] disabled:opacity-50"
             >
-              {shots.length ? <Check size={19} /> : mode === 'video' ? <Film size={19} /> : <Aperture size={19} />}
-              {shots.length ? 'Next' : mode === 'video' ? 'Record' : 'Camera'}
+              <Check size={19} /> Next
             </button>
           </div>
         </div>
+        ) : null}
       </main>
     </div>,
     document.body,

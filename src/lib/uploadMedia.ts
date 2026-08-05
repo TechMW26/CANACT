@@ -232,7 +232,9 @@ export async function probeVideo(blob: Blob): Promise<{ durationSec: number; wid
  *  MediaRecorder at an optimised bitrate. Falls back to the original
  *  blob on any failure — callers always get a valid video.
  *
- *  Target: 720p max, ~2 Mbps video bitrate, MP4 container when supported. */
+ *  Target: 1080p max, up to 60fps and ~8 Mbps when re-encoding is required.
+ *  Captures already within the upload budget stay untouched, preserving the
+ *  native camera's original frame rate, codec and audio. */
 async function compressVideo(blob: Blob): Promise<{ blob: Blob; mime: string }> {
   if (typeof window === 'undefined') return { blob, mime: blob.type || 'video/mp4' };
 
@@ -251,15 +253,15 @@ async function compressVideo(blob: Blob): Promise<{ blob: Blob; mime: string }> 
       v.onerror = () => reject(new Error('cannot read video'));
     });
 
-    // Only compress if video is larger than 720p or > 15 MB
-    const needsCompress = (srcW.w > 720 || srcW.h > 720) || blob.size > 15 * 1024 * 1024;
+    // Preserve native 1080p/60fps captures whenever they already fit. Only
+    // oversized sources are normalised to the app's high-quality upload tier.
+    const needsCompress = Math.max(srcW.w, srcW.h) > 1920 || blob.size > 72 * 1024 * 1024;
     if (!needsCompress) return { blob, mime: blob.type || 'video/mp4' };
 
-    // Calculate output dimensions (max 720p, maintain aspect ratio)
-    let outW = srcW.w;
-    let outH = srcW.h;
-    if (outW > 720) { outH = Math.round(outH * (720 / outW)); outW = 720; }
-    if (outH > 720) { outW = Math.round(outW * (720 / outH)); outH = 720; }
+    // Calculate output dimensions (1080p short edge / 1920p long edge).
+    const scale = Math.min(1, 1920 / Math.max(srcW.w, srcW.h));
+    let outW = Math.round(srcW.w * scale);
+    let outH = Math.round(srcW.h * scale);
     // Ensure even dimensions (required by most encoders)
     outW = outW - (outW % 2);
     outH = outH - (outH % 2);
@@ -292,10 +294,15 @@ async function compressVideo(blob: Blob): Promise<{ blob: Blob; mime: string }> 
           : 'video/webm';
 
     const chunks: Blob[] = [];
-    const stream = canvas.captureStream(30); // 30 fps
+    const stream = canvas.captureStream(60);
+    const sourceStream = typeof (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream === 'function'
+      ? (video as HTMLVideoElement & { captureStream: () => MediaStream }).captureStream()
+      : null;
+    sourceStream?.getAudioTracks().forEach((track) => stream.addTrack(track));
     const recorder = new MediaRecorder(stream, {
       mimeType,
-      videoBitsPerSecond: 2_000_000, // ~2 Mbps
+      videoBitsPerSecond: 8_000_000,
+      audioBitsPerSecond: 192_000,
     });
 
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
@@ -384,16 +391,6 @@ export async function prepareMedia(input: Blob | File, opts?: PrepareOptions): P
     lqipPromise = generateLqip(blob);
   }
 
-  if (blob.size > MAX_UPLOAD_BYTES) {
-    throw new Error(`File too large (${(blob.size / 1024 / 1024).toFixed(1)} MB). Limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
-  }
-
-  const result: PreparedMedia = {
-    blob,
-    mime,
-    ext: extForMime(mime),
-  };
-
   if (isVideo) {
     // ── On-device video compression: downscale + re-encode before upload ──
     try {
@@ -401,7 +398,21 @@ export async function prepareMedia(input: Blob | File, opts?: PrepareOptions): P
       blob = compressed.blob;
       mime = compressed.mime;
     } catch { /* fall back to original */ }
+  }
 
+  if (blob.size > MAX_UPLOAD_BYTES) {
+    throw new Error(`File too large (${(blob.size / 1024 / 1024).toFixed(1)} MB). Limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`);
+  }
+
+  // Construct the result only after optional video processing so callers
+  // receive the actual high-quality output blob and matching MIME metadata.
+  const result: PreparedMedia = {
+    blob,
+    mime,
+    ext: extForMime(mime),
+  };
+
+  if (isVideo) {
     try {
       const probe = await probeVideo(blob);
       if (probe.durationSec && probe.durationSec > MAX_VIDEO_SEC + 1) {

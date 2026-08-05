@@ -236,6 +236,30 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   margin-right: auto;
 }
 
+.canact-story-viewer {
+  animation: canactStoryIn 260ms cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes canactStoryIn {
+  0%   { opacity: 0; transform: scale(.94); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Friend & favourite markers on Explore map — gold ring, no blur. */
+.personMarker[data-friend="true"],
+.personMarker[data-favourite="true"] {
+  opacity: 1 !important;
+  filter: none !important;
+}
+.personMarker[data-friend="true"] .personMarkerPhoto {
+  box-shadow: 0 0 0 3px #1f6b55;
+}
+.personMarker[data-favourite="true"] .personMarkerPhoto {
+  box-shadow: 0 0 0 3px #E8B830;
+}
+.personMarker[data-friend="true"][data-favourite="true"] .personMarkerPhoto {
+  box-shadow: 0 0 0 3px #E8B830, 0 0 0 5px #1f6b55;
+}
+
 /* Opaque surfaces keep navigation and controls crisp over moving content. */
 :root {
   --canact-header-lift: 7.6px;

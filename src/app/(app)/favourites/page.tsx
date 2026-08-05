@@ -287,6 +287,9 @@ export default function FavouritesPage() {
     return true;
   }, [orderedStories]);
 
+  const friendUidSet = useMemo(() => new Set(friends.map((f) => f.uid)), [friends]);
+  const favouriteUidSet = useMemo(() => new Set(favs.map((f) => f.uid)), [favs]);
+
   if (!user) return null;
   if (!liveCoords) {
     return <LocationRequiredPage pending={!locationError} onRetry={retryLocation} />;
@@ -321,8 +324,10 @@ export default function FavouritesPage() {
         myPhotoURL={profile?.photoURL}
         onActivityClick={handleActivityClick}
         onOpenStory={handleActivityClick}
+        friendUids={friendUidSet}
+        favouriteUids={favouriteUidSet}
       />
-      {storyViewerIndex !== null && stories[storyViewerIndex] && user && profile ? (
+      {storyViewerIndex !== null && orderedStories[storyViewerIndex] && user && profile ? (
         <StoryViewer
           stories={orderedStories}
           startIndex={storyViewerIndex}
@@ -370,7 +375,7 @@ export default function FavouritesPage() {
 
       {peopleView === 'list' && tab !== 'requests' ? <div className="mx-auto mt-4 w-full max-w-[540px]"><MapToolbar tab={tab} people={visiblePeople} view={peopleView} onViewChange={setPeopleView} /></div> : null}
     </div>
-    {storyViewerIndex !== null && stories[storyViewerIndex] && user && profile ? (
+    {storyViewerIndex !== null && orderedStories[storyViewerIndex] && user && profile ? (
       <StoryViewer
         stories={orderedStories}
         startIndex={storyViewerIndex}
@@ -421,6 +426,8 @@ function ExploreMapSurface({
   myPhotoURL,
   onActivityClick,
   onOpenStory,
+  friendUids,
+  favouriteUids,
 }: {
   firstName: string;
   mapPeople: PeoplePerson[];
@@ -441,11 +448,20 @@ function ExploreMapSurface({
   myPhotoURL?: string | null;
   onActivityClick?: (activity: ExploreActivity) => boolean | void;
   onOpenStory?: (activity: ExploreActivity) => boolean | void;
+  friendUids?: Set<string>;
+  favouriteUids?: Set<string>;
 }) {
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [activityMinimized, setActivityMinimized] = useState(true);
+  const [activityMinimized, setActivityMinimized] = useState(false); // start expanded
   const [dragOffset, setDragOffset] = useState(0);
   const dragStart = useRef<number | null>(null);
+  const activityAutoHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show activity rail for 2s on initial page load, then auto-minimize once.
+  useEffect(() => {
+    activityAutoHideRef.current = setTimeout(() => setActivityMinimized(true), 2000);
+    return () => { if (activityAutoHideRef.current) clearTimeout(activityAutoHideRef.current); };
+  }, []);
 
   const onHandlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragStart.current = event.clientY;
@@ -474,6 +490,8 @@ function ExploreMapSurface({
         activities={activities}
         myPhotoURL={myPhotoURL}
         onActivityClick={onActivityClick}
+        friendUids={friendUids}
+        favouriteUids={favouriteUids}
       />
       <div className={styles.mapTopFade} aria-hidden="true" style={{ opacity: sheetExpanded ? 0 : 1, transition: 'opacity .3s ease' }} />
 

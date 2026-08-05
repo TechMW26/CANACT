@@ -30,6 +30,7 @@ import {
   cancelFriendRequest,
   declineFriendRequest,
   listenFriendStatus,
+  listenFriends,
   listenIncomingRequests,
   sendFriendRequest,
   unfriend,
@@ -43,6 +44,7 @@ import { getMoodDefinition } from '@/lib/moodTracker';
 import {
   Award,
   CheckCircle2,
+  ChevronRight,
   Crown,
   Mail,
   MapPin,
@@ -811,8 +813,14 @@ function CanactPagesProfileUI({
   isFavourite: boolean;
 }) {
   const { updateMyProfile } = useAuth();
+  const { user, profile: me } = useAuth();
   const [attrsSheetOpen, setAttrsSheetOpen] = useState(false);
   const [receivedConnections, setReceivedConnections] = useState<ConnectionCardGift[]>([]);
+  const [friendsSheetOpen, setFriendsSheetOpen] = useState(false);
+  const [friendsTab, setFriendsTab] = useState<'friends' | 'favourites'>('friends');
+  const [myFriends, setMyFriends] = useState<FriendEdge[]>([]);
+  const [myFavUids, setMyFavUids] = useState<string[]>([]);
+  const [myFavProfiles, setMyFavProfiles] = useState<Record<string, UserProfile | null>>({});
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profilePhotoEditorOpen, setProfilePhotoEditorOpen] = useState(false);
@@ -861,6 +869,24 @@ function CanactPagesProfileUI({
   ));
 
   useEffect(() => listenReceivedConnectionCards(userProfile.uid, setReceivedConnections), [userProfile.uid]);
+
+  // Friends & favourites listeners (own profile only).
+  useEffect(() => {
+    if (!user || !isSelf) return;
+    return listenFriends(user.uid, setMyFriends);
+  }, [user?.uid, isSelf]);
+  useEffect(() => {
+    if (!user || !isSelf) return;
+    return listenFavourites(user.uid, setMyFavUids);
+  }, [user?.uid, isSelf]);
+  // Fetch profiles for favourite UIDs.
+  useEffect(() => {
+    if (!myFavUids.length) { setMyFavProfiles({}); return; }
+    const offs = myFavUids.map((uid) => onValue(ref(db, `users/${uid}`), (snap) => {
+      setMyFavProfiles((current) => ({ ...current, [uid]: snap.val() as UserProfile | null }));
+    }));
+    return () => offs.forEach((off) => off());
+  }, [myFavUids.join(',')]);
 
   const closeProfilePhotoEditor = () => {
     if (profilePhotoBusy) return;
@@ -1022,7 +1048,13 @@ function CanactPagesProfileUI({
         <div className="mt-4 flex gap-3">
           {isSelf ? <Link href="/edit-profile" prefetch className="flex h-12 flex-1 items-center justify-center rounded-full bg-brand font-bold text-white">Edit profile</Link> : <button type="button" onClick={onSupport} className={`h-12 flex-1 rounded-full font-bold text-white transition ${isGoldButton ? 'bg-[#E8B830] shadow-[0_4px_16px_rgba(232,184,48,0.3)]' : 'bg-brand'}`}>{supportLabel}</button>}
           {isSelf || friendStatus === 'friends' ? (
-            <Link href={isSelf ? '/profile/settings' : `/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">{isSelf ? 'Settings' : 'Message'}</Link>
+            isSelf ? (
+              <button type="button" onClick={() => setFriendsSheetOpen(true)} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-brand bg-white font-bold text-brand">
+                <UsersIcon size={16} /> My Friends
+              </button>
+            ) : (
+              <Link href={`/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">Message</Link>
+            )
           ) : (
             <button type="button" onClick={onSupport} className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand/30 bg-white font-bold text-brand/60">Connect to message</button>
           )}
@@ -1095,6 +1127,71 @@ function CanactPagesProfileUI({
           </div>
         </Sheet>
       )}
+
+      {/* My Friends sheet — own profile only */}
+      {isSelf ? (
+        <Sheet open={friendsSheetOpen} onClose={() => setFriendsSheetOpen(false)} title="My Friends" topmost>
+          <div className="flex gap-1 rounded-full bg-[#edf3ef] p-1">
+            <button
+              type="button"
+              onClick={() => setFriendsTab('friends')}
+              className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${friendsTab === 'friends' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
+            >
+              Friends{myFriends.length > 0 ? ` · ${myFriends.length}` : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFriendsTab('favourites')}
+              className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${friendsTab === 'favourites' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
+            >
+              Favourites{myFavUids.length > 0 ? ` · ${myFavUids.length}` : ''}
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {friendsTab === 'friends' ? (
+              myFriends.length ? (
+                <div className="overflow-hidden rounded-[22px] border border-[#E4E7E2] bg-white shadow-sm">
+                  <ul className="divide-y divide-line">
+                    {myFriends.map((friend) => (
+                      <li key={friend.uid} className="flex items-center gap-3 px-4 py-3">
+                        <Link href={`/profile/${friend.uid}`} prefetch><Avatar src={friend.photoURL ?? null} name={friend.name} size={38} /></Link>
+                        <Link href={`/profile/${friend.uid}`} prefetch className="min-w-0 flex-1"><div className="truncate text-sm font-extrabold text-ink">{friend.name}</div></Link>
+                        <ChevronRight size={16} className="text-ink/30" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="rounded-[22px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
+                  <div className="text-sm font-extrabold text-ink">No friends yet</div>
+                  <div className="mt-1 text-xs font-semibold text-ink/50">Connect with people nearby to add friends.</div>
+                </div>
+              )
+            ) : myFavUids.length ? (
+              <div className="overflow-hidden rounded-[22px] border border-[#E4E7E2] bg-white shadow-sm">
+                <ul className="divide-y divide-line">
+                  {myFavUids.map((uid) => {
+                    const fav = myFavProfiles[uid];
+                    return (
+                      <li key={uid} className="flex items-center gap-3 px-4 py-3">
+                        <Link href={`/profile/${uid}`} prefetch><Avatar src={fav?.photoURL ?? null} name={fav?.fullName ?? uid} size={38} /></Link>
+                        <Link href={`/profile/${uid}`} prefetch className="min-w-0 flex-1"><div className="truncate text-sm font-extrabold text-ink">{fav?.fullName || 'Canact user'}</div></Link>
+                        <ChevronRight size={16} className="text-ink/30" />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-[22px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
+                <div className="text-sm font-extrabold text-ink">No favourites yet</div>
+                <div className="mt-1 text-xs font-semibold text-ink/50">Add friends to your favourites to see them here.</div>
+              </div>
+            )}
+          </div>
+        </Sheet>
+      ) : null}
     </div>
   );
 }
