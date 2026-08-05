@@ -48,6 +48,7 @@
 .moodGrid button > svg { position: absolute; right: 8px; top: 8px; }
 .moodGrid button[data-selected="true"] { background: var(--item-soft); box-shadow: inset 0 0 0 2px var(--item-accent),0 9px 20px color-mix(in srgb,var(--item-accent) 14%,transparent); transform: translateY(-2px); }
 .moodGrid button:active { transform: scale(.97); }
+.moodGrid button:focus-visible { outline: 3px solid color-mix(in srgb,var(--item-accent) 48%,white); outline-offset: 3px; }
 
 .selectionSummary { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: 11px; margin-top: 16px; border-radius: 21px; background: var(--mood-soft); padding: 11px 13px; color: var(--mood-accent); transition: background-color 180ms ease,color 180ms ease; }
 .selectedMoodIcon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 15px; background: #fff; }
@@ -70,6 +71,8 @@
 .cooldownNote small { margin-top: 2px; color: rgb(21 56 46 / 52%); font-size: 8px; font-weight: 650; line-height: 1.4; }
 .saveButton { width: 100%; min-height: 50px; margin-top: 14px; border-radius: 999px; background: var(--mood-accent); color: white; font-size: 13px; font-weight: 950; box-shadow: 0 12px 28px color-mix(in srgb,var(--mood-accent) 22%,transparent); transition: transform 160ms ease,background-color 180ms ease; }
 .saveButton:active { transform: scale(.98); }
+.saveButton[data-cooldown="true"] { border: 1px solid color-mix(in srgb,var(--mood-accent) 28%,white); background: color-mix(in srgb,var(--mood-soft) 68%,white); color: var(--mood-accent); box-shadow: none; }
+.saveButton:focus-visible { outline: 3px solid color-mix(in srgb,var(--mood-accent) 42%,white); outline-offset: 3px; }
 .saveButton:disabled, .removeMood:disabled { opacity: .55; }
 .removeMood { display: block; min-height: 36px; margin: 7px auto -5px; padding-inline: 14px; color: rgb(21 56 46 / 48%); font-size: 9px; font-weight: 850; }
 

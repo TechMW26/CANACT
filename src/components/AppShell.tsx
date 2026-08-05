@@ -29,6 +29,8 @@ import { OnboardingTaskGuide } from './OnboardingTaskGuide';
 import { MandatoryPhoneSheet } from './MandatoryPhoneSheet';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
+import { listenIncomingRequests } from '@/lib/services/friends';
+import { listenFollowRequests } from '@/lib/services/favourites';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -721,6 +723,8 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const [islandAnchor, setIslandAnchor] = useState<{ top: number; left: number; expandedWidth: number } | null>(null);
   const [islandPortalMounted, setIslandPortalMounted] = useState(false);
   const [liveScore, setLiveScore] = useState(0);
+  const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [favouriteRequestCount, setFavouriteRequestCount] = useState(0);
   const [liveSummary, setLiveSummary] = useState<ReturnType<typeof calculateCanactScore> | null>(null);
   const prevScoreRef = useRef<number | null>(null);
   const prevScoreProfileRef = useRef<UserProfile | null>(null);
@@ -733,6 +737,21 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
   const motionBusyRef = useRef(false);
   const motionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const processMotionRef = useRef<() => void>(() => {});
+  const profileRequestCount = friendRequestCount + favouriteRequestCount;
+
+  useEffect(() => {
+    if (!user) {
+      setFriendRequestCount(0);
+      setFavouriteRequestCount(0);
+      return;
+    }
+    const stopFriends = listenIncomingRequests(user.uid, (items) => setFriendRequestCount(items.length));
+    const stopFavourites = listenFollowRequests(user.uid, (items) => setFavouriteRequestCount(items.length));
+    return () => {
+      stopFriends();
+      stopFavourites();
+    };
+  }, [user?.uid]);
 
   const triggerIslandMoment = useCallback((icon: string, label: string, tone: 'positive' | 'negative' | 'neutral' = 'neutral') => {
     setIslandMoment({ icon, label, tone });
@@ -809,19 +828,75 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
     if (!user) return;
     prevScoreRef.current = null;
     prevScoreProfileRef.current = null;
-    return onValue(dbRef(db, `users/${user.uid}`), (snap) => {
+    const cursorKey = `canact:score-motion-cursor:${user.uid}`;
+    const rawStoredScore = window.localStorage.getItem(cursorKey);
+    const storedScore = rawStoredScore === null ? Number.NaN : Number(rawStoredScore);
+    let consumedScore = Number.isFinite(storedScore) ? storedScore : null;
+    let hydrated = false;
+    let hydrateTimer: ReturnType<typeof setTimeout> | null = null;
+    let cursorProfile: UserProfile | null = null;
+    let latestProfile: UserProfile | null = null;
+
+    const persistConsumedScore = (score: number) => {
+      consumedScore = score;
+      try { window.localStorage.setItem(cursorKey, String(score)); } catch { /* storage can be unavailable */ }
+    };
+
+    const stop = onValue(dbRef(db, `users/${user.uid}`), (snap) => {
       const p = snap.val() as UserProfile | null;
       if (p) {
         const s = calculateCanactScore(p);
+        latestProfile = p;
+        if (consumedScore !== null && s.score === consumedScore) cursorProfile = p;
+
+        // RTDB can emit an older local cache before the server snapshot when
+        // the app is reopened. Settle that hydration window before deciding
+        // whether a score movement is genuinely new.
+        if (!hydrated) {
+          setLiveScore(consumedScore ?? s.score);
+          setLiveSummary(s);
+          prevScoreRef.current = s.score;
+          prevScoreProfileRef.current = p;
+          if (hydrateTimer) clearTimeout(hydrateTimer);
+          hydrateTimer = setTimeout(() => {
+            const settledProfile = latestProfile;
+            if (!settledProfile) return;
+            const settled = calculateCanactScore(settledProfile);
+            const previousScore = consumedScore;
+            hydrated = true;
+            prevScoreRef.current = settled.score;
+            prevScoreProfileRef.current = settledProfile;
+            if (previousScore !== null && settled.score !== previousScore) {
+              const diff = settled.score - previousScore;
+              const description = cursorProfile
+                ? describeScoreMotion(cursorProfile, settledProfile, diff)
+                : { delta: diff, icon: diff > 0 ? '↗' : '↘', label: `Score ${diff > 0 ? 'increased' : 'changed'} by ${Math.abs(diff)}`, tone: diff > 0 ? 'positive' as const : 'negative' as const };
+              persistConsumedScore(settled.score);
+              enqueueScoreMotion({ targetScore: settled.score, summary: settled, ...description });
+            } else {
+              persistConsumedScore(settled.score);
+              setLiveScore(settled.score);
+              setLiveSummary(settled);
+            }
+          }, 320);
+          return;
+        }
+
         const prev = prevScoreRef.current;
         const previousProfile = prevScoreProfileRef.current;
         if (prev !== null && previousProfile && s.score !== prev) {
           const diff = s.score - prev;
-          enqueueScoreMotion({
-            targetScore: s.score,
-            summary: s,
-            ...describeScoreMotion(previousProfile, p, diff),
-          });
+          if (s.score !== consumedScore) {
+            persistConsumedScore(s.score);
+            enqueueScoreMotion({
+              targetScore: s.score,
+              summary: s,
+              ...describeScoreMotion(previousProfile, p, diff),
+            });
+          } else {
+            setLiveScore(s.score);
+            setLiveSummary(s);
+          }
         } else if (prev === null) {
           setLiveScore(s.score);
           setLiveSummary(s);
@@ -832,6 +907,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         prevScoreProfileRef.current = p;
       }
     });
+    return () => {
+      if (hydrateTimer) clearTimeout(hydrateTimer);
+      stop();
+    };
   }, [enqueueScoreMotion, user?.uid]);
 
   useEffect(() => () => {
@@ -948,7 +1027,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
         className="canact-figma-header"
       >
         <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
-          <Brand size={38} href="/" />
+          <Brand size={38} href="/" className="-ml-3" />
 
           {/* The compact pill belongs to the header layout. Only its expanded
               dialog is portalled, so scrolling can never make the pill lag
@@ -966,7 +1045,7 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
                 <i><Activity size={17} /></i>
                 <strong>{liveScore}</strong>
                 <span><small>CANACT</small><small>SCORE</small></span>
-                <em>{scoreSummary.label}</em>
+                <em data-level={scoreSummary.label.toLowerCase()}>{scoreSummary.label}</em>
               </span>
             </button>
           </div>
@@ -976,12 +1055,20 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
             <div className="relative">
               <button
                 type="button"
-                aria-label="Open profile menu"
+                aria-label={profileRequestCount > 0 ? `Open profile menu, ${profileRequestCount} pending requests` : 'Open profile menu'}
                 onClick={() => { haptic('subtle'); setAvatarPopup((v) => !v); }}
                 className={`inline-flex h-22 w-22 shrink-0 items-center justify-center rounded-full overflow-hidden transition ${profileChrome ? 'canact-profile-header-icon' : 'text-ink hover:text-brand'}`}
               >
                 <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={50} />
               </button>
+              {profileRequestCount > 0 ? (
+                <span
+                  className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#e34d4d] px-1 text-[9px] font-black leading-none text-white shadow-sm"
+                  aria-hidden="true"
+                >
+                  {profileRequestCount > 9 ? '9+' : profileRequestCount}
+                </span>
+              ) : null}
               {sidebarMounted && createPortal(
                 <>
                   {/* Backdrop — fades in/out */}
@@ -1112,13 +1199,13 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
               <i><Activity size={17} /></i>
               <strong>{liveScore}</strong>
               <span><small>CANACT</small><small>SCORE</small></span>
-              <em>{scoreSummary.label}</em>
+              <em data-level={scoreSummary.label.toLowerCase()}>{scoreSummary.label}</em>
             </span>
             <span className="canact-score-island-panel">
               <span className="canact-score-island-hero">
                 <i>{islandMoment?.icon ?? <Activity size={24} />}</i>
                 <span><small>CANACT SCORE</small><strong>{liveScore}</strong></span>
-                <b>{scoreSummary.label}</b>
+                <b data-level={scoreSummary.label.toLowerCase()}>{scoreSummary.label}</b>
                 {scoreDelta !== 0 ? <em data-positive={scoreDelta > 0}>{scoreDelta > 0 ? '+' : '−'}{Math.abs(scoreDelta)} earned</em> : null}
               </span>
               <span className="canact-score-island-club">

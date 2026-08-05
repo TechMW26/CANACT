@@ -20,6 +20,12 @@ type Particle = {
   circle: boolean;
   opacity: number;
 };
+type ReceiveCard = {
+  id: string;
+  group: 'connection' | 'lifetime';
+  label: string;
+  renderCard: (className: string, style: CSSProperties) => ReactNode;
+};
 
 const audioCache = new Map<string, AudioBuffer>();
 let sharedAudioCtx: AudioContext | null = null;
@@ -80,6 +86,8 @@ export function LifetimeCardSendAnimation({
   ariaLabel = 'Sending card',
   tone = 'connection',
   direction = 'send',
+  presentationKey,
+  receiveCards,
 }: {
   sourceRect: CardRect;
   renderCard: (className: string, style: CSSProperties) => ReactNode;
@@ -87,6 +95,8 @@ export function LifetimeCardSendAnimation({
   ariaLabel?: string;
   tone?: 'connection' | 'lifetime';
   direction?: 'send' | 'receive';
+  presentationKey?: string;
+  receiveCards?: ReceiveCard[];
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +106,8 @@ export function LifetimeCardSendAnimation({
   const completeRef = useRef(onComplete);
   const completedRef = useRef(false);
   const [receiveReady, setReceiveReady] = useState(false);
+  const [activeCard, setActiveCard] = useState(0);
+  const swipeStartRef = useRef<number | null>(null);
 
   useEffect(() => { completeRef.current = onComplete; }, [onComplete]);
 
@@ -114,7 +126,11 @@ export function LifetimeCardSendAnimation({
       sourceY: sourceRect.top + sourceRect.height / 2 - viewportHeight / 2,
       viewportHeight,
     };
-  }, [sourceRect]);
+  }, [sourceRect.height, sourceRect.left, sourceRect.naturalHeight, sourceRect.naturalWidth, sourceRect.top, sourceRect.width]);
+
+  useEffect(() => {
+    setActiveCard((current) => Math.min(current, Math.max(0, (receiveCards?.length ?? 1) - 1)));
+  }, [receiveCards?.length]);
 
   useEffect(() => {
     const overlay = overlayRef.current;
@@ -217,6 +233,23 @@ export function LifetimeCardSendAnimation({
     gsap.set(glow, { opacity: 0, scale: .55, force3D: true });
 
     if (direction === 'receive') {
+      const presentationStorageKey = presentationKey ? `canact:card-reveal-played:${presentationKey}` : '';
+      let introAlreadyPlayed = false;
+      if (presentationStorageKey) {
+        try {
+          introAlreadyPlayed = window.sessionStorage.getItem(presentationStorageKey) === '1';
+        } catch { /* session storage can be unavailable */ }
+      }
+      const playIntroOnce = () => {
+        if (presentationStorageKey) {
+          try {
+            if (window.sessionStorage.getItem(presentationStorageKey) === '1') return;
+            window.sessionStorage.setItem(presentationStorageKey, '1');
+          } catch { /* session storage can be unavailable */ }
+        }
+        playCardSound(sound);
+        startConfetti();
+      };
       gsap.set(card, {
         xPercent: -50,
         yPercent: -50,
@@ -227,12 +260,20 @@ export function LifetimeCardSendAnimation({
         opacity: 0,
         force3D: true,
       });
-      timeline
-        .to(overlay, { duration: duration(.18), opacity: 1, ease: 'power1.out' })
-        .call(() => { playCardSound(sound); startConfetti(); }, undefined, '<.02')
-        .to(glow, { duration: duration(.48), opacity: 1, scale: 1, ease: 'power2.out' }, '<')
-        .to(card, { duration: duration(.52), y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1, ease: 'back.out(1.35)' }, '<.03')
-        .call(() => setReceiveReady(true));
+      if (introAlreadyPlayed) {
+        timeline
+          .set(overlay, { opacity: 1 })
+          .set(glow, { opacity: 1, scale: 1 })
+          .set(card, { y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1 })
+          .call(() => setReceiveReady(true));
+      } else {
+        timeline
+          .to(overlay, { duration: duration(.18), opacity: 1, ease: 'power1.out' })
+          .call(playIntroOnce, undefined, '<.02')
+          .to(glow, { duration: duration(.48), opacity: 1, scale: 1, ease: 'power2.out' }, '<')
+          .to(card, { duration: duration(.52), y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1, ease: 'back.out(1.35)' }, '<.03')
+          .call(() => setReceiveReady(true));
+      }
 
       dismissRef.current = () => {
         setReceiveReady(false);
@@ -273,7 +314,17 @@ export function LifetimeCardSendAnimation({
   }, [direction, geometry, tone]);
 
   const dismissReceive = useCallback(() => dismissRef.current?.(), []);
-
+  const cardCount = receiveCards?.length ?? 0;
+  const activeGroup = receiveCards?.[activeCard]?.group;
+  const groups = useMemo(() => (['connection', 'lifetime'] as const).flatMap((group) => {
+    const indices = (receiveCards ?? []).flatMap((card, index) => card.group === group ? [index] : []);
+    return indices.length ? [{ group, indices }] : [];
+  }), [receiveCards]);
+  const groupIndices = groups.find((item) => item.group === activeGroup)?.indices ?? [];
+  const groupPosition = Math.max(0, groupIndices.indexOf(activeCard)) + 1;
+  const selectCard = useCallback((next: number) => {
+    setActiveCard(Math.max(0, Math.min(cardCount - 1, next)));
+  }, [cardCount]);
   if (typeof document === 'undefined') return null;
   return createPortal(
     <div
@@ -284,7 +335,7 @@ export function LifetimeCardSendAnimation({
       role="status"
       aria-live="polite"
       aria-label={ariaLabel}
-      onClick={(event) => { if (direction === 'receive' && event.target === event.currentTarget) dismissReceive(); }}
+      onClick={(event) => { if (direction === 'receive' && cardCount <= 1 && event.target === event.currentTarget) dismissReceive(); }}
     >
       <canvas ref={canvasRef} className={styles.confetti} aria-hidden="true" />
       <div className={styles.stage}>
@@ -292,13 +343,63 @@ export function LifetimeCardSendAnimation({
         <div
           ref={cardRef}
           className={styles.cardHost}
+          data-receive-stack={direction === 'receive' && cardCount > 0 ? 'true' : undefined}
           style={{ width: geometry.naturalWidth, height: geometry.naturalHeight }}
+          onPointerDown={(event) => { if (direction === 'receive' && cardCount > 1) swipeStartRef.current = event.clientX; }}
+          onPointerUp={(event) => {
+            const start = swipeStartRef.current;
+            swipeStartRef.current = null;
+            if (start === null || Math.abs(event.clientX - start) < 36) return;
+            selectCard(activeCard + (event.clientX < start ? 1 : -1));
+          }}
+          onPointerCancel={() => { swipeStartRef.current = null; }}
         >
-          {renderCard(styles.cardLayer, { width: geometry.naturalWidth, height: geometry.naturalHeight })}
+          {direction === 'receive' && receiveCards?.length ? receiveCards.map((item, index) => {
+            const distance = index - activeCard;
+            const visible = Math.abs(distance) <= 2;
+            return (
+              <div
+                key={item.id}
+                className={styles.stackCard}
+                data-active={distance === 0 ? 'true' : undefined}
+                aria-hidden={distance !== 0}
+                style={{
+                  zIndex: 20 - Math.abs(distance),
+                  opacity: visible ? (distance === 0 ? 1 : .38) : 0,
+                  transform: `translate3d(${distance * 14}px, ${Math.abs(distance) * 8}px, 0) scale(${1 - Math.min(2, Math.abs(distance)) * .035})`,
+                }}
+              >
+                {item.renderCard(styles.cardLayer, { width: geometry.naturalWidth, height: geometry.naturalHeight })}
+              </div>
+            );
+          }) : renderCard(styles.cardLayer, { width: geometry.naturalWidth, height: geometry.naturalHeight })}
+          {direction === 'receive' && receiveReady && cardCount > 1 ? (
+            <div className={styles.receiveNavigator} aria-label="Received cards">
+              <div className={styles.receiveGroups} data-count={groups.length} data-active={activeGroup}>
+                {groups.map(({ group, indices }) => (
+                  <button key={group} type="button" data-active={group === activeGroup ? 'true' : undefined} onClick={() => selectCard(indices[0]!)}>
+                    {group === 'connection' ? 'Connection' : 'Lifetime'} · {indices.length}
+                  </button>
+                ))}
+              </div>
+              <div className={styles.receiveControls}>
+                <button type="button" onClick={() => selectCard(activeCard - 1)} disabled={activeCard === 0} aria-label="Previous card">‹</button>
+                <span><strong>{receiveCards?.[activeCard]?.label}</strong>{groupPosition} of {groupIndices.length} {activeGroup === 'lifetime' ? 'lifetime' : 'connection'}</span>
+                <button type="button" onClick={() => selectCard(activeCard + 1)} disabled={activeCard === cardCount - 1} aria-label="Next card">›</button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       {direction === 'receive' && receiveReady ? (
-        <button type="button" className={styles.receiveClose} onClick={dismissReceive} aria-label="Close received card">Done</button>
+        <button
+          type="button"
+          className={styles.receiveClose}
+          onClick={dismissReceive}
+          aria-label="Close received cards"
+        >
+          Done
+        </button>
       ) : null}
     </div>,
     document.body,

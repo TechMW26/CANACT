@@ -22,6 +22,7 @@ import { PostMenu } from '@/components/PostMenu';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
 import { MoodIcon } from '@/components/MoodIcon';
+import { MoodSelectorSheet } from '@/components/MoodSelectorSheet';
 import { StoryViewer } from '@/components/StoryViewer';
 import { acceptFollow, listenFollowRequests, listenFavourites, rejectFollow, requestFollow } from '@/lib/services/favourites';
 import { listenReceivedConnectionCards } from '@/lib/services/connectionCards';
@@ -53,7 +54,6 @@ import {
   Camera,
   Film,
   Heart,
-  HandHeart,
   BarChart3,
   Pencil,
   Star,
@@ -317,9 +317,12 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
           <button
             type="button"
             onClick={() => setRequestsSheetOpen(true)}
-            className="fixed right-0 top-[55%] z-40 flex h-12 -translate-y-1/2 items-center gap-2 rounded-l-full border border-white/30 bg-[#1f6b55]/90 pl-4 pr-3 text-white shadow-[0_8px_24px_rgba(7,37,28,.35)] backdrop-blur-md transition-transform active:scale-95"
+            className="fixed right-0 top-[55%] z-40 flex h-12 -translate-y-1/2 items-center gap-2 rounded-l-full border border-r-0 border-white/30 bg-[#1f6b55]/90 pl-4 pr-3 text-white shadow-[0_8px_24px_rgba(7,37,28,.35)] backdrop-blur-md transition-transform active:scale-95"
             aria-label={`${friendReqs.length + favReqs.length} pending requests`}
           >
+            {(friendReqs.length + favReqs.length) > 0 ? (
+              <span className="pointer-events-none absolute -left-1 -top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#e34d4d] shadow-sm" aria-hidden="true" />
+            ) : null}
             <UserPlus size={16} />
             {(friendReqs.length + favReqs.length) > 0 ? (
               <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-extrabold text-[#1f6b55] px-1">
@@ -335,14 +338,14 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
                 onClick={() => setRequestsTab('friends')}
                 className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${requestsTab === 'friends' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
               >
-                Friends{friendReqs.length > 0 ? ` · ${friendReqs.length}` : ''}
+                Friend Requests{friendReqs.length > 0 ? ` · ${friendReqs.length}` : ''}
               </button>
               <button
                 type="button"
                 onClick={() => setRequestsTab('favourites')}
                 className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${requestsTab === 'favourites' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
               >
-                Favourites{favReqs.length > 0 ? ` · ${favReqs.length}` : ''}
+                Favourites Requests{favReqs.length > 0 ? ` · ${favReqs.length}` : ''}
               </button>
             </div>
 
@@ -715,52 +718,72 @@ function buildProfileInsight(profile: UserProfile, cards: ConnectionCardGift[]) 
   return profile.bio?.trim() || 'Building meaningful connections, one genuine interaction at a time.';
 }
 
-function ProfileAttributeGauge({
-  id,
-  label,
-  positive,
-  negative,
-}: {
-  id: string;
+type ProfileAttributeDatum = {
+  key: string;
   label: string;
   positive: number;
   negative: number;
-}) {
-  const total = positive + negative;
-  const balance = total ? (positive - negative) / total : 0;
-  const angle = balance * 72;
-  const [displayAngle, setDisplayAngle] = useState(0);
-  const neutral = total === 0 || positive === negative;
-  const state = neutral ? 'Neutral' : balance > 0 ? `+${positive - negative}` : `${positive - negative}`;
-  const needleColor = neutral ? '#8f8aa8' : balance > 0 ? '#6fa98d' : '#d58b82';
+  icon: React.ReactNode;
+  accent: string;
+  soft: string;
+};
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setDisplayAngle(angle));
-    return () => cancelAnimationFrame(frame);
-  }, [angle]);
+function attributeSignalLevel(value: number) {
+  if (value <= 0) return 0;
+  return Math.min(5, Math.max(1, Math.ceil(Math.log10(value + 1) * 1.6)));
+}
 
+const ATTRIBUTE_BLOOM_LEFT_CONTOURS = [
+  'M51 43 C43 34 39 21 25 19',
+  'M50 47 C38 42 30 31 15 33',
+  'M50 51 C37 53 27 49 14 54',
+  'M51 55 C40 64 30 65 22 71',
+  'M52 58 C46 72 41 78 35 82',
+];
+
+const ATTRIBUTE_BLOOM_RIGHT_CONTOURS = [
+  'M57 43 C65 34 69 21 83 19',
+  'M58 47 C70 42 78 31 93 33',
+  'M58 51 C71 53 81 49 94 54',
+  'M57 55 C68 64 78 65 86 71',
+  'M56 58 C62 72 67 78 73 82',
+];
+
+function ProfileAttributeBlooms({ attributes }: { attributes: ProfileAttributeDatum[] }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-[20px] bg-white px-1 pb-3 pt-2.5 text-center shadow-[0_8px_18px_rgba(7,37,28,.12)]">
-      <svg viewBox="0 0 120 72" className="mx-auto h-auto w-full max-w-[128px] overflow-visible" role="img" aria-label={`${label}: ${positive} positive, ${negative} negative, ${state}`}>
-        <defs>
-          <linearGradient id={`profile-gauge-${id}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#efb2aa" />
-            <stop offset=".5" stopColor="#eee4c5" />
-            <stop offset="1" stopColor="#afd9c2" />
-          </linearGradient>
-          <filter id={`profile-gauge-shadow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#173f34" floodOpacity=".13" />
-          </filter>
-        </defs>
-        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke="#eeeae0" strokeWidth="11" strokeLinecap="round" />
-        <path d="M15 59a45 45 0 0 1 90 0" fill="none" stroke={`url(#profile-gauge-${id})`} strokeWidth="8" strokeLinecap="round" opacity=".96" />
-        <path d="M60 13v6" stroke="#d1caba" strokeWidth="2" strokeLinecap="round" />
-        <g style={{ transform: `rotate(${displayAngle}deg)`, transformOrigin: '60px 59px', transition: 'transform 720ms cubic-bezier(.2,.9,.25,1.2)' }} filter={`url(#profile-gauge-shadow-${id})`}>
-          <path d="M57.7 58.5 60 25l2.3 33.5Z" fill={needleColor} style={{ transition: 'fill 360ms ease' }} />
-        </g>
-        <circle cx="60" cy="59" r="6" fill={needleColor} stroke="#fffdf8" strokeWidth="2.5" style={{ transition: 'fill 360ms ease' }} />
-      </svg>
-      <strong className="-mt-0.5 block truncate text-[11px] font-black text-[#173f34] sm:text-[12px]">{label}</strong>
+    <div className="mt-4 grid grid-cols-3 gap-1 rounded-[30px] bg-white/95 px-2 py-3 shadow-[0_12px_28px_rgba(7,37,28,.16)]" aria-label="Community attribute movement">
+      {attributes.map((attribute) => {
+        const negativeLevel = attributeSignalLevel(attribute.negative);
+        const positiveLevel = attributeSignalLevel(attribute.positive);
+        return (
+          <article
+            key={attribute.key}
+            aria-label={`${attribute.label}: ${attribute.positive} positive and ${attribute.negative} negative signals`}
+            title={`${attribute.positive} positive · ${attribute.negative} negative`}
+            className="min-w-0 text-[#173f34]"
+          >
+            <div className="relative mx-auto h-[88px] w-[108px] max-w-full" aria-hidden="true">
+              <svg viewBox="0 0 108 88" className="absolute inset-0 h-full w-full overflow-visible">
+                <path d="M52 48 C45 17 9 12 9 43 C9 69 37 72 52 54 Z" fill="#e79088" opacity={negativeLevel ? .18 + negativeLevel * .07 : .07} className="transition-opacity duration-700" />
+                <path d="M56 48 C63 17 99 12 99 43 C99 69 71 72 56 54 Z" fill="#6ebe98" opacity={positiveLevel ? .18 + positiveLevel * .07 : .07} className="transition-opacity duration-700" />
+                {ATTRIBUTE_BLOOM_LEFT_CONTOURS.map((path, index) => (
+                  <path key={path} d={path} fill="none" stroke="#c95d57" strokeWidth="2.5" strokeLinecap="round" opacity={index < negativeLevel ? .9 : .1} className="transition-opacity duration-500" />
+                ))}
+                {ATTRIBUTE_BLOOM_RIGHT_CONTOURS.map((path, index) => (
+                  <path key={path} d={path} fill="none" stroke="#24795e" strokeWidth="2.5" strokeLinecap="round" opacity={index < positiveLevel ? .9 : .1} className="transition-opacity duration-500" />
+                ))}
+                <circle cx="54" cy="50" r="18" fill="white" stroke={attribute.accent} strokeWidth="2.5" />
+                <circle cx="13" cy="17" r="7" fill="#fff5f3" />
+                <circle cx="95" cy="17" r="7" fill="#eff9f3" />
+                <path d="M10 17h6" stroke="#c95d57" strokeWidth="2" strokeLinecap="round" />
+                <path d="M92 17h6M95 14v6" stroke="#24795e" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="absolute left-1/2 top-[50px] grid -translate-x-1/2 -translate-y-1/2 place-items-center" style={{ color: attribute.accent }}>{attribute.icon}</span>
+            </div>
+            <strong className="block w-full truncate text-center text-[9px] font-black uppercase tracking-[.04em]">{attribute.label}</strong>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -825,6 +848,12 @@ function CanactPagesProfileUI({
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profilePhotoEditorOpen, setProfilePhotoEditorOpen] = useState(false);
   const [profilePhotoBusy, setProfilePhotoBusy] = useState(false);
+  const [moodSheetOpen, setMoodSheetOpen] = useState(false);
+  const [moodAccentOverride, setMoodAccentOverride] = useState<string | null>(null);
+  const [moodSplash, setMoodSplash] = useState<{ id: number; color: string } | null>(null);
+  const orbitRef = useRef<HTMLDivElement | null>(null);
+  const [orbitLines, setOrbitLines] = useState<Array<{ id: string; d: string }>>([]);
+  const [orbitSize, setOrbitSize] = useState({ width: 330, height: 228 });
   const activeTab = tab === 'rateme' ? 'polls' : tab;
   const displayName = String(userProfile.fullName || userProfile.firstName || userProfile.email || 'Canact user');
   useAdaptiveProfileChrome(null);
@@ -867,6 +896,73 @@ function CanactPagesProfileUI({
   const scoreProgress = Math.max(0, Math.min(100,
     (scoreSummary.score / Math.max(1, scoreSummary.max)) * 100,
   ));
+
+  useEffect(() => {
+    if (moodAccentOverride && currentMood?.accent === moodAccentOverride) setMoodAccentOverride(null);
+  }, [currentMood?.accent, moodAccentOverride]);
+
+  useEffect(() => {
+    if (!moodSplash) return;
+    const timer = window.setTimeout(() => setMoodSplash(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [moodSplash]);
+
+  useLayoutEffect(() => {
+    const container = orbitRef.current;
+    if (!container || !connectionHighlights.length) {
+      setOrbitLines([]);
+      return;
+    }
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const hostRect = container.getBoundingClientRect();
+        const target = container.querySelector<HTMLElement>('[data-profile-orbit-target]');
+        if (!target || !hostRect.width || !hostRect.height) return;
+        setOrbitSize((current) => current.width === hostRect.width && current.height === hostRect.height
+          ? current
+          : { width: hostRect.width, height: hostRect.height });
+        const targetRect = target.getBoundingClientRect();
+        const targetX = targetRect.left - hostRect.left + targetRect.width / 2;
+        const targetY = targetRect.top - hostRect.top + targetRect.height / 2;
+        const targetRadius = Math.min(targetRect.width, targetRect.height) / 2;
+        const next = Array.from(container.querySelectorAll<HTMLElement>('[data-connection-orbit-source]')).map((source, index) => {
+          const sourceRect = source.getBoundingClientRect();
+          const sourceX = sourceRect.left - hostRect.left + sourceRect.width / 2;
+          const sourceY = sourceRect.top - hostRect.top + sourceRect.height / 2;
+          const dx = targetX - sourceX;
+          const dy = targetY - sourceY;
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const unitX = dx / distance;
+          const unitY = dy / distance;
+          const sourceRadius = Math.min(sourceRect.width, sourceRect.height) / 2;
+          const x1 = sourceX + unitX * sourceRadius;
+          const y1 = sourceY + unitY * sourceRadius;
+          const x2 = targetX - unitX * targetRadius;
+          const y2 = targetY - unitY * targetRadius;
+          const bend = (index % 2 === 0 ? 1 : -1) * Math.min(7, distance * .035);
+          const controlX = (x1 + x2) / 2 - unitY * bend;
+          const controlY = (y1 + y2) / 2 + unitX * bend;
+          return {
+            id: source.dataset.connectionOrbitSource || String(index),
+            d: `M ${x1.toFixed(2)} ${y1.toFixed(2)} Q ${controlX.toFixed(2)} ${controlY.toFixed(2)} ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+          };
+        });
+        setOrbitLines((current) => current.length === next.length && current.every((line, index) => line.id === next[index]?.id && line.d === next[index]?.d) ? current : next);
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    container.querySelectorAll<HTMLElement>('[data-connection-orbit-source], [data-profile-orbit-target]').forEach((element) => observer.observe(element));
+    window.addEventListener('resize', measure);
+    measure();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [connectionHighlights.map((item) => item.kind).join(',')]);
 
   useEffect(() => listenReceivedConnectionCards(userProfile.uid, setReceivedConnections), [userProfile.uid]);
 
@@ -931,17 +1027,17 @@ function CanactPagesProfileUI({
     <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
       <section className="relative mx-auto w-full max-w-[440px] px-5 pb-5 text-center">
-        <div className="relative -mx-5 rounded-b-[34px] bg-[#1f6b55] px-5 pb-5 pt-[calc(var(--canact-header-top-inset,0px)+78px+1em)] shadow-[0_14px_30px_rgba(22,67,53,.16)] lg:pt-5">
-        <div className="relative mx-auto h-[228px] w-full max-w-[330px]">
-          {connectionHighlights.length ? (
-            <svg className="pointer-events-none absolute inset-x-4 top-0 h-[190px] w-auto text-white/40" viewBox="0 0 328 222" aria-hidden="true">
-              {[
-                'M58 46C95 45 112 61 135 90',
-                'M270 46C232 45 216 61 193 90',
-                'M47 158C92 158 108 143 134 128',
-                'M281 158C236 158 220 143 194 128',
-              ].slice(0, connectionHighlights.length).map((path) => (
-                <path key={path} d={path} fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="3 4" />
+        <div
+          className="relative isolate -mx-5 overflow-hidden rounded-b-[34px] px-5 pb-5 pt-[calc(var(--canact-header-top-inset,0px)+78px+1em)] shadow-[0_14px_30px_rgba(22,67,53,.16)] transition-colors duration-500 lg:pt-5"
+          style={{ backgroundColor: moodAccentOverride ?? currentMood?.accent ?? '#1f6b55' }}
+          data-profile-mood={currentMood?.id ?? 'unset'}
+        >
+        {moodSplash ? <span key={moodSplash.id} className="canact-profile-mood-splash" style={{ backgroundColor: moodSplash.color }} aria-hidden="true" /> : null}
+        <div ref={orbitRef} className="relative mx-auto mb-[3.5em] h-[228px] w-full max-w-[330px]">
+          {orbitLines.length ? (
+            <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible text-white/45" viewBox={`0 0 ${orbitSize.width} ${orbitSize.height}`} preserveAspectRatio="none" aria-hidden="true">
+              {orbitLines.map((line) => (
+                <path key={line.id} d={line.d} fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeDasharray="3 5" />
               ))}
             </svg>
           ) : null}
@@ -950,13 +1046,13 @@ function CanactPagesProfileUI({
             const positions = ['left-0 top-1', 'right-0 top-1', 'left-0 top-[52%]', 'right-0 top-[52%]'];
             return (
               <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[68px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
-                <span className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white text-[#1f6b55] shadow-[0_8px_22px_rgba(8,39,30,.22)]"><ConnectionOrbitIcon kind={item.kind} /></span>
+                <span data-connection-orbit-source={item.kind} className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white text-[#1f6b55] shadow-[0_8px_22px_rgba(8,39,30,.22)]"><ConnectionOrbitIcon kind={item.kind} /></span>
                 <span className="max-w-full truncate text-[9px] font-bold text-white">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
               </button>
             );
           })}
 
-          <div className="absolute left-1/2 top-[43%] z-10 h-[172px] w-[172px] -translate-x-1/2 -translate-y-1/2">
+          <div data-profile-orbit-target className="absolute left-1/2 top-[43%] z-10 h-[172px] w-[172px] -translate-x-1/2 -translate-y-1/2">
             <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible drop-shadow-[0_10px_22px_rgba(20,70,54,.14)]" viewBox="0 0 172 172" role="img" aria-label={`Canact score ${scoreSummary.score}, ${Math.round(scoreProgress)}% of the ${scoreSummary.max} maximum`}>
               <path d="M38.32 149.57A79.45 79.45 0 1 1 133.68 149.57" pathLength="79.5" fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="7" strokeLinecap="round" />
               <path
@@ -986,57 +1082,58 @@ function CanactPagesProfileUI({
                 <Camera size={14} />
               </button>
             ) : null}
-            <div className="absolute bottom-[-40px] left-1/2 z-20 flex h-9 -translate-x-1/2 overflow-hidden rounded-full shadow-[0_8px_20px_rgba(7,37,28,.3)]">
+            <div className="profile-score-cluster absolute bottom-[-92px] left-1/2 z-20 -translate-x-1/2">
               {isSelf ? (
-                <Link
-                  href="/mood"
-                  prefetch
-                  className="flex h-full min-w-[66px] items-center justify-center gap-1.5 border-r border-[#faf8f2]/75 px-2 transition-[filter] active:brightness-95"
+                <button
+                  type="button"
+                  onClick={() => setMoodSheetOpen(true)}
+                  className="profile-score-cluster__mood"
                   style={{ background: currentMood?.soft ?? '#e2f2e9', color: currentMood?.accent ?? '#1f6b55' }}
                   aria-label={currentMood ? `Current mood: ${currentMood.label}. Change mood` : 'Select your mood'}
                 >
-                  {currentMood ? <MoodIcon kind={currentMood.id} size={14} /> : <Smile size={14} />}
-                  <strong className="max-w-[42px] truncate text-[8px] font-black uppercase tracking-[.04em]">{currentMood?.label ?? 'Mood'}</strong>
-                </Link>
+                  {currentMood ? <MoodIcon kind={currentMood.id} size={17} /> : <Smile size={17} />}
+                  <strong>{currentMood?.label ?? 'Mood'}</strong>
+                </button>
               ) : currentMood ? (
                 <span
-                  className="flex h-full min-w-[66px] items-center justify-center gap-1.5 border-r border-[#faf8f2]/75 px-2"
+                  className="profile-score-cluster__mood"
                   style={{ background: currentMood.soft, color: currentMood.accent }}
                   role="status"
                   aria-label={`${displayName} feels ${currentMood.label}, intensity ${userProfile.currentMood?.intensity ?? 3} of 5`}
                 >
-                  <MoodIcon kind={currentMood.id} size={14} />
-                  <strong className="max-w-[42px] truncate text-[8px] font-black uppercase tracking-[.04em]">{currentMood.label}</strong>
+                  <MoodIcon kind={currentMood.id} size={17} />
+                  <strong>{currentMood.label}</strong>
                 </span>
               ) : null}
-              <span className="flex h-full min-w-[112px] items-center justify-center gap-2 bg-[#174f3f] px-3 text-white">
-                <strong className="text-[17px] font-black leading-none tracking-[-.04em]">{scoreSummary.score}</strong>
-                <span className="text-left text-[6px] font-black uppercase leading-[1.05] tracking-[.11em] text-white/70">Canact<br />score</span>
+              <span className="profile-score-cluster__score" aria-label={`Canact score ${scoreSummary.score}`}>
+                <strong>{scoreSummary.score}</strong>
+                <span aria-hidden="true"><i style={{ transform: `scaleX(${scoreProgress / 100})` }} /></span>
               </span>
-              <span className="flex h-full min-w-[58px] items-center justify-center gap-1 border-l border-[#faf8f2]/75 bg-[#f1c84b] px-2 text-[#513d0a]" aria-label={`${helpCount} confirmed helps`}>
-                <HandHeart size={12} strokeWidth={2.4} />
-                <strong className="text-[13px] font-black leading-none">{helpCount}</strong>
-                <small className="text-[6px] font-black uppercase tracking-[.08em]">Help</small>
+              <span className="profile-score-cluster__help" aria-label={`${helpCount} confirmed helps`}>
+                <strong>{helpCount}</strong>
+                <small>Help</small>
               </span>
             </div>
           </div>
         </div>
 
         {isSelf ? (
-          <Link href="/mood" prefetch className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-white/80 bg-white px-7 text-[12px] font-black text-[#1f6b55] shadow-[0_7px_16px_rgba(7,37,28,.22),inset_0_1px_0_rgba(255,255,255,.18)] transition-[transform,box-shadow,background-color] hover:bg-[#f1f7f3] active:translate-y-px active:scale-[.97] active:shadow-[0_3px_8px_rgba(7,37,28,.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          <button type="button" onClick={() => setMoodSheetOpen(true)} className="mt-5 inline-flex h-10 items-center justify-center rounded-full border border-white/80 bg-white px-7 text-[12px] font-black text-[#1f6b55] shadow-[0_7px_16px_rgba(7,37,28,.22),inset_0_1px_0_rgba(255,255,255,.18)] transition-[transform,box-shadow,background-color] hover:bg-[#f1f7f3] active:translate-y-px active:scale-[.97] active:shadow-[0_3px_8px_rgba(7,37,28,.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
             Update mood
-          </Link>
+          </button>
         ) : null}
         <h1 className="mt-6 text-[26px] font-black tracking-[-.04em] text-white">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-[#9de1c1]">✓</span> : null}</h1>
         <p className="mt-1 text-[13px] font-semibold text-white/65">@{profileSlug(userProfile)} · {role}</p>
         <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-white/80">{profileInsight}</p>
         {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-white/60">{userProfile.bio}</p> : null}
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <ProfileAttributeGauge id={`${userProfile.uid}-behaviour`} label="Behaviour" positive={userProfile.attrs?.behaviour ?? 0} negative={userProfile.attrs?.rude ?? 0} />
-          <ProfileAttributeGauge id={`${userProfile.uid}-reliability`} label="Reliability" positive={userProfile.attrs?.reliability ?? 0} negative={userProfile.attrs?.unreliable ?? 0} />
-          <ProfileAttributeGauge id={`${userProfile.uid}-civic`} label="Civic sense" positive={userProfile.attrs?.civic_sense ?? 0} negative={userProfile.attrs?.uncivil ?? 0} />
-        </div>
+        <ProfileAttributeBlooms
+          attributes={[
+            { key: 'behaviour', label: 'Behaviour', positive: userProfile.attrs?.behaviour ?? 0, negative: userProfile.attrs?.rude ?? 0, icon: <ShieldCheck size={20} />, accent: '#3c6fa5', soft: '#dce9f7' },
+            { key: 'reliability', label: 'Reliability', positive: userProfile.attrs?.reliability ?? 0, negative: userProfile.attrs?.unreliable ?? 0, icon: <CheckCircle2 size={20} />, accent: '#24795e', soft: '#dcefe7' },
+            { key: 'civic', label: 'Civic sense', positive: userProfile.attrs?.civic_sense ?? 0, negative: userProfile.attrs?.uncivil ?? 0, icon: <Sparkles size={20} />, accent: '#a66d18', soft: '#faebc9' },
+          ]}
+        />
 
         {!isSelf ? (
           <button type="button" onClick={() => setAttrsSheetOpen(true)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white font-black text-[#1f6b55] shadow-[0_7px_16px_rgba(7,37,28,.2)] transition-transform active:scale-[.98]"><Star size={16} /> Give attributes</button>
@@ -1099,6 +1196,14 @@ function CanactPagesProfileUI({
             busy={profilePhotoBusy}
             onClose={closeProfilePhotoEditor}
             onApply={applyProfilePhoto}
+          />
+          <MoodSelectorSheet
+            open={moodSheetOpen}
+            onClose={() => setMoodSheetOpen(false)}
+            onPublished={(accent) => {
+              setMoodAccentOverride(accent);
+              setMoodSplash({ id: Date.now(), color: accent });
+            }}
           />
         </>
       ) : null}

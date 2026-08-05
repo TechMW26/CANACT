@@ -69,11 +69,18 @@ export default function MoodPage() {
     return () => { active = false; };
   }, [user?.uid]);
 
+  const publishedMoodKind = profile?.currentMood?.kind;
+  const publishedMoodIntensity = Number(profile?.currentMood?.intensity || 3);
+  const publishedMoodAt = Number(profile?.currentMood?.updatedAt || 0);
+
+  // Sync only when the published value actually changes. Depending on the
+  // whole object caused live profile snapshots to reset a user's new choice
+  // back to the current mood immediately after every tap.
   useEffect(() => {
-    if (!profile?.currentMood) return;
-    setSelectedMood(profile.currentMood.kind);
-    setIntensity(Math.max(1, Math.min(5, profile.currentMood.intensity || 3)));
-  }, [profile?.currentMood]);
+    if (!publishedMoodKind) return;
+    setSelectedMood(publishedMoodKind);
+    setIntensity(Math.max(1, Math.min(5, publishedMoodIntensity)));
+  }, [publishedMoodAt, publishedMoodIntensity, publishedMoodKind]);
 
   const mood = getMoodDefinition(selectedMood) ?? MOODS[1];
   const currentMood = getMoodDefinition(profile?.currentMood?.kind);
@@ -85,6 +92,9 @@ export default function MoodPage() {
   const cooldownRemaining = clock ? Math.max(0, lastMoodUpdate + MOOD_COOLDOWN_MS - clock) : 0;
   const cooldownActive = cooldownRemaining > 0;
   const cooldownLabel = cooldownActive ? formatCooldown(cooldownRemaining) : '';
+  const hasDraftChanges = !!profile?.currentMood && (
+    selectedMood !== profile.currentMood.kind || intensity !== profile.currentMood.intensity
+  );
   const streak = moodStreak(entries);
   const firstName = profile?.firstName || profile?.fullName?.split(' ')[0] || 'there';
   const lastSevenDays = useMemo(() => {
@@ -177,7 +187,7 @@ export default function MoodPage() {
         <section className={styles.moodSelector} aria-labelledby="mood-selector-title">
           <div className={styles.sectionHeading}>
             <span><small>ONE-TAP CHOICE</small><h2 id="mood-selector-title">What feels closest?</h2></span>
-            {currentMood ? <b><MoodIcon kind={currentMood.id} size={14} /> {currentMood.label}</b> : <b>Not set</b>}
+            {currentMood ? <b><MoodIcon kind={currentMood.id} size={14} /> Current · {currentMood.label}</b> : <b>Not set</b>}
           </div>
 
           <div className={styles.moodGrid}>
@@ -202,7 +212,7 @@ export default function MoodPage() {
 
           <div className={styles.selectionSummary}>
             <span className={styles.selectedMoodIcon}><MoodIcon kind={mood.id} size={28} /></span>
-            <span><small>YOUR SELECTION</small><strong>{mood.label}</strong></span>
+            <span><small>{hasDraftChanges ? 'NEW SELECTION' : 'YOUR SELECTION'}</small><strong>{mood.label}</strong></span>
             <b>{intensity}/5</b>
           </div>
           <label className={styles.intensity}>
@@ -212,8 +222,8 @@ export default function MoodPage() {
           </label>
 
           <p className={styles.publicNote}><Globe2 size={16} /><span><strong>Public on your profile</strong><small>Your mood and intensity are visible. Your history stays on this device.</small></span></p>
-          {cooldownActive ? <p className={styles.cooldownNote}><Clock size={15} /><span><strong>Update available in {cooldownLabel}</strong><small>Moods can be updated once every two hours.</small></span></p> : null}
-          <button type="button" className={styles.saveButton} disabled={saving || !clock || cooldownActive} onClick={publishMood}>{saving ? 'Publishing…' : !clock ? 'Checking availability…' : cooldownActive ? `Update in ${cooldownLabel}` : `Publish ${mood.label}`}</button>
+          {cooldownActive ? <p className={styles.cooldownNote} aria-live="polite"><Clock size={15} /><span><strong>Update available in {cooldownLabel}</strong><small>{hasDraftChanges ? `Your ${mood.label} selection is ready. Publish it when the timer ends.` : 'You can choose another mood now and publish it when the timer ends.'}</small></span></p> : null}
+          <button type="button" className={styles.saveButton} data-cooldown={cooldownActive || undefined} disabled={saving || !clock} onClick={publishMood}>{saving ? 'Publishing…' : !clock ? 'Checking availability…' : cooldownActive ? `Available in ${cooldownLabel}` : profile?.currentMood ? `Update to ${mood.label}` : `Publish ${mood.label}`}</button>
           {profile?.currentMood ? <button type="button" className={styles.removeMood} disabled={saving} onClick={clearCurrentMood}>Remove current mood</button> : null}
         </section>
       ) : (

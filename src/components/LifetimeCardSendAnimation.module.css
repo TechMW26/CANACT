@@ -27,6 +27,66 @@
   contain: layout style;
 }
 
+.cardHost[data-receive-stack="true"] {
+  pointer-events: auto;
+  touch-action: pan-y;
+}
+
+.stackCard {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  pointer-events: none;
+  transition: transform 320ms cubic-bezier(.2,.82,.25,1), opacity 220ms ease;
+  will-change: transform, opacity;
+}
+
+.stackCard[data-active="true"] { pointer-events: auto; }
+
+.receiveNavigator {
+  position: absolute;
+  top: calc(100% + 22px);
+  left: 50%;
+  z-index: 50;
+  display: flex;
+  width: min(280px, 82vw);
+  flex-direction: column;
+  gap: 8px;
+  transform: translateX(-50%);
+  color: #174f3f;
+}
+
+.receiveControls {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.receiveControls button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #dfe8e3;
+  border-radius: 50%;
+  background: #fff;
+  color: #174f3f;
+  font: 800 30px/1 system-ui, sans-serif;
+  box-shadow: 0 8px 20px rgb(15 69 56 / 10%);
+  cursor: pointer;
+}
+
+.receiveControls button:disabled { opacity: .3; cursor: default; }
+.receiveControls span { display: grid; gap: 2px; text-align: center; font-size: 11px; font-weight: 750; text-transform: capitalize; }
+.receiveControls strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; text-transform: none; }
+.receiveGroups { position: relative; display: grid; width: min(250px,78vw); grid-auto-flow: column; grid-auto-columns: 1fr; align-self: center; gap: 0; padding: 4px; border-radius: 999px; background: #e8efeb; isolation: isolate; }
+.receiveGroups::before { content: ""; position: absolute; inset: 4px auto 4px 4px; z-index: -1; width: calc((100% - 8px) / 2); border-radius: 999px; background: #174f3f; box-shadow: 0 4px 12px rgb(15 69 56 / 18%); transition: transform 260ms cubic-bezier(.2,.82,.25,1); }
+.receiveGroups[data-count="1"]::before { width: calc(100% - 8px); }
+.receiveGroups[data-count="2"][data-active="lifetime"]::before { transform: translateX(100%); }
+.receiveGroups button { position: relative; z-index: 1; min-height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: #567269; font: 800 11px/1 system-ui, sans-serif; cursor: pointer; transition: color 180ms ease; }
+.receiveGroups button[data-active="true"] { color: #fff; }
+
 .cardLayer {
   position: absolute !important;
   inset: 0 !important;

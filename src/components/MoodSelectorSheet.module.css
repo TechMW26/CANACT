@@ -1,0 +1,46 @@
+.content { display: grid; gap: 15px; padding: 2px 0 8px; color: #15382e; }
+.heading { display: flex; align-items: center; justify-content: space-between; padding: 0 3px; }
+.heading > span { display: grid; gap: 2px; }
+.heading small, .intensity small { color: var(--mood-accent); font-size: 9px; font-weight: 950; letter-spacing: .15em; }
+.heading strong { font-size: 23px; font-weight: 950; letter-spacing: -.04em; }
+.heading > b { display: grid; width: 45px; height: 45px; place-items: center; border-radius: 15px; background: var(--mood-soft); color: var(--mood-accent); }
+
+.carousel { display: flex; gap: 10px; margin-inline: -16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 20%; padding: 8px 20% 14px; scrollbar-width: none; overscroll-behavior-inline: contain; }
+.carousel::-webkit-scrollbar { display: none; }
+.moodCard { --item-accent:#397c72; --item-soft:#deefea; display: grid; flex: 0 0 62%; min-height: 154px; scroll-snap-align: center; place-items: center; align-content: center; gap: 7px; border: 1px solid color-mix(in srgb,var(--item-accent) 16%,white); border-radius: 25px; background: color-mix(in srgb,var(--item-soft) 68%,white); color: var(--item-accent); opacity: .58; transform: scale(.82); transition: transform 260ms cubic-bezier(.2,.82,.25,1),opacity 200ms ease,box-shadow 220ms ease; }
+.moodCard > span { display: grid; width: 62px; height: 62px; place-items: center; border-radius: 20px; background: var(--item-soft); transition: transform 220ms ease; }
+.moodCard > strong { color: #15382e; font-size: 16px; font-weight: 950; }
+.moodCard > small { font-size: 9px; font-weight: 800; opacity: .75; }
+.moodCard[data-active="true"] { opacity: 1; transform: scale(1); box-shadow: 0 14px 30px color-mix(in srgb,var(--item-accent) 18%,transparent),inset 0 0 0 2px var(--item-accent); }
+.moodCard[data-active="true"] > span { transform: scale(1.05); }
+.moodCard:focus-visible { outline: 3px solid color-mix(in srgb,var(--item-accent) 45%,white); outline-offset: 3px; }
+
+.intensity { display: grid; gap: 9px; border-radius: 23px; background: color-mix(in srgb,var(--mood-soft) 64%,white); padding: 14px 15px 11px; }
+.intensity > div:first-child { display: flex; align-items: center; justify-content: space-between; }
+.intensity > div:first-child > span { display: grid; }
+.intensity strong { margin-top: 2px; font-size: 15px; font-weight: 950; }
+.intensity b { min-width: 46px; border-radius: 999px; background: #fff; padding: 7px 10px; color: var(--mood-accent); font-size: 12px; font-weight: 950; text-align: center; }
+.intensity input { width: 100%; margin: 1px 0 -5px; accent-color: var(--mood-accent); cursor: pointer; }
+.ticks { display: grid; grid-template-columns: repeat(5,1fr); align-items: center; padding-inline: 2px; }
+.ticks i { width: 5px; height: 5px; justify-self: center; border-radius: 50%; background: color-mix(in srgb,var(--mood-accent) 22%,white); }
+.ticks i[data-active="true"] { background: var(--mood-accent); transform: scale(1.35); }
+.intensity footer { display: flex; justify-content: space-between; color: rgb(21 56 46 / 48%); font-size: 9px; font-weight: 850; }
+.cooldown { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 9px; margin: 0; border-radius: 18px; background: #f4f2eb; padding: 10px 12px; color: var(--mood-accent); }
+.cooldown > svg { justify-self: center; }
+.cooldown span { display: grid; }
+.cooldown strong { font-size: 10px; font-weight: 900; }
+.cooldown small { margin-top: 2px; color: rgb(21 56 46 / 52%); font-size: 8px; font-weight: 650; }
+.setButton { min-height: 51px; border-radius: 999px; background: var(--mood-accent); color: #fff; font-size: 13px; font-weight: 950; box-shadow: 0 12px 28px color-mix(in srgb,var(--mood-accent) 24%,transparent); transition: transform 160ms ease; }
+.setButton:active { transform: scale(.98); }
+.setButton:disabled { opacity: .55; }
+.setButton[data-cooldown="true"] { border: 1px solid color-mix(in srgb,var(--mood-accent) 25%,white); background: var(--mood-soft); color: var(--mood-accent); box-shadow: none; }
+
+@media (max-height: 690px) {
+  .content { gap: 10px; }
+  .moodCard { min-height: 130px; }
+  .moodCard > span { width: 52px; height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moodCard, .moodCard > span, .setButton { transition: none; }
+}

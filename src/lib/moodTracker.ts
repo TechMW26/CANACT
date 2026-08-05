@@ -22,15 +22,15 @@ export type MoodEntry = {
 };
 
 export const MOODS: MoodDefinition[] = [
-  { id: 'joyful', label: 'Joyful', state: 'balanced', accent: '#d7812f', soft: '#fff0d5' },
-  { id: 'calm', label: 'Calm', state: 'balanced', accent: '#397c72', soft: '#deefea' },
-  { id: 'grateful', label: 'Grateful', state: 'balanced', accent: '#a66472', soft: '#f7e4e8' },
-  { id: 'tired', label: 'Tired', state: 'low', accent: '#6878a7', soft: '#e7eaf6' },
-  { id: 'drained', label: 'Drained', state: 'low', accent: '#706489', soft: '#ebe6f1' },
-  { id: 'numb', label: 'Numb', state: 'low', accent: '#6f7d7b', soft: '#e7ecea' },
-  { id: 'sad', label: 'Sad', state: 'vulnerable', accent: '#4f78a1', soft: '#e3edf6' },
-  { id: 'anxious', label: 'Anxious', state: 'vulnerable', accent: '#b36b4d', soft: '#f8e5dc' },
-  { id: 'lonely', label: 'Lonely', state: 'vulnerable', accent: '#8a657c', soft: '#f0e5ec' },
+  { id: 'joyful', label: 'Joyful', state: 'balanced', accent: '#925116', soft: '#fff0d5' },
+  { id: 'calm', label: 'Calm', state: 'balanced', accent: '#1f6b55', soft: '#deefea' },
+  { id: 'grateful', label: 'Grateful', state: 'balanced', accent: '#784452', soft: '#f7e4e8' },
+  { id: 'tired', label: 'Tired', state: 'low', accent: '#4d5d8b', soft: '#e7eaf6' },
+  { id: 'drained', label: 'Drained', state: 'low', accent: '#54476b', soft: '#ebe6f1' },
+  { id: 'numb', label: 'Numb', state: 'low', accent: '#4d5d5a', soft: '#e7ecea' },
+  { id: 'sad', label: 'Sad', state: 'vulnerable', accent: '#365f86', soft: '#e3edf6' },
+  { id: 'anxious', label: 'Anxious', state: 'vulnerable', accent: '#874a33', soft: '#f8e5dc' },
+  { id: 'lonely', label: 'Lonely', state: 'vulnerable', accent: '#65475b', soft: '#f0e5ec' },
 ];
 
 export function getMoodDefinition(kind?: MoodKind | null) {
