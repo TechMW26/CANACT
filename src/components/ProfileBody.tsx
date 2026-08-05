@@ -10,7 +10,7 @@ import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
-import { AttrKey, CARD_LABELS, CardKey, ConnectionCardGift, Poll, RateMeSession, ReelItem, StoryItem, UserProfile, WhaPost } from '@/lib/types';
+import { AttrKey, CARD_LABELS, CardKey, ConnectionCardGift, FriendEdge, Poll, RateMeSession, ReelItem, StoryItem, UserProfile, WhaPost } from '@/lib/types';
 import { setLikeDislike, giveCard, takeBackCard, type AttributeVoteMap } from '@/lib/services/votes';
 import { deletePost, listenUserWhaPosts } from '@/lib/services/wha';
 import { deleteReel, listenUserReels } from '@/lib/services/reels';
@@ -23,13 +23,14 @@ import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolder
 import { ProfileImageEditorSheet } from '@/components/ProfileImageEditorSheet';
 import { MoodIcon } from '@/components/MoodIcon';
 import { StoryViewer } from '@/components/StoryViewer';
-import { listenFavourites, requestFollow } from '@/lib/services/favourites';
+import { acceptFollow, listenFollowRequests, listenFavourites, rejectFollow, requestFollow } from '@/lib/services/favourites';
 import { listenReceivedConnectionCards } from '@/lib/services/connectionCards';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
   declineFriendRequest,
   listenFriendStatus,
+  listenIncomingRequests,
   sendFriendRequest,
   unfriend,
 } from '@/lib/services/friends';
@@ -66,6 +67,7 @@ import {
   Laugh,
   ShieldCheck,
   Smile,
+  UserPlus,
   Zap,
 } from '@/components/icons';
 
@@ -83,6 +85,20 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const [isFavourite, setIsFavourite] = useState(false);
   const [profileVoteBusy, setProfileVoteBusy] = useState(false);
   const { coords: myCoords, error: locationError, retry: retryLocation } = useGeo();
+  const [friendReqs, setFriendReqs] = useState<FriendEdge[]>([]);
+  const [favReqs, setFavReqs] = useState<{ fromUid: string; fromName: string; createdAt: number }[]>([]);
+  const [requestsSheetOpen, setRequestsSheetOpen] = useState(false);
+  const [requestsTab, setRequestsTab] = useState<'friends' | 'favourites'>('friends');
+
+  // Listen for incoming requests (own profile only).
+  useEffect(() => {
+    if (!user || !viewingSelf) return;
+    return listenIncomingRequests(user.uid, setFriendReqs);
+  }, [user?.uid, viewingSelf]);
+  useEffect(() => {
+    if (!user || !viewingSelf) return;
+    return listenFollowRequests(user.uid, setFavReqs);
+  }, [user?.uid, viewingSelf]);
 
   useEffect(() => {
     return onValue(ref(db, `users/${uid}`), (snapshot) => {
@@ -247,7 +263,7 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
   const bypassLocationGate = isLocalhostLocationBypass();
   const outOfRange = !bypassLocationGate && !viewingSelf && !!myCoords && !!theirLoc?.lat && !!theirLoc?.lng
     && haversineMeters(myCoords, { lat: theirLoc.lat!, lng: theirLoc.lng! }) > 15;
-  const accessBlockReason: 'location' | 'range' | null = viewingSelf || bypassLocationGate
+  const accessBlockReason: 'location' | 'range' | null = viewingSelf || bypassLocationGate || friendStatus === 'friends'
     ? null
     : !myCoords ? 'location' : outOfRange ? 'range' : null;
 
@@ -291,6 +307,95 @@ export function ProfileBody({ uid, isSelf }: { uid: string; isSelf: boolean }) {
             toast('Story removed', 'success');
           }}
         />
+      ) : null}
+
+      {/* Floating requests pill — own profile only */}
+      {viewingSelf ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setRequestsSheetOpen(true)}
+            className="fixed right-0 top-[55%] z-40 flex h-12 -translate-y-1/2 items-center gap-2 rounded-l-full border border-white/30 bg-[#1f6b55]/90 pl-4 pr-3 text-white shadow-[0_8px_24px_rgba(7,37,28,.35)] backdrop-blur-md transition-transform active:scale-95"
+            aria-label={`${friendReqs.length + favReqs.length} pending requests`}
+          >
+            <UserPlus size={16} />
+            {(friendReqs.length + favReqs.length) > 0 ? (
+              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white text-[10px] font-extrabold text-[#1f6b55] px-1">
+                {friendReqs.length + favReqs.length > 9 ? '9+' : friendReqs.length + favReqs.length}
+              </span>
+            ) : null}
+          </button>
+
+          <Sheet open={requestsSheetOpen} onClose={() => setRequestsSheetOpen(false)} title="Requests" topmost>
+            <div className="flex gap-1 rounded-full bg-[#edf3ef] p-1">
+              <button
+                type="button"
+                onClick={() => setRequestsTab('friends')}
+                className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${requestsTab === 'friends' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
+              >
+                Friends{friendReqs.length > 0 ? ` · ${friendReqs.length}` : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRequestsTab('favourites')}
+                className={`flex-1 rounded-full py-2.5 text-[13px] font-extrabold transition ${requestsTab === 'favourites' ? 'bg-white text-[#1f6b55] shadow-sm' : 'text-ink/50'}`}
+              >
+                Favourites{favReqs.length > 0 ? ` · ${favReqs.length}` : ''}
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {requestsTab === 'friends' ? (
+                friendReqs.length ? (
+                  <div className="overflow-hidden rounded-[22px] border border-[#E4E7E2] bg-white shadow-sm">
+                    <h3 className="px-4 py-3 text-[11px] font-extrabold uppercase tracking-wide text-ink/45">Friend requests</h3>
+                    <ul className="divide-y divide-line">
+                      {friendReqs.map((req) => (
+                        <li key={req.uid} className="flex items-center gap-3 px-4 py-3">
+                          <Link href={`/profile/${req.uid}`} prefetch><Avatar src={req.photoURL ?? null} name={req.name} size={38} /></Link>
+                          <Link href={`/profile/${req.uid}`} prefetch className="min-w-0 flex-1"><div className="truncate text-sm font-extrabold text-ink">{req.name}</div></Link>
+                          <div className="flex shrink-0 gap-2">
+                            <Button size="sm" className="h-8 px-3 text-xs" onClick={async () => {
+                              if (!me) return;
+                              await acceptFriendRequest(user!.uid, { name: me.fullName, photoURL: me.photoURL }, req.uid, { name: req.name, photoURL: req.photoURL });
+                            }}>Accept</Button>
+                            <Button size="sm" variant="outline" className="h-8 px-3 text-xs" onClick={() => declineFriendRequest(user!.uid, req.uid)}>Decline</Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="rounded-[22px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
+                    <div className="text-sm font-extrabold text-ink">No friend requests</div>
+                    <div className="mt-1 text-xs font-semibold text-ink/50">Friend requests will appear here.</div>
+                  </div>
+                )
+              ) : favReqs.length ? (
+                <div className="overflow-hidden rounded-[22px] border border-[#E4E7E2] bg-white shadow-sm">
+                  <h3 className="px-4 py-3 text-[11px] font-extrabold uppercase tracking-wide text-ink/45">Favourite requests</h3>
+                  <ul className="divide-y divide-line">
+                    {favReqs.map((req) => (
+                      <li key={req.fromUid} className="flex items-center gap-3 px-4 py-3">
+                        <Link href={`/profile/${req.fromUid}`} prefetch><Avatar src={null} name={req.fromName} size={38} /></Link>
+                        <Link href={`/profile/${req.fromUid}`} prefetch className="min-w-0 flex-1"><div className="truncate text-sm font-extrabold text-ink">{req.fromName}</div></Link>
+                        <div className="flex shrink-0 gap-2">
+                          <Button size="sm" className="h-8 px-3 text-xs" onClick={() => acceptFollow(user!.uid, req.fromUid)}>Accept</Button>
+                          <Button size="sm" variant="outline" className="h-8 px-3 text-xs" onClick={() => rejectFollow(user!.uid, req.fromUid)}>Reject</Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="rounded-[22px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
+                  <div className="text-sm font-extrabold text-ink">No favourite requests</div>
+                  <div className="mt-1 text-xs font-semibold text-ink/50">Favourite requests will appear here.</div>
+                </div>
+              )}
+            </div>
+          </Sheet>
+        </>
       ) : null}
     </>
   );
@@ -820,7 +925,7 @@ function CanactPagesProfileUI({
             return (
               <button key={item.kind} type="button" onClick={() => document.getElementById(`connection-cards-${userProfile.uid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`absolute z-20 grid w-[68px] place-items-center gap-1 ${positions[index]}`} aria-label={`${CARD_LABELS[item.kind]} connection cards: ${item.count}`}>
                 <span className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white text-[#1f6b55] shadow-[0_8px_22px_rgba(8,39,30,.22)]"><ConnectionOrbitIcon kind={item.kind} /></span>
-                <span className="max-w-full truncate text-[9px] font-bold text-white/72">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
+                <span className="max-w-full truncate text-[9px] font-bold text-white">{CARD_LABELS[item.kind]}{item.count > 1 ? ` · ${item.count}` : ''}</span>
               </button>
             );
           })}

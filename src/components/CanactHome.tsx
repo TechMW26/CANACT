@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { Activity, ArrowUp, Award, Check, Heart, HeartHandshake, MapPin, ShieldCheck, Sparkles, UserPlus, Users } from '@/components/icons';
+import { Activity, ArrowUp, Award, Check, HeartHandshake, MapPin, ShieldCheck, Sparkles, UserPlus, Users } from '@/components/icons';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { ExploreMap } from '@/components/ExploreMap';
 import { useAuth } from '@/lib/auth';
@@ -61,8 +61,7 @@ export function CanactHome() {
   const score = summary.score;
   const tier = getCanactScoreLabel(score);
   const name = firstName(profile?.firstName || profile?.fullName || user?.displayName);
-  const likes = Math.max(0, profile?.likesCount || 0);
-  const dislikes = Math.max(0, profile?.dislikesCount || 0);
+
   const goodActs = (profile?.helpStats?.resolved || 0) + (profile?.helpStats?.confirmed || 0);
   const connectionCardCount = Object.values(profile?.cardsReceived ?? {}).reduce((sum, count) => sum + Number(count || 0), 0);
   const badgeCount = new Set(profile?.badges ?? []).size;
@@ -412,19 +411,6 @@ export function CanactHome() {
         </div>
 
         <div className={styles.belowFold}>
-        <div className={styles.statsRow}>
-          <div className={styles.statItem}><span><Heart /></span><b>{likes}</b><small>Likes</small></div>
-          <div className={styles.statItem}><span><Users /></span><b>{dislikes}</b><small>Dislikes</small></div>
-          <div className={styles.statItem}><span><Sparkles /></span><b>{goodActs}</b><small>Good acts</small></div>
-        </div>
-
-        {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" showAttributes={false} /></div> : null}
-
-        <div className={styles.insight}>
-          <span><Activity /></span>
-          <div><h3>{summary.delta >= 0 ? 'Your trust is trending upward' : 'Small reliable actions rebuild momentum'}</h3><p>Consistency, genuine interactions, and community help shape your score.</p></div>
-        </div>
-
         {suggestions.length ? (
           <section className={styles.suggestions} aria-labelledby="people-you-may-know-title">
             <div className={styles.suggestionHeading}>
@@ -444,6 +430,13 @@ export function CanactHome() {
             </div>
           </section>
         ) : null}
+
+        {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" showAttributes={false} /></div> : null}
+
+        <div className={styles.insight}>
+          <span><Activity /></span>
+          <div><h3>{summary.delta >= 0 ? 'Your trust is trending upward' : 'Small reliable actions rebuild momentum'}</h3><p>Consistency, genuine interactions, and community help shape your score.</p></div>
+        </div>
 
         {/* Explore Map — always renders; live/stored location improves its centre. */}
         <div className={styles.mapStage}>

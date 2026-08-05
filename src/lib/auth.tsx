@@ -258,7 +258,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const patch = profileBackfillFromAuth(user, v);
         const hasPatch = Object.keys(patch).length > 0;
-        const merged = hasPatch ? ({ ...v, ...patch } as UserProfile) : v;
+        const merged = ({ ...v, uid: user.uid, ...(hasPatch ? patch : {}) } as UserProfile);
         setProfile(merged);
 
         if (hasPatch) {
