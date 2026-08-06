@@ -10,7 +10,7 @@ import { Card } from '@/components/Card';
 import { Brand } from '@/components/Brand';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
-import { BarChart3, Bell, Camera, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil, TrendingUp, Navigation, Zap } from '@/components/icons';
+import { BarChart3, Bell, Camera, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, ShieldCheck, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil, TrendingUp, Navigation, Zap } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
 
@@ -126,20 +126,44 @@ function mergeHeatzoneResponses(legacy: HeatzoneResponse | null, realtime: Heatz
   return buildHeatzoneResponse(acc);
 }
 
-type AdminView = 'overview' | 'users' | 'heatzones' | 'navigation';
+type AdminView = 'overview' | 'users' | 'verifications' | 'heatzones' | 'navigation';
 
 const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Icon: LucideIcon }> = [
   { id: 'overview', label: 'Overview', description: 'Command center', Icon: ShieldAlert },
   { id: 'users', label: 'Users', description: 'Profiles and status', Icon: Users },
+  { id: 'verifications', label: 'Verifications', description: 'Review identity requests', Icon: ShieldCheck },
   { id: 'heatzones', label: 'Heatzones', description: 'Page & feature analytics', Icon: TrendingUp },
   { id: 'navigation', label: 'Navigation', description: 'App navbar config', Icon: Compass },
 ];
+
+type AdminVerificationRequest = {
+  uid: string;
+  requestId: string;
+  fullName: string;
+  email: string | null;
+  mobile: string | null;
+  photoURL: string | null;
+  documentType: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: number;
+  reviewedAt?: number;
+  rejectionReason?: string;
+  cooldownUntil?: number;
+  files: {
+    documentFront?: { url: string; name: string; type: string; size: number };
+    documentBack?: { url: string; name: string; type: string; size: number } | null;
+    selfie?: { url: string; name: string; type: string; size: number };
+  };
+};
 
 export default function AdminDashboardPage() {
   const { user, loading } = useAuth();
   const [activeView, setActiveView] = useState<AdminView>('overview');
   const [heatData, setHeatData] = useState<HeatzoneResponse | null>(null);
   const [heatBusy, setHeatBusy] = useState(false);
+  const [verificationRequests, setVerificationRequests] = useState<AdminVerificationRequest[]>([]);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [reviewingUid, setReviewingUid] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
 
@@ -166,6 +190,39 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchVerifications = async () => {
+    setVerificationBusy(true);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/admin/verifications', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not load verification requests');
+      setVerificationRequests(json.requests ?? []);
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not load verification requests', 'error');
+    } finally { setVerificationBusy(false); }
+  };
+
+  const reviewVerification = async (uid: string, decision: 'approve' | 'reject', reason = '') => {
+    setReviewingUid(uid);
+    try {
+      const token = await getFirebaseAuth().currentUser?.getIdToken();
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/admin/verifications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid, decision, reason }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not review request');
+      toast(decision === 'approve' ? 'Verification approved' : 'Verification rejected', 'success');
+      await fetchVerifications();
+    } catch (error: any) {
+      toast(error?.message ?? 'Could not review request', 'error');
+    } finally { setReviewingUid(null); }
+  };
+
   useEffect(() => {
     if (loading) return;
     if (!user) { window.location.replace('/admin/login'); return; }
@@ -177,6 +234,7 @@ export default function AdminDashboardPage() {
       return;
     }
     fetchHeatzones();
+    fetchVerifications();
   }, [loading, user?.uid, user?.email]);
 
   // Derive user stats from RTDB snapshot
@@ -284,7 +342,7 @@ export default function AdminDashboardPage() {
                     className="h-11 w-full rounded-lg border border-[#E0D4CA] bg-white pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
                   />
                 </label>
-                <Button onClick={fetchHeatzones} loading={heatBusy}>Refresh</Button>
+                <Button onClick={activeView === 'verifications' ? fetchVerifications : fetchHeatzones} loading={activeView === 'verifications' ? verificationBusy : heatBusy}>Refresh</Button>
               </div>
             </div>
           </header>
@@ -307,6 +365,20 @@ export default function AdminDashboardPage() {
             )}
 
             {activeView === 'users' && <UsersPage users={filteredUsers} />}
+
+            {activeView === 'verifications' && (
+              <VerificationsPage
+                requests={verificationRequests.filter((request) => {
+                  const needle = query.trim().toLowerCase();
+                  if (!needle) return true;
+                  return [request.fullName, request.email, request.mobile, request.uid, request.documentType].filter(Boolean).join(' ').toLowerCase().includes(needle);
+                })}
+                busy={verificationBusy}
+                reviewingUid={reviewingUid}
+                onRefresh={fetchVerifications}
+                onDecision={reviewVerification}
+              />
+            )}
 
             {activeView === 'heatzones' && (
               <HeatzonesPage
@@ -414,6 +486,112 @@ function UsersPage({ users }: { users: Array<{ uid: string; fullName: string; em
         </div>
       </div>
     </Card>
+  );
+}
+
+// ── VERIFICATIONS PAGE ──
+
+function VerificationsPage({ requests, busy, reviewingUid, onRefresh, onDecision }: {
+  requests: AdminVerificationRequest[];
+  busy: boolean;
+  reviewingUid: string | null;
+  onRefresh: () => void;
+  onDecision: (uid: string, decision: 'approve' | 'reject', reason?: string) => void;
+}) {
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const pending = requests.filter((request) => request.status === 'pending');
+  const reviewed = requests.filter((request) => request.status !== 'pending');
+
+  const requestCard = (request: AdminVerificationRequest) => {
+    const reviewing = reviewingUid === request.uid;
+    const files = [
+      ['Document front', request.files?.documentFront],
+      ['Document back', request.files?.documentBack],
+      ['Verification selfie', request.files?.selfie],
+    ] as const;
+    return (
+      <Card key={request.requestId || request.uid} className="rounded-xl bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar src={request.photoURL} name={request.fullName} size={46} />
+            <div className="min-w-0">
+              <div className="truncate text-base font-extrabold text-ink">{request.fullName}</div>
+              <div className="truncate text-xs text-ink/55">{request.email || request.mobile || request.uid}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <StatusPill tone={request.status === 'approved' ? 'green' : request.status === 'rejected' ? 'gray' : 'amber'}>{request.status}</StatusPill>
+            <div className="mt-1 text-[10px] font-bold text-ink/40">{formatDate(request.submittedAt)}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-[#F7F4EF] px-3 py-2 text-xs font-bold text-ink/65">
+          Document type: <span className="text-ink">{formatDocumentType(request.documentType)}</span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {files.map(([label, file]) => file ? (
+            <a key={label} href={file.url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-lg border border-line bg-[#F7F4EF] transition hover:border-brand/40">
+              {file.type.startsWith('image/') ? (
+                <img src={file.url} alt={label} className="h-36 w-full object-cover" />
+              ) : (
+                <div className="grid h-36 place-items-center bg-[#EFE5DE] text-sm font-extrabold text-ink/50">PDF document</div>
+              )}
+              <div className="p-3">
+                <div className="text-xs font-extrabold text-ink">{label}</div>
+                <div className="mt-1 truncate text-[10px] text-ink/45">{file.name} · {formatBytes(file.size)}</div>
+              </div>
+            </a>
+          ) : (
+            <div key={label} className="grid min-h-[190px] place-items-center rounded-lg border border-dashed border-line text-xs font-bold text-ink/35">{label} not supplied</div>
+          ))}
+        </div>
+
+        {request.status === 'pending' ? (
+          <div className="mt-4 grid gap-3 border-t border-line pt-4 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-end">
+            <label className="grid gap-1.5 text-xs font-extrabold text-ink/60">
+              Rejection reason
+              <textarea
+                value={reasons[request.uid] ?? ''}
+                onChange={(event) => setReasons((current) => ({ ...current, [request.uid]: event.target.value }))}
+                placeholder="Required only when rejecting"
+                rows={2}
+                className="resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink outline-none focus:border-brand"
+              />
+            </label>
+            <div className="flex gap-2">
+              <Button variant="danger" size="sm" loading={reviewing} onClick={() => onDecision(request.uid, 'reject', reasons[request.uid] ?? '')}>Reject</Button>
+              <Button size="sm" loading={reviewing} onClick={() => onDecision(request.uid, 'approve')}>Approve</Button>
+            </div>
+          </div>
+        ) : (
+          <div className={`mt-4 rounded-lg px-3 py-2 text-xs font-bold ${request.status === 'approved' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+            {request.status === 'approved'
+              ? `Approved ${request.reviewedAt ? formatDate(request.reviewedAt) : ''}`
+              : `${request.rejectionReason || 'Rejected'}${request.cooldownUntil ? ` · Reapply after ${formatDate(request.cooldownUntil)}` : ''}`}
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="rounded-lg bg-[#201A17] text-white">
+        <SectionHeader title="Identity review queue" eyebrow={`${pending.length} pending`} dark action={<Button size="sm" variant="outline" loading={busy} onClick={onRefresh} className="!border-white/30 !text-white">Refresh</Button>} />
+        <p className="mt-2 text-sm text-white/60">Compare the submitted identity document with the fresh selfie, then approve or reject the profile.</p>
+      </Card>
+      <div className="space-y-4">
+        {pending.map(requestCard)}
+        {!pending.length && <EmptyState title={busy ? 'Loading requests…' : 'Review queue is clear'} detail="New manual verification submissions will appear here." />}
+      </div>
+      {reviewed.length ? (
+        <div className="space-y-4">
+          <SectionHeader title="Review history" eyebrow={`${reviewed.length} reviewed`} />
+          {reviewed.map(requestCard)}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -625,6 +803,17 @@ function formatBytes(bytes: number): string {
 function formatDate(value: number): string {
   if (!value) return 'Unknown';
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function formatDocumentType(value: string): string {
+  const labels: Record<string, string> = {
+    aadhaar: 'Aadhaar card',
+    passport: 'Passport',
+    driving_licence: 'Driving licence',
+    voter_id: 'Voter ID',
+    other: 'Other government ID',
+  };
+  return labels[value] ?? value;
 }
 
 /* ================================================================

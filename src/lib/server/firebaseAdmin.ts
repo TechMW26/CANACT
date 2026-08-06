@@ -30,6 +30,9 @@ export function getFirebaseAdminApp(): App | null {
     if (!credential) return null;
     adminApp = initializeApp({
       credential,
+      storageBucket:
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+        'canact-94ad6.firebasestorage.app',
       databaseURL:
         process.env.NEXT_PUBLIC_FIREBASE_DB_URL ??
         'https://canact-94ad6-default-rtdb.asia-southeast1.firebasedatabase.app',

@@ -10,7 +10,7 @@ const INTERNAL_ONBOARDING_WINDOW = 7 * DAY;
 export const ONBOARDING_TASKS = [
   { id: 'complete-profile', title: 'Complete your profile', description: 'Add your real details so trusted connections can recognise you.', points: 40, href: '/edit-profile', contexts: ['/', '/profile', '/edit-profile'], minAge: 0 },
   { id: 'face-identity', title: 'Set your profile selfie', description: 'Choose the public selfie people will see on your Canact profile.', points: 5, href: '/edit-profile', contexts: ['/', '/profile', '/edit-profile'], minAge: 0 },
-  { id: 'verify-identity', title: 'Verify your identity', description: 'Complete DigiLocker verification to secure your profile and unlock trusted features.', points: 40, href: '/settings', contexts: ['/', '/profile', '/settings'], minAge: 0 },
+  { id: 'verify-identity', title: 'Verify your identity', description: 'Submit your identity document and verification selfie for a secure manual review.', points: 40, href: '/profile/settings', contexts: ['/', '/profile', '/profile/settings'], minAge: 0 },
   { id: 'sync-contacts', title: 'Find people you already know', description: 'Allow contact access to securely sync your address book and discover people already on Canact.', points: 30, contexts: ['/', '/search', '/profile'], minAge: 30 * 60 * 1000 },
   { id: 'enable-notifications', title: 'Stay in the loop', description: 'Enable notifications for ratings, favourites, Help and nearby activity.', points: 15, contexts: ['/', '/feed', '/inbox'], minAge: 2 * HOUR },
   { id: 'enable-location', title: 'Discover your community', description: 'Allow location access for vicinity cards and the live Explore map.', points: 20, href: '/favourites', contexts: ['/', '/favourites'], minAge: 30 * 60 * 1000 },

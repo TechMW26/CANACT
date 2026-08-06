@@ -273,7 +273,7 @@ export default function EditProfilePage() {
         </div>
         {locked ? (
           <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
-            <Lock size={12} /> Name is locked after DigiLocker verification.
+            <Lock size={12} /> Name is locked after identity verification.
           </div>
         ) : null}
       </Card>
@@ -328,7 +328,7 @@ export default function EditProfilePage() {
           />
           {locked ? (
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
-              <Lock size={12} /> Address is locked after DigiLocker verification.
+              <Lock size={12} /> Address is locked after identity verification.
             </div>
           ) : null}
         </div>

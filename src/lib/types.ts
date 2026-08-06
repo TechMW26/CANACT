@@ -117,7 +117,12 @@ export interface UserProfile {
   photoURL?: string;
   coverPhoto?: string;
   profileVerified?: boolean;
-  verificationProvider?: 'digilocker';
+  verificationProvider?: 'manual' | 'digilocker';
+  verificationStatus?: 'pending' | 'approved' | 'rejected';
+  verificationSubmittedAt?: number;
+  verificationRejectedAt?: number;
+  verificationCooldownUntil?: number;
+  verificationRejectionReason?: string;
   verificationIdLast4?: string;
   verifiedAt?: number;
   verificationLockedAt?: number;
