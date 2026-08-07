@@ -27,6 +27,7 @@ import { HelpAlertManager } from './HelpAlertManager';
 import { IncomingCardEnvelope } from './IncomingCardEnvelope';
 import { OnboardingTaskGuide } from './OnboardingTaskGuide';
 import { MandatoryPhoneSheet } from './MandatoryPhoneSheet';
+import { StickyHelpPullTab } from './StickyHelpPullTab';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { listenIncomingRequests } from '@/lib/services/friends';
@@ -434,6 +435,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <Plus className="canact-adaptive-icon" size={27} strokeWidth={2.4} aria-hidden="true" />
         </button>
       )}
+      <StickyHelpPullTab />
       <button
         type="button"
         data-canact-create-button

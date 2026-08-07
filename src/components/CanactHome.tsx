@@ -494,23 +494,45 @@ function PeopleSuggestionCard({
   const candidate = suggestion.profile;
   const name = candidate.fullName || candidate.firstName || 'Canact user';
   const score = calculateCanactScore(candidate).score;
+  const photoUrl = candidate.photoURL || null;
+
   return (
-    <article className={styles.suggestionCard}>
-      <Link href={`/profile/${encodeURIComponent(candidate.uid)}`} className={styles.suggestionProfile} aria-label={`Open ${name}'s profile`}>
+    <article
+      className={styles.suggestionCard}
+      style={photoUrl ? { backgroundImage: `url(${photoUrl})` } : undefined}
+    >
+      <Link
+        href={`/profile/${encodeURIComponent(candidate.uid)}`}
+        className={styles.suggestionCardLink}
+        aria-label={`Open ${name}'s profile`}
+      >
+        {/* Source badge */}
         <span className={styles.suggestionSource} data-source={suggestion.source}>
           {suggestion.source === 'contact' ? <Users size={12} /> : <MapPin size={12} />}
           {suggestion.source === 'contact' ? 'In your contacts' : suggestion.distanceMeters === undefined ? 'Nearby' : `${formatDistance(suggestion.distanceMeters)} away`}
         </span>
-        {candidate.photoURL ? <img src={candidate.photoURL} alt="" loading="lazy" /> : <span className={styles.suggestionFallback}>{name.slice(0, 1).toUpperCase()}</span>}
-        <span className={styles.suggestionCopy}><strong>{name}</strong><small>{candidate.city || candidate.country || 'Canact community'}</small><b>{score} score</b></span>
+
+        {/* Gradient overlay + text at bottom */}
+        <div className={styles.suggestionOverlay}>
+          <strong className={styles.suggestionName}>{name}</strong>
+          <span className={styles.suggestionMeta}>
+            {candidate.city || candidate.country || 'Canact community'}
+            <b className={styles.suggestionScore}>{score} score</b>
+          </span>
+        </div>
       </Link>
-      <div className={styles.suggestionActions}>
-        <Link href={`/profile/${encodeURIComponent(candidate.uid)}`}>View profile</Link>
-        <button type="button" disabled={busy || requested} onClick={() => void onConnect(suggestion)} aria-label={requested ? `Connection requested with ${name}` : `Connect with ${name}`}>
-          {requested ? <Check size={16} /> : <UserPlus size={16} />}
-          <span>{busy ? 'Sending…' : requested ? 'Requested' : 'Connect'}</span>
-        </button>
-      </div>
+
+      {/* Buy-hit style connect button */}
+      <button
+        type="button"
+        disabled={busy || requested}
+        onClick={() => void onConnect(suggestion)}
+        className={styles.suggestionConnect}
+        aria-label={requested ? `Connection requested with ${name}` : `Connect with ${name}`}
+      >
+        {requested ? <Check size={15} strokeWidth={2.5} /> : <UserPlus size={15} strokeWidth={2.5} />}
+        <span>{busy ? 'Sending…' : requested ? 'Requested' : 'Connect'}</span>
+      </button>
     </article>
   );
 }

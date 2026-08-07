@@ -282,22 +282,154 @@
 .suggestionHeading h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: #112822; font-size: 17px; font-weight: 900; letter-spacing: -.025em; }
 .suggestionHeading h2 svg { color: #1f6b55; }
 .suggestionHeading > a { color: #1f6b55; font-size: 11px; font-weight: 850; }
-.suggestionRail { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; padding: 14px 24px 28px; scroll-padding-inline: 24px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.suggestionRail { display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain; padding: 14px 24px 28px; scroll-padding-inline: 24px; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .suggestionRail::-webkit-scrollbar { display: none; }
-.suggestionCard { width: min(72vw, 282px); min-width: min(72vw, 282px); overflow: hidden; scroll-snap-align: center; border: 1px solid rgb(31 107 85 / 10%); border-radius: 24px; background: #fff; box-shadow: 0 14px 30px rgb(25 58 47 / 12%); }
-.suggestionProfile { position: relative; display: block; color: #112822; }
-.suggestionProfile > img, .suggestionFallback { display: grid; width: 100%; height: 176px; place-items: center; object-fit: cover; background: linear-gradient(145deg, #dcece5, #efe5d2); color: #1f6b55; font-size: 46px; font-weight: 950; }
-.suggestionSource { position: absolute; top: 10px; left: 10px; z-index: 2; display: inline-flex; max-width: calc(100% - 20px); align-items: center; gap: 5px; border-radius: 999px; background: #faf8f2; padding: 6px 9px; color: #1f6b55; font-size: 9px; font-weight: 850; box-shadow: 0 5px 14px rgb(15 45 35 / 12%); }
-.suggestionSource[data-source="nearby"] { background: #fff4cd; color: #765a00; }
-.suggestionCopy { display: grid; gap: 1px; padding: 11px 14px 9px; }
-.suggestionCopy strong { overflow: hidden; font-size: 15px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
-.suggestionCopy small { overflow: hidden; color: rgb(17 40 34 / 52%); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.suggestionCopy b { margin-top: 3px; color: #1f6b55; font-size: 12px; }
-.suggestionActions { display: grid; grid-template-columns: .8fr 1fr; gap: 7px; padding: 0 10px 10px; }
-.suggestionActions a, .suggestionActions button { display: flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; border-radius: 12px; font-size: 10px; font-weight: 850; }
-.suggestionActions a { background: #f0eee7; color: #315247; }
-.suggestionActions button { background: #1f6b55; color: #fff; }
-.suggestionActions button:disabled { background: #dcece5; color: #1f6b55; }
+
+/* Product-card inspired suggestion card */
+.suggestionCard {
+  position: relative;
+  width: 192px;
+  min-width: 192px;
+  height: 295px;
+  overflow: hidden;
+  scroll-snap-align: center;
+  border-radius: 29px;
+  background-color: #e8e3da;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 14px 32px rgba(18, 35, 28, 0.14);
+  transform: translateZ(0);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+/* White bottom fade — 100% opaque white at the bottom, fading to transparent upward */
+.suggestionCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 29px;
+  background: linear-gradient(to top, rgba(255,255,255,1) 0%, transparent 55%);
+  pointer-events: none;
+}
+.suggestionCard:hover {
+  filter: brightness(1.015);
+  box-shadow: 0 18px 40px rgba(18, 35, 28, 0.18);
+}
+.suggestionCard:active {
+  transform: translateZ(0) scale(0.995);
+}
+
+.suggestionCardLink {
+  position: absolute;
+  inset: 0;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.suggestionSource {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  z-index: 2;
+  display: inline-flex;
+  max-width: calc(100% - 22px);
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  background: rgba(250, 248, 242, 0.92);
+  backdrop-filter: blur(6px);
+  padding: 5px 10px;
+  color: #1f6b55;
+  font-size: 9px;
+  font-weight: 850;
+  box-shadow: 0 4px 12px rgba(15, 45, 35, 0.14);
+}
+.suggestionSource[data-source="nearby"] {
+  background: rgba(255, 244, 205, 0.92);
+  color: #765a00;
+}
+
+.suggestionOverlay {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 14px;
+}
+
+.suggestionName {
+  overflow: hidden;
+  color: #112822;
+  font-size: 15px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.suggestionMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow: hidden;
+  color: rgba(17, 40, 34, 0.62);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestionScore {
+  flex-shrink: 0;
+  margin: 0;
+  color: #1f6b55;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* Buy-hit style connect button */
+.suggestionConnect {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: none;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(8px);
+  color: #1f6b55;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.suggestionConnect:hover {
+  background: #fff;
+  transform: scale(1.03);
+}
+.suggestionConnect:active {
+  transform: scale(0.97);
+}
+.suggestionConnect:disabled {
+  background: rgba(255,255,255,0.7);
+  color: #8aa89a;
+  cursor: default;
+  transform: none;
+}
 
 /* Actions */
 .actions {
