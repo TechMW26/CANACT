@@ -1,6 +1,9 @@
 .overlay {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
   z-index: 2147483500;
   overflow: hidden;
   background: #faf8f2;
@@ -45,7 +48,7 @@
 
 .receiveNavigator {
   position: absolute;
-  top: calc(100% + 22px);
+  top: calc(100% + clamp(12px, 2.5dvh, 22px));
   left: 50%;
   z-index: 50;
   display: flex;
@@ -127,11 +130,12 @@
 }
 
 .receiveClose {
-  position: fixed;
+  position: absolute;
   left: 50%;
-  bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px));
-  z-index: 40;
+  bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 18px));
+  z-index: 60;
   min-width: 132px;
+  max-width: calc(100vw - 32px);
   min-height: 48px;
   padding: 0 28px;
   transform: translateX(-50%);
@@ -143,6 +147,8 @@
   font-weight: 800;
   box-shadow: 0 12px 32px rgb(15 69 56 / 28%);
   cursor: pointer;
+  visibility: visible;
+  pointer-events: auto;
   animation: receiveCloseIn .24s ease-out both;
 }
 
@@ -163,5 +169,16 @@
 @media (max-width: 768px) and (pointer: coarse) {
   .overlay {
     background: #faf8f2;
+  }
+}
+
+@media (max-height: 720px) {
+  .receiveNavigator { gap: 6px; }
+  .receiveControls { grid-template-columns: 38px 1fr 38px; gap: 6px; }
+  .receiveControls button { width: 38px; height: 38px; }
+  .receiveGroups button { min-height: 28px; }
+  .receiveClose {
+    bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 8px));
+    min-height: 44px;
   }
 }

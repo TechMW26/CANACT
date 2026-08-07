@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       kind: 'gift',
       title: `${fromName} gave you ${LIFETIME_CARD_LABELS[kind]}`,
       body: kind === 'custom' ? deliveredCustomText : 'A lifetime recognition card was added to your profile.',
-      data: { fromUid, giftId },
+      data: { fromUid, giftId, family: 'lifetime' },
       read: false,
       createdAt: sentAt,
     }, app, idToken);

@@ -32,7 +32,7 @@ const ALL_RADIAL_ITEMS: Record<string, RadialItem> = {
   '/underground':   { href: '/underground',   label: 'Underground', Icon: Globe2,      className: '' },
 };
 
-const DEFAULT_PLUS_ITEMS = ['/help', '/mood', '/story/create', '/post/create', '/reel/create', '/poll/create', '/rateme/start'];
+const DEFAULT_PLUS_ITEMS = ['/help', '/mood', '/rateme/start', '/leaderboard', '/search', '/notifications', '/profile', '/settings', '/underground'];
 const ITEM_SIZE = 56;
 
 export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; onClose: () => void; plusItems?: string[] }) {

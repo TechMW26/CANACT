@@ -1153,7 +1153,7 @@ function CanactPagesProfileUI({
               <Link href={`/inbox/${userProfile.uid}`} prefetch className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand bg-white font-bold text-brand">Message</Link>
             )
           ) : (
-            <button type="button" onClick={onSupport} className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand/30 bg-white font-bold text-brand/60">Connect to message</button>
+            <button type="button" onClick={onSupport} className="flex h-12 flex-1 items-center justify-center rounded-full border border-brand/30 bg-white font-bold text-brand/60">Message</button>
           )}
         </div>
 

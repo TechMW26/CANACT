@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirebaseAuth, db } from '@/lib/firebase';
+import { clearLocalPhoneSession } from '@/lib/auth';
 import { ref, set } from 'firebase/database';
 import { Brand } from '@/components/Brand';
 import { Button } from '@/components/Button';
@@ -14,7 +14,6 @@ import { ShieldAlert, Eye, EyeOff } from '@/components/icons';
 const ADMIN_EMAIL = 'avi2001raj@gmail.com';
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +31,7 @@ export default function AdminLoginPage() {
     }
     setBusy(true);
     try {
+      clearLocalPhoneSession();
       const auth = getFirebaseAuth();
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = cred.user.uid;
@@ -45,7 +45,9 @@ export default function AdminLoginPage() {
         adminSince: Date.now(),
       });
       toast('Welcome, Admin', 'success');
-      router.replace('/admin');
+      // Reload the auth provider from Firebase persistence so a stale local
+      // development phone session cannot trigger the dashboard guard.
+      window.location.replace('/admin');
     } catch (err: any) {
       const msg = err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password'
         ? 'Invalid email or password'
@@ -56,7 +58,7 @@ export default function AdminLoginPage() {
     } finally {
       setBusy(false);
     }
-  }, [email, password, router]);
+  }, [email, password]);
 
   return (
     <main className="flex min-h-[var(--canact-viewport-height)] items-center justify-center bg-[#F7F4EF] px-4">

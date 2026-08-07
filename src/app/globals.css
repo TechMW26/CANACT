@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Help pull-tab x-axis nudge */
+@keyframes helpNudgeX {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-6px); }
+  30%  { transform: translateX(4px); }
+  45%  { transform: translateX(-3px); }
+  60%  { transform: translateX(2px); }
+  75%  { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+
 /* Liquid Glass fill helper — positions the glass canvas behind children */
 @layer components {
   .lg-glass {
@@ -714,19 +725,23 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
   border: 1px solid rgb(255 255 255 / 66%);
   border-radius: 50%;
   overflow: hidden;
-  background: transparent;
-  color: #1f6b55;
+  background: #1f6b55;
+  color: #fff;
   box-shadow: none;
   flex-shrink: 0;
   z-index: 57;
   transition: transform 320ms cubic-bezier(.22,.85,.3,1);
   /* Positioned next to navbar via JS — see AppShell inline style */
 }
+.canact-create-nav-button .canact-adaptive-icon {
+  color: #fff !important;
+  filter: none;
+}
 .canact-create-button-glass { border-radius: 50%; box-shadow: none; }
 
 .canact-create-nav-button:active { opacity: .82; }
 .canact-create-nav-button-open {
-  background: transparent;
+  background: #1f6b55;
   box-shadow: none;
   z-index: 65 !important;
 }
@@ -958,6 +973,13 @@ body > div:has(iframe[title*="recaptcha challenge"]) {
 .canact-score-island-backdrop[data-expanded="true"] { visibility: visible; background: var(--canact-popup-backdrop) !important; opacity: 1; pointer-events: auto; transition-delay: 0s; }
 .canact-liquid-sheet-panel {
   background: #fff !important;
+}
+.canact-liquid-sheet-panel.canact-liquid-sheet-panel-clear {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.canact-liquid-sheet-panel.canact-liquid-sheet-panel-flat {
+  box-shadow: none !important;
 }
 .canact-liquid-sheet-panel,
 .canact-sheet-slide[data-liquid-glass]:not([data-liquid-glass="none"]) {

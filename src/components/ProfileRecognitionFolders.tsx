@@ -28,6 +28,7 @@ import { CardsFolderSVG, ConnectionCardsFolderSVG } from './FolderSVGs';
 import { LifetimeCardSendAnimation } from './LifetimeCardSendAnimation';
 import { RocketLaunchOverlay } from './RocketLaunchOverlay';
 import { ConnectionCardContent } from './ConnectionAttributeCard';
+import { useAttributeCardStyle } from '@/lib/attributeCardStyle';
 
 type Folder = 'connections' | 'cards';
 type CardMode = 'received' | 'reward';
@@ -332,7 +333,14 @@ export function ProfileRecognitionFolders({
   const receivedConnections = suppliedConnectionCards ?? loadedConnections;
   const rewardCards = LIFETIME_CARD_KINDS.map((kind) => inventory[kind]);
   const availableCount = rewardCards.filter((item) => item.status === 'available').length;
-  const connectionCards = CARD_KEYS.map((key) => ({ key }));
+  const sentConnectionKinds = useMemo(() => new Set(
+    receivedConnections
+      .filter((gift) => gift.fromUid === user?.uid && gift.toUid === profile.uid)
+      .map((gift) => gift.kind),
+  ), [profile.uid, receivedConnections, user?.uid]);
+  const connectionCards = useMemo(() => CARD_KEYS
+    .map((key) => ({ key, sent: sentConnectionKinds.has(key) }))
+    .sort((left, right) => Number(left.sent) - Number(right.sent)), [sentConnectionKinds]);
   const connectionCount = receivedConnections.length;
   const giftSourceKey = receivedGift ? `received:${receivedGift.id}` : giftKind ? `inventory:${giftKind}` : null;
   const profileRecipient = useMemo<GiftCandidate>(() => ({
@@ -344,13 +352,13 @@ export function ProfileRecognitionFolders({
   }), [profile.city, profile.firstName, profile.fullName, profile.photoURL, profile.uid]);
   const givenAttrKeys = useMemo(() => new Set(Object.keys(myAttrVotes)), [myAttrVotes]);
 
-  function openFolder(next: Folder) {
+  function openFolder(next: Folder, nextConnectionMode: ConnectionMode = 'received') {
     setPickerOpen(false); setClosingGift(false); setGiftKind(null); setReceivedGift(null);
     setConnectionPickerOpen(false); setClosingConnection(false); setConnectionKind(null);
     setSlide(0);
     setFolder(next);
     if (next === 'cards') setMode('received');
-    if (next === 'connections') setConnectionMode('received');
+    if (next === 'connections') setConnectionMode(nextConnectionMode);
   }
 
   function openConnectionStack(kind: CardKey) {
@@ -471,6 +479,7 @@ export function ProfileRecognitionFolders({
     setConnectionPickerOpen(false);
     setClosingConnection(false);
     setConnectionKind(null);
+    setSlide(0);
     setConnectionMode('send');
   }
 
@@ -486,13 +495,13 @@ export function ProfileRecognitionFolders({
         {receivedConnections.length ? (
           <ConnectionCardShowcaseCarousel cards={receivedConnections} onExpand={openConnectionStack} />
         ) : (
-          <button type="button" className={styles.connectionEmpty} onClick={() => { openFolder('connections'); setConnectionMode('received'); }}>
+          <button type="button" className={styles.connectionEmpty} onClick={() => openFolder('connections', 'received')}>
             <Sparkles size={22} />
             <span><strong>No cards yet</strong><small>Swipe up on a card to recognise someone.</small></span>
           </button>
         )}
         {!viewingSelf ? (
-          <button type="button" className={styles.connectionGive} onClick={() => { openFolder('connections'); setConnectionMode('send'); }}>
+          <button type="button" className={styles.connectionGive} onClick={() => openFolder('connections', 'send')}>
             <ArrowUp size={16} /> Give a card
           </button>
         ) : null}
@@ -538,27 +547,32 @@ export function ProfileRecognitionFolders({
         </Link>
       ) : null}
 
-      {showCards ? <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost>
+      {showCards ? <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost nearFullscreen flatSurface={folder === 'connections'}>
         {folder === 'connections' ? (
-          <div className={styles.gallery}>
-            <div className={styles.tabs}>
-              <button type="button" className={connectionMode === 'received' ? styles.activeTab : ''} onClick={() => setConnectionMode('received')}>Received · {connectionCount}</button>
-              <button type="button" className={connectionMode === 'send' ? styles.activeTab : ''} onClick={() => setConnectionMode('send')}>Give · {CARD_KEYS.length}</button>
-            </div>
+          <div className={styles.gallery} data-connection-popup="true">
             {connectionMode === 'received' ? (
               <CardGallery items={receivedConnections} index={slide} setIndex={setSlide} empty="No connection cards received yet." render={(gift) => <ConnectionCard gift={gift} />} />
             ) : (
-              <CardGallery items={connectionCards} index={slide} setIndex={setSlide} empty="No connection cards available." onDragY={connectionSwipe.onDrag} render={(item) => (
+              <CardGallery
+                items={connectionCards}
+                index={slide}
+                setIndex={setSlide}
+                empty="No connection cards available."
+                onDragY={connectionCards[Math.min(slide, Math.max(connectionCards.length - 1, 0))]?.sent ? undefined : connectionSwipe.onDrag}
+                render={(item) => (
                 <SendableConnectionCard
                   cardKey={item.key}
                   active={connectionPickerOpen && connectionKind === item.key}
                   exiting={closingConnection && connectionKind === item.key}
                   sending={sendingConnection === item.key}
+                  sent={item.sent}
+                  recipientName={profile.firstName || profile.fullName || 'this person'}
                   dragY={connectionSwipe.dragY}
                   launchRef={connectionSwipe.launchRef}
                   onSend={() => openConnectionPicker(item.key)}
                 />
-              )} />
+                )}
+              />
             )}
           </div>
         ) : folder === 'cards' ? (
@@ -628,8 +642,10 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
   }, [cards]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragX, setDragX] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const dragXRef = useRef(0);
-  const dragRef = useRef<{ pointerId: number; startX: number; moved: boolean } | null>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startedAt: number; axis: 'x' | 'y' | null; target: EventTarget | null } | null>(null);
   const suppressClickRef = useRef(false);
   const count = groups.length;
   const wrapIndex = useCallback((value: number) => count ? (value + count) % count : 0, [count]);
@@ -648,10 +664,19 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
     if (!drag || drag.pointerId !== pointerId) return;
     dragRef.current = null;
     const travelled = dragXRef.current;
-    if (!cancelled && Math.abs(travelled) >= 42) move(travelled < 0 ? 1 : -1);
-    if (drag.moved) {
+    const elapsed = Math.max(1, performance.now() - drag.startedAt);
+    const velocity = Math.abs(travelled) / elapsed;
+    const committedSwipe = !cancelled && drag.axis === 'x'
+      && (Math.abs(travelled) >= 34 || (Math.abs(travelled) >= 16 && velocity >= .32));
+    if (committedSwipe) move(travelled < 0 ? 1 : -1);
+    if (committedSwipe) {
       suppressClickRef.current = true;
       window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+    }
+    // Release pointer capture so child click events fire on mobile
+    const captureTarget = drag.target as Element | null;
+    if (captureTarget?.hasPointerCapture?.(pointerId)) {
+      captureTarget.releasePointerCapture(pointerId);
     }
     dragXRef.current = 0;
     setDragX(0);
@@ -660,24 +685,63 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
   const positions = count > 1 ? [-1, 0, 1] : [0];
   const activeGroup = groups[activeIndex];
 
+  useLayoutEffect(() => {
+    const activeItem = activeItemRef.current;
+    if (!activeItem) return;
+    const frontCard = Array.from(activeItem.children).find((child): child is HTMLElement => (
+      child instanceof HTMLElement
+      && child.tagName === 'ARTICLE'
+      && !child.hasAttribute('data-stack-layer')
+    ));
+    const cardStage = frontCard?.querySelector<HTMLElement>('[data-attribute-card-style]') ?? null;
+    const measure = () => {
+      const stackTail = activeGroup && activeGroup.gifts.length > 1 ? 24 : 9;
+      const cardHeight = Math.max(
+        activeItem.offsetHeight,
+        frontCard?.offsetHeight ?? 0,
+        frontCard?.scrollHeight ?? 0,
+        cardStage?.offsetHeight ?? 0,
+        cardStage?.scrollHeight ?? 0,
+      );
+      const nextHeight = Math.ceil(cardHeight + stackTail);
+      setViewportHeight((current) => current === nextHeight ? current : nextHeight);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(activeItem);
+    if (frontCard) observer.observe(frontCard);
+    if (cardStage) observer.observe(cardStage);
+    measure();
+    return () => observer.disconnect();
+  }, [activeGroup]);
+
   return (
     <div className={styles.connectionCarousel}>
       <div
         className={styles.connectionCarouselViewport}
-        style={{ '--carousel-drag': `${dragX * .72}px` } as React.CSSProperties}
+        data-dragging={dragRef.current !== null}
+        style={{
+          '--carousel-drag': `${dragX * .72}px`,
+          '--connection-carousel-height': viewportHeight ? `${viewportHeight}px` : undefined,
+        } as React.CSSProperties}
         onPointerDown={(event) => {
           if (!event.isPrimary || dragRef.current) return;
-          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, moved: false };
+          dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startedAt: performance.now(), axis: null, target: event.currentTarget };
           dragXRef.current = 0;
-          event.currentTarget.setPointerCapture?.(event.pointerId);
         }}
         onPointerMove={(event) => {
           const drag = dragRef.current;
           if (!drag || drag.pointerId !== event.pointerId) return;
           const nextX = event.clientX - drag.startX;
-          if (Math.abs(nextX) > 6) drag.moved = true;
-          dragXRef.current = nextX;
-          setDragX(nextX);
+          const nextY = event.clientY - drag.startY;
+          if (!drag.axis && (Math.abs(nextX) > 5 || Math.abs(nextY) > 5)) {
+            drag.axis = Math.abs(nextX) > Math.abs(nextY) * .9 ? 'x' : 'y';
+          }
+          if (drag.axis === 'x') {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            dragXRef.current = nextX;
+            setDragX(nextX);
+          }
         }}
         onPointerUp={(event) => finishDrag(event.pointerId)}
         onPointerCancel={(event) => finishDrag(event.pointerId, true)}
@@ -691,12 +755,19 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
           const active = position === 0;
           return (
             <div
-              key={`${position}:${group.kind}`}
+              ref={active ? activeItemRef : undefined}
+              key={count === 2 ? `${position}:${group.kind}` : group.kind}
               className={styles.connectionCarouselItem}
               data-position={position}
               data-stacked={active && group.gifts.length > 1}
               data-connection-kind={group.kind}
             >
+              {active && group.gifts.length > 1 ? (
+                <>
+                  <ConnectionCard gift={representative} stackLayer={2} />
+                  <ConnectionCard gift={representative} stackLayer={1} />
+                </>
+              ) : null}
               <ConnectionCard gift={representative} />
               {active && group.gifts.length > 1 ? <span className={styles.connectionStackCount}>×{group.gifts.length}</span> : null}
               <button
@@ -715,17 +786,13 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
           );
         })}
       </div>
-      <div className={styles.connectionCarouselMeta} aria-live="polite">
-        <span>{activeGroup ? CARD_LABELS[activeGroup.kind] : ''}</span>
-        <small>{activeGroup?.gifts.length && activeGroup.gifts.length > 1 ? `${activeGroup.gifts.length} cards · tap stack to expand` : `${activeIndex + 1} of ${count}`}</small>
-      </div>
     </div>
   );
 }
 
 function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { items: T[]; index: number; setIndex: (index: number) => void; empty: string; render: (item: T) => React.ReactNode; onDragY?: (dy: number, phase: 'move' | 'end') => void }) {
   const safeIndex = Math.min(index, Math.max(items.length - 1, 0));
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; idx: number; dir: 'h' | 'v' | null } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startedAt: number; idx: number; dir: 'h' | 'v' | null } | null>(null);
   const dragXRef = useRef(0);
   const dragYRef = useRef(0);
   const [dragX, setDragX] = useState(0);
@@ -735,24 +802,29 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!e.isPrimary || dragRef.current) return;
-    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, idx: safeIndex, dir: null };
+    if ((e.target as HTMLElement).closest('button')) return;
+    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startedAt: performance.now(), idx: safeIndex, dir: null };
     dragXRef.current = 0;
     dragYRef.current = 0;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
     // Determine direction once threshold passed
-    if (!dragRef.current.dir && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      dragRef.current.dir = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
-      if (dragRef.current.dir === 'h') (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    if (!dragRef.current.dir && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      dragRef.current.dir = Math.abs(dx) > Math.abs(dy) * .9 ? 'h' : 'v';
+      e.currentTarget.setPointerCapture?.(e.pointerId);
     }
     if (dragRef.current.dir === 'h') {
-      dragXRef.current = dx;
-      setDragX(dx);
+      e.preventDefault();
+      const atStart = safeIndex === 0 && dx > 0;
+      const atEnd = safeIndex === items.length - 1 && dx < 0;
+      const resistedX = atStart || atEnd ? dx * .28 : dx;
+      dragXRef.current = resistedX;
+      setDragX(resistedX);
     } else if (dragRef.current.dir === 'v' && onDragY) {
+      e.preventDefault();
       dragYRef.current = dy;
       onDragY(dy, 'move');
     }
@@ -763,9 +835,11 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
     dragRef.current = null;
     if (drag.dir === 'h') {
       const x = dragXRef.current;
-      const threshold = 60;
-      if (x < -threshold && safeIndex < items.length - 1) { setAnimDir('left'); setIndex(safeIndex + 1); }
-      else if (x > threshold && safeIndex > 0) { setAnimDir('right'); setIndex(safeIndex - 1); }
+      const elapsed = Math.max(1, performance.now() - drag.startedAt);
+      const velocity = Math.abs(x) / elapsed;
+      const committed = !cancelled && (Math.abs(x) >= 34 || (Math.abs(x) >= 16 && velocity >= .32));
+      if (committed && x < 0 && safeIndex < items.length - 1) { setAnimDir('left'); setIndex(safeIndex + 1); }
+      else if (committed && x > 0 && safeIndex > 0) { setAnimDir('right'); setIndex(safeIndex - 1); }
     } else if (drag.dir === 'v' && onDragY) {
       onDragY(cancelled ? 0 : dragYRef.current, 'end');
     } else if (onDragY) {
@@ -777,7 +851,7 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
   if (!items.length) return <div className={styles.empty}>{empty}</div>;
   return (
     <div className={styles.gallery}>
-      <div className={styles.slider}
+      <div className={styles.slider} data-vertical-swipe={onDragY ? 'true' : undefined}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={(event) => finishPointer(false, event.pointerId)}
         onPointerCancel={(event) => finishPointer(true, event.pointerId)}
@@ -796,26 +870,44 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
   );
 }
 
-function ConnectionCard({ gift }: { gift: ConnectionCardGift }) {
+function ConnectionCard({ gift, stackLayer }: { gift: ConnectionCardGift; stackLayer?: 1 | 2 }) {
+  const cardStyle = useAttributeCardStyle();
   return (
-    <article className={`${styles.card} ${styles.connectionCard}`} data-kind={gift.kind} data-family="connection" data-connection-kind={gift.kind}>
+    <article
+      className={`${styles.card} ${styles.connectionCard}`}
+      data-kind={gift.kind}
+      data-family="connection"
+      data-connection-kind={gift.kind}
+      data-connection-card-style={cardStyle}
+      data-stack-layer={stackLayer}
+      aria-hidden={stackLayer ? true : undefined}
+    >
       <ConnectionCardContent
         cardKey={gift.kind}
-        footer={<><b>Given by:</b> {gift.fromName} · {new Date(gift.sentAt).toLocaleDateString()}</>}
-        trailing={<Check size={18} />}
+        givenBy={gift.fromName}
+        date={new Date(gift.sentAt).toLocaleDateString()}
+        showGivenDetails
       />
     </article>
   );
 }
 
-function SendableConnectionCard({ cardKey, active, exiting, sending, dragY, launchRef, onSend }: { cardKey: CardKey; active: boolean; exiting: boolean; sending: boolean; dragY: number; launchRef: React.MutableRefObject<(() => void) | null>; onSend: () => void }) {
+function SendableConnectionCard({ cardKey, active, exiting, sending, sent, recipientName, dragY, launchRef, onSend }: { cardKey: CardKey; active: boolean; exiting: boolean; sending: boolean; sent: boolean; recipientName: string; dragY: number; launchRef: React.MutableRefObject<(() => void) | null>; onSend: () => void }) {
   return (
-    <SwipeableLifetimeCard kind={cardKey} family="connection" sourceKey={`connection:${cardKey}`} enabled active={active} exiting={exiting} sending={sending} dragY={dragY} launchRef={launchRef} onGift={onSend}>
+    <SwipeableLifetimeCard kind={cardKey} family="connection" sourceKey={`connection:${cardKey}`} enabled={!sent} active={active} exiting={exiting} sending={sending} sent={sent} dragY={dragY} launchRef={launchRef} onGift={onSend}>
       <ConnectionCardContent
         cardKey={cardKey}
-        footer={<><b>Issued to:</b> {active || exiting ? 'Choose a connection' : 'Someone you appreciate'} {active || exiting ? null : <ArrowUp size={15} />}</>}
-        trailing={<Send size={18} />}
+        givenBy="YOU"
+        date={new Date().toLocaleDateString()}
       />
+      {sent ? (
+        <span className={styles.sentConnectionShell} aria-label={`${CARD_LABELS[cardKey]} already sent to ${recipientName}`}>
+          <span><Check size={18} /></span>
+          <small>Already given</small>
+          <strong>{CARD_LABELS[cardKey]}</strong>
+          <em>Sent to {recipientName}</em>
+        </span>
+      ) : null}
     </SwipeableLifetimeCard>
   );
 }
@@ -869,6 +961,7 @@ function RewardCard({ slot, active, exiting, sending, dragY, launchRef, onGift }
 }
 
 function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, active, exiting, sending, sent = false, dragY, launchRef, onGift, children }: { kind: string; family?: 'lifetime' | 'connection'; sourceKey: string; enabled: boolean; active: boolean; exiting: boolean; sending: boolean; sent?: boolean; dragY: number; launchRef: React.MutableRefObject<(() => void) | null>; onGift: () => void; children: React.ReactNode }) {
+  const connectionCardStyle = useAttributeCardStyle();
   const placeholderRef = useRef<HTMLDivElement | null>(null);
   const onGiftRef = useRef(onGift);
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
@@ -940,8 +1033,9 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
       };
       if (bounds?.width && bounds.height) {
         const availableWidth = Math.min(620, window.innerWidth - 32, next.width - 32);
-        const scale = Math.max(.68, Math.min(1.16, availableWidth / bounds.width));
-        nextPanel.style.setProperty('--canact-lifted-card-clearance', `${Math.ceil(24 + bounds.height * scale + 16)}px`);
+        const scale = Math.min(1, availableWidth / bounds.width);
+        const overlap = Math.min(42, Math.max(0, next.top - 16));
+        nextPanel.style.setProperty('--canact-lifted-card-clearance', `${Math.ceil(24 + bounds.height * scale - overlap + 16)}px`);
       }
       setPopupBounds((current) => current
         && Math.abs(current.left - next.left) < .5
@@ -968,12 +1062,13 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
   const viewportWidth = typeof window === 'undefined' ? 430 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
   const availableWidth = Math.min(620, viewportWidth - 32, (popupBounds?.width ?? viewportWidth) - 32);
-  const liftScale = bounds ? Math.max(.68, Math.min(1.16, availableWidth / bounds.width)) : 1;
+  const liftScale = bounds ? Math.min(1, availableWidth / bounds.width) : 1;
   const anchorCenter = popupBounds ? popupBounds.left + (popupBounds.width / 2) : viewportWidth / 2;
   const liftX = bounds ? anchorCenter - (bounds.left + bounds.width / 2) : 0;
   const scaledHeight = bounds ? bounds.height * liftScale : 0;
   const viewportLiftTop = Math.max(20, Math.min(72, viewportHeight * .06));
-  const liftTop = popupBounds ? Math.max(16, popupBounds.top + 24) : viewportLiftTop;
+  const sheetOverlap = popupBounds ? Math.min(42, Math.max(0, popupBounds.top - 16)) : 0;
+  const liftTop = popupBounds ? Math.max(16, popupBounds.top - sheetOverlap) : viewportLiftTop;
   const scaleTopOffset = bounds ? (bounds.height - scaledHeight) / 2 : 0;
   const liftY = bounds ? liftTop - bounds.top - scaleTopOffset : 0;
   const dragProgress = Math.min(1, Math.max(0, -dragY / 110));
@@ -992,9 +1087,11 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
       data-lifetime-card-source={sourceKey}
       data-kind={kind}
       data-family={family}
+      data-connection-card-style={family === 'connection' ? connectionCardStyle : undefined}
       data-sent={sent}
       data-sending={sending}
-      data-reward="true"
+      data-reward={enabled ? 'true' : undefined}
+      data-disabled={!enabled ? 'true' : undefined}
       data-dragging={isDragging}
       data-lifted={active}
       data-exiting={exiting}
@@ -1019,7 +1116,11 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
   );
 
   return (
-    <div ref={placeholderRef} className={styles.rewardCardPlaceholder}>
+    <div
+      ref={placeholderRef}
+      className={styles.rewardCardPlaceholder}
+      style={floating && bounds ? { height: bounds.height } : undefined}
+    >
       {floating && bounds && typeof document !== 'undefined' ? createPortal(card, document.body) : card}
     </div>
   );
@@ -1101,7 +1202,7 @@ function RecipientPicker({ open, kind, sourceGift, profile, fixedRecipient, onCl
   return (
     <>
       <Sheet open={open} onClose={sending ? () => {} : onClose} onExited={onExited} title={kind === 'custom' && phase === 'message' ? 'Write your card' : kind ? `Give ${LIFETIME_CARD_LABELS[kind]}` : 'Give card'} hideTitle hideClose topmost>
-        <div className={`${styles.picker} ${kind ? styles.pickerWithCard : ''}`}>
+        <div className={`${styles.picker} ${kind ? styles.pickerWithCard : ''}`} data-fixed-recipient={fixedRecipient ? 'true' : undefined}>
           <div className={styles.warning}>{sourceGift ? 'Passing this card on removes it from your collection forever. It can return only if a future owner chooses to send it back.' : 'This is one of only three cards you can originate. Once sent, it leaves your collection forever unless someone gives a lifetime card back to you.'}</div>
           {kind === 'custom' && !sourceGift && phase === 'message' ? (
             <div className={styles.messageStep}>
@@ -1216,8 +1317,8 @@ function ConnectionRecipientPicker({ open, kind, profile, fixedRecipient, onClos
 
   return (
     <>
-      <Sheet open={open} onClose={sending ? () => {} : onClose} onExited={onExited} title={kind ? `Send ${CARD_LABELS[kind]}` : 'Send connection card'} hideTitle hideClose topmost>
-        <div className={`${styles.picker} ${kind ? styles.pickerWithCard : ''}`}>
+      <Sheet open={open} onClose={sending ? () => {} : onClose} onExited={onExited} title={kind ? `Send ${CARD_LABELS[kind]}` : 'Send connection card'} hideTitle hideClose topmost nearFullscreen>
+        <div className={`${styles.picker} ${kind ? styles.pickerWithCard : ''}`} data-fixed-recipient={fixedRecipient ? 'true' : undefined}>
           <div className={styles.connectionNote}>Connection cards celebrate a quality you genuinely experienced. Each card type can be sent once to the same person.</div>
           {!fixedRecipient ? <div className={styles.filters}>{FILTERS.map((item) => <button key={item.id} type="button" className={filter === item.id ? styles.activeFilter : ''} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div> : null}
           {!fixedRecipient ? <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label> : null}
@@ -1236,7 +1337,7 @@ function ConnectionRecipientPicker({ open, kind, profile, fixedRecipient, onClos
       {sendAnimation ? (
         <LifetimeCardSendAnimation sourceRect={sendAnimation.rect} onComplete={finishAnimation} ariaLabel="Sending connection card" renderCard={(layerClassName, style) => (
           <article className={`${styles.card} ${styles.connectionCard} ${layerClassName}`} data-connection-kind={sendAnimation.kind} style={style} aria-hidden="true">
-            <ConnectionCardContent cardKey={sendAnimation.kind} footer={<><b>Issued to:</b> {selected?.name || 'A connection'}</>} trailing={<Send size={17} />} />
+            <ConnectionCardContent cardKey={sendAnimation.kind} givenBy="YOU" date={new Date().toLocaleDateString()} />
           </article>
         )} />
       ) : null}

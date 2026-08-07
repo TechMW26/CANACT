@@ -1,0 +1,16 @@
+.git/
+.next/
+.next-dev/
+.venv/
+node_modules/
+android/
+android-www/
+functions/
+tmp/
+assets/
+/*.apk
+/*.html
+/*.mp3
+/*.png
+/*.svg
+tsconfig.tsbuildinfo

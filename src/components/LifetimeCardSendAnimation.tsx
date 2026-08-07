@@ -105,28 +105,66 @@ export function LifetimeCardSendAnimation({
   const dismissRef = useRef<(() => void) | null>(null);
   const completeRef = useRef(onComplete);
   const completedRef = useRef(false);
-  const [receiveReady, setReceiveReady] = useState(false);
+  const dismissingRef = useRef(false);
   const [activeCard, setActiveCard] = useState(0);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === 'undefined' ? 390 : window.innerWidth,
+    height: typeof window === 'undefined' ? 844 : (window.visualViewport?.height ?? window.innerHeight),
+  }));
   const swipeStartRef = useRef<number | null>(null);
 
   useEffect(() => { completeRef.current = onComplete; }, [onComplete]);
 
+  useEffect(() => {
+    const updateViewport = () => {
+      const width = window.innerWidth;
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      setViewportSize((current) => current.width === width && current.height === height ? current : { width, height });
+    };
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
+    };
+  }, []);
+
   const geometry = useMemo(() => {
-    const viewportWidth = typeof window === 'undefined' ? 390 : window.innerWidth;
-    const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
+    const viewportWidth = viewportSize.width;
+    const viewportHeight = viewportSize.height;
     const naturalWidth = Math.max(1, sourceRect.naturalWidth);
     const naturalHeight = Math.max(1, sourceRect.naturalHeight);
-    const displayWidth = Math.min(620, viewportWidth - 28, naturalWidth);
+    const receivedCardCount = receiveCards?.length ?? 0;
+    const receiveNavigatorHeight = direction === 'receive' && receivedCardCount > 1 ? 88 : 0;
+    const receiveNavigatorGap = receiveNavigatorHeight ? 22 : 0;
+    const receiveActionReserve = direction === 'receive' ? 78 : 0;
+    const receiveTopInset = direction === 'receive' ? 16 : 0;
+    const availableCardHeight = Math.max(
+      180,
+      viewportHeight - receiveTopInset - receiveActionReserve - receiveNavigatorHeight - receiveNavigatorGap,
+    );
+    const displayWidth = Math.min(
+      620,
+      viewportWidth - 28,
+      naturalWidth,
+      availableCardHeight * (naturalWidth / naturalHeight),
+    );
+    const targetScale = displayWidth / naturalWidth;
+    const receiveCardHeight = naturalHeight * targetScale;
+    const receiveAreaBottom = viewportHeight - receiveActionReserve - receiveNavigatorHeight - receiveNavigatorGap;
+    const receiveCenterY = receiveTopInset + Math.max(receiveCardHeight, receiveAreaBottom - receiveTopInset) / 2;
     return {
       naturalWidth,
       naturalHeight,
-      targetScale: displayWidth / naturalWidth,
+      targetScale,
       sourceScale: sourceRect.width / naturalWidth,
       sourceX: sourceRect.left + sourceRect.width / 2 - viewportWidth / 2,
       sourceY: sourceRect.top + sourceRect.height / 2 - viewportHeight / 2,
+      receiveY: direction === 'receive' ? receiveCenterY - viewportHeight / 2 : 0,
       viewportHeight,
     };
-  }, [sourceRect.height, sourceRect.left, sourceRect.naturalHeight, sourceRect.naturalWidth, sourceRect.top, sourceRect.width]);
+  }, [direction, receiveCards?.length, sourceRect.height, sourceRect.left, sourceRect.naturalHeight, sourceRect.naturalWidth, sourceRect.top, sourceRect.width, viewportSize.height, viewportSize.width]);
 
   useEffect(() => {
     setActiveCard((current) => Math.min(current, Math.max(0, (receiveCards?.length ?? 1) - 1)));
@@ -140,7 +178,7 @@ export function LifetimeCardSendAnimation({
     if (!overlay || !card || !glow || !canvas) return;
 
     completedRef.current = false;
-    setReceiveReady(false);
+    dismissingRef.current = false;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const duration = (value: number) => reducedMotion ? .01 : value;
     const context = canvas.getContext('2d');
@@ -254,7 +292,7 @@ export function LifetimeCardSendAnimation({
         xPercent: -50,
         yPercent: -50,
         x: 0,
-        y: 22,
+        y: geometry.receiveY + 22,
         scale: geometry.targetScale * .82,
         rotation: -1.5,
         opacity: 0,
@@ -264,21 +302,18 @@ export function LifetimeCardSendAnimation({
         timeline
           .set(overlay, { opacity: 1 })
           .set(glow, { opacity: 1, scale: 1 })
-          .set(card, { y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1 })
-          .call(() => setReceiveReady(true));
+          .set(card, { y: geometry.receiveY, scale: geometry.targetScale, rotation: 0, opacity: 1 });
       } else {
         timeline
           .to(overlay, { duration: duration(.18), opacity: 1, ease: 'power1.out' })
           .call(playIntroOnce, undefined, '<.02')
           .to(glow, { duration: duration(.48), opacity: 1, scale: 1, ease: 'power2.out' }, '<')
-          .to(card, { duration: duration(.52), y: 0, scale: geometry.targetScale, rotation: 0, opacity: 1, ease: 'back.out(1.35)' }, '<.03')
-          .call(() => setReceiveReady(true));
+          .to(card, { duration: duration(.52), y: geometry.receiveY, scale: geometry.targetScale, rotation: 0, opacity: 1, ease: 'back.out(1.35)' }, '<.03');
       }
 
       dismissRef.current = () => {
-        setReceiveReady(false);
         gsap.timeline({ defaults: { overwrite: 'auto' }, onComplete: finishOnce })
-          .to(card, { duration: duration(.24), y: 18, scale: geometry.targetScale * .94, opacity: 0, ease: 'power2.in' })
+          .to(card, { duration: duration(.24), y: geometry.receiveY + 18, scale: geometry.targetScale * .94, opacity: 0, ease: 'power2.in' })
           .to(glow, { duration: duration(.2), opacity: 0, scale: 1.12, ease: 'power1.in' }, '<')
           .to(overlay, { duration: duration(.18), opacity: 0, ease: 'power1.in' }, '<.05');
       };
@@ -313,7 +348,24 @@ export function LifetimeCardSendAnimation({
     };
   }, [direction, geometry, tone]);
 
-  const dismissReceive = useCallback(() => dismissRef.current?.(), []);
+  const dismissReceive = useCallback(() => {
+    if (completedRef.current || dismissingRef.current) return;
+    dismissingRef.current = true;
+    if (dismissRef.current) dismissRef.current();
+    else {
+      completedRef.current = true;
+      completeRef.current();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (direction !== 'receive') return;
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismissReceive();
+    };
+    window.addEventListener('keydown', dismissOnEscape);
+    return () => window.removeEventListener('keydown', dismissOnEscape);
+  }, [direction, dismissReceive]);
   const cardCount = receiveCards?.length ?? 0;
   const activeGroup = receiveCards?.[activeCard]?.group;
   const groups = useMemo(() => (['connection', 'lifetime'] as const).flatMap((group) => {
@@ -335,7 +387,7 @@ export function LifetimeCardSendAnimation({
       role="status"
       aria-live="polite"
       aria-label={ariaLabel}
-      onClick={(event) => { if (direction === 'receive' && cardCount <= 1 && event.target === event.currentTarget) dismissReceive(); }}
+      onClick={(event) => { if (direction === 'receive' && event.target === event.currentTarget) dismissReceive(); }}
     >
       <canvas ref={canvasRef} className={styles.confetti} aria-hidden="true" />
       <div className={styles.stage}>
@@ -373,7 +425,7 @@ export function LifetimeCardSendAnimation({
               </div>
             );
           }) : renderCard(styles.cardLayer, { width: geometry.naturalWidth, height: geometry.naturalHeight })}
-          {direction === 'receive' && receiveReady && cardCount > 1 ? (
+          {direction === 'receive' && cardCount > 1 ? (
             <div className={styles.receiveNavigator} aria-label="Received cards">
               <div className={styles.receiveGroups} data-count={groups.length} data-active={activeGroup}>
                 {groups.map(({ group, indices }) => (
@@ -391,14 +443,14 @@ export function LifetimeCardSendAnimation({
           ) : null}
         </div>
       </div>
-      {direction === 'receive' && receiveReady ? (
+      {direction === 'receive' ? (
         <button
           type="button"
           className={styles.receiveClose}
           onClick={dismissReceive}
-          aria-label="Close received cards"
+          aria-label="Acknowledge received cards"
         >
-          Done
+          Acknowledge
         </button>
       ) : null}
     </div>,

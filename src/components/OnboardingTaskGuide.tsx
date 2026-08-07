@@ -26,6 +26,7 @@ import {
   syncContactRecords,
 } from '@/lib/services/contactSync';
 import { toast } from './Toaster';
+import { enableWebPush } from '@/lib/services/push';
 import styles from './OnboardingTaskGuide.module.css';
 
 type TourStep = { selector: string; eyebrow: string; title: string; body: string };
@@ -187,7 +188,13 @@ export function OnboardingTaskGuide() {
         if (cap?.isNativePlatform?.()) {
           const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
           granted = (await FirebaseMessaging.requestPermissions()).receive === 'granted';
-        } else if (typeof Notification !== 'undefined') granted = (await Notification.requestPermission()) === 'granted';
+        } else {
+          const result = await enableWebPush(user.uid);
+          if (result.reason === 'ios-install-required') {
+            throw new Error('In Safari, add Canact to your Home Screen, open it from the new icon, then tap Allow again.');
+          }
+          granted = result.ok;
+        }
         if (!granted) throw new Error('Notification permission was not granted');
         await signal(activeTask.id);
         toast('Notifications enabled', 'success');

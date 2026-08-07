@@ -101,7 +101,7 @@ export default function HelpDetailPage() {
           </span>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           {!mine && h.status !== 'closed' && (
             offered ? (
               <>
@@ -113,17 +113,17 @@ export default function HelpDetailPage() {
                 )}
               </>
             ) : (
-              <Button onClick={() => acceptHelp(h.id, { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL })}>
+              <Button full onClick={() => acceptHelp(h.id, { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL })}>
                 Offer to help
               </Button>
             )
           )}
           {mine && h.status !== 'closed' && (
             <>
-              <Button onClick={() => requesterCloseHelp(h.id, 'yes')}>Resolved — Yes</Button>
-              <Button variant="subtle" onClick={() => requesterCloseHelp(h.id, 'tried-good')}>Tried (good intent)</Button>
-              <Button variant="subtle" className="!text-red-600" onClick={() => requesterCloseHelp(h.id, 'tried-bad')}>Tried (bad intent)</Button>
-              <Button variant="outline" onClick={() => requesterCloseHelp(h.id, 'no').then(() => router.replace('/help'))}>Not resolved</Button>
+              <button type="button" onClick={() => requesterCloseHelp(h.id, 'yes')} className="inline-flex items-center justify-center gap-2 rounded-full font-semibold h-11 px-2 text-[13px] text-white border-0" style={{ background: '#1F6B55' }}>Resolved — Yes</button>
+              <button type="button" onClick={() => requesterCloseHelp(h.id, 'tried-good')} className="inline-flex items-center justify-center gap-2 rounded-full font-semibold h-11 px-2 text-[13px] text-white border-0" style={{ background: '#0d9488' }}>Tried (good intent)</button>
+              <button type="button" onClick={() => requesterCloseHelp(h.id, 'tried-bad')} className="inline-flex items-center justify-center gap-2 rounded-full font-semibold h-11 px-2 text-[13px] text-white border-0" style={{ background: '#dc2626' }}>Tried (bad intent)</button>
+              <button type="button" onClick={() => requesterCloseHelp(h.id, 'no').then(() => router.replace('/help'))} className="inline-flex items-center justify-center gap-2 rounded-full font-semibold h-11 px-2 text-[13px] text-white border-0" style={{ background: '#6b7280' }}>Not resolved</button>
             </>
           )}
         </div>
@@ -230,6 +230,7 @@ function HelperRow({
           ) : (
             <Button
               size="sm"
+              full
               onClick={() => confirmHelper(
                 help.id,
                 helperUid,

@@ -108,6 +108,75 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+function notificationUrl(rawUrl) {
+  try {
+    const raw = String(rawUrl || '/');
+    if (raw.startsWith('canact://open')) {
+      const route = new URL(raw).searchParams.get('to') || '/';
+      return new URL(route, self.location.origin).href;
+    }
+    const url = new URL(raw, self.location.origin);
+    return url.origin === self.location.origin ? url.href : self.location.origin;
+  } catch {
+    return self.location.origin;
+  }
+}
+
+/** Receive FCM/Web Push directly in the app's existing root service worker.
+ * This is required on iOS where a Home Screen web app has one root worker;
+ * registering firebase-messaging-sw.js at the same scope would replace this
+ * worker and break both push delivery and offline caching. */
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch {
+    try { payload = { data: { body: event.data ? event.data.text() : '' } }; } catch {}
+  }
+
+  const data = payload.data || {};
+  const notification = payload.notification || {};
+  const type = String(data.type || 'general');
+  const isCall = type === 'call';
+  const title = String(data.title || notification.title || (isCall ? 'Incoming Canact call' : 'Canact'));
+  const body = String(data.body || notification.body || (isCall ? `${data.fromName || 'Someone'} is calling` : ''));
+  const url = notificationUrl(data.url || data.deepLink || (payload.fcmOptions && payload.fcmOptions.link) || '/');
+  const tag = String(data.tag || notification.tag || (isCall && data.callId ? `call:${data.callId}` : 'canact'));
+
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, {
+      body,
+      icon: notification.icon || '/icons/icon-192.png',
+      badge: notification.badge || '/icons/badge-72.png',
+      image: data.image || notification.image,
+      tag,
+      renotify: isCall,
+      requireInteraction: isCall,
+      silent: false,
+      data: { url, type, callId: data.callId || '' },
+    }),
+    self.navigator && typeof self.navigator.setAppBadge === 'function'
+      ? self.navigator.setAppBadge(1).catch(() => {})
+      : Promise.resolve(),
+  ]));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = notificationUrl(event.notification.data && event.notification.data.url);
+  event.waitUntil((async () => {
+    if (self.navigator && typeof self.navigator.clearAppBadge === 'function') {
+      try { await self.navigator.clearAppBadge(); } catch {}
+    }
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      try {
+        if ('navigate' in client) await client.navigate(url);
+        return await client.focus();
+      } catch {}
+    }
+    return self.clients.openWindow(url);
+  })());
+});
+
 function isMediaRequest(url) {
   return MEDIA_HOSTS.some((h) => url.hostname.endsWith(h));
 }

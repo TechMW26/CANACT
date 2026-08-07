@@ -83,6 +83,10 @@ export async function POST(req: Request) {
   const cleanBody = stripEmoji(body || '').slice(0, 200);
   const safeUrl = typeof url === 'string' ? url : '/';
   const safeImage = typeof image === 'string' && /^https?:\/\//.test(image) ? image : undefined;
+  let webLink = new URL('/', req.url).href;
+  try {
+    webLink = new URL(safeUrl.startsWith('/') ? safeUrl : '/', req.url).href;
+  } catch { /* use app root */ }
 
   const data: Record<string, string> = { title: cleanTitle, body: cleanBody, url: safeUrl };
   if (tag) data.tag = String(tag).slice(0, 60);
@@ -106,7 +110,16 @@ export async function POST(req: Request) {
         ...(safeImage ? { imageUrl: safeImage } : {}),
       },
     },
-    webpush: { headers: { Urgency: 'high' } },
+    webpush: {
+      headers: { Urgency: 'high', TTL: '86400' },
+      notification: {
+        icon: '/icons/icon-192.png',
+        badge: '/icons/badge-72.png',
+        tag: tag ? String(tag).slice(0, 60) : undefined,
+        ...(safeImage ? { image: safeImage } : {}),
+      },
+      fcmOptions: { link: webLink },
+    },
   });
 
   // Prune dead tokens.

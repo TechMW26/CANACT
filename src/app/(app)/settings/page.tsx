@@ -7,7 +7,7 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/auth';
 import { ConfirmDialog } from '@/components/Modal';
 import { toast } from '@/components/Toaster';
-import { enableWebPush, pushSupported } from '@/lib/services/push';
+import { enableWebPush, pushSupported, webPushInstallRequired } from '@/lib/services/push';
 import { GlassSwitch } from '@/components/GlassSwitch';
 import {
   isNativeContactSyncAvailable,
@@ -23,9 +23,10 @@ export default function SettingsPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [contactsBusy, setContactsBusy] = useState(false);
   const contactFileRef = useRef<HTMLInputElement | null>(null);
-  const [pushState, setPushState] = useState<'unknown' | 'granted' | 'denied' | 'default' | 'unsupported'>('unknown');
+  const [pushState, setPushState] = useState<'unknown' | 'granted' | 'denied' | 'default' | 'unsupported' | 'install-required'>('unknown');
 
   useEffect(() => {
+    if (webPushInstallRequired()) { setPushState('install-required'); return; }
     if (!pushSupported()) { setPushState('unsupported'); return; }
     setPushState(Notification.permission as any);
   }, []);
@@ -39,7 +40,9 @@ export default function SettingsPage() {
         setPushState('granted');
         toast('Notifications enabled', 'success');
       } else {
-        toast(`Could not enable: ${r.reason}`, 'error');
+        toast(r.reason === 'ios-install-required'
+          ? 'Add Canact to your Home Screen first'
+          : `Could not enable: ${r.reason}`, 'error');
         setPushState((Notification.permission as any) || 'denied');
       }
     } finally { setPushBusy(false); }
@@ -91,12 +94,18 @@ export default function SettingsPage() {
           <div className="text-sm font-extrabold text-ink">Push notifications</div>
           <p className="mt-1 text-xs text-ink/60">
             Get alerts for messages, help responses and meet ratings — even when the app is closed.
-            On iOS you must first add Canact to your home screen.
+            On iPhone and iPad, install Canact on the Home Screen first.
           </p>
           <div className="mt-3">
             {pushState === 'granted' && <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">Enabled</span>}
             {pushState === 'denied' && <span className="rounded-full bg-brand-light px-3 py-1 text-xs font-bold text-brand">Blocked in browser settings</span>}
             {pushState === 'unsupported' && <span className="rounded-full bg-ink/10 px-3 py-1 text-xs font-bold text-ink/60">Not supported on this device</span>}
+            {pushState === 'install-required' && (
+              <div className="rounded-2xl bg-brand-light/70 px-4 py-3 text-sm text-brand-dark">
+                <div className="font-extrabold">Install Canact to enable iOS notifications</div>
+                <p className="mt-1 text-xs leading-5">In Safari, tap Share, choose Add to Home Screen, then open Canact from its new icon and return here.</p>
+              </div>
+            )}
             {(pushState === 'default' || pushState === 'unknown') && (
               <Button onClick={turnOnPush} disabled={pushBusy}>{pushBusy ? 'Enabling…' : 'Turn on notifications'}</Button>
             )}

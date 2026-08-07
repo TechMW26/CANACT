@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { Activity, ArrowUp, Award, Check, HeartHandshake, MapPin, ShieldCheck, Sparkles, UserPlus, Users } from '@/components/icons';
+import { Activity, ArrowUp, Award, Check, ChevronRight, HeartHandshake, MapPin, ShieldCheck, Sparkles, UserPlus, Users } from '@/components/icons';
 import { ProfileRecognitionFolders } from '@/components/ProfileRecognitionFolders';
 import { ExploreMap } from '@/components/ExploreMap';
+import { Sheet } from '@/components/Sheet';
 import { useAuth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { useGeo } from '@/lib/useGeo';
@@ -49,10 +50,12 @@ export function CanactHome() {
   const [transitionOrigin, setTransitionOrigin] = useState<React.CSSProperties>();
   const [people, setPeople] = useState<FriendMapPerson[]>([]);
   const [profiles, setProfiles] = useState<HomeProfile[]>([]);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [contactUids, setContactUids] = useState<Set<string>>(() => new Set());
   const [friendUids, setFriendUids] = useState<Set<string>>(() => new Set());
   const [outgoingUids, setOutgoingUids] = useState<Set<string>>(() => new Set());
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [metricPage, setMetricPage] = useState(0);
   const metricSwipeRef = useRef<{ x: number; y: number } | null>(null);
   const metricSwipedRef = useRef(false);
@@ -107,11 +110,14 @@ export function CanactHome() {
   // Load map-visible profiles. Distance styling in ExploreMap keeps the
   // immediate 15 m vicinity clear and de-emphasises everyone farther away.
   useEffect(() => {
-    if (!user) { setPeople([]); setProfiles([]); return; }
+    if (!user) { setPeople([]); setProfiles([]); setProfilesLoaded(false); return; }
     return onValue(ref(db, 'users'), (snapshot) => {
       const value = snapshot.val() as Record<string, HomeProfile> | null;
-      const rows = Object.entries(value ?? {}).map(([uid, candidate]) => ({ ...candidate, uid: candidate.uid || uid }));
+      const rows = Object.entries(value ?? {})
+        .filter(([, candidate]) => candidate.role !== 'admin')
+        .map(([uid, candidate]) => ({ ...candidate, uid: candidate.uid || uid }));
       setProfiles(rows);
+      setProfilesLoaded(true);
       const located = rows.flatMap<FriendMapPerson>((candidate) => {
         const uid = candidate.uid;
         const location = candidate?.lastLocation;
@@ -172,6 +178,7 @@ export function CanactHome() {
     }).sort((left, right) => (left.distanceMeters ?? Infinity) - (right.distanceMeters ?? Infinity)) : [];
     return [...contacts, ...nearby].slice(0, 10);
   }, [contactUids, currentLocation, friendUids, profiles, radius, suggestionDay, user?.uid]);
+  const visibleSuggestions = suggestions.slice(0, 5);
 
   const connect = async (suggestion: HomeSuggestion) => {
     if (!user || !profile || connectingUid || outgoingUids.has(suggestion.profile.uid)) return;
@@ -412,14 +419,17 @@ export function CanactHome() {
 
         <div className={styles.belowFold}>
         {suggestions.length ? (
-          <section className={styles.suggestions} aria-labelledby="people-you-may-know-title">
+          <>
             <div className={styles.suggestionHeading}>
-              <h2 id="people-you-may-know-title"><Users size={20} /> People you may know</h2>
-              <Link href="/search">See all</Link>
+              <div>
+                <span className={styles.suggestionEyebrow}>Grow your circle</span>
+                <h2 id="people-you-may-know-title">People you may know</h2>
+                <p>Based on your contacts and nearby community</p>
+              </div>
             </div>
-            <div className={styles.suggestionRail}>
-              {suggestions.map((suggestion) => (
-                <PeopleSuggestionCard
+            <div className={styles.suggestionList}>
+              {visibleSuggestions.map((suggestion) => (
+                <PeopleListRow
                   key={suggestion.profile.uid}
                   suggestion={suggestion}
                   requested={outgoingUids.has(suggestion.profile.uid)}
@@ -428,7 +438,45 @@ export function CanactHome() {
                 />
               ))}
             </div>
-          </section>
+            {suggestions.length > visibleSuggestions.length ? (
+              <button
+                type="button"
+                className={styles.suggestionLoadMore}
+                aria-haspopup="dialog"
+                aria-expanded={suggestionsOpen}
+                onClick={() => setSuggestionsOpen(true)}
+              >
+                <span className={styles.suggestionLoadMoreIcon} aria-hidden="true"><Users size={18} /></span>
+                <span className={styles.suggestionLoadMoreCopy}>
+                  <strong>Explore more people</strong>
+                  <small>{suggestions.length - visibleSuggestions.length} more suggestions waiting</small>
+                </span>
+                <ChevronRight size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+          </>
+        ) : !profilesLoaded ? (
+          <>
+            <div className={styles.suggestionHeading}>
+              <div>
+                <span className={styles.suggestionEyebrow}>Grow your circle</span>
+                <h2 id="people-you-may-know-title">People you may know</h2>
+                <p>Based on your contacts and nearby community</p>
+              </div>
+            </div>
+            <div className={styles.suggestionList}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className={styles.suggestionSkeleton}>
+                  <span className={styles.skeletonCircle} />
+                  <span className={styles.skeletonLines}>
+                    <span className={styles.skeletonLine} style={{ width: '60%' }} />
+                    <span className={styles.skeletonLine} style={{ width: '40%' }} />
+                  </span>
+                  <span className={styles.skeletonPill} />
+                </div>
+              ))}
+            </div>
+          </>
         ) : null}
 
         {profile ? <div data-onboarding="recognition-folders"><ProfileRecognitionFolders profile={profile} isSelf communityLeadersHref="/leaderboard" showAttributes={false} /></div> : null}
@@ -476,11 +524,37 @@ export function CanactHome() {
           </div>
         </div>
       ) : null}
+
+      <Sheet open={suggestionsOpen} onClose={() => setSuggestionsOpen(false)} title="People you may know">
+        <div className={styles.suggestionSheet}>
+          <p>All {suggestions.length} suggestions</p>
+          <div className={styles.suggestionList}>
+            {suggestions.map((suggestion) => (
+              <PeopleListRow
+                key={suggestion.profile.uid}
+                suggestion={suggestion}
+                requested={outgoingUids.has(suggestion.profile.uid)}
+                busy={connectingUid === suggestion.profile.uid}
+                onConnect={connect}
+              />
+            ))}
+          </div>
+        </div>
+      </Sheet>
     </section>
   );
 }
 
-function PeopleSuggestionCard({
+function getRatingDotColor(label: string): string {
+  switch (label) {
+    case 'TRUST': return '#2e8068';
+    case 'GOOD': return '#4a9e82';
+    case 'FAIR': return '#c7880a';
+    default: return '#c0392b';
+  }
+}
+
+function PeopleListRow({
   suggestion,
   requested,
   busy,
@@ -493,47 +567,64 @@ function PeopleSuggestionCard({
 }) {
   const candidate = suggestion.profile;
   const name = candidate.fullName || candidate.firstName || 'Canact user';
-  const score = calculateCanactScore(candidate).score;
-  const photoUrl = candidate.photoURL || null;
+  const initial = name.slice(0, 1).toUpperCase();
+  const handle = candidate.firstName
+    ? `@${candidate.firstName.toLowerCase().replace(/\s+/g, '.')}`
+    : '@canact.user';
+  const { score, label } = calculateCanactScore(candidate);
+  const dotColor = getRatingDotColor(label);
+  const matchReason = suggestion.source === 'contact'
+    ? 'In your contacts'
+    : suggestion.distanceMeters == null
+      ? 'Near you'
+      : `${formatDistance(suggestion.distanceMeters)} away`;
 
   return (
-    <article
-      className={styles.suggestionCard}
-      style={photoUrl ? { backgroundImage: `url(${photoUrl})` } : undefined}
+    <Link
+      href={`/profile/${encodeURIComponent(candidate.uid)}`}
+      className={styles.suggestionRow}
     >
-      <Link
-        href={`/profile/${encodeURIComponent(candidate.uid)}`}
-        className={styles.suggestionCardLink}
-        aria-label={`Open ${name}'s profile`}
-      >
-        {/* Source badge */}
-        <span className={styles.suggestionSource} data-source={suggestion.source}>
-          {suggestion.source === 'contact' ? <Users size={12} /> : <MapPin size={12} />}
-          {suggestion.source === 'contact' ? 'In your contacts' : suggestion.distanceMeters === undefined ? 'Nearby' : `${formatDistance(suggestion.distanceMeters)} away`}
+      {/* Avatar */}
+      <span className={styles.suggestionAvatar}>
+        {candidate.photoURL ? (
+          <img src={candidate.photoURL} alt="" loading="lazy" />
+        ) : (
+          <span className={styles.suggestionAvatarFallback}>{initial}</span>
+        )}
+        <span className={styles.suggestionSourceIcon} aria-hidden="true">
+          {suggestion.source === 'contact' ? <UserPlus size={10} /> : <MapPin size={10} />}
         </span>
+      </span>
 
-        {/* Gradient overlay + text at bottom */}
-        <div className={styles.suggestionOverlay}>
-          <strong className={styles.suggestionName}>{name}</strong>
-          <span className={styles.suggestionMeta}>
-            {candidate.city || candidate.country || 'Canact community'}
-            <b className={styles.suggestionScore}>{score} score</b>
+      {/* Name + handle */}
+      <span className={styles.suggestionIdentity}>
+        <span className={styles.suggestionName}>{name}</span>
+        <span className={styles.suggestionHandle}>{handle}</span>
+        <span className={styles.suggestionMeta}>
+          <span className={styles.suggestionReason}>
+            {suggestion.source === 'contact' ? <UserPlus size={10} /> : <MapPin size={10} />}
+            {matchReason}
           </span>
-        </div>
-      </Link>
+          <span className={styles.suggestionScoreArea} title={`${label} Canact score`}>
+            <span className={styles.suggestionDot} style={{ background: dotColor }} />
+            <b className={styles.suggestionScore}>{score}</b>
+            <span>score</span>
+          </span>
+        </span>
+      </span>
 
-      {/* Buy-hit style connect button */}
+      {/* Connect */}
       <button
         type="button"
-        disabled={busy || requested}
-        onClick={() => void onConnect(suggestion)}
         className={styles.suggestionConnect}
-        aria-label={requested ? `Connection requested with ${name}` : `Connect with ${name}`}
+        disabled={busy || requested}
+        aria-label={requested ? `Connection request sent to ${name}` : `Connect with ${name}`}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onConnect(suggestion); }}
       >
-        {requested ? <Check size={15} strokeWidth={2.5} /> : <UserPlus size={15} strokeWidth={2.5} />}
-        <span>{busy ? 'Sending…' : requested ? 'Requested' : 'Connect'}</span>
+        {requested ? <Check size={14} aria-hidden="true" /> : <UserPlus size={14} aria-hidden="true" />}
+        <span>{busy ? 'Sending…' : requested ? 'Sent' : 'Connect'}</span>
       </button>
-    </article>
+    </Link>
   );
 }
 

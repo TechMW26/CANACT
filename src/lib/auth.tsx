@@ -179,6 +179,10 @@ function writeLocalPhoneSession(value: SessionUser | null) {
   else window.localStorage.removeItem(LOCAL_PHONE_SESSION_KEY);
 }
 
+export function clearLocalPhoneSession() {
+  writeLocalPhoneSession(null);
+}
+
 function normalizedPhone(value: unknown) {
   return typeof value === 'string' ? value.replace(/\D/g, '') : '';
 }
@@ -211,7 +215,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Auth state listener
   useEffect(() => {
-    const localSession = readLocalPhoneSession();
+    // Admin access always uses Firebase email authentication. A localhost
+    // phone-session fallback must never mask the newly signed-in admin user.
+    const localSession = window.location.pathname.startsWith('/admin') ? null : readLocalPhoneSession();
     if (localSession) {
       setUser(localSession);
       setLoading(false);

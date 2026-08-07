@@ -105,59 +105,45 @@ export function StickyHelpPullTab() {
   return (
     <div
       ref={panelRef}
-      className="fixed right-0 top-[47%] z-[2147483200] flex items-center lg:hidden"
+      className="fixed right-0 top-[47%] z-[70] h-[46px] lg:hidden"
       style={{ transform: 'translateY(-50%)' }}
     >
       {/* ── Tooltip (only when collapsed) ── */}
       {showTooltip && hasNewHelp && !expanded && (
-        <div className="absolute bottom-full right-0 mb-2.5 w-52 rounded-2xl bg-white px-3.5 py-2.5 text-[12px] font-bold text-[#b04820] shadow-[0_8px_28px_rgba(180,70,30,.22)] border border-[#f5d5c0]">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#e85d2c] px-1.5 text-[10px] font-extrabold text-white">
-              {nearbyHelpCount > 99 ? '99+' : nearbyHelpCount}
-            </span>
-            {nearbyHelpCount === 1 ? 'person needs' : 'people need'} help near you!
-          </span>
+        <div className="absolute bottom-full right-0 mb-2.5 w-52 rounded-2xl bg-white px-3.5 py-2.5 shadow-[0_8px_28px_rgba(180,70,30,.22)] border border-[#f5d5c0]">
+          <div className="flex items-center gap-3">
+            <strong className="text-[28px] font-extrabold leading-none text-[#b04820]">{nearbyHelpCount > 99 ? '99+' : nearbyHelpCount}</strong>
+            <span className="text-[12px] font-bold text-[#b04820] leading-snug">{nearbyHelpCount === 1 ? 'person needs' : 'people need'} help near you!</span>
+          </div>
           {/* Tooltip arrow */}
           <div className="absolute -bottom-1.5 right-5 h-3 w-3 rotate-45 border-b border-r border-[#f5d5c0] bg-white" />
         </div>
       )}
 
-      {/* ── Collapsed pull tab ── */}
-      {!expanded && (
-        <button
-          type="button"
-          onClick={toggle}
-          className={`relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-l-full border border-r-0 bg-white transition-all duration-300 active:scale-95 shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] border-[#e8c8b5] ${nudge ? 'animate-bounce' : ''}`}
-          aria-label={`Help — ${nearbyHelpCount} nearby`}
-        >
-          {hasNewHelp && (
-            <span className="absolute -left-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-white px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
-              {nearbyHelpCount > 9 ? '9+' : nearbyHelpCount}
-            </span>
-          )}
-          <HeartHandshake size={20} strokeWidth={2.3} className="text-[#d46630]" />
-        </button>
-      )}
-
-      {/* ── Expanded pill panel at right:0, X inside with right padding ── */}
+      {/* ── Expanded pill panel — slides in from right, covers tab ── */}
       <div
-        className="shrink-0 transition-all duration-300 ease-out overflow-hidden"
+        className="absolute bottom-0 right-0 z-10 overflow-hidden transition-all duration-300 ease-out"
         style={{
           maxWidth: expanded ? 'calc(100vw - 12px)' : '0px',
           opacity: expanded ? 1 : 0,
         }}
       >
-        <div className="flex items-center gap-2.5 rounded-l-full bg-white px-4 py-2 shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] whitespace-nowrap">
+        <div className="flex items-center gap-2.5 rounded-l-full border border-r-0 border-[#e8c8b5] bg-white px-4 py-2 shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] whitespace-nowrap">
           <Link
             href="/help"
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#fdf3ed] px-3.5 py-1.5 text-[12px] font-bold text-[#b85a2c] transition-colors hover:bg-[#fce8db] active:scale-95 shrink-0"
+            className="relative inline-flex items-center gap-1.5 rounded-full bg-[#fdf3ed] px-3.5 py-1.5 text-[12px] font-bold text-[#b85a2c] transition-colors hover:bg-[#fce8db] shrink-0"
           >
             <Eye size={15} strokeWidth={2.2} />
             View
+            {nearbyHelpCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-[#fdf3ed] px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
+                {nearbyHelpCount > 99 ? '99+' : nearbyHelpCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/help/create"
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#e85d2c] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm transition-colors hover:bg-[#d14a1a] active:scale-95 shrink-0"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#e85d2c] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm transition-colors hover:bg-[#d14a1a] shrink-0"
           >
             <Plus size={15} strokeWidth={2.2} />
             Request
@@ -165,13 +151,30 @@ export function StickyHelpPullTab() {
           <button
             type="button"
             onClick={toggle}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#fdf3ed] hover:bg-[#fce8db] active:scale-95 transition-colors shrink-0"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#fdf3ed] hover:bg-[#fce8db] transition-colors shrink-0"
             aria-label="Close help menu"
           >
             <X size={15} strokeWidth={2.5} className="text-[#b85a2c]" />
           </button>
         </div>
       </div>
+
+      {/* ── Collapsed pull tab — hidden when expanded ── */}
+      {!expanded && (
+        <button
+          type="button"
+          onClick={toggle}
+          className={`relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-l-full border border-r-0 border-[#e8c8b5] bg-white shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] ${nudge ? 'animate-[helpNudgeX_0.5s_ease-out]' : ''}`}
+          aria-label={`Help — ${nearbyHelpCount} nearby`}
+        >
+          {hasNewHelp && (
+            <span className="absolute -left-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-white px-1 text-[10px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
+              {nearbyHelpCount > 9 ? '9+' : nearbyHelpCount}
+            </span>
+          )}
+          <HeartHandshake size={20} strokeWidth={2.3} className="text-[#d46630]" />
+        </button>
+      )}
     </div>
   );
 }

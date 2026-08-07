@@ -12,6 +12,17 @@ function isNative(): boolean {
   return cap.platform === 'android' || cap.platform === 'ios';
 }
 
+function internalRoute(raw: string): string | null {
+  try {
+    if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+    if (!raw.startsWith('canact://open')) return null;
+    const target = new URL(raw).searchParams.get('to');
+    return target?.startsWith('/') && !target.startsWith('//') ? target : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Listens for canact://call/<id>?action=answer|decline deep links emitted by
  * the native full-screen FCM call notification (CanactCallMessagingService).
@@ -38,12 +49,9 @@ export default function NativeCallDeepLinkRouter() {
     const handleUrl = (url: string | null | undefined) => {
       if (!url) return;
 
-      if (url.startsWith('canact://open')) {
-        try {
-          const u = new URL(url);
-          const to = u.searchParams.get('to');
-          if (to && to.startsWith('/')) router.push(to);
-        } catch { /* noop */ }
+      const route = internalRoute(url);
+      if (route) {
+        router.push(route);
         return;
       }
 

@@ -118,11 +118,15 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
 
   if (!batch || typeof window === 'undefined') return null;
   const viewportWidth = window.innerWidth;
-  const displayWidth = Math.min(620, viewportWidth - 32);
-  const displayHeight = Math.max(196, displayWidth * .52);
+  const viewportHeight = window.innerHeight;
+  const hasConnectionCard = batch.gifts.some((item) => item.family === 'connection');
+  const displayWidth = hasConnectionCard
+    ? Math.min(360, viewportWidth - 32, Math.max(220, (viewportHeight - 128) * (2 / 3)))
+    : Math.min(620, viewportWidth - 32);
+  const displayHeight = hasConnectionCard ? displayWidth * 1.5 : Math.max(196, displayWidth * .52);
   const sourceRect = {
     left: Math.max(16, (viewportWidth - displayWidth) / 2),
-    top: 96,
+    top: Math.max(32, (viewportHeight - displayHeight) / 2),
     width: displayWidth,
     height: displayHeight,
     naturalWidth: displayWidth,
@@ -145,8 +149,8 @@ export function IncomingCardEnvelope({ uid }: { uid: string }) {
         {item.family === 'connection' ? (
           <ConnectionCardContent
             cardKey={item.gift.kind}
-            footer={<><b>Given by:</b> {item.gift.fromName} · {new Date(item.gift.sentAt).toLocaleDateString()}</>}
-            trailing={<Check size={18} />}
+            givenBy={item.gift.fromName}
+            date={new Date(item.gift.sentAt).toLocaleDateString()}
           />
         ) : (
           <>

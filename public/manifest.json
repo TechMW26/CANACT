@@ -2,6 +2,7 @@
   "name": "Canact",
   "short_name": "Canact",
   "description": "Community-first social-location app",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

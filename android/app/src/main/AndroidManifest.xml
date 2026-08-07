@@ -84,7 +84,7 @@
             android:resource="@color/canactNotification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="canact_general_v1" />
+            android:value="canact_general_v2" />
 
         <!-- Custom FCM service that converts a `type=call` data message into a
              full-screen, high-priority call notification that wakes the device

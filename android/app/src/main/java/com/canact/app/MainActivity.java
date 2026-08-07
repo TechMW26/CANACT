@@ -16,6 +16,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        normalizeNotificationDeepLink(getIntent());
         // Register custom plugins BEFORE super.onCreate so the Capacitor
         // bridge picks them up during initial plugin discovery.
         registerPlugin(AudioRouterPlugin.class);
@@ -47,12 +48,41 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onNewIntent(Intent intent) {
+        normalizeNotificationDeepLink(intent);
         super.onNewIntent(intent);
+        setIntent(intent);
         // singleTask launchMode means re-entries land here. Clear the
         // ringer notification + dismiss the lock-screen ringer activity
         // the moment the user taps Answer.
         cancelCallNotificationFor(intent);
         dismissRingerActivityFor(intent);
+    }
+
+    /** Legacy/auto-rendered FCM notifications launch the activity with data
+     * extras instead of an Android VIEW URI. Convert those extras before the
+     * Capacitor bridge starts so App.getLaunchUrl/appUrlOpen can route cold
+     * and warm taps identically. Only relative in-app routes are accepted. */
+    private void normalizeNotificationDeepLink(Intent intent) {
+        if (intent == null || intent.getData() != null) return;
+        String raw = intent.getStringExtra("deepLink");
+        if (raw == null || raw.isEmpty()) raw = intent.getStringExtra("url");
+        String route = null;
+        try {
+            if (raw != null && raw.startsWith("canact://open")) {
+                route = Uri.parse(raw).getQueryParameter("to");
+            } else if (raw != null && raw.startsWith("/") && !raw.startsWith("//")) {
+                route = raw;
+            }
+            if (route != null && route.startsWith("/") && !route.startsWith("//")) {
+                Uri uri = new Uri.Builder()
+                    .scheme("canact")
+                    .authority("open")
+                    .appendQueryParameter("to", route)
+                    .build();
+                intent.setAction(Intent.ACTION_VIEW);
+                intent.setData(uri);
+            }
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -125,13 +155,44 @@ public class MainActivity extends BridgeActivity {
             mgr.createNotificationChannel(calls);
         }
 
-        if (mgr.getNotificationChannel("canact_general_v1") == null) {
-            NotificationChannel general = new NotificationChannel(
-                "canact_general_v1", "General notifications", NotificationManager.IMPORTANCE_HIGH);
-            general.setDescription("Messages, help requests, ratings and other updates");
-            general.enableVibration(true);
-            general.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-            mgr.createNotificationChannel(general);
-        }
+        createSoundChannel(
+            mgr,
+            "canact_general_v2",
+            "General notifications",
+            "Messages, help requests, ratings and other updates",
+            R.raw.connection_card_notification);
+        createSoundChannel(
+            mgr,
+            "canact_connection_cards_v1",
+            "Connection cards",
+            "Connection card recognition alerts",
+            R.raw.connection_card_notification);
+        createSoundChannel(
+            mgr,
+            "canact_lifetime_cards_v1",
+            "Lifetime cards",
+            "Lifetime card recognition alerts",
+            R.raw.lifetime_card_notification);
+    }
+
+    private void createSoundChannel(
+            NotificationManager mgr,
+            String id,
+            String name,
+            String description,
+            int soundResource) {
+        if (mgr.getNotificationChannel(id) != null) return;
+        NotificationChannel channel = new NotificationChannel(
+            id, name, NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription(description);
+        channel.enableVibration(true);
+        channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        Uri sound = Uri.parse("android.resource://" + getPackageName() + "/" + soundResource);
+        AudioAttributes attrs = new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build();
+        channel.setSound(sound, attrs);
+        mgr.createNotificationChannel(channel);
     }
 }

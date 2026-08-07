@@ -1,9 +1,12 @@
 import { createHmac } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { getDatabase } from 'firebase-admin/database';
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
-import { getFirebaseAdminApp, verifyUserRequest } from '@/lib/server/firebaseAdmin';
+import {
+  getFirebaseAdminApp,
+  patchUserRtdb,
+  readAdminRtdb,
+  verifyUserRequest,
+} from '@/lib/server/firebaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,7 +19,6 @@ type ContactInput = { phones?: unknown; emails?: unknown };
 export async function POST(request: Request) {
   try {
     const app = getFirebaseAdminApp();
-    if (!app) return NextResponse.json({ ok: false, reason: 'contacts-unavailable' }, { status: 503 });
     const verified = await verifyUserRequest(request, app);
     if (!verified) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
 
@@ -24,13 +26,12 @@ export async function POST(request: Request) {
     if (!Array.isArray(body?.contacts)) return NextResponse.json({ ok: false, reason: 'invalid-contacts' }, { status: 400 });
     if (body.contacts.length > MAX_CONTACTS) return NextResponse.json({ ok: false, reason: 'too-many-contacts' }, { status: 413 });
 
-    const database = getDatabase(app);
-    const [profileSnapshot, allProfilesSnapshot, account] = await Promise.all([
-      database.ref(`users/${verified.uid}`).get(),
-      database.ref('users').get(),
-      getAuth(app).getUser(verified.uid),
+    const [currentProfileValue, allProfilesValue] = await Promise.all([
+      readAdminRtdb<Record<string, unknown>>(`users/${verified.uid}`, app, verified.idToken),
+      readAdminRtdb<Record<string, Record<string, unknown>>>('users', app, verified.idToken),
     ]);
-    const currentProfile = (profileSnapshot.val() || {}) as { countryCode?: unknown; mobile?: unknown; email?: unknown };
+    const currentProfile = (currentProfileValue || {}) as { countryCode?: unknown; mobile?: unknown; email?: unknown };
+    const allProfiles = allProfilesValue || {};
     const profileRegion = String(currentProfile.countryCode || body.countryCode || '').toUpperCase();
     const region = /^[A-Z]{2}$/.test(profileRegion) ? profileRegion as CountryCode : undefined;
     const rawIdentifiers = normalizeContacts(body.contacts as ContactInput[], region);
@@ -40,36 +41,31 @@ export async function POST(request: Request) {
     if (!secret) return NextResponse.json({ ok: false, reason: 'contacts-unavailable' }, { status: 503 });
     const identifierHashes = new Set(Array.from(rawIdentifiers, (identifier) => hashIdentifier(identifier, secret)));
     const matchedUids = new Set<string>();
-    allProfilesSnapshot.forEach((child) => {
-      const profile = (child.val() || {}) as { uid?: unknown; mobile?: unknown; email?: unknown };
-      const uid = String(profile.uid || child.key || '');
+    Object.entries(allProfiles).forEach(([key, value]) => {
+      const profile = (value || {}) as { uid?: unknown; mobile?: unknown; email?: unknown };
+      const uid = String(profile.uid || key || '');
       const phone = normalizePhone(String(profile.mobile || ''), region);
       const email = normalizeEmail(String(profile.email || ''));
       if (uid && uid !== verified.uid && ((phone && rawIdentifiers.has(`phone:${phone}`)) || (email && rawIdentifiers.has(`email:${email}`)))) {
         matchedUids.add(uid);
       }
-      return undefined;
     });
     const currentUserHashes = hashesForIdentity([
-      account.phoneNumber,
-      account.email,
+      verified.email,
       currentProfile.mobile,
       currentProfile.email,
     ], secret, region);
 
-    const [oldSyncSnapshot, oldContactsSnapshot, priorOwnerSnapshots] = await Promise.all([
-      database.ref(`contactSyncs/${verified.uid}/identifierHashes`).get(),
-      database.ref(`contacts/${verified.uid}`).get(),
-      Promise.all(Array.from(currentUserHashes, (hash) => database.ref(`contactIdentifierOwners/${hash}`).get())),
+    const [oldSyncValue, oldContactsValue, priorOwnerValues] = await Promise.all([
+      readAdminRtdb<Record<string, boolean>>(`contactSyncs/${verified.uid}/identifierHashes`, app, verified.idToken),
+      readAdminRtdb<Record<string, unknown>>(`contacts/${verified.uid}`, app, verified.idToken),
+      Promise.all(Array.from(currentUserHashes, (hash) => readAdminRtdb<Record<string, boolean>>(`contactIdentifierOwners/${hash}`, app, verified.idToken))),
     ]);
-    const oldHashes = new Set<string>();
-    oldSyncSnapshot.forEach((child) => { if (child.key) oldHashes.add(child.key); return undefined; });
-    const oldMatches = new Set<string>();
-    oldContactsSnapshot.forEach((child) => { if (child.key) oldMatches.add(child.key); return undefined; });
+    const oldHashes = new Set(Object.keys(oldSyncValue || {}));
+    const oldMatches = new Set(Object.keys(oldContactsValue || {}));
     const priorOwners = new Set<string>();
-    priorOwnerSnapshots.forEach((snapshot) => snapshot.forEach((child) => {
-      if (child.key && child.key !== verified.uid) priorOwners.add(child.key);
-      return undefined;
+    priorOwnerValues.forEach((owners) => Object.keys(owners || {}).forEach((uid) => {
+      if (uid !== verified.uid) priorOwners.add(uid);
     }));
 
     const now = Date.now();
@@ -96,7 +92,7 @@ export async function POST(request: Request) {
       updates[`contactedBy/${verified.uid}/${ownerUid}`] = { matchedAt: now };
     });
 
-    await database.ref().update(updates);
+    await patchUserRtdb('', updates, app, verified.idToken);
     return NextResponse.json({ ok: true, synced: body.contacts.length, matched: matchedUids.size });
   } catch (error) {
     console.error('[contacts] sync failed', error instanceof Error ? error.message : 'unknown');
@@ -151,6 +147,7 @@ function hashIdentifier(identifier: string, secret: string) {
 
 function contactHashSecret() {
   return process.env.CONTACT_SYNC_HASH_SECRET
+    || process.env.JWT_SECRET
     || process.env.FIREBASE_ADMIN_PRIVATE_KEY
     || process.env.FIREBASE_SERVICE_ACCOUNT_JSON
     || '';

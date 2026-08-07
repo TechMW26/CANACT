@@ -39,13 +39,13 @@ import {
   Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, X,
 } from './icons';
 
-type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean };
+type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean; badge?: number };
 
 const TABS: Tab[] = [
   { href: '/',            label: 'Home',      Icon: Home },
   { href: '/favourites',  label: 'Nearby',    Icon: MapPin },
   { href: '/feed',        label: 'Community', Icon: Grid3X3 },
-  { href: '/leaderboard', label: 'Leaderboard', Icon: Activity },
+  { href: '/inbox',       label: 'Messages',  Icon: MessageSquare },
 ];
 
 const SIDE_LINKS = [
@@ -84,7 +84,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
   const mobileHeaderInset = mobileHeaderTopInset ?? '1em';
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
-  const [navbarHrefs, setNavbarHrefs] = useState<{ tabs: string[]; plusIcon?: string; plusItems?: string[] } | null>(null);
   const prefetchedRoutesRef = useRef(new Set<string>());
   // Live counters for the chat icon (header) and Inbox sidebar entry.
   const { total: inboxTotal } = useInboxBadges();
@@ -110,21 +109,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('canact:set-page-blend-chrome', onBlendChrome as EventListener);
   }, []);
 
-  // Read navbar visibility config from Firebase
-  useEffect(() => {
-    return onValue(dbRef(db, 'config/navbar'), (snap) => {
-      const val = snap.val() as { tabs?: string[]; plusIcon?: string; plusItems?: string[] } | null;
-      if (val) setNavbarHrefs({ tabs: val.tabs ?? [], plusIcon: val.plusIcon, plusItems: val.plusItems });
-      else setNavbarHrefs(null);
-    });
-  }, []);
-
   const visibleTabs = useMemo(() => {
-    if (!navbarHrefs) return TABS;
-    return TABS.filter((t) => navbarHrefs.tabs.includes(t.href));
-  }, [navbarHrefs]);
-
-  const plusIconName = navbarHrefs?.plusIcon ?? 'Plus';
+    return TABS.map((t) => ({
+      ...t,
+      badge: t.href === '/inbox' ? inboxTotal : undefined,
+    }));
+  }, [inboxTotal]);
 
   const anyTabActive = useMemo(() => visibleTabs.some((t) => isNavLinkActive(pathname, t.href, user?.uid)), [pathname, visibleTabs, user?.uid]);
 
@@ -389,7 +379,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 60px)`, gap: '10px' }}>
               <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
               <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.14" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
-              {visibleTabs.map(({ href, label, Icon, isFab }, tabIndex) => {
+              {visibleTabs.map(({ href, label, Icon, isFab, badge }, tabIndex) => {
                 const active = isNavLinkActive(pathname, href, user.uid);
                 const onTap = () => {
                   if (isFab) { haptic('strong'); setPlusOpen(true); return; }
@@ -408,6 +398,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 return (
                   <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
                     <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
+                    {badge && badge > 0 ? (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-white px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -442,7 +437,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         aria-label={radialCreateOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={radialCreateOpen}
         aria-controls="canact-radial-create-menu"
-        data-liquid-glass="surface"
+        data-liquid-glass="none"
         data-liquid-radius="999"
         data-liquid-blur="0"
         data-liquid-thickness="28"
@@ -458,25 +453,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           bottom: 'var(--canact-create-button-bottom)',
         }}
       >
-        {radialCreateOpen ? <X className="canact-adaptive-icon" size={29} strokeWidth={2.3} style={{ color: '#1f6b55' }} /> : renderPlusIcon(plusIconName)}
+        {radialCreateOpen ? <X className="canact-adaptive-icon" size={29} strokeWidth={2.3} style={{ color: '#fff' }} /> : <Compass className="canact-adaptive-icon" size={26} strokeWidth={2} style={{ color: '#fff' }} />}
       </button>
-      <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} plusItems={navbarHrefs?.plusItems} />
+      <RadialCreateMenu open={radialCreateOpen} onClose={() => setRadialCreateOpen(false)} />
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       {postPopups}
     </div>
   );
-}
-
-function renderPlusIcon(name: string) {
-  const size = 29; const sw = 2.3;
-  const cls = 'canact-adaptive-icon canact-create-nav-icon';
-  switch (name) {
-    case 'Sparkles': return <Sparkles className={cls} size={size} strokeWidth={sw} />;
-    case 'Camera': return <Camera className={cls} size={size} strokeWidth={sw} />;
-    case 'Pencil': return <Pencil className={cls} size={size} strokeWidth={sw} />;
-    case 'Menu': return <AlignLeft className={cls} size={size} strokeWidth={sw} />;
-    default: return <Plus className={cls} size={size} strokeWidth={sw} />;
-  }
 }
 
 function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>, tabs: Tab[]) {
@@ -1134,10 +1117,15 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
                         href="/profile"
                         prefetch
                         onClick={() => { setAvatarPopup(false); haptic('subtle'); }}
-                        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand py-3 text-sm font-bold text-white transition active:scale-[0.98]"
+                        className="relative flex w-full items-center justify-center gap-2 rounded-full bg-brand py-3 text-sm font-bold text-white transition active:scale-[0.98]"
                       >
                         <UserIcon size={18} />
                         <span>View Profile</span>
+                        {profileRequestCount > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-brand px-1 text-[10px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
+                            {profileRequestCount > 99 ? '99+' : profileRequestCount}
+                          </span>
+                        )}
                       </Link>
                     </div>
                   </aside>

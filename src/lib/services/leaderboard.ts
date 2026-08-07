@@ -42,6 +42,7 @@ function normalizedLocation(value: unknown) {
 }
 
 function isVisibleOnLeaderboard(profile: UserProfile) {
+  if (profile.role === 'admin') return false;
   if (!profile.underground) return true;
   return Number(profile.undergroundUntil || 0) > 0 && Number(profile.undergroundUntil) <= Date.now();
 }
@@ -105,6 +106,7 @@ export async function searchUsers(text: string): Promise<UserProfile[]> {
   const snap = await get(ref(db, 'users'));
   const out: UserProfile[] = []; snap.forEach((c) => {
     const u = c.val() as UserProfile;
+    if (u.role === 'admin') return;
     const hay = `${u.fullName ?? ''} ${u.city ?? ''} ${u.country ?? ''} ${u.email ?? ''} ${u.mobile ?? ''}`.toLowerCase();
     if (hay.includes(t)) out.push(u);
   });

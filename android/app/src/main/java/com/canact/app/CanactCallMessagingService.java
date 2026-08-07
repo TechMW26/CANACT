@@ -58,9 +58,11 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
     // Default channel used by every non-call push (chat messages, help
     // alerts, ratings, etc). Bumping the suffix forces Android to recreate
     // the channel if we ever change its sound/importance.
-    private static final String GENERAL_CHANNEL_ID = "canact_general_v1";
+    private static final String GENERAL_CHANNEL_ID = "canact_general_v2";
     private static final String GENERAL_CHANNEL_NAME = "General notifications";
     private static final String GENERAL_CHANNEL_DESC = "Messages, help requests, ratings and other updates";
+    private static final String CONNECTION_CARD_CHANNEL_ID = "canact_connection_cards_v1";
+    private static final String LIFETIME_CARD_CHANNEL_ID = "canact_lifetime_cards_v1";
 
     @Override
     public void onMessageReceived(RemoteMessage message) {
@@ -113,18 +115,18 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         }
 
         // -------- Generic push (chat / help / rating / system) --------
-        // Only surface here when the app is foreground; otherwise the FCM
-        // SDK has already shown the system notification using the `notification`
-        // payload + GENERAL_CHANNEL_ID (declared as the default in the
-        // manifest meta-data).
-        if (!isAppInForeground()) return;
+        // Generic native pushes are data-only so this service creates the
+        // PendingIntent itself. That guarantees the target is an explicit
+        // canact:// URI on both warm and cold starts; FCM's auto-generated
+        // background PendingIntent only carries extras and loses the route
+        // before Capacitor's JavaScript listeners are registered.
 
         RemoteMessage.Notification n = message.getNotification();
         String title = n != null ? n.getTitle() : data.get("title");
         String body = n != null ? n.getBody() : data.get("body");
         if ((title == null || title.isEmpty()) && (body == null || body.isEmpty())) return;
 
-        ensureGeneralChannel();
+        ensureNotificationChannels();
         postGeneralNotification(title, body, data);
     }
 
@@ -282,16 +284,48 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         }
     }
 
-    private void ensureGeneralChannel() {
+    private void ensureNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager mgr = getSystemService(NotificationManager.class);
         if (mgr == null) return;
-        if (mgr.getNotificationChannel(GENERAL_CHANNEL_ID) != null) return;
+        createSoundChannel(
+            mgr,
+            GENERAL_CHANNEL_ID,
+            GENERAL_CHANNEL_NAME,
+            GENERAL_CHANNEL_DESC,
+            R.raw.connection_card_notification);
+        createSoundChannel(
+            mgr,
+            CONNECTION_CARD_CHANNEL_ID,
+            "Connection cards",
+            "Connection card recognition alerts",
+            R.raw.connection_card_notification);
+        createSoundChannel(
+            mgr,
+            LIFETIME_CARD_CHANNEL_ID,
+            "Lifetime cards",
+            "Lifetime card recognition alerts",
+            R.raw.lifetime_card_notification);
+    }
+
+    private void createSoundChannel(
+            NotificationManager mgr,
+            String id,
+            String name,
+            String description,
+            int soundResource) {
+        if (mgr.getNotificationChannel(id) != null) return;
         NotificationChannel channel = new NotificationChannel(
-            GENERAL_CHANNEL_ID, GENERAL_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
-        channel.setDescription(GENERAL_CHANNEL_DESC);
+            id, name, NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription(description);
         channel.enableVibration(true);
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        Uri sound = Uri.parse("android.resource://" + getPackageName() + "/" + soundResource);
+        AudioAttributes attrs = new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build();
+        channel.setSound(sound, attrs);
         mgr.createNotificationChannel(channel);
     }
 
@@ -301,8 +335,10 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         // Tap → open the relevant screen inside the WebView. We use a
         // generic deep-link that the in-app router converts into a route
         // change (e.g. /inbox/<uid>, /help/<id>, /notifications).
-        String deepLink = data.get("deepLink");
-        if (deepLink == null || deepLink.isEmpty()) deepLink = "canact://open";
+        String deepLink = internalDeepLink(data.get("deepLink"));
+        if ("canact://open".equals(deepLink)) {
+            deepLink = internalDeepLink(data.get("url"));
+        }
 
         Intent open = new Intent(ctx, MainActivity.class);
         open.setAction(Intent.ACTION_VIEW);
@@ -318,7 +354,8 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
         int rc = (int) (System.currentTimeMillis() & 0x7fffffff);
         PendingIntent pi = PendingIntent.getActivity(ctx, rc, open, piFlags);
 
-        Notification notif = new NotificationCompat.Builder(ctx, GENERAL_CHANNEL_ID)
+        String channelId = channelIdFor(data);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(ctx, channelId)
             .setSmallIcon(R.mipmap.ic_notification)
             .setContentTitle(title != null ? title : "Canact")
             .setContentText(body != null ? body : "")
@@ -327,12 +364,61 @@ public class CanactCallMessagingService extends FirebaseMessagingService {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
-            .setContentIntent(pi)
-            .build();
+            .setContentIntent(pi);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setSound(soundForChannel(channelId));
+        }
+        Notification notif = builder.build();
 
         NotificationManager mgr = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (mgr != null) {
             mgr.notify(rc, notif);
         }
+    }
+
+    private String channelIdFor(Map<String, String> data) {
+        if ("gift".equals(data.get("type"))) {
+            if ("connection".equals(data.get("family"))) return CONNECTION_CARD_CHANNEL_ID;
+            if ("lifetime".equals(data.get("family"))) return LIFETIME_CARD_CHANNEL_ID;
+        }
+        return GENERAL_CHANNEL_ID;
+    }
+
+    private Uri soundForChannel(String channelId) {
+        int soundResource = LIFETIME_CARD_CHANNEL_ID.equals(channelId)
+            ? R.raw.lifetime_card_notification
+            : R.raw.connection_card_notification;
+        return Uri.parse("android.resource://" + getPackageName() + "/" + soundResource);
+    }
+
+    /** Accept only Canact's custom scheme or an app-relative path. Any
+     * absolute/external URL is discarded so notification taps can never
+     * escape the installed application. */
+    private String internalDeepLink(String raw) {
+        if (raw == null || raw.isEmpty()) return "canact://open";
+        try {
+            if (raw.startsWith("canact://open")) {
+                Uri parsed = Uri.parse(raw);
+                String target = parsed.getQueryParameter("to");
+                if (target != null && target.startsWith("/") && !target.startsWith("//")) {
+                    return new Uri.Builder()
+                        .scheme("canact")
+                        .authority("open")
+                        .appendQueryParameter("to", target)
+                        .build()
+                        .toString();
+                }
+                return "canact://open";
+            }
+            if (raw.startsWith("/") && !raw.startsWith("//")) {
+                return new Uri.Builder()
+                    .scheme("canact")
+                    .authority("open")
+                    .appendQueryParameter("to", raw)
+                    .build()
+                    .toString();
+            }
+        } catch (Exception ignored) {}
+        return "canact://open";
     }
 }

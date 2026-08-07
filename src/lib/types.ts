@@ -101,6 +101,7 @@ export interface UserProfile {
   lastName?: string;
   email?: string;
   mobile?: string;
+  role?: string;
   mobileVerifiedAt?: number;
   selfieVerifiedAt?: number;
   selfieVerificationMethod?: 'blink-liveness-v1';

@@ -10,9 +10,10 @@ import { Card } from '@/components/Card';
 import { Brand } from '@/components/Brand';
 import { Splash } from '@/components/Splash';
 import { toast } from '@/components/Toaster';
-import { BarChart3, Bell, Camera, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, ShieldCheck, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil, TrendingUp, Navigation, Zap } from '@/components/icons';
+import { BarChart3, Bell, Camera, Compass, Eye, Film, HandHeart, Heart, AlignLeft, MessageSquare, Plus, Search, ShieldAlert, ShieldCheck, Sparkles, Trophy, Users, Globe2, Clock, Mail, Phone, MapPin, Check, Home, MapPin as MapPinIcon, Grid3X3, Activity, Pencil, TrendingUp, Navigation, Zap, Layers } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
+import { ATTRIBUTE_CARD_STYLE_CONFIG_PATH, normalizeAttributeCardStyle, type AttributeCardStyle } from '@/lib/attributeCardStyle';
 
 // ── Heatzones types ──
 
@@ -126,7 +127,7 @@ function mergeHeatzoneResponses(legacy: HeatzoneResponse | null, realtime: Heatz
   return buildHeatzoneResponse(acc);
 }
 
-type AdminView = 'overview' | 'users' | 'verifications' | 'heatzones' | 'navigation';
+type AdminView = 'overview' | 'users' | 'verifications' | 'heatzones' | 'navigation' | 'styling';
 
 const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Icon: LucideIcon }> = [
   { id: 'overview', label: 'Overview', description: 'Command center', Icon: ShieldAlert },
@@ -134,6 +135,7 @@ const ADMIN_VIEWS: Array<{ id: AdminView; label: string; description: string; Ic
   { id: 'verifications', label: 'Verifications', description: 'Review identity requests', Icon: ShieldCheck },
   { id: 'heatzones', label: 'Heatzones', description: 'Page & feature analytics', Icon: TrendingUp },
   { id: 'navigation', label: 'Navigation', description: 'App navbar config', Icon: Compass },
+  { id: 'styling', label: 'Styling', description: 'Global visual systems', Icon: Layers },
 ];
 
 type AdminVerificationRequest = {
@@ -392,6 +394,7 @@ export default function AdminDashboardPage() {
             )}
 
             {activeView === 'navigation' && <NavbarConfigPage />}
+            {activeView === 'styling' && <StylingConfigPage adminEmail={user.email} />}
           </div>
         </section>
       </div>
@@ -938,6 +941,97 @@ function NavbarConfigPage() {
               </button>
             );
           })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function StylingConfigPage({ adminEmail }: { adminEmail?: string | null }) {
+  const [style, setStyle] = useState<AttributeCardStyle>('html');
+  const [updating, setUpdating] = useState<AttributeCardStyle | null>(null);
+
+  useEffect(() => onValue(dbRef(db, ATTRIBUTE_CARD_STYLE_CONFIG_PATH), (snapshot) => {
+    setStyle(normalizeAttributeCardStyle(snapshot.val()));
+  }), []);
+
+  const applyStyle = async (next: AttributeCardStyle) => {
+    if (next === style || updating) return;
+    const previous = style;
+    setStyle(next);
+    setUpdating(next);
+    try {
+      await dbSet(dbRef(db, ATTRIBUTE_CARD_STYLE_CONFIG_PATH), {
+        style: next,
+        updatedAt: Date.now(),
+        updatedBy: adminEmail ?? null,
+      });
+      toast(`${next === 'image' ? 'Image' : 'HTML'} attribute cards are now live`, 'success');
+    } catch (error: any) {
+      setStyle(previous);
+      toast(error?.message ?? 'Could not update attribute card styling', 'error');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const options: Array<{ id: AttributeCardStyle; title: string; description: string; preview: string }> = [
+    {
+      id: 'html',
+      title: 'HTML cards',
+      description: 'Editorial ivory cards with live embedded giver details.',
+      preview: '/attribute-cards/creativity-clean.webp',
+    },
+    {
+      id: 'image',
+      title: 'Image-only cards',
+      description: 'Original metallic PNG artwork with no text or visual overlays.',
+      preview: '/attribute-cards/metallic/01-creativity.png',
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card className="rounded-lg bg-white">
+        <SectionHeader title="Attribute card style" eyebrow="Realtime global setting" />
+        <p className="mb-5 max-w-3xl text-sm text-ink/60">Choose the active design system. Changes publish immediately to every open app session and all attribute-card surfaces.</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {options.map((option) => {
+            const active = style === option.id;
+            const busy = updating === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                disabled={updating !== null}
+                onClick={() => void applyStyle(option.id)}
+                className={`grid min-w-0 grid-cols-[112px_minmax(0,1fr)] gap-4 rounded-xl border p-4 text-left transition ${active ? 'border-brand bg-brand/8 ring-2 ring-brand/10' : 'border-[#E0D4CA] bg-white hover:border-brand/40'} disabled:cursor-wait disabled:opacity-75`}
+              >
+                <span className="block aspect-[2/3] overflow-hidden rounded-lg bg-[#F7F4EF]">
+                  <img src={option.preview} alt="" className="h-full w-full object-contain" />
+                </span>
+                <span className="flex min-w-0 flex-col justify-center">
+                  <span className="flex items-center gap-2 text-base font-extrabold text-ink">
+                    {option.title}
+                    {active ? <Check className="h-5 w-5 text-brand" /> : null}
+                  </span>
+                  <span className="mt-2 text-sm leading-6 text-ink/55">{option.description}</span>
+                  <span className={`mt-4 text-xs font-extrabold uppercase tracking-wide ${active ? 'text-brand' : 'text-ink/35'}`}>{busy ? 'Publishing…' : active ? 'Currently live' : 'Use this style'}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="rounded-lg border-[#E0D4CA] bg-[#FFF9EC]">
+        <div className="flex items-start gap-3">
+          <Layers className="mt-0.5 h-5 w-5 shrink-0 text-[#9A6B16]" />
+          <div>
+            <div className="font-extrabold text-ink">Image set coverage</div>
+            <p className="mt-1 text-sm leading-6 text-ink/60">All eight metallic attribute cards use matching edge-to-edge transparent artwork, including Understanding Edition 08.</p>
+          </div>
         </div>
       </Card>
     </div>

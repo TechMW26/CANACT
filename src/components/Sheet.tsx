@@ -26,6 +26,9 @@ export function Sheet({
   hideClose = false,
   children,
   topmost,
+  clearSurface = false,
+  flatSurface = false,
+  nearFullscreen = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -44,6 +47,13 @@ export function Sheet({
    *  page that already has open modals (e.g. the chat composer) is
    *  guaranteed to be visible. */
   topmost?: boolean;
+  /** Removes the standard opaque sheet surface and its elevation. */
+  clearSurface?: boolean;
+  /** Keeps the standard opaque surface but removes its elevation. */
+  flatSurface?: boolean;
+  /** Allows content-heavy sheets to use the full visible viewport while
+   * retaining a small safe-area gap at the top. */
+  nearFullscreen?: boolean;
 }) {
   const [mounted, setMounted] = useState(open);
   const [entered, setEntered] = useState(false);
@@ -153,7 +163,7 @@ export function Sheet({
         ref={swipeRef}
         data-canact-sheet-panel="true"
         data-entered={entered}
-        data-liquid-glass="surface"
+        data-liquid-glass={clearSurface ? 'none' : 'surface'}
         data-liquid-radius="32"
         data-liquid-blur="0"
         data-liquid-tint="250,248,242"
@@ -163,10 +173,12 @@ export function Sheet({
         data-liquid-specular-opacity="0.48"
         style={{
           transition: 'transform 320ms cubic-bezier(.22,.85,.3,1), opacity 320ms cubic-bezier(.22,.85,.3,1)',
-          maxHeight: 'var(--canact-popup-max-height)',
+          maxHeight: nearFullscreen
+            ? 'calc(var(--canact-viewport-height, 100svh) - max(8px, env(safe-area-inset-top, 0px)))'
+            : 'var(--canact-popup-max-height)',
           paddingBottom: 'var(--canact-popup-bottom-inset)',
         }}
-        className={`canact-liquid-sheet-panel relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-transparent pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+        className={`canact-liquid-sheet-panel ${clearSurface ? 'canact-liquid-sheet-panel-clear' : ''} ${flatSurface ? 'canact-liquid-sheet-panel-flat' : ''} relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-transparent pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >
         <div className="mx-auto mb-3 h-1.5 w-12 shrink-0 rounded-full bg-ink/10" />
         {title !== undefined && hideTitle && hideClose ? (

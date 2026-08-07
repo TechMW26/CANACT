@@ -27,6 +27,51 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
+const WEB_APP_ORIGIN = 'https://canact.vercel.app';
+
+function webRoute(deepLink) {
+  try {
+    const raw = String(deepLink || '/');
+    if (raw.startsWith('canact://open')) {
+      return new URL(raw).searchParams.get('to') || '/';
+    }
+    return raw.startsWith('/') ? raw : '/';
+  } catch (_) {
+    return '/';
+  }
+}
+
+async function getRecipientTokens(db, uid) {
+  const [nativeSnap, webSnap] = await Promise.all([
+    db.ref(`users/${uid}/fcmTokens`).get(),
+    db.ref(`users/${uid}/pushTokens`).get(),
+  ]);
+  const native = Object.keys(nativeSnap.val() || {});
+  const webEntries = Object.entries(webSnap.val() || {})
+    .filter(([, value]) => value && typeof value.token === 'string');
+  return {
+    native,
+    web: webEntries.map(([, value]) => value.token),
+    webEntries,
+  };
+}
+
+async function pruneRejectedTokens(db, uid, kind, tokens, responses, webEntries) {
+  const updates = {};
+  responses.forEach((response, index) => {
+    if (response.success) return;
+    const code = response.error && response.error.code;
+    if (code !== 'messaging/invalid-registration-token'
+      && code !== 'messaging/registration-token-not-registered') return;
+    if (kind === 'native') updates[`users/${uid}/fcmTokens/${tokens[index]}`] = null;
+    else {
+      const entry = webEntries.find(([, value]) => value.token === tokens[index]);
+      if (entry) updates[`users/${uid}/pushTokens/${entry[0]}`] = null;
+    }
+  });
+  if (Object.keys(updates).length) await db.ref().update(updates);
+}
+
 exports.notifyIncomingCall = functions
   .region('asia-southeast1')
   .database
@@ -51,11 +96,9 @@ exports.notifyIncomingCall = functions
     const fromPhoto = rawPhoto.startsWith('http') && rawPhoto.length < 512 ? rawPhoto : '';
 
     // 2. Collect all device tokens for the recipient.
-    const tokensSnap = await db.ref(`users/${toUid}/fcmTokens`).get();
-    const tokensVal = tokensSnap.val() || {};
-    const tokens = Object.keys(tokensVal);
-    if (tokens.length === 0) {
-      console.log(`[notifyIncomingCall] no FCM tokens for user ${toUid}`);
+    const tokenSets = await getRecipientTokens(db, toUid);
+    if (tokenSets.native.length === 0 && tokenSets.web.length === 0) {
+      console.log(`[notifyIncomingCall] no notification tokens for user ${toUid}`);
       return null;
     }
 
@@ -74,33 +117,50 @@ exports.notifyIncomingCall = functions
         priority: 'high',
         ttl: 60 * 1000, // call rings for ~1 min
       },
-      tokens,
+      tokens: tokenSets.native,
     };
 
-    const resp = await admin.messaging().sendEachForMulticast(message);
-    console.log(
-      `[notifyIncomingCall] sent to ${resp.successCount}/${tokens.length} tokens`,
-    );
+    if (tokenSets.native.length) {
+      const resp = await admin.messaging().sendEachForMulticast(message);
+      console.log(`[notifyIncomingCall] native ${resp.successCount}/${tokenSets.native.length}`);
+      await pruneRejectedTokens(db, toUid, 'native', tokenSets.native, resp.responses, []);
+    }
 
-    // 4. Prune any tokens FCM rejected as invalid so they don't accumulate.
-    const stale = [];
-    resp.responses.forEach((r, i) => {
-      if (r.success) return;
-      const code = r.error && r.error.code;
-      if (
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/registration-token-not-registered'
-      ) {
-        stale.push(tokens[i]);
-      } else {
-        console.warn('[notifyIncomingCall] send error', code, r.error && r.error.message);
-      }
-    });
-    if (stale.length > 0) {
-      const updates = {};
-      stale.forEach((t) => { updates[`users/${toUid}/fcmTokens/${t}`] = null; });
-      await db.ref().update(updates);
-      console.log(`[notifyIncomingCall] pruned ${stale.length} stale tokens`);
+    // Web/iOS Home Screen apps cannot display a native full-screen CallKit
+    // surface. A high-urgency visible push wakes the PWA; tapping it opens
+    // Canact where the existing incoming-call listener presents Answer/Reject.
+    if (tokenSets.web.length) {
+      const title = `${(call.kind === 'video') ? 'Video' : 'Voice'} call from ${fromName}`;
+      const body = `${fromName} is calling you on Canact`;
+      const route = `/?incomingCall=${encodeURIComponent(callId)}`;
+      const webResp = await admin.messaging().sendEachForMulticast({
+        tokens: tokenSets.web,
+        notification: { title, body },
+        data: {
+          type: 'call',
+          callId: String(callId),
+          fromName: String(fromName),
+          fromPhoto: String(fromPhoto),
+          kind: String((call.kind === 'video') ? 'video' : 'audio'),
+          title,
+          body,
+          url: route,
+          tag: `call:${callId}`,
+        },
+        webpush: {
+          headers: { Urgency: 'high', TTL: '60' },
+          notification: {
+            icon: `${WEB_APP_ORIGIN}/icons/icon-192.png`,
+            badge: `${WEB_APP_ORIGIN}/icons/badge-72.png`,
+            tag: `call:${callId}`,
+            renotify: true,
+            requireInteraction: true,
+          },
+          fcmOptions: { link: `${WEB_APP_ORIGIN}${route}` },
+        },
+      });
+      console.log(`[notifyIncomingCall] web ${webResp.successCount}/${tokenSets.web.length}`);
+      await pruneRejectedTokens(db, toUid, 'web', tokenSets.web, webResp.responses, tokenSets.webEntries);
     }
     return null;
   });
@@ -179,16 +239,20 @@ exports.cancelIncomingCall = functions
 async function pushToUser(toUid, { title, body, deepLink, type, extra }) {
   if (!toUid) return;
   const db = admin.database();
-  const tokensSnap = await db.ref(`users/${toUid}/fcmTokens`).get();
-  const tokens = Object.keys(tokensSnap.val() || {});
-  if (tokens.length === 0) {
+  const tokenSets = await getRecipientTokens(db, toUid);
+  if (tokenSets.native.length === 0 && tokenSets.web.length === 0) {
     console.log(`[push] no tokens for ${toUid} (type=${type})`);
     return;
   }
 
+  const cleanTitle = title || 'Canact';
+  const cleanBody = body || '';
+  const route = webRoute(deepLink);
   const data = {
     type: String(type || 'general'),
     deepLink: String(deepLink || 'canact://open'),
+    title: String(cleanTitle),
+    body: String(cleanBody),
   };
   if (extra && typeof extra === 'object') {
     Object.entries(extra).forEach(([k, v]) => {
@@ -197,47 +261,44 @@ async function pushToUser(toUid, { title, body, deepLink, type, extra }) {
     });
   }
 
-  const message = {
-    notification: {
-      title: title || 'Canact',
-      body: body || '',
-    },
-    data,
-    android: {
-      priority: 'high',
-      notification: {
-        channelId: 'canact_general_v1',
-        clickAction: 'FLUTTER_NOTIFICATION_CLICK', // harmless on plain Android; lets PWA wrappers bind too
-        defaultSound: true,
-        defaultVibrateTimings: true,
-      },
-      ttl: 24 * 60 * 60 * 1000,
-    },
-    tokens,
-  };
-
   try {
-    const resp = await admin.messaging().sendEachForMulticast(message);
-    console.log(`[push:${type}] sent ${resp.successCount}/${tokens.length} to ${toUid}`);
+    if (tokenSets.native.length) {
+      const nativeResp = await admin.messaging().sendEachForMulticast({
+        data,
+        android: {
+          priority: 'high',
+          ttl: 24 * 60 * 60 * 1000,
+        },
+        tokens: tokenSets.native,
+      });
+      console.log(`[push:${type}] native ${nativeResp.successCount}/${tokenSets.native.length} to ${toUid}`);
+      await pruneRejectedTokens(db, toUid, 'native', tokenSets.native, nativeResp.responses, []);
+    }
 
-    // Prune any tokens FCM rejected as invalid.
-    const stale = [];
-    resp.responses.forEach((r, i) => {
-      if (r.success) return;
-      const code = r.error && r.error.code;
-      if (
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/registration-token-not-registered'
-      ) {
-        stale.push(tokens[i]);
-      } else {
-        console.warn(`[push:${type}] send error`, code, r.error && r.error.message);
-      }
-    });
-    if (stale.length > 0) {
-      const updates = {};
-      stale.forEach((t) => { updates[`users/${toUid}/fcmTokens/${t}`] = null; });
-      await db.ref().update(updates);
+    if (tokenSets.web.length) {
+      const webData = {
+        ...data,
+        title: String(cleanTitle),
+        body: String(cleanBody),
+        url: route,
+        tag: `${String(type || 'general')}:${String((extra && (extra.notificationId || extra.threadId || extra.helpId)) || toUid)}`,
+      };
+      const webResp = await admin.messaging().sendEachForMulticast({
+        notification: { title: cleanTitle, body: cleanBody },
+        data: webData,
+        webpush: {
+          headers: { Urgency: type === 'help-request' ? 'high' : 'normal', TTL: '86400' },
+          notification: {
+            icon: `${WEB_APP_ORIGIN}/icons/icon-192.png`,
+            badge: `${WEB_APP_ORIGIN}/icons/badge-72.png`,
+            tag: webData.tag,
+          },
+          fcmOptions: { link: `${WEB_APP_ORIGIN}${route}` },
+        },
+        tokens: tokenSets.web,
+      });
+      console.log(`[push:${type}] web ${webResp.successCount}/${tokenSets.web.length} to ${toUid}`);
+      await pruneRejectedTokens(db, toUid, 'web', tokenSets.web, webResp.responses, tokenSets.webEntries);
     }
   } catch (err) {
     console.warn(`[push:${type}] failed`, err && err.message);
@@ -327,7 +388,7 @@ exports.notifyAppNotification = functions
         if (d.helpId) deepLink = `canact://open?to=/help/${d.helpId}`;
         break;
       case 'follow':
-        if (d.fromUid) deepLink = `canact://open?to=/u/${d.fromUid}`;
+        if (d.fromUid) deepLink = `canact://open?to=/profile/${d.fromUid}`;
         break;
       case 'react':
       case 'comment':
@@ -342,7 +403,7 @@ exports.notifyAppNotification = functions
       body,
       deepLink,
       type: note.kind || 'general',
-      extra: { kind: note.kind, notificationId: context.params.id },
+      extra: { kind: note.kind, family: d.family, notificationId: context.params.id },
     });
     return null;
   });

@@ -228,7 +228,9 @@ export function HomeScoreExperience() {
   useEffect(() => {
     return onValue(ref(db, 'users'), (snapshot) => {
       const value = snapshot.val() as Record<string, UserWithLocation> | null;
-      const profiles = Object.entries(value ?? {}).map(([uid, userProfile]) => ({ ...userProfile, uid: userProfile?.uid || uid }));
+      const profiles = Object.entries(value ?? {})
+        .filter(([, userProfile]) => userProfile.role !== 'admin')
+        .map(([uid, userProfile]) => ({ ...userProfile, uid: userProfile?.uid || uid }));
       setAllProfiles(profiles);
     });
   }, []);
