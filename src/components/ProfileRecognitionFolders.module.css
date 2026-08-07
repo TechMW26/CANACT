@@ -35,7 +35,7 @@
   position: relative;
   height: var(--connection-carousel-height, clamp(370px, 122vw, 500px));
   overflow: hidden;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: contain;
   user-select: none;
   -webkit-user-select: none;
@@ -103,6 +103,7 @@
   border: 0;
   border-radius: 24px;
   background: transparent;
+  touch-action: pan-y pinch-zoom;
   -webkit-tap-highlight-color: transparent;
 }
 .connectionCarouselHit:focus-visible { outline: 3px solid rgb(31 107 85 / 34%); outline-offset: 3px; }
@@ -449,6 +450,11 @@
   overflow: hidden;
   container-type: inline-size;
   pointer-events: none;
+}
+.attributeCardStage[data-attribute-card-style="html"] {
+  border-radius: 9% / 6%;
+  background: transparent;
+  clip-path: inset(0 round 9% 9% 9% 9% / 6% 6% 6% 6%);
 }
 .attributeImageCardStage {
   position: relative;

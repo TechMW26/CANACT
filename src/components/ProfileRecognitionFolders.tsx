@@ -36,6 +36,13 @@ type ConnectionMode = 'received' | 'send';
 type CandidateFilter = 'all' | GiftCandidateCategory;
 type SendAnimationRect = { left: number; top: number; width: number; height: number; naturalWidth: number; naturalHeight: number };
 
+function getGestureAxis(dx: number, dy: number): 'x' | 'y' | null {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+  if (Math.max(absX, absY) < 10) return null;
+  return absX >= absY * 1.25 ? 'x' : 'y';
+}
+
 function useCardSwipe() {
   const [dragY, setDragY] = useState(0);
   const dragYRef = useRef(0);
@@ -669,9 +676,9 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
     const committedSwipe = !cancelled && drag.axis === 'x'
       && (Math.abs(travelled) >= 34 || (Math.abs(travelled) >= 16 && velocity >= .32));
     if (committedSwipe) move(travelled < 0 ? 1 : -1);
-    if (committedSwipe) {
+    if (drag.axis === 'x' && Math.abs(travelled) >= 8) {
       suppressClickRef.current = true;
-      window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+      window.setTimeout(() => { suppressClickRef.current = false; }, 120);
     }
     // Release pointer capture so child click events fire on mobile
     const captureTarget = drag.target as Element | null;
@@ -724,21 +731,18 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
           '--connection-carousel-height': viewportHeight ? `${viewportHeight}px` : undefined,
         } as React.CSSProperties}
         onPointerDown={(event) => {
-          if (!event.isPrimary || dragRef.current) return;
+          if (!event.isPrimary || dragRef.current || (event.pointerType === 'mouse' && event.button !== 0)) return;
           dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startedAt: performance.now(), axis: null, target: event.currentTarget };
           dragXRef.current = 0;
+          event.currentTarget.setPointerCapture?.(event.pointerId);
         }}
         onPointerMove={(event) => {
           const drag = dragRef.current;
           if (!drag || drag.pointerId !== event.pointerId) return;
           const nextX = event.clientX - drag.startX;
           const nextY = event.clientY - drag.startY;
-          if (!drag.axis && (Math.abs(nextX) > 5 || Math.abs(nextY) > 5)) {
-            drag.axis = Math.abs(nextX) > Math.abs(nextY) * .9 ? 'x' : 'y';
-          }
+          if (!drag.axis) drag.axis = getGestureAxis(nextX, nextY);
           if (drag.axis === 'x') {
-            event.preventDefault();
-            event.currentTarget.setPointerCapture?.(event.pointerId);
             dragXRef.current = nextX;
             setDragX(nextX);
           }
@@ -801,23 +805,23 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
   useEffect(() => { setAnimDir(null); setDragX(0); dragXRef.current = 0; }, [safeIndex]);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!e.isPrimary || dragRef.current) return;
+    if (!e.isPrimary || dragRef.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
     if ((e.target as HTMLElement).closest('button')) return;
     dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startedAt: performance.now(), idx: safeIndex, dir: null };
     dragXRef.current = 0;
     dragYRef.current = 0;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
     // Determine direction once threshold passed
-    if (!dragRef.current.dir && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
-      dragRef.current.dir = Math.abs(dx) > Math.abs(dy) * .9 ? 'h' : 'v';
-      e.currentTarget.setPointerCapture?.(e.pointerId);
+    if (!dragRef.current.dir) {
+      const axis = getGestureAxis(dx, dy);
+      if (axis) dragRef.current.dir = axis === 'x' ? 'h' : 'v';
     }
     if (dragRef.current.dir === 'h') {
-      e.preventDefault();
       const atStart = safeIndex === 0 && dx > 0;
       const atEnd = safeIndex === items.length - 1 && dx < 0;
       const resistedX = atStart || atEnd ? dx * .28 : dx;
