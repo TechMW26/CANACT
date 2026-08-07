@@ -558,13 +558,14 @@ export function ProfileRecognitionFolders({
         {folder === 'connections' ? (
           <div className={styles.gallery} data-connection-popup="true">
             {connectionMode === 'received' ? (
-              <CardGallery items={receivedConnections} index={slide} setIndex={setSlide} empty="No connection cards received yet." render={(gift) => <ConnectionCard gift={gift} />} />
+              <CardGallery items={receivedConnections} index={slide} setIndex={setSlide} empty="No connection cards received yet." loop render={(gift) => <ConnectionCard gift={gift} />} />
             ) : (
               <CardGallery
                 items={connectionCards}
                 index={slide}
                 setIndex={setSlide}
                 empty="No connection cards available."
+                loop
                 onDragY={connectionCards[Math.min(slide, Math.max(connectionCards.length - 1, 0))]?.sent ? undefined : connectionSwipe.onDrag}
                 render={(item) => (
                 <SendableConnectionCard
@@ -651,8 +652,10 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
   const [dragX, setDragX] = useState(0);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const dragXRef = useRef(0);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startedAt: number; axis: 'x' | 'y' | null; target: EventTarget | null } | null>(null);
+  const touchDragRef = useRef<{ identifier: number; startX: number; startY: number; startedAt: number; axis: 'x' | 'y' | null } | null>(null);
   const suppressClickRef = useRef(false);
   const count = groups.length;
   const wrapIndex = useCallback((value: number) => count ? (value + count) % count : 0, [count]);
@@ -666,28 +669,32 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
     setActiveIndex((current) => wrapIndex(current + direction));
   }, [count, wrapIndex]);
 
-  const finishDrag = (pointerId: number, cancelled = false) => {
+  const finishSwipe = useCallback((axis: 'x' | 'y' | null, travelled: number, startedAt: number, cancelled = false) => {
+    const elapsed = Math.max(1, performance.now() - startedAt);
+    const velocity = Math.abs(travelled) / elapsed;
+    const committedSwipe = !cancelled && axis === 'x'
+      && (Math.abs(travelled) >= 34 || (Math.abs(travelled) >= 16 && velocity >= .32));
+    if (committedSwipe) move(travelled < 0 ? 1 : -1);
+    if (axis === 'x' && Math.abs(travelled) >= 8) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => { suppressClickRef.current = false; }, 120);
+    }
+    dragXRef.current = 0;
+    setDragX(0);
+  }, [move]);
+
+  const finishDrag = useCallback((pointerId: number, cancelled = false) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== pointerId) return;
     dragRef.current = null;
     const travelled = dragXRef.current;
-    const elapsed = Math.max(1, performance.now() - drag.startedAt);
-    const velocity = Math.abs(travelled) / elapsed;
-    const committedSwipe = !cancelled && drag.axis === 'x'
-      && (Math.abs(travelled) >= 34 || (Math.abs(travelled) >= 16 && velocity >= .32));
-    if (committedSwipe) move(travelled < 0 ? 1 : -1);
-    if (drag.axis === 'x' && Math.abs(travelled) >= 8) {
-      suppressClickRef.current = true;
-      window.setTimeout(() => { suppressClickRef.current = false; }, 120);
-    }
     // Release pointer capture so child click events fire on mobile
     const captureTarget = drag.target as Element | null;
     if (captureTarget?.hasPointerCapture?.(pointerId)) {
       captureTarget.releasePointerCapture(pointerId);
     }
-    dragXRef.current = 0;
-    setDragX(0);
-  };
+    finishSwipe(drag.axis, travelled, drag.startedAt, cancelled);
+  }, [finishSwipe]);
 
   const positions = count > 1 ? [-1, 0, 1] : [0];
   const activeGroup = groups[activeIndex];
@@ -721,9 +728,79 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
     return () => observer.disconnect();
   }, [activeGroup]);
 
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const findTouch = (touches: TouchList, identifier: number) => {
+      for (let index = 0; index < touches.length; index += 1) {
+        const touch = touches.item(index);
+        if (touch?.identifier === identifier) return touch;
+      }
+      return null;
+    };
+    const resetTouch = (cancelled: boolean) => {
+      const drag = touchDragRef.current;
+      if (!drag) return;
+      touchDragRef.current = null;
+      finishSwipe(drag.axis, dragXRef.current, drag.startedAt, cancelled);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        resetTouch(true);
+        return;
+      }
+      const touch = event.touches.item(0);
+      if (!touch) return;
+      touchDragRef.current = {
+        identifier: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startedAt: performance.now(),
+        axis: null,
+      };
+      dragXRef.current = 0;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const drag = touchDragRef.current;
+      if (!drag) return;
+      const touch = findTouch(event.touches, drag.identifier);
+      if (!touch) return;
+      const nextX = touch.clientX - drag.startX;
+      const nextY = touch.clientY - drag.startY;
+      if (!drag.axis) drag.axis = getGestureAxis(nextX, nextY);
+      if (drag.axis !== 'x') return;
+      if (event.cancelable) event.preventDefault();
+      dragXRef.current = nextX;
+      setDragX(nextX);
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      const drag = touchDragRef.current;
+      if (!drag || !findTouch(event.changedTouches, drag.identifier)) return;
+      resetTouch(false);
+    };
+    const onTouchCancel = (event: TouchEvent) => {
+      const drag = touchDragRef.current;
+      if (!drag || !findTouch(event.changedTouches, drag.identifier)) return;
+      resetTouch(true);
+    };
+
+    viewport.addEventListener('touchstart', onTouchStart, { passive: true });
+    viewport.addEventListener('touchmove', onTouchMove, { passive: false });
+    viewport.addEventListener('touchend', onTouchEnd, { passive: true });
+    viewport.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    return () => {
+      viewport.removeEventListener('touchstart', onTouchStart);
+      viewport.removeEventListener('touchmove', onTouchMove);
+      viewport.removeEventListener('touchend', onTouchEnd);
+      viewport.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, [finishSwipe]);
+
   return (
     <div className={styles.connectionCarousel}>
       <div
+        ref={viewportRef}
         className={styles.connectionCarouselViewport}
         data-dragging={dragRef.current !== null}
         style={{
@@ -731,12 +808,13 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
           '--connection-carousel-height': viewportHeight ? `${viewportHeight}px` : undefined,
         } as React.CSSProperties}
         onPointerDown={(event) => {
-          if (!event.isPrimary || dragRef.current || (event.pointerType === 'mouse' && event.button !== 0)) return;
+          if (event.pointerType === 'touch' || !event.isPrimary || dragRef.current || (event.pointerType === 'mouse' && event.button !== 0)) return;
           dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startedAt: performance.now(), axis: null, target: event.currentTarget };
           dragXRef.current = 0;
           event.currentTarget.setPointerCapture?.(event.pointerId);
         }}
         onPointerMove={(event) => {
+          if (event.pointerType === 'touch') return;
           const drag = dragRef.current;
           if (!drag || drag.pointerId !== event.pointerId) return;
           const nextX = event.clientX - drag.startX;
@@ -794,8 +872,11 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
   );
 }
 
-function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { items: T[]; index: number; setIndex: (index: number) => void; empty: string; render: (item: T) => React.ReactNode; onDragY?: (dy: number, phase: 'move' | 'end') => void }) {
+function CardGallery<T>({ items, index, setIndex, empty, render, onDragY, loop = false }: { items: T[]; index: number; setIndex: (index: number) => void; empty: string; render: (item: T) => React.ReactNode; onDragY?: (dy: number, phase: 'move' | 'end') => void; loop?: boolean }) {
   const safeIndex = Math.min(index, Math.max(items.length - 1, 0));
+  const canLoop = loop && items.length > 1;
+  const previousIndex = safeIndex > 0 ? safeIndex - 1 : items.length - 1;
+  const nextIndex = safeIndex < items.length - 1 ? safeIndex + 1 : 0;
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startedAt: number; idx: number; dir: 'h' | 'v' | null } | null>(null);
   const dragXRef = useRef(0);
   const dragYRef = useRef(0);
@@ -822,8 +903,8 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
       if (axis) dragRef.current.dir = axis === 'x' ? 'h' : 'v';
     }
     if (dragRef.current.dir === 'h') {
-      const atStart = safeIndex === 0 && dx > 0;
-      const atEnd = safeIndex === items.length - 1 && dx < 0;
+      const atStart = !canLoop && safeIndex === 0 && dx > 0;
+      const atEnd = !canLoop && safeIndex === items.length - 1 && dx < 0;
       const resistedX = atStart || atEnd ? dx * .28 : dx;
       dragXRef.current = resistedX;
       setDragX(resistedX);
@@ -842,8 +923,8 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
       const elapsed = Math.max(1, performance.now() - drag.startedAt);
       const velocity = Math.abs(x) / elapsed;
       const committed = !cancelled && (Math.abs(x) >= 34 || (Math.abs(x) >= 16 && velocity >= .32));
-      if (committed && x < 0 && safeIndex < items.length - 1) { setAnimDir('left'); setIndex(safeIndex + 1); }
-      else if (committed && x > 0 && safeIndex > 0) { setAnimDir('right'); setIndex(safeIndex - 1); }
+      if (committed && x < 0 && (canLoop || safeIndex < items.length - 1)) { setAnimDir('left'); setIndex(nextIndex); }
+      else if (committed && x > 0 && (canLoop || safeIndex > 0)) { setAnimDir('right'); setIndex(previousIndex); }
     } else if (drag.dir === 'v' && onDragY) {
       onDragY(cancelled ? 0 : dragYRef.current, 'end');
     } else if (onDragY) {
@@ -865,9 +946,9 @@ function CardGallery<T>({ items, index, setIndex, empty, render, onDragY }: { it
           {render(items[safeIndex]!)}
         </div>
         <div className={styles.galleryNav}>
-          <button type="button" aria-label="Previous card" disabled={safeIndex === 0} onClick={() => { setAnimDir('right'); setIndex(safeIndex - 1); }}><ChevronLeft size={19} /></button>
+          <button type="button" aria-label="Previous card" disabled={items.length < 2 || (!canLoop && safeIndex === 0)} onClick={() => { setAnimDir('right'); setIndex(previousIndex); }}><ChevronLeft size={19} /></button>
           <div className={styles.dots}>{items.map((_, dot) => <button key={dot} type="button" aria-label={`Show card ${dot + 1}`} className={dot === safeIndex ? styles.activeDot : ''} onClick={() => { setAnimDir(dot > safeIndex ? 'left' : 'right'); setIndex(dot); }} />)}</div>
-          <button type="button" aria-label="Next card" disabled={safeIndex === items.length - 1} onClick={() => { setAnimDir('left'); setIndex(safeIndex + 1); }}><ChevronRight size={19} /></button>
+          <button type="button" aria-label="Next card" disabled={items.length < 2 || (!canLoop && safeIndex === items.length - 1)} onClick={() => { setAnimDir('left'); setIndex(nextIndex); }}><ChevronRight size={19} /></button>
         </div>
       </div>
     </div>

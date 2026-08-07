@@ -36,9 +36,10 @@
   height: var(--connection-carousel-height, clamp(370px, 122vw, 500px));
   overflow: hidden;
   touch-action: pan-y pinch-zoom;
-  overscroll-behavior-x: contain;
+  overscroll-behavior-x: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .connectionCarouselItem {
   --connection-card-bg: #edf7f2;
