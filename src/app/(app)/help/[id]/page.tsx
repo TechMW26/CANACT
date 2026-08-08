@@ -74,7 +74,7 @@ export default function HelpDetailPage() {
   const confirmedMe = !!h.confirmedHelpers?.[user.uid];
 
   return (
-    <div className="space-y-3 pt-4">
+    <div className="space-y-3 px-4 pt-4">
       {/* Author header */}
       <Card>
         <div className="flex items-start gap-3">
@@ -148,7 +148,6 @@ export default function HelpDetailPage() {
       )}
 
       {/* Helpers list */}
-      <Card>
         <h3 className="font-bold">Helpers</h3>
         {h.acceptedBy && Object.keys(h.acceptedBy).length ? (
           <ul className="mt-2 space-y-3">
@@ -165,7 +164,6 @@ export default function HelpDetailPage() {
             ))}
           </ul>
         ) : <p className="text-muted text-sm mt-2">No one yet. Share with your circle.</p>}
-      </Card>
 
       {askerToRate && (
         <HelpRatingSheet
