@@ -55,9 +55,9 @@
   --canact-profile-bottom-rgb: 255 255 255;
   --canact-profile-top-ink: 10 10 10;
   --canact-profile-bottom-ink: 10 10 10;
-  --canact-ios-safe-bottom: 0px;
-  --canact-footer-safe-padding: var(--canact-ios-safe-bottom);
-  --canact-bottom-nav-height: calc(76px + var(--canact-ios-safe-bottom));
+  --canact-mobile-bottom-inset: 0px;
+  --canact-footer-safe-padding: var(--canact-mobile-bottom-inset);
+  --canact-bottom-nav-height: calc(76px + var(--canact-mobile-bottom-inset));
   --canact-floating-bottom-clearance: calc(var(--canact-bottom-nav-height) + 12px);
   --canact-profile-top-light-opacity: 1;
   --canact-profile-top-dark-opacity: 0;
@@ -1550,8 +1550,13 @@ button.profile-score-cluster__mood:focus-visible { outline: 3px solid #fff; outl
 @supports (-webkit-touch-callout: none) {
   :root {
     --canact-header-offset: 0px;
-    --canact-ios-safe-bottom: env(safe-area-inset-bottom, 0px);
+    /* Keep controls above the home gesture without rendering the full native
+       inset as an oversized empty strip below the footer. */
+    --canact-mobile-bottom-inset: max(0px, calc(env(safe-area-inset-bottom, 0px) - 14px));
   }
+
+  html { background: #fff; }
+  body { background: #faf8f2; }
 }
 
 /* ---- Bottom nav group ---- */

@@ -86,6 +86,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
+  const [mobileFooterBottomInset, setMobileFooterBottomInset] = useState<string | null>(null);
   const mobileHeaderInset = mobileHeaderTopInset ?? '0px';
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   const prefetchedRoutesRef = useRef(new Set<string>());
@@ -140,7 +141,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const anyTabActive = useMemo(() => visibleTabs.some((t) => isNavLinkActive(pathname, t.href, user?.uid)), [pathname, visibleTabs, user?.uid]);
 
   const createButtonLeft = 'calc(100% - 72px)';
-  const createButtonBottom = 'calc(var(--canact-ios-safe-bottom, 0px) + 8px)';
+  const createButtonBottom = 'calc(var(--canact-mobile-bottom-inset, 0px) + 8px)';
 
   const [helpOpen, setHelpOpen] = useState(false);
   const handleNavAction = useCallback((tab: Tab) => {
@@ -171,7 +172,17 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileHeaderTopInset(getMobileHeaderTopInset());
+    setMobileFooterBottomInset(getMobileFooterBottomInset());
   }, []);
+
+  useEffect(() => {
+    if (!mobileFooterBottomInset) return;
+    const root = document.documentElement;
+    root.style.setProperty('--canact-mobile-bottom-inset', mobileFooterBottomInset);
+    return () => {
+      root.style.removeProperty('--canact-mobile-bottom-inset');
+    };
+  }, [mobileFooterBottomInset]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -384,7 +395,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav group — centered, button on right */}
       <div className="canact-bottom-group fixed bottom-0 z-40 flex items-end gap-[1.5em] lg:hidden"
-        style={{ left: 0, right: 0, paddingBottom: 'var(--canact-ios-safe-bottom, 0px)' }}>
+        style={{ left: 0, right: 0, paddingBottom: 'var(--canact-mobile-bottom-inset, 0px)' }}>
         <nav
           data-canact-bottom-nav
           className="canact-bottom-nav-shell canact-solid-footer"
@@ -512,7 +523,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           className="canact-feed-quick-create-button fixed lg:hidden"
           style={{
             left: 'calc(var(--canact-create-button-left) + 4px)',
-            bottom: 'calc(92px + var(--canact-ios-safe-bottom, 0px))',
+            bottom: 'calc(92px + var(--canact-mobile-bottom-inset, 0px))',
           }}
         >
           <Plus className="canact-adaptive-icon" size={27} strokeWidth={2.4} aria-hidden="true" />
@@ -715,7 +726,21 @@ function detailPopupItemFromPath(path: string | null): PostDetailSheetItem | nul
 
 function getMobileHeaderTopInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return null;
-  return isIOSDevice() ? 'env(safe-area-inset-top, 0px)' : null;
+  if (isIOSDevice()) return 'env(safe-area-inset-top, 0px)';
+  return isAndroidAppShell() ? 'max(env(safe-area-inset-top, 0px), 24px)' : null;
+}
+
+function getMobileFooterBottomInset() {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return null;
+  return isAndroidAppShell() ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : null;
+}
+
+function isAndroidAppShell() {
+  if (!/Android/i.test(navigator.userAgent || '')) return false;
+  return 'Capacitor' in window
+    || /; wv\)|\bwv\b/i.test(navigator.userAgent || '')
+    || !!window.matchMedia?.('(display-mode: standalone)').matches
+    || !!window.matchMedia?.('(display-mode: fullscreen)').matches;
 }
 
 function isIOSDevice() {

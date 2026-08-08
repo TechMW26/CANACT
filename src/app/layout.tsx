@@ -10,6 +10,7 @@ import { GlassMorphismRuntime } from '@/components/GlassMorphismRuntime';
 import { LqipObserver } from '@/components/LqipObserver';
 import { PageViewTracker } from '@/components/PageViewTracker';
 import WebPushBootstrapper from '@/components/WebPushBootstrapper';
+import { PopupStatusBarSync } from '@/components/PopupStatusBarSync';
 
 export const metadata: Metadata = {
   title: 'Canact',
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-[var(--canact-viewport-height)] w-screen max-w-[100vw] overflow-x-hidden bg-candy text-ink antialiased">
         <ViewportHeightManager />
+        <PopupStatusBarSync />
         <GlassMorphismRuntime />
         <AuthProvider>
           <EarlyPermissionsPrompt />
