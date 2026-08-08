@@ -80,6 +80,9 @@ export function PullToRefresh({
       if (getScrollTop() > 1) { resetGesture(); return; }
       const dy = (e.touches[0]?.clientY ?? 0) - startY.current;
       if (dy <= 0) { setPull(0); return; }
+      // Canact supplies its own refresh feedback, so stop WebKit's native
+      // rubber-band layer from sliding over the fixed app header.
+      if (e.cancelable) e.preventDefault();
       // Soft resistance past the threshold so it never feels like a free fall.
       const eased = dy < threshold ? dy : threshold + (dy - threshold) * 0.35;
       setPull(Math.min(eased, threshold * 1.8));
@@ -108,7 +111,7 @@ export function PullToRefresh({
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd, { passive: true });
     window.addEventListener('touchcancel', onTouchEnd, { passive: true });
     return () => {

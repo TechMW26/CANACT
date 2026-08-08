@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 import { getMessaging } from 'firebase-admin/messaging';
+import { sendWebPushSubscriptions, type StoredWebPushSubscription } from '@/lib/server/webPush';
 
 export const runtime = 'nodejs';
 
@@ -114,10 +115,11 @@ export async function POST(req: Request) {
 
   const decisions = await Promise.all(candidateUids.map(async (uid) => {
     try {
-      const [locSnap, prefSnap, tokSnap] = await Promise.all([
+      const [locSnap, prefSnap, tokSnap, webPushSnap] = await Promise.all([
         dbAdm.ref(`users/${uid}/lastLocation`).get(),
         dbAdm.ref(`users/${uid}/notifPrefs`).get(),
         dbAdm.ref(`users/${uid}/pushTokens`).get(),
+        dbAdm.ref(`users/${uid}/webPushSubscriptions`).get(),
       ]);
       const loc = locSnap.val() as { lat?: number; lng?: number; at?: number } | null;
       if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return null;
@@ -128,13 +130,17 @@ export async function POST(req: Request) {
       if (d > radius) return null;
       const tokensVal = (tokSnap.val() ?? {}) as Record<string, { token: string }>;
       const tokens = Object.values(tokensVal).map((t) => t.token).filter(Boolean);
-      if (tokens.length === 0) return null;
-      return { uid, tokens, tokensVal };
+      const webPushSubscriptions = (webPushSnap.val() ?? {}) as Record<string, StoredWebPushSubscription>;
+      if (tokens.length === 0 && Object.keys(webPushSubscriptions).length === 0) return null;
+      return { uid, tokens, tokensVal, webPushSubscriptions };
     } catch { return null; }
   }));
 
   const recipients = decisions.filter(Boolean) as Array<{
-    uid: string; tokens: string[]; tokensVal: Record<string, { token: string }>;
+    uid: string;
+    tokens: string[];
+    tokensVal: Record<string, { token: string }>;
+    webPushSubscriptions: Record<string, StoredWebPushSubscription>;
   }>;
   if (recipients.length === 0) return NextResponse.json({ ok: true, sent: 0, recipients: 0 });
 
@@ -143,7 +149,7 @@ export async function POST(req: Request) {
   if (safeTag) data.tag = safeTag;
   if (helpId) data.helpId = String(helpId);
 
-  const res = await getMessaging(app).sendEachForMulticast({
+  const res = allTokens.length ? await getMessaging(app).sendEachForMulticast({
     tokens: allTokens,
     notification: { title: cleanTitle, body: cleanBody },
     data,
@@ -152,12 +158,27 @@ export async function POST(req: Request) {
       notification: { channelId: 'canact_general_v1', clickAction: 'FCM_PLUGIN_ACTIVITY' },
     },
     webpush: { headers: { Urgency: 'high' } },
-  });
+  }) : null;
+
+  const webResults = await Promise.all(recipients.map((recipient) => sendWebPushSubscriptions(
+    dbAdm,
+    recipient.uid,
+    recipient.webPushSubscriptions,
+    {
+      title: cleanTitle,
+      body: cleanBody,
+      url: safeUrl,
+      tag: safeTag,
+      type: 'help',
+      helpId: helpId ? String(helpId) : undefined,
+    },
+    { urgency: 'high' },
+  )));
 
   // Prune dead tokens.
   let cursor = 0;
   await Promise.all(recipients.map(async (r) => {
-    const slice = res.responses.slice(cursor, cursor + r.tokens.length);
+    const slice = (res?.responses ?? []).slice(cursor, cursor + r.tokens.length);
     cursor += r.tokens.length;
     await Promise.all(slice.map(async (resp, i) => {
       if (resp.success) return;
@@ -173,7 +194,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     recipients: recipients.length,
-    sent: res.successCount,
-    failed: res.failureCount,
+    sent: (res?.successCount ?? 0) + webResults.reduce((total, result) => total + result.sent, 0),
+    failed: (res?.failureCount ?? 0) + webResults.reduce((total, result) => total + result.failed, 0),
   });
 }

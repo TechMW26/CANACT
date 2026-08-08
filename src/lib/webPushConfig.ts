@@ -1,0 +1,2 @@
+export const WEB_PUSH_PUBLIC_KEY = 'BDS7qJlMyIW31ry0K6VgPdB0X6dxxd_U3G7KDC67Fgfo7iSyCoFIVxnj3EwioCyblnCOQFBniPpqAZ7wc1T6aA4';
+

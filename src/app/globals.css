@@ -135,8 +135,16 @@ body [style*="box-shadow"] {
    because `hidden` would establish a new scroll container and break
    `position: sticky` on the desktop sidebar. `clip` blocks horizontal
    overflow without creating a scrollport. */
-html, body { overflow-x: clip; max-width: 100vw; }
-#canact-app-shell { min-height: var(--canact-viewport-height); overflow-x: clip; }
+html, body {
+  overflow-x: clip;
+  max-width: 100vw;
+  overscroll-behavior-y: none;
+}
+#canact-app-shell {
+  min-height: var(--canact-viewport-height);
+  overflow-x: clip;
+  overscroll-behavior-y: none;
+}
 
 html[data-canact-profile-route="true"] {
   --canact-profile-bottom-rgb: 0 0 0;
@@ -1639,5 +1647,28 @@ html[data-canact-home-nearby="true"] [data-canact-bottom-nav].canact-solid-foote
 .canact-bottom-group {
   width: 100%;
   border-radius: 28px 28px 0 0;
-  box-shadow: 0 -10px 28px rgb(0 0 0 / 16%);
+  isolation: isolate;
+  box-shadow: 0 -4px 14px rgb(0 0 0 / 7%);
+}
+
+/* Paint the native home-indicator inset with the same solid surface as the
+   dock. iOS otherwise exposes the page canvas beneath the fixed navbar. */
+.canact-bottom-group::after {
+  position: fixed;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: max(var(--canact-mobile-bottom-inset, 0px), env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  content: "";
+  pointer-events: none;
+}
+
+.canact-header-shell.canact-solid-header {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 7%) !important;
+}
+
+[data-canact-bottom-nav].canact-solid-footer {
+  box-shadow: 0 -4px 14px rgb(0 0 0 / 7%) !important;
 }

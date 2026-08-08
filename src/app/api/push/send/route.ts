@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 import { getMessaging } from 'firebase-admin/messaging';
+import { sendWebPushSubscriptions, type StoredWebPushSubscription } from '@/lib/server/webPush';
 
 export const runtime = 'nodejs';
 
@@ -66,10 +67,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
-  const tokensSnap = await getDatabase(app).ref(`users/${toUid}/pushTokens`).get();
+  const database = getDatabase(app);
+  const [tokensSnap, webPushSnap] = await Promise.all([
+    database.ref(`users/${toUid}/pushTokens`).get(),
+    database.ref(`users/${toUid}/webPushSubscriptions`).get(),
+  ]);
   const tokensVal = (tokensSnap.val() ?? {}) as Record<string, { token: string }>;
   const tokens = Object.values(tokensVal).map((t) => t.token).filter(Boolean);
-  if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
+  const webPushSubscriptions = (webPushSnap.val() ?? {}) as Record<string, StoredWebPushSubscription>;
+  if (tokens.length === 0 && Object.keys(webPushSubscriptions).length === 0) {
+    return NextResponse.json({ ok: true, sent: 0 });
+  }
 
   // Strip emojis from any user-provided text — product requirement.
   const stripEmoji = (s: string) =>
@@ -92,7 +100,7 @@ export async function POST(req: Request) {
   if (tag) data.tag = String(tag).slice(0, 60);
   if (safeImage) data.image = safeImage;
 
-  const res = await getMessaging(app).sendEachForMulticast({
+  const res = tokens.length ? await getMessaging(app).sendEachForMulticast({
     tokens,
     // Notification block ensures Android/iOS render in the system tray
     // even when the app is backgrounded or killed. The data block carries
@@ -120,19 +128,31 @@ export async function POST(req: Request) {
       },
       fcmOptions: { link: webLink },
     },
-  });
+  }) : null;
+
+  const webResult = await sendWebPushSubscriptions(database, toUid, webPushSubscriptions, {
+    title: cleanTitle,
+    body: cleanBody,
+    url: safeUrl,
+    tag: tag ? String(tag).slice(0, 60) : undefined,
+    image: safeImage,
+  }, { urgency: 'high' });
 
   // Prune dead tokens.
   await Promise.all(
-    res.responses.map(async (r, i) => {
+    (res?.responses ?? []).map(async (r, i) => {
       if (r.success) return;
       const code = r.error?.code || '';
       if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
         const key = Object.keys(tokensVal).find((k) => tokensVal[k]?.token === tokens[i]);
-        if (key) await getDatabase(app).ref(`users/${toUid}/pushTokens/${key}`).remove();
+        if (key) await database.ref(`users/${toUid}/pushTokens/${key}`).remove();
       }
     }),
   );
 
-  return NextResponse.json({ ok: true, sent: res.successCount, failed: res.failureCount });
+  return NextResponse.json({
+    ok: true,
+    sent: (res?.successCount ?? 0) + webResult.sent,
+    failed: (res?.failureCount ?? 0) + webResult.failed,
+  });
 }

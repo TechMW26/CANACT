@@ -24,10 +24,58 @@
 
 const functions = require('firebase-functions/v1');
 const admin = require('firebase-admin');
+const webPush = require('web-push');
 
 admin.initializeApp();
 
 const WEB_APP_ORIGIN = 'https://canact.vercel.app';
+const WEB_PUSH_PUBLIC_KEY = 'BDS7qJlMyIW31ry0K6VgPdB0X6dxxd_U3G7KDC67Fgfo7iSyCoFIVxnj3EwioCyblnCOQFBniPpqAZ7wc1T6aA4';
+let webPushConfigured = false;
+
+function configureWebPush() {
+  if (webPushConfigured) return true;
+  const privateKey = process.env.WEB_PUSH_PRIVATE_KEY;
+  if (!privateKey) return false;
+  webPush.setVapidDetails(WEB_APP_ORIGIN, WEB_PUSH_PUBLIC_KEY, privateKey);
+  webPushConfigured = true;
+  return true;
+}
+
+async function sendStandardWebPush(db, uid, subscriptions, payload, options = {}) {
+  const entries = Object.entries(subscriptions || {}).filter(([, subscription]) => (
+    subscription && subscription.endpoint && subscription.keys
+    && subscription.keys.auth && subscription.keys.p256dh
+  ));
+  if (!entries.length || !configureWebPush()) return { sent: 0, failed: 0 };
+
+  let sent = 0;
+  let failed = 0;
+  await Promise.all(entries.map(async ([key, subscription]) => {
+    try {
+      await webPush.sendNotification(subscription, JSON.stringify({
+        data: payload,
+        notification: {
+          title: payload.title || 'Canact',
+          body: payload.body || '',
+          icon: '/icons/icon-192.png',
+          badge: '/icons/badge-72.png',
+          tag: payload.tag,
+          image: payload.image,
+        },
+      }), {
+        TTL: options.ttl || 86400,
+        urgency: options.urgency || 'normal',
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      if (error && (error.statusCode === 404 || error.statusCode === 410)) {
+        await db.ref(`users/${uid}/webPushSubscriptions/${key}`).remove();
+      }
+    }
+  }));
+  return { sent, failed };
+}
 
 function webRoute(deepLink) {
   try {
@@ -42,9 +90,10 @@ function webRoute(deepLink) {
 }
 
 async function getRecipientTokens(db, uid) {
-  const [nativeSnap, webSnap] = await Promise.all([
+  const [nativeSnap, webSnap, standardWebSnap] = await Promise.all([
     db.ref(`users/${uid}/fcmTokens`).get(),
     db.ref(`users/${uid}/pushTokens`).get(),
+    db.ref(`users/${uid}/webPushSubscriptions`).get(),
   ]);
   const native = Object.keys(nativeSnap.val() || {});
   const webEntries = Object.entries(webSnap.val() || {})
@@ -53,6 +102,7 @@ async function getRecipientTokens(db, uid) {
     native,
     web: webEntries.map(([, value]) => value.token),
     webEntries,
+    standardWeb: standardWebSnap.val() || {},
   };
 }
 
@@ -73,6 +123,7 @@ async function pruneRejectedTokens(db, uid, kind, tokens, responses, webEntries)
 }
 
 exports.notifyIncomingCall = functions
+  .runWith({ secrets: ['WEB_PUSH_PRIVATE_KEY'] })
   .region('asia-southeast1')
   .database
   .ref('/incomingCalls/{toUid}/{callId}')
@@ -97,7 +148,8 @@ exports.notifyIncomingCall = functions
 
     // 2. Collect all device tokens for the recipient.
     const tokenSets = await getRecipientTokens(db, toUid);
-    if (tokenSets.native.length === 0 && tokenSets.web.length === 0) {
+    if (tokenSets.native.length === 0 && tokenSets.web.length === 0
+      && Object.keys(tokenSets.standardWeb).length === 0) {
       console.log(`[notifyIncomingCall] no notification tokens for user ${toUid}`);
       return null;
     }
@@ -161,6 +213,24 @@ exports.notifyIncomingCall = functions
       });
       console.log(`[notifyIncomingCall] web ${webResp.successCount}/${tokenSets.web.length}`);
       await pruneRejectedTokens(db, toUid, 'web', tokenSets.web, webResp.responses, tokenSets.webEntries);
+    }
+
+    if (Object.keys(tokenSets.standardWeb).length) {
+      const title = `${(call.kind === 'video') ? 'Video' : 'Voice'} call from ${fromName}`;
+      const body = `${fromName} is calling you on Canact`;
+      const route = `/?incomingCall=${encodeURIComponent(callId)}`;
+      const standardResult = await sendStandardWebPush(db, toUid, tokenSets.standardWeb, {
+        type: 'call',
+        callId: String(callId),
+        fromName: String(fromName),
+        fromPhoto: String(fromPhoto),
+        kind: String((call.kind === 'video') ? 'video' : 'audio'),
+        title,
+        body,
+        url: route,
+        tag: `call:${callId}`,
+      }, { urgency: 'high', ttl: 60 });
+      console.log(`[notifyIncomingCall] standard web ${standardResult.sent}/${Object.keys(tokenSets.standardWeb).length}`);
     }
     return null;
   });
@@ -240,7 +310,8 @@ async function pushToUser(toUid, { title, body, deepLink, type, extra }) {
   if (!toUid) return;
   const db = admin.database();
   const tokenSets = await getRecipientTokens(db, toUid);
-  if (tokenSets.native.length === 0 && tokenSets.web.length === 0) {
+  if (tokenSets.native.length === 0 && tokenSets.web.length === 0
+    && Object.keys(tokenSets.standardWeb).length === 0) {
     console.log(`[push] no tokens for ${toUid} (type=${type})`);
     return;
   }
@@ -300,6 +371,20 @@ async function pushToUser(toUid, { title, body, deepLink, type, extra }) {
       console.log(`[push:${type}] web ${webResp.successCount}/${tokenSets.web.length} to ${toUid}`);
       await pruneRejectedTokens(db, toUid, 'web', tokenSets.web, webResp.responses, tokenSets.webEntries);
     }
+
+    if (Object.keys(tokenSets.standardWeb).length) {
+      const webData = {
+        ...data,
+        title: String(cleanTitle),
+        body: String(cleanBody),
+        url: route,
+        tag: `${String(type || 'general')}:${String((extra && (extra.notificationId || extra.threadId || extra.helpId)) || toUid)}`,
+      };
+      const standardResult = await sendStandardWebPush(db, toUid, tokenSets.standardWeb, webData, {
+        urgency: type === 'help-request' ? 'high' : 'normal',
+      });
+      console.log(`[push:${type}] standard web ${standardResult.sent}/${Object.keys(tokenSets.standardWeb).length} to ${toUid}`);
+    }
   } catch (err) {
     console.warn(`[push:${type}] failed`, err && err.message);
   }
@@ -314,6 +399,7 @@ async function pushToUser(toUid, { title, body, deepLink, type, extra }) {
  * tokens.
  */
 exports.notifyChatMessage = functions
+  .runWith({ secrets: ['WEB_PUSH_PRIVATE_KEY'] })
   .region('asia-southeast1')
   .database
   .ref('/chatMessages/{threadId}/{messageId}')
@@ -368,6 +454,7 @@ exports.notifyChatMessage = functions
  * having to wire each event individually.
  */
 exports.notifyAppNotification = functions
+  .runWith({ secrets: ['WEB_PUSH_PRIVATE_KEY'] })
   .region('asia-southeast1')
   .database
   .ref('/notifications/{toUid}/{id}')
@@ -420,6 +507,7 @@ exports.notifyAppNotification = functions
  * If neither index exists yet, we silently skip — no harm done.
  */
 exports.notifyHelpRequest = functions
+  .runWith({ secrets: ['WEB_PUSH_PRIVATE_KEY'] })
   .region('asia-southeast1')
   .database
   .ref('/help/{helpId}')
