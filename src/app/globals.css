@@ -243,6 +243,15 @@ html[data-canact-explore-handoff="true"] .canact-page-enter-back {
   animation: none;
   opacity: 1;
 }
+/* Fullscreen routes render fixed surfaces inside this wrapper. Keeping the
+   route reveal's final clip-path would clip those surfaces to the wrapper's
+   zero-height layout box once the Explore handoff finishes. */
+html[data-canact-fullscreen-page="true"] .canact-page-enter-forward,
+html[data-canact-fullscreen-page="true"] .canact-page-enter-back {
+  animation: none;
+  clip-path: none;
+  opacity: 1;
+}
 @keyframes canactPageInForward {
   0%   { opacity: 0; clip-path: inset(10px 0 0 0 round 18px); }
   55%  { opacity: 1; }
