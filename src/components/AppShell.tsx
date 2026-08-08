@@ -418,7 +418,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
         <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderInset} />
         <div
-          className={isProfileRoute ? 'w-full pb-[var(--canact-bottom-nav-height)] lg:px-6 lg:pb-6' : `canact-col ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
+          className={`w-full ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: `calc(${mobileHeaderInset} + 92px)` } : undefined}
         ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />

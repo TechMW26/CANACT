@@ -1,3 +1,9 @@
+@property --orbit-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .home {
   position: relative;
   left: 50%;
@@ -48,21 +54,26 @@
 
 /* Score circle */
 .scoreDock {
+  --orbit-center-y: 192px;
+  --orbit-radius-x: 141px;
+  --orbit-radius-y: 87px;
   position: relative;
-  display: flex;
-  height: 286px;
-  align-items: flex-start;
-  justify-content: center;
-  margin-top: 10px;
+  width: calc(100% + 48px);
+  height: clamp(354px, 88vw, 388px);
+  margin: 12px -24px 0;
   isolation: isolate;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .scoreCircle {
-  position: relative;
-  z-index: 3;
-  width: 264px;
-  height: 264px;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 6;
+  width: clamp(236px, 61vw, 264px);
+  height: clamp(236px, 61vw, 264px);
   border-radius: 50%;
   overflow: hidden;
   display: grid;
@@ -71,19 +82,23 @@
   border: 1px solid rgba(31,107,85,.08);
   box-shadow: 0 8px 32px rgba(31,56,47,.06);
   opacity: var(--circle-opacity, 1);
-  transform: scale(var(--circle-scale, 1));
+  transform: translateX(-50%) scale(var(--circle-scale, 1));
   transition: opacity .16s linear, transform .16s linear;
   will-change: transform, opacity;
 }
 
 .metricCircle {
+  --orbit-scale: 1;
+  --orbit-opacity: 1;
+  --orbit-z: 8;
   position: absolute;
-  top: 42px;
-  left: 50%;
-  z-index: 1;
+  top: calc(var(--orbit-center-y) + (cos(var(--orbit-angle)) * var(--orbit-radius-y)));
+  left: calc(50% - (sin(var(--orbit-angle)) * var(--orbit-radius-x)));
+  z-index: var(--orbit-z);
   display: flex;
-  width: 172px;
-  height: 172px;
+  width: 154px;
+  height: 154px;
+  margin: -77px 0 0 -77px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -92,16 +107,37 @@
   border-radius: 50%;
   background: #e4f2ec;
   color: #174f3f;
-  opacity: var(--metric-opacity, 1);
+  opacity: min(var(--metric-opacity, 1), var(--orbit-opacity));
   box-shadow: 0 12px 32px rgb(31 56 47 / 10%);
-  transition: transform 440ms cubic-bezier(.22,.85,.3,1), opacity 160ms linear, background 240ms ease;
-  animation: metricCircleIn 360ms cubic-bezier(.22,.85,.3,1);
+  transform: scale(var(--orbit-scale));
+  transform-origin: center;
+  transition:
+    --orbit-angle 620ms cubic-bezier(.2,.82,.24,1),
+    transform 620ms cubic-bezier(.2,.82,.24,1),
+    opacity 360ms ease,
+    background 240ms ease,
+    box-shadow 360ms ease;
   -webkit-tap-highlight-color: transparent;
+  will-change: transform, opacity;
 }
-.metricCircle[data-side="left"] { transform: translateX(-138%) scale(.84); }
-.metricCircle[data-side="right"] { transform: translateX(38%) scale(.84); }
+.metricCircle[data-slot="active"] { --orbit-scale: 1; --orbit-opacity: 1; --orbit-z: 8; box-shadow: 0 16px 34px rgb(31 56 47 / 13%); }
+.metricCircle[data-slot="right-low"] { --orbit-scale: .82; --orbit-opacity: .88; --orbit-z: 4; }
+.metricCircle[data-slot="right-high"] { --orbit-scale: .58; --orbit-opacity: .68; --orbit-z: 2; }
+.metricCircle[data-slot="hidden"] { --orbit-scale: .42; --orbit-opacity: 0; --orbit-z: 1; pointer-events: none; }
+.metricCircle[data-slot="left-high"] { --orbit-scale: .58; --orbit-opacity: .68; --orbit-z: 2; }
+.metricCircle[data-slot="left-low"] { --orbit-scale: .82; --orbit-opacity: .88; --orbit-z: 4; }
+.metricCircle:focus { outline: none; }
+.metricCircle:focus-visible { outline: 3px solid rgb(31 107 85 / 32%); outline-offset: 3px; }
 .metricCircle:active { filter: brightness(.98); }
-.metricCircle > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgb(255 255 255 / 72%); }
+.metricContent {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.metricIcon { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: rgb(255 255 255 / 72%); }
 .metricCircle b { margin-top: 7px; font-size: 29px; font-weight: 950; line-height: 1; letter-spacing: -.04em; }
 .metricCircle strong { width: 82px; margin-top: 5px; overflow: visible; font-size: 11px; font-weight: 900; line-height: 1.08; text-align: center; text-overflow: clip; white-space: normal; }
 .metricCircle small { width: 78px; margin-top: 3px; color: rgb(23 79 63 / 58%); font-size: 9px; font-weight: 800; line-height: 1.08; text-align: center; white-space: normal; }
@@ -111,36 +147,19 @@
 .metricCircle[data-tone="lavender"] { background: #ece5f6; color: #604a82; }
 .metricCircle[data-tone="cream"] { background: #f2ead8; color: #705a2e; }
 
-.metricDots {
+.metricStatus {
   position: absolute;
-  bottom: 5px;
-  left: 50%;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transform: translateX(-50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-.metricDots button { width: 6px; height: 6px; border-radius: 999px; background: #d6ddd9; transition: width 220ms ease, background 220ms ease; }
-.metricDots button[aria-current="page"] { width: 19px; background: #2e8068; }
 
 @media (max-width: 520px) {
-  .scoreCircle { width: 244px; height: 244px; }
-  .metricCircle { top: 40px; width: 164px; height: 164px; }
-  .metricCircle[data-side="left"] > span,
-  .metricCircle[data-side="left"] > b,
-  .metricCircle[data-side="left"] > strong,
-  .metricCircle[data-side="left"] > small { transform: translateX(-14px); }
-  .metricCircle[data-side="right"] > span,
-  .metricCircle[data-side="right"] > b,
-  .metricCircle[data-side="right"] > strong,
-  .metricCircle[data-side="right"] > small { transform: translateX(14px); }
-  .metricCircle strong,
-  .metricCircle small { width: 66px; }
-}
-
-@keyframes metricCircleIn {
-  from { opacity: 0; }
+  .metricCircle { width: 148px; height: 148px; }
+  .metricCircle { margin: -74px 0 0 -74px; }
 }
 
 .scoreRing {
@@ -705,6 +724,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .metricCircle,
+  .metricContent { transition-duration: 1ms !important; }
   .exploreTransitionMap { transition-duration: 1ms !important; animation-duration: 1ms !important; }
   .nearbyPill svg { animation: none !important; }
 }

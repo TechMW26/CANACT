@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
 import { Button } from '@/components/Button';
 import { Select, Textarea } from '@/components/Input';
-import { Card } from '@/components/Card';
 import { createHelp } from '@/lib/services/help';
 import { HelpAudience, HelpChannel, HelpType } from '@/lib/types';
 import { toast } from '@/components/Toaster';
@@ -69,8 +68,7 @@ export default function HelpCreatePage() {
   }
 
   return (
-    <div className="space-y-3 pt-4">
-      <Card>
+    <div className="space-y-3 px-4 pt-4">
         <h2 className="text-xl font-bold">Request Help</h2>
         <p className="text-xs text-muted mt-1">Pick urgency, audience, and how nearby people should respond.</p>
 
@@ -149,7 +147,6 @@ export default function HelpCreatePage() {
         <Button full size="lg" loading={busy} className="mt-4" onClick={submit}>
           Send help request
         </Button>
-      </Card>
     </div>
   );
 }

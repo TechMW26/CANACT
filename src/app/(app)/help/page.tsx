@@ -39,7 +39,7 @@ export default function HelpFeed() {
     });
 
   return (
-    <div className="space-y-3 pt-4">
+    <div className="space-y-3 px-4 pt-4">
       {/* Sticky single CTA */}
       <div className="sticky top-[68px] z-20 -mx-4 bg-white px-4 pb-2 pt-1 md:-mx-6 md:px-6">
         <Link href="/help/create" className="block">

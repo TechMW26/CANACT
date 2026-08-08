@@ -28,7 +28,7 @@ export default function UndergroundPage() {
     }
   };
   return (
-    <div className="pt-4">
+    <div className="px-4 pt-4">
       <Card className={active ? 'bg-underground text-white border-black' : ''}>
         <h2 className={`text-2xl font-extrabold ${active ? 'text-white' : 'text-ink'}`}>Underground</h2>
         <p className={`mt-1 text-sm ${active ? 'text-white/70' : 'text-muted'}`}>

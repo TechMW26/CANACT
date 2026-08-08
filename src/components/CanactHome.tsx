@@ -23,6 +23,14 @@ import styles from './CanactHome.module.css';
 
 type HomeProfile = UserProfile & { lastLocation?: { lat?: number; lng?: number } };
 type HomeSuggestion = { profile: HomeProfile; source: 'contact' | 'nearby'; distanceMeters?: number };
+type MetricOrbitSlot = 'active' | 'right-low' | 'right-high' | 'hidden' | 'left-high' | 'left-low';
+
+const METRIC_ORBIT_SLOTS: MetricOrbitSlot[] = ['active', 'right-low', 'right-high', 'hidden', 'left-high', 'left-low'];
+
+function getMetricOrbitSlot(index: number, activeIndex: number, total: number): MetricOrbitSlot {
+  const distance = (index - activeIndex + total) % total;
+  return METRIC_ORBIT_SLOTS[distance] ?? 'hidden';
+}
 
 function firstName(value?: string | null) {
   return String(value || 'there').trim().split(/\s+/)[0] || 'there';
@@ -56,9 +64,11 @@ export function CanactHome() {
   const [outgoingUids, setOutgoingUids] = useState<Set<string>>(() => new Set());
   const [connectingUid, setConnectingUid] = useState<string | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [metricPage, setMetricPage] = useState(0);
-  const metricSwipeRef = useRef<{ x: number; y: number } | null>(null);
+  const [metricOrbitStep, setMetricOrbitStep] = useState(0);
+  const [metricAutoPaused, setMetricAutoPaused] = useState(false);
+  const metricSwipeRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const metricSwipedRef = useRef(false);
+  const metricResumeTimerRef = useRef<number | null>(null);
   const suggestionDay = useMemo(() => Math.floor(Date.now() / 86_400_000), []);
   const summary = useMemo(() => calculateCanactScore(profile), [profile]);
   const score = summary.score;
@@ -77,15 +87,40 @@ export function CanactHome() {
     { id: 'civic', label: 'Civic sense', displayLabel: 'Civic sense', value: Number(profile?.attrs?.civic_sense || 0), suffix: 'signals', Icon: Sparkles, tone: 'yellow', href: '/profile' },
     { id: 'behaviour', label: 'Behaviour', displayLabel: 'Behaviour', value: Number(profile?.attrs?.behaviour || 0), suffix: 'signals', Icon: Users, tone: 'coral', href: '/profile' },
   ], [badgeCount, connectionCardCount, connectionCardsHref, goodActs, profile?.attrs?.behaviour, profile?.attrs?.civic_sense, profile?.attrs?.reliability]);
-  const metricPageCount = Math.ceil(scoreMetrics.length / 2);
-  const visibleScoreMetrics = [scoreMetrics[metricPage * 2], scoreMetrics[(metricPage * 2) + 1]];
+  const activeMetricIndex = ((metricOrbitStep % scoreMetrics.length) + scoreMetrics.length) % scoreMetrics.length;
 
-  const changeMetricPage = (direction: number) => {
-    setMetricPage((current) => (current + direction + metricPageCount) % metricPageCount);
-  };
+  const changeMetric = useCallback((direction: number) => {
+    setMetricOrbitStep((current) => current + direction);
+  }, []);
+
+  const pauseMetricAutoRotate = useCallback((resumeAfterMs?: number) => {
+    setMetricAutoPaused(true);
+    if (metricResumeTimerRef.current) window.clearTimeout(metricResumeTimerRef.current);
+    metricResumeTimerRef.current = null;
+    if (resumeAfterMs) {
+      metricResumeTimerRef.current = window.setTimeout(() => {
+        setMetricAutoPaused(false);
+        metricResumeTimerRef.current = null;
+      }, resumeAfterMs);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (metricAutoPaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setMetricOrbitStep((current) => current + 1);
+    }, 2800);
+    return () => window.clearInterval(timer);
+  }, [metricAutoPaused]);
+
+  useEffect(() => () => {
+    if (metricResumeTimerRef.current) window.clearTimeout(metricResumeTimerRef.current);
+  }, []);
 
   const onMetricPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    metricSwipeRef.current = { x: event.clientX, y: event.clientY };
+    if (!event.isPrimary) return;
+    pauseMetricAutoRotate();
+    metricSwipeRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     metricSwipedRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -93,14 +128,29 @@ export function CanactHome() {
   const onMetricPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const start = metricSwipeRef.current;
     metricSwipeRef.current = null;
+    pauseMetricAutoRotate(5200);
     if (!start) return;
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
     if (Math.abs(deltaX) < 34 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
     metricSwipedRef.current = true;
-    changeMetricPage(deltaX < 0 ? 1 : -1);
+    changeMetric(deltaX < 0 ? 1 : -1);
     haptic('selection');
     window.setTimeout(() => { metricSwipedRef.current = false; }, 0);
+  };
+
+  const cancelMetricSwipe = () => {
+    metricSwipeRef.current = null;
+    pauseMetricAutoRotate(3200);
+  };
+
+  const promoteMetric = (index: number) => {
+    const forwardDistance = (index - activeMetricIndex + scoreMetrics.length) % scoreMetrics.length;
+    const shortestDistance = forwardDistance <= scoreMetrics.length / 2
+      ? forwardDistance
+      : forwardDistance - scoreMetrics.length;
+    setMetricOrbitStep((current) => current + shortestDistance);
+    pauseMetricAutoRotate(5200);
   };
 
   const currentLocation = coords
@@ -366,21 +416,34 @@ export function CanactHome() {
           className={styles.scoreDock}
           role="region"
           aria-label="Score insights carousel"
+          aria-roledescription="carousel"
           onPointerDown={onMetricPointerDown}
           onPointerUp={onMetricPointerUp}
-          onPointerCancel={() => { metricSwipeRef.current = null; }}
+          onPointerCancel={cancelMetricSwipe}
+          onLostPointerCapture={cancelMetricSwipe}
+          onMouseEnter={() => pauseMetricAutoRotate()}
+          onMouseLeave={() => setMetricAutoPaused(false)}
+          onFocus={() => pauseMetricAutoRotate()}
+          onBlur={() => pauseMetricAutoRotate(2800)}
         >
-          {visibleScoreMetrics.map((metric, index) => {
+          {scoreMetrics.map((metric, index) => {
             const Icon = metric.Icon;
-            const side = index === 0 ? 'left' : 'right';
+            const orbitSlot = getMetricOrbitSlot(index, activeMetricIndex, scoreMetrics.length);
+            const isActive = orbitSlot === 'active';
+            const isHidden = orbitSlot === 'hidden';
             return (
               <Link
-                key={`${metricPage}-${metric.id}`}
+                key={metric.id}
                 href={metric.href}
                 prefetch
                 className={styles.metricCircle}
-                data-side={side}
+                data-slot={orbitSlot}
                 data-tone={metric.tone}
+                style={{
+                  '--orbit-angle': `${(index * -60) + (metricOrbitStep * 60)}deg`,
+                } as React.CSSProperties}
+                tabIndex={isHidden ? -1 : 0}
+                aria-hidden={isHidden || undefined}
                 aria-label={`${metric.label}: ${metric.value} ${metric.suffix}. Open details.`}
                 onClick={(event) => {
                   if (metricSwipedRef.current) {
@@ -388,13 +451,19 @@ export function CanactHome() {
                     event.preventDefault();
                     return;
                   }
+                  if (!isActive) {
+                    event.preventDefault();
+                    promoteMetric(index);
+                  }
                   haptic('selection');
                 }}
               >
-                <span><Icon size={18} /></span>
-                <b>{metric.value}</b>
-                <strong>{metric.displayLabel}</strong>
-                <small>{metric.suffix}</small>
+                <span className={styles.metricContent}>
+                  <span className={styles.metricIcon}><Icon size={18} /></span>
+                  <b>{metric.value}</b>
+                  <strong>{metric.displayLabel}</strong>
+                  <small>{metric.suffix}</small>
+                </span>
               </Link>
             );
           })}
@@ -410,11 +479,9 @@ export function CanactHome() {
               <em>{tier}</em>
             </div>
           </div>
-          <div className={styles.metricDots} aria-label="Insight pages">
-            {Array.from({ length: metricPageCount }, (_, index) => (
-              <button key={index} type="button" aria-label={`Show insight page ${index + 1}`} aria-current={metricPage === index ? 'page' : undefined} onClick={() => setMetricPage(index)} />
-            ))}
-          </div>
+          <span className={styles.metricStatus} aria-live="polite">
+            {scoreMetrics[activeMetricIndex]?.label}: {scoreMetrics[activeMetricIndex]?.value} {scoreMetrics[activeMetricIndex]?.suffix}
+          </span>
         </div>
 
         <div className={styles.belowFold}>

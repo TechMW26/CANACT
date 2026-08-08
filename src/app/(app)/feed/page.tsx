@@ -32,11 +32,11 @@ import 'react-loading-skeleton/dist/skeleton.css';
 type FeedDetailItem = Extract<FeedItem, { kind: 'wha' | 'poll' | 'rateme' }>;
 
 const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'wha', label: "What's Happening" },
-  { id: 'poll', label: 'Polls' },
-  { id: 'rateme', label: 'Rate Me' },
-  { id: 'reel', label: 'Reels' },
+  { id: 'all', label: 'All', color: '#1f6b55', dot: '●' },
+  { id: 'wha', label: "What's Happening", color: '#3b82f6', dot: '●' },
+  { id: 'poll', label: 'Polls', color: '#f59e0b', dot: '●' },
+  { id: 'rateme', label: 'Rate Me', color: '#ef4444', dot: '●' },
+  { id: 'reel', label: 'Reels', color: '#8b5cf6', dot: '●' },
 ];
 
 export default function FeedPage() {
@@ -167,7 +167,7 @@ export default function FeedPage() {
 
   return (
     <SkeletonTheme baseColor="#E6EEE9" highlightColor="#F3F1EB">
-    <div className="canact-figma-feed pt-3 pb-4 md:pb-6" data-onboarding="feed">
+    <div className="canact-figma-feed pt-3 pb-24 px-4 lg:pb-6" data-onboarding="feed">
 
       <section className="canact-stories-strip flex items-center gap-2 pb-2" data-onboarding="feed-stories">
         <div className="canact-stories-fade min-w-0 flex-1 overflow-x-auto no-scrollbar">
@@ -338,7 +338,7 @@ export default function FeedPage() {
 
       {filterOpen && (
         <Sheet open={filterOpen} onClose={() => setFilterOpen(false)} title="Filter feed">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-2">
             {FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -349,8 +349,9 @@ export default function FeedPage() {
                 data-liquid-blur="0"
                 data-liquid-tint={filter === f.id ? '31,107,85' : '250,248,242'}
                 data-liquid-tint-opacity={filter === f.id ? '0.22' : '0.08'}
-                className={`rounded-2xl bg-transparent px-4 py-3 text-sm font-semibold ${filter === f.id ? 'text-brand' : 'text-ink'}`}
+                className={`flex items-center gap-3 rounded-2xl bg-transparent px-4 py-3 text-sm font-semibold ${filter === f.id ? 'text-brand' : 'text-ink'}`}
               >
+                <span className="text-lg leading-none" style={{ color: f.color }}>{f.dot}</span>
                 <span>{f.label}</span>
               </button>
             ))}
@@ -406,6 +407,7 @@ function MediaOverlayTile({
   onDelete,
   isOwner,
   reactionsDisabled = false,
+  showExpandedActions = true,
   children,
 }: {
   href: string;
@@ -429,6 +431,7 @@ function MediaOverlayTile({
   onDelete?: () => Promise<void> | void;
   isOwner: boolean;
   reactionsDisabled?: boolean;
+  showExpandedActions?: boolean;
   children: React.ReactNode;
 }) {
   const trimmed = (caption ?? '').trim();
@@ -520,22 +523,26 @@ function MediaOverlayTile({
             >
               <ThumbsDown size={15} fill={disliked ? 'currentColor' : 'none'} />
             </button>
-            <button
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(); }}
-              aria-label="Comments"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
-            >
-              <MessageCircle size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }}
-              aria-label="Share"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
-            >
-              <Share2 size={15} />
-            </button>
+            {showExpandedActions ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(); }}
+                  aria-label="Comments"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
+                >
+                  <MessageCircle size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(); }}
+                  aria-label="Share"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition"
+                >
+                  <Share2 size={15} />
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
@@ -570,6 +577,7 @@ function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost;
       onLike={() => reactWha(post.id, myUid, 'love')}
       onDislike={() => reactWha(post.id, myUid, 'angry')}
       onShare={() => onShare({ kind: 'post', postId: post.id })}
+      showExpandedActions={false}
       isOwner={post.uid === myUid}
       onDelete={post.uid === myUid ? async () => { await deletePost(post.id, myUid); } : undefined}
       badge={<span className="inline-flex h-6 items-center rounded-full bg-[#2E8068] px-2 text-[10px] font-bold text-white">Post</span>}
