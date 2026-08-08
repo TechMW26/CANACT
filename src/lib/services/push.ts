@@ -7,7 +7,7 @@ import { db } from '../firebase';
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 let foregroundListenerReady = false;
 
-function isIosDevice() {
+export function isIosDevice() {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -39,29 +39,31 @@ export async function enableWebPush(uid: string): Promise<{ ok: boolean; reason?
   if (typeof window === 'undefined') return { ok: false, reason: 'ssr' };
   // iOS exposes Web Push only to apps launched from the Home Screen.
   if (webPushInstallRequired()) return { ok: false, reason: 'ios-install-required' };
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return { ok: false, reason: 'unsupported' };
   }
+  if (!VAPID_KEY) return { ok: false, reason: 'missing-vapid-key' };
+
+  // Keep this as the first awaited operation. Safari requires the permission
+  // request to run within the transient user activation from the button tap.
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();
+  if (perm !== 'granted') return { ok: false, reason: 'denied' };
+
   try {
     const supported = await isSupported();
     if (!supported) return { ok: false, reason: 'not-supported' };
   } catch { return { ok: false, reason: 'not-supported' }; }
 
-  let perm = Notification.permission;
-  if (perm === 'default') perm = await Notification.requestPermission();
-  if (perm !== 'granted') return { ok: false, reason: 'denied' };
-
-  // The app already owns the root scope with /sw.js. Registering a second
-  // Firebase worker at the same scope replaces the offline/cache worker and
-  // is unreliable on iOS. FCM can bind to our existing worker directly.
-  const reg = await navigator.serviceWorker.register('/sw.js?v=push', { scope: '/' });
+  // Reuse the app's root worker. Registering it under a different URL replaces
+  // the active worker and can invalidate the iOS push subscription.
+  const existing = await navigator.serviceWorker.getRegistration('/');
+  const reg = existing ?? await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   await navigator.serviceWorker.ready;
 
   const messaging = getMessaging(firebaseApp);
-  // Firebase supplies its managed default Web Push key when a project-specific
-  // public VAPID key has not been configured yet.
   const token = await getToken(messaging, {
-    ...(VAPID_KEY ? { vapidKey: VAPID_KEY } : {}),
+    vapidKey: VAPID_KEY,
     serviceWorkerRegistration: reg,
   });
   if (!token) return { ok: false, reason: 'no-token' };
@@ -108,5 +110,18 @@ export function pushSupported() {
   return typeof window !== 'undefined'
     && !webPushInstallRequired()
     && 'Notification' in window
-    && 'serviceWorker' in navigator;
+    && 'serviceWorker' in navigator
+    && 'PushManager' in window;
+}
+
+export function webPushErrorMessage(reason?: string) {
+  switch (reason) {
+    case 'ios-install-required': return 'Add Canact to your Home Screen, then open it from the new icon.';
+    case 'missing-vapid-key': return 'Web Push is not configured for this installation yet.';
+    case 'denied': return 'Notifications are blocked. Enable Canact in the device notification settings.';
+    case 'unsupported':
+    case 'not-supported': return 'Web Push is not supported in this browser.';
+    case 'no-token': return 'The device could not create a notification subscription.';
+    default: return 'Could not enable notifications. Please try again.';
+  }
 }

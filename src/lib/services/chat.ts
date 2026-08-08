@@ -14,7 +14,7 @@ async function assertConnected(a: string, b: string) {
     get(ref(db, `blocks/${a}/${b}`)),
     get(ref(db, `blocks/${b}/${a}`)),
   ]);
-  if (!friend.exists()) throw new Error('Connect as friends before messaging.');
+  if (!friend.exists()) throw new Error('Get In Touch as friends before messaging.');
   if (blockedByA.exists() || blockedByB.exists()) throw new Error('Messaging is unavailable for this connection.');
 }
 

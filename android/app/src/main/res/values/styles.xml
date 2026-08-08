@@ -10,7 +10,7 @@
     </style>
 
     <!-- Main app theme.
-         The web UI uses a near-white background (#FFF8F8) so we paint
+         The web UI uses a white background (#FFFFFF) so we paint
          the system status bar the same colour and force DARK icons
          (windowLightStatusBar=true) \u2014 otherwise the OEM default of
          white icons becomes invisible against our pale background.
@@ -23,6 +23,8 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:navigationBarColor">@color/statusBarBackground</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 
 
@@ -32,5 +34,7 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:navigationBarColor">@color/statusBarBackground</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 </resources>

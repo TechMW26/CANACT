@@ -29,11 +29,13 @@
 .connectionCarousel {
   display: grid;
   margin-inline: -24px;
+  padding-bottom: 3em;
 }
 .connectionCarouselViewport {
   --carousel-drag: 0px;
   position: relative;
   height: var(--connection-carousel-height, clamp(370px, 122vw, 500px));
+  padding-bottom: 3em;
   overflow: hidden;
   touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: none;
@@ -367,6 +369,18 @@
 .cardWrap {
   width: 100%;
   animation: cardSlideIn 0.35s cubic-bezier(.2,.82,.25,1) both;
+  padding-bottom: 3em;
+}
+.connectionStack {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 126px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: linear-gradient(145deg,rgba(238,232,215,.64),rgba(226,240,232,.7));
+  box-shadow: inset 0 0 0 1px rgba(31,107,85,.07);
+  padding-bottom: 1.5em;
 }
 .cardWrap > * { width: 100% !important; border-radius: 24px !important; }
 .cardWrap > .connectionCard { width: min(100%, 360px) !important; margin-inline: auto; border-radius: 9% / 6% !important; }

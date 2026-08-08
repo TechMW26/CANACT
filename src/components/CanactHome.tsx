@@ -188,8 +188,8 @@ export function CanactHome() {
         { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
         { uid: suggestion.profile.uid, name: suggestion.profile.fullName || 'Canact user', photoURL: suggestion.profile.photoURL },
       );
-      toast(`Connection request sent to ${suggestion.profile.firstName || suggestion.profile.fullName || 'this person'}`, 'success');
-    } catch (error: any) { toast(error?.message || 'Could not send connection request', 'error'); }
+      toast(`Get In Touch request sent to ${suggestion.profile.firstName || suggestion.profile.fullName || 'this person'}`, 'success');
+    } catch (error: any) { toast(error?.message || 'Could not send Get In Touch request', 'error'); }
     finally { setConnectingUid(null); }
   };
 
@@ -618,11 +618,11 @@ function PeopleListRow({
         type="button"
         className={styles.suggestionConnect}
         disabled={busy || requested}
-        aria-label={requested ? `Connection request sent to ${name}` : `Connect with ${name}`}
+        aria-label={requested ? `Get In Touch request sent to ${name}` : `Get In Touch with ${name}`}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onConnect(suggestion); }}
       >
         {requested ? <Check size={14} aria-hidden="true" /> : <UserPlus size={14} aria-hidden="true" />}
-        <span>{busy ? 'Sending…' : requested ? 'Sent' : 'Connect'}</span>
+        <span>{busy ? 'Sending…' : requested ? 'Sent' : 'Get In Touch'}</span>
       </button>
     </Link>
   );

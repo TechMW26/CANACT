@@ -7,7 +7,7 @@ import { Button } from '@/components/Button';
 import { useAuth } from '@/lib/auth';
 import { ConfirmDialog } from '@/components/Modal';
 import { toast } from '@/components/Toaster';
-import { enableWebPush, pushSupported, webPushInstallRequired } from '@/lib/services/push';
+import { enableWebPush, pushSupported, webPushErrorMessage, webPushInstallRequired } from '@/lib/services/push';
 import { GlassSwitch } from '@/components/GlassSwitch';
 import {
   isNativeContactSyncAvailable,
@@ -40,9 +40,7 @@ export default function SettingsPage() {
         setPushState('granted');
         toast('Notifications enabled', 'success');
       } else {
-        toast(r.reason === 'ios-install-required'
-          ? 'Add Canact to your Home Screen first'
-          : `Could not enable: ${r.reason}`, 'error');
+        toast(webPushErrorMessage(r.reason), 'error');
         setPushState((Notification.permission as any) || 'denied');
       }
     } finally { setPushBusy(false); }

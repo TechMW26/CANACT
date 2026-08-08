@@ -53,7 +53,10 @@ export default function PollCreatePage() {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={(event) => choosePhoto(event.target.files?.[0])}
+            onChange={(event) => {
+              choosePhoto(event.target.files?.[0]);
+              event.currentTarget.value = '';
+            }}
           />
           <input
             ref={cameraInputRef}
@@ -96,7 +99,7 @@ export default function PollCreatePage() {
                 onClick={() => photoInputRef.current?.click()}
                 className="flex items-center justify-center gap-2 rounded-3xl border border-dashed border-[#E8C8CE] bg-brand-light/30 px-4 py-8 text-sm font-extrabold text-brand"
               >
-                <ImageIcon size={18} /> Library
+                <ImageIcon size={18} /> Upload from gallery
               </button>
             </div>
           )}

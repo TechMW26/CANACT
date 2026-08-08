@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Aperture, Check, Film, Loader2, Plus, X } from './icons';
+import { Aperture, Check, Film, ImageIcon, Loader2, Plus, X } from './icons';
 
 type Mode = 'photo' | 'video';
 type Facing = 'user' | 'environment';
@@ -40,6 +40,7 @@ export function CameraCapture({
 }: CameraCaptureProps) {
   const photoCameraRef = useRef<HTMLInputElement | null>(null);
   const videoCameraRef = useRef<HTMLInputElement | null>(null);
+  const galleryRef = useRef<HTMLInputElement | null>(null);
   const [mode, setMode] = useState<Mode>(() => initialMode === 'video' && allowVideo ? 'video' : 'photo');
   const [shots, setShots] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -95,6 +96,27 @@ export function CameraCapture({
     else photoCameraRef.current?.click();
   };
 
+  const openGallery = () => {
+    setError(null);
+    galleryRef.current?.click();
+  };
+
+  const readGallery = async (files: FileList | null, input: HTMLInputElement) => {
+    if (!files?.length || busy) {
+      resetInput(input);
+      return;
+    }
+    const selected = Array.from(files);
+    const hasVideo = selected.some((file) => file.type.startsWith('video/'));
+    const hasPhoto = selected.some((file) => !file.type || file.type.startsWith('image/'));
+    if (hasVideo && (hasPhoto || selected.length > 1)) {
+      setError('Choose one video, or select photos only.');
+      resetInput(input);
+      return;
+    }
+    await readFiles(files, hasVideo ? 'video' : 'photo', input);
+  };
+
   const chooseMode = (nextMode: Mode) => {
     setMode(nextMode);
     // Keep the native picker launch in this gesture. iOS and Android then use
@@ -124,6 +146,15 @@ export function CameraCapture({
         className="sr-only"
         tabIndex={-1}
         onChange={(event) => void readFiles(event.target.files, 'video', event.currentTarget)}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept={photoEnabled && videoEnabled ? 'image/*,video/*' : photoEnabled ? 'image/*' : 'video/*'}
+        multiple={photoEnabled && multiple}
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => void readGallery(event.target.files, event.currentTarget)}
       />
       <header className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-[max(14px,env(safe-area-inset-top))]">
         <button type="button" onClick={onCancel} aria-label="Close media capture" className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white active:bg-white/10">
@@ -189,7 +220,7 @@ export function CameraCapture({
             <div className="w-full max-w-md text-center">
               <span className="text-[10px] font-black uppercase tracking-[.18em] text-[#79d5b2]">New capture</span>
               <h1 className="mt-2 text-[26px] font-black tracking-[-.04em]">What are you sharing?</h1>
-              <p className="mx-auto mt-2 max-w-[290px] text-sm font-medium leading-5 text-white/55">Choose a format to open your phone camera directly.</p>
+              <p className="mx-auto mt-2 max-w-[290px] text-sm font-medium leading-5 text-white/55">Capture something new or upload it from your gallery.</p>
               <div className={`mx-auto mt-7 grid max-w-sm gap-3 ${photoEnabled && videoEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {photoEnabled ? (
                   <button
@@ -220,6 +251,14 @@ export function CameraCapture({
                   </button>
                 ) : null}
               </div>
+              <button
+                type="button"
+                onClick={openGallery}
+                disabled={busy}
+                className="mx-auto mt-3 inline-flex h-14 w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-extrabold text-white ring-1 ring-white/15 transition active:scale-[.985] active:bg-white/15 disabled:opacity-50"
+              >
+                <ImageIcon size={20} /> Upload from gallery
+              </button>
               <p className="mt-5 text-[11px] font-semibold text-white/35">Availability depends on your camera hardware and device settings.</p>
             </div>
           )}
@@ -229,14 +268,22 @@ export function CameraCapture({
 
         {shots.length ? (
         <div className="border-t border-white/10 bg-[#101110] px-4 pb-[max(18px,env(safe-area-inset-bottom))] pt-3 text-white">
-          <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3">
+          <div className="mx-auto grid w-full max-w-md grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => openCamera('photo')}
               disabled={busy}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/8 px-4 text-sm font-extrabold ring-1 ring-white/12 active:bg-white/15 disabled:opacity-50"
             >
-              <Plus size={19} /> Add photo
+              <Plus size={19} /> Camera
+            </button>
+            <button
+              type="button"
+              onClick={openGallery}
+              disabled={busy}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/8 px-3 text-sm font-extrabold ring-1 ring-white/12 active:bg-white/15 disabled:opacity-50"
+            >
+              <ImageIcon size={18} /> Gallery
             </button>
             <button
               type="button"

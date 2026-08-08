@@ -7,7 +7,10 @@ import { onValue, ref as dbRef } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth';
 import { calculateCanactScore } from '@/lib/canactScore';
-import { DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
+import { DEFAULT_RADIUS_INDEX, DistanceProvider, RADIUS_OPTIONS, useDistance } from '@/lib/distance';
+import { useGeo } from '@/lib/useGeo';
+import { haversineMeters } from '@/lib/utils';
+import { listenHelpFeed } from '@/lib/services/help';
 import { Brand } from './Brand';
 import { Avatar } from './Avatar';
 import { PageTransition } from './PageTransition';
@@ -16,6 +19,7 @@ import { PlusSheet } from './PlusSheet';
 import { RadialCreateMenu } from './RadialCreateMenu';
 import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
 import { ShareToChatSheet } from './ShareToChatSheet';
+import { Sheet } from './Sheet';
 import { VicinityTracker } from './VicinityTracker';
 import { Splash } from './Splash';
 import { IncomingCallRinger } from './IncomingCallRinger';
@@ -43,7 +47,7 @@ type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean; bad
 
 const TABS: Tab[] = [
   { href: '/',            label: 'Home',      Icon: Home },
-  { href: '/favourites',  label: 'Nearby',    Icon: MapPin },
+  { href: '/help',        label: 'Help',      Icon: HeartHandshake },
   { href: '/feed',        label: 'Community', Icon: Grid3X3 },
   { href: '/inbox',       label: 'Messages',  Icon: MessageSquare },
 ];
@@ -82,7 +86,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const [globalDetailItem, setGlobalDetailItem] = useState<PostDetailSheetItem | null>(null);
   const [postShareAttachment, setPostShareAttachment] = useState<ChatAttachment | null>(null);
   const [mobileHeaderTopInset, setMobileHeaderTopInset] = useState<string | null>(null);
-  const mobileHeaderInset = mobileHeaderTopInset ?? '1em';
+  const mobileHeaderInset = mobileHeaderTopInset ?? '0px';
   const [pageBlendChrome, setPageBlendChrome] = useState(false);
   const prefetchedRoutesRef = useRef(new Set<string>());
   // Live counters for the chat icon (header) and Inbox sidebar entry.
@@ -116,16 +120,36 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }));
   }, [inboxTotal]);
 
+  // Live nearby help count for the Help tab badge and sheet bubble
+  const { coords } = useGeo();
+  const { radius } = useDistance();
+  const [nearbyHelpCount, setNearbyHelpCount] = useState(0);
+  useEffect(() => {
+    if (!user) return;
+    return listenHelpFeed((items) => {
+      const nearby = items.filter((h) => {
+        if (h.uid === user.uid) return false;
+        if (h.status !== 'open') return false;
+        if (h.lat == null || h.lng == null || !coords) return true;
+        return haversineMeters(coords, { lat: h.lat, lng: h.lng }) <= (h.vicinityMeters ?? radius);
+      });
+      setNearbyHelpCount(nearby.length);
+    });
+  }, [user, coords, radius]);
+
   const anyTabActive = useMemo(() => visibleTabs.some((t) => isNavLinkActive(pathname, t.href, user?.uid)), [pathname, visibleTabs, user?.uid]);
 
-  const navWidth = useMemo(() => Math.max(180, visibleTabs.length * 60 + (visibleTabs.length - 1) * 10 + 16), [visibleTabs]);
-  const BUTTON_SIZE = 76;
-  const BUTTON_GAP = 24;
-  const combinedWidth = navWidth + BUTTON_GAP + BUTTON_SIZE;
-  const createButtonLeft = `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP}px)`;
-  const createButtonBottom = 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))';
+  const createButtonLeft = 'calc(100% - 72px)';
+  const createButtonBottom = 'calc(var(--canact-ios-safe-bottom, 0px) + 8px)';
 
-  const liquidNav = useLiquidNavSlider(pathname, user?.uid, router, visibleTabs);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const handleNavAction = useCallback((tab: Tab) => {
+    if (tab.href !== '/help') return false;
+    haptic('selection');
+    setHelpOpen(true);
+    return true;
+  }, []);
+  const liquidNav = useLiquidNavSlider(pathname, user?.uid, router, visibleTabs, handleNavAction);
 
   useEffect(() => { setPageBlendChrome(false); setRadialCreateOpen(false); }, [pathname]);
 
@@ -360,27 +384,33 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav group — centered, button on right */}
       <div className="canact-bottom-group fixed bottom-0 z-40 flex items-end gap-[1.5em] lg:hidden"
-        style={{ left: `calc(50% - ${combinedWidth / 2}px)`, paddingBottom: 'max(6px, calc(12px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))' }}>
+        style={{ left: 0, right: 0, paddingBottom: 'var(--canact-ios-safe-bottom, 0px)' }}>
         <nav
           data-canact-bottom-nav
-          className="canact-bottom-nav-shell"
-          style={{ width: `${navWidth}px` }}
+          className="canact-bottom-nav-shell canact-solid-footer"
+          style={{ width: '100%' }}
         >
           <div
             ref={liquidNav.navRef}
-            data-liquid-glass="surface"
-            data-liquid-radius="999"
+            data-liquid-glass="none"
+            data-liquid-radius="0"
             data-liquid-blur="0"
-            data-liquid-tint="250,248,242"
-            data-liquid-tint-opacity="0.12"
+            data-liquid-tint="255,255,255"
+            data-liquid-tint-opacity="1"
             className="canact-figma-bottom-nav"
           >
             <div className="canact-bottom-dock-items relative z-10 flex h-full items-center justify-center"
-              style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 60px)`, gap: '10px' }}>
+              style={{
+                width: '100%',
+                gridTemplateColumns: `repeat(${visibleTabs.length + 1}, 60px)`,
+                justifyContent: 'space-between',
+                gap: 0,
+              }}>
               <div ref={liquidNav.glowRef} className="canact-bottom-nav-glow" aria-hidden="true" />
-              <div ref={liquidNav.indicatorRef} data-liquid-glass="switcher" data-liquid-radius="999" data-liquid-tint="31,107,85" data-liquid-tint-opacity="0.14" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
+              <div ref={liquidNav.indicatorRef} data-liquid-glass="none" data-liquid-radius="999" data-liquid-tint="255,255,255" data-liquid-tint-opacity="1" className="canact-bottom-tab-indicator" aria-hidden="true" style={{ opacity: anyTabActive ? 1 : 0, transform: anyTabActive ? undefined : 'scale(0)' }} />
               {visibleTabs.map(({ href, label, Icon, isFab, badge }, tabIndex) => {
                 const active = isNavLinkActive(pathname, href, user.uid);
+                const tabBadge = href === '/inbox' ? inboxTotal : href === '/help' ? nearbyHelpCount : badge;
                 const onTap = () => {
                   if (isFab) { haptic('strong'); setPlusOpen(true); return; }
                   if (!active) haptic('selection');
@@ -395,12 +425,44 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                     </button>
                   );
                 }
+                if (href === '/help') {
+                  return (
+                    <button
+                      key={href}
+                      type="button"
+                      aria-label={tabBadge ? `${label} — ${tabBadge} nearby request${tabBadge === 1 ? '' : 's'}` : label}
+                      onPointerDown={(event) => {
+                        prefetchRoute(href);
+                        if (event.isPrimary && event.button === 0) {
+                          haptic('selection');
+                          setHelpOpen(true);
+                        }
+                      }}
+                      onClick={(event) => {
+                        liquidNav.consumeClick(event);
+                        if (event.detail === 0) {
+                          onTap();
+                          setHelpOpen(true);
+                        }
+                      }}
+                      onFocus={() => prefetchRoute(href)}
+                      className={cls}
+                    >
+                      <Icon className="canact-adaptive-icon canact-bottom-help-icon" size={25} strokeWidth={active ? 2.3 : 1.8} style={{ color: '#dc2626' }} />
+                      {tabBadge && tabBadge > 0 ? (
+                        <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-[#dc2626] px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(220,38,38,.4)]">
+                          {tabBadge > 99 ? '99+' : tabBadge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                }
                 return (
                   <Link key={href} href={href} aria-label={label} prefetch onPointerEnter={() => prefetchRoute(href)} onPointerDown={(event) => { prefetchRoute(href); liquidNav.begin(tabIndex, event); }} onFocus={() => prefetchRoute(href)} onClick={(event) => { if (!liquidNav.consumeClick(event)) onTap(); }} className={cls}>
                     <Icon className="canact-adaptive-icon" size={25} strokeWidth={active ? 2.3 : 1.8} />
-                    {badge && badge > 0 ? (
+                    {tabBadge && tabBadge > 0 ? (
                       <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-white px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
-                        {badge > 99 ? '99+' : badge}
+                        {tabBadge > 99 ? '99+' : tabBadge}
                       </span>
                     ) : null}
                   </Link>
@@ -410,6 +472,32 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
       </div>{/* /canact-bottom-group */}
+      <Sheet open={helpOpen} onClose={() => setHelpOpen(false)} title="Help">
+        <div className="px-1 pb-4">
+          <div className="flex items-center gap-3 rounded-2xl bg-[#fdf3ed] px-4 py-3">
+            <strong className="text-[28px] font-extrabold leading-none text-[#b04820]">{nearbyHelpCount > 99 ? '99+' : nearbyHelpCount}</strong>
+            <span className="text-[13px] font-bold leading-snug text-[#b04820]">{nearbyHelpCount === 1 ? 'person needs' : 'people need'} help near you</span>
+          </div>
+          <p className="mt-3 line-clamp-2 text-sm leading-5 text-ink/65">
+            See who nearby needs support, or send a request when you need help from the community.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Link href="/help" onClick={() => setHelpOpen(false)} className="relative inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fdf3ed] px-4 text-[14px] font-bold text-[#b85a2c] transition-colors hover:bg-[#fce8db]">
+              <Eye size={15} strokeWidth={2.2} />
+              View
+              {nearbyHelpCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e85d2c] border-2 border-[#fdf3ed] px-1 text-[9px] font-extrabold text-white shadow-[0_2px_6px_rgba(232,93,44,.4)]">
+                  {nearbyHelpCount > 99 ? '99+' : nearbyHelpCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/help/create" onClick={() => setHelpOpen(false)} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#e85d2c] px-4 text-[14px] font-bold text-white shadow-sm transition-colors hover:bg-[#d14a1a]">
+              <Plus size={15} strokeWidth={2.2} />
+              Request
+            </Link>
+          </div>
+        </div>
+      </Sheet>
       {pathname === '/feed' && (
         <button
           type="button"
@@ -423,8 +511,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           }}
           className="canact-feed-quick-create-button fixed lg:hidden"
           style={{
-            left: `calc(50% - ${combinedWidth / 2}px + ${navWidth + BUTTON_GAP + 12}px)`,
-            bottom: 'max(94px, calc(100px + env(safe-area-inset-bottom) - var(--canact-ios-bottom-shift, 0px)))',
+            left: 'calc(var(--canact-create-button-left) + 4px)',
+            bottom: 'calc(92px + var(--canact-ios-safe-bottom, 0px))',
           }}
         >
           <Plus className="canact-adaptive-icon" size={27} strokeWidth={2.4} aria-hidden="true" />
@@ -462,7 +550,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-function useLiquidNavSlider(pathname: string | null, userId: string | undefined, router: ReturnType<typeof useRouter>, tabs: Tab[]) {
+function useLiquidNavSlider(
+  pathname: string | null,
+  userId: string | undefined,
+  router: ReturnType<typeof useRouter>,
+  tabs: Tab[],
+  handleAction?: (tab: Tab) => boolean,
+) {
   const navRef = useRef<HTMLDivElement | null>(null);
   const indicatorRef = useRef<HTMLDivElement | null>(null);
   const glowRef = useRef<HTMLDivElement | null>(null);
@@ -558,7 +652,9 @@ function useLiquidNavSlider(pathname: string | null, userId: string | undefined,
       snap(targetIndex, true);
       suppressClickUntil.current = performance.now() + 600;
       const target = tabs[targetIndex];
-      if (target && !isNavLinkActive(pathname, target.href, userId)) {
+      if (target && handleAction?.(target)) {
+        // Action tabs (such as Help) open UI without changing routes.
+      } else if (target && !isNavLinkActive(pathname, target.href, userId)) {
         haptic('selection');
         router.push(target.href);
       }
@@ -585,7 +681,7 @@ function useLiquidNavSlider(pathname: string | null, userId: string | undefined,
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
-  }, [activeIndex, metrics, pathname, router, snap, userId]);
+  }, [activeIndex, handleAction, metrics, pathname, router, snap, tabs, userId]);
 
   const consumeClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (event.detail === 0 || performance.now() > suppressClickUntil.current) return false;
@@ -619,17 +715,7 @@ function detailPopupItemFromPath(path: string | null): PostDetailSheetItem | nul
 
 function getMobileHeaderTopInset() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return null;
-  if (isIOSDevice()) return 'max(env(safe-area-inset-top, 0px), 1em)';
-  const ua = navigator.userAgent || '';
-  const isAndroid = /Android/i.test(ua);
-  if (!isAndroid) return null;
-  const nativeShell = 'Capacitor' in window;
-  const androidWebView = /; wv\)|\bwv\b/i.test(ua);
-  const standalone = !!(
-    window.matchMedia?.('(display-mode: standalone)').matches ||
-    window.matchMedia?.('(display-mode: fullscreen)').matches
-  );
-  return nativeShell || androidWebView || standalone ? 'calc(max(env(safe-area-inset-top, 0px), 24px) + 1em)' : null;
+  return isIOSDevice() ? 'env(safe-area-inset-top, 0px)' : null;
 }
 
 function isIOSDevice() {
@@ -1000,15 +1086,19 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
     <>
       <header
       data-canact-header
-      className={`canact-header-shell fixed z-30 lg:hidden ${headerChromeClass}`}
-      style={{ top: topInset ? `calc(${topInset} + var(--canact-header-offset, 0px))` : 'var(--canact-header-offset, 0px)' }}
+      className={`canact-header-shell canact-solid-header fixed z-30 lg:hidden ${headerChromeClass}`}
+      style={{
+        top: 'var(--canact-header-offset, 0px)',
+        height: `calc(76px + ${topInset ?? '0px'})`,
+        paddingTop: topInset ?? '0px',
+      }}
     >
       <div
-        data-liquid-glass="surface"
-        data-liquid-radius="999"
-        data-liquid-blur="18"
-        data-liquid-tint="250,248,242"
-        data-liquid-tint-opacity="0.48"
+        data-liquid-glass="none"
+        data-liquid-radius="0"
+        data-liquid-blur="0"
+        data-liquid-tint="255,255,255"
+        data-liquid-tint-opacity="1"
         className="canact-figma-header"
       >
         <div className={`canact-header-inner flex items-center gap-2 px-4 relative ${profileChrome ? 'canact-profile-header-content' : ''}`}>
@@ -1310,7 +1400,7 @@ function LeaderboardScopeDropdown({ blendChrome }: { blendChrome: boolean }) {
 function DistanceDropdown({ radiusIdx, setRadiusIdx, blendChrome }: { radiusIdx: number; setRadiusIdx: (value: number) => void; blendChrome: boolean }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const selectedOption = RADIUS_OPTIONS.find((option) => option.index === radiusIdx) ?? RADIUS_OPTIONS[0];
+  const selectedOption = RADIUS_OPTIONS.find((option) => option.index === radiusIdx) ?? RADIUS_OPTIONS[DEFAULT_RADIUS_INDEX];
 
   useEffect(() => {
     if (!open) return;

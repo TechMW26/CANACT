@@ -643,7 +643,7 @@ function ProfileVotePill({
       data-canact-profile-votes="true"
       className="fixed z-[58] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/80 bg-white p-1.5 shadow-[0_12px_28px_rgba(23,63,52,.16)] lg:hidden"
       style={{
-        left: 'calc(var(--canact-create-button-left, calc(100% - 50px)) + 38px)',
+        left: 'calc(var(--canact-create-button-left, calc(100% - 72px)) + 30px)',
         bottom: 'calc(var(--canact-create-button-bottom, 12px) + 88px)',
       }}
       role="group"
@@ -1270,7 +1270,7 @@ function CanactPagesProfileUI({
               ) : (
                 <div className="rounded-[22px] border border-[#E4E7E2] bg-white px-4 py-8 text-center shadow-sm">
                   <div className="text-sm font-extrabold text-ink">No friends yet</div>
-                  <div className="mt-1 text-xs font-semibold text-ink/50">Connect with people nearby to add friends.</div>
+                  <div className="mt-1 text-xs font-semibold text-ink/50">Get In Touch with people nearby to add friends.</div>
                 </div>
               )
             ) : myFavUids.length ? (

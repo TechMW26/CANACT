@@ -17,7 +17,10 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: '#005445',
+    backgroundColor: '#FFFFFF',
+  },
+  ios: {
+    backgroundColor: '#FFFFFF',
   },
   plugins: {
     SplashScreen: {

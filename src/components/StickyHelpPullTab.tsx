@@ -164,7 +164,7 @@ export function StickyHelpPullTab() {
         <button
           type="button"
           onClick={toggle}
-          className={`relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-l-full border border-r-0 border-[#e8c8b5] bg-white shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] ${nudge ? 'animate-[helpNudgeX_0.5s_ease-out]' : ''}`}
+          className={`relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-l-full border border-r-0 border-[#e8c8b5] bg-[#dc2626] shadow-[0_2px_14px_rgba(180,80,40,.12),0_8px_24px_rgba(180,80,40,.06)] ${nudge ? 'animate-[helpNudgeX_0.5s_ease-out]' : ''}`}
           aria-label={`Help — ${nearbyHelpCount} nearby`}
         >
           {hasNewHelp && (
@@ -172,7 +172,7 @@ export function StickyHelpPullTab() {
               {nearbyHelpCount > 9 ? '9+' : nearbyHelpCount}
             </span>
           )}
-          <HeartHandshake size={20} strokeWidth={2.3} className="text-[#d46630]" />
+          <HeartHandshake size={20} strokeWidth={2.3} className="text-white" />
         </button>
       )}
     </div>

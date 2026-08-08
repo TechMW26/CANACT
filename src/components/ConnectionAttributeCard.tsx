@@ -47,18 +47,11 @@ export function ConnectionCardContent({
       <div
         className={`${styles.attributeCardStage} ${styles.attributeImageCardStage}`}
         data-attribute-card-style="image"
-        aria-label={`${label} attribute card. Given by ${givenBy} on ${date}.`}
+        aria-label={`${label} attribute card.`}
       >
         <div className={styles.attributeImageFrame}>
           <img className={styles.attributeImageArtwork} src={imageArtwork} alt="" draggable={false} decoding="async" />
         </div>
-        {showGivenDetails ? (
-          <div className={styles.attributeImageDetails}>
-            <span>Given by</span>
-            <strong title={givenBy}>{givenBy}</strong>
-            <small>{date}</small>
-          </div>
-        ) : null}
       </div>
     );
   }

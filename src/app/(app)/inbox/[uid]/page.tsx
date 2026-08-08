@@ -90,8 +90,8 @@ export default function InboxThreadPage() {
         offMsgs = listenMessages(id, setMessages);
         markThreadRead(id, user.uid).catch(() => {});
       } catch (error: any) {
-        setConnectionError(error?.message ?? 'Connect as friends before messaging.');
-      }
+          setConnectionError(error?.message ?? 'Get In Touch as friends before messaging.');
+        }
     })();
     return () => { off?.(); offMsgs?.(); };
   }, [user, profile, other]);
@@ -138,7 +138,7 @@ export default function InboxThreadPage() {
     return (
       <div className="grid min-h-[60vh] place-items-center px-6 text-center">
         <div>
-          <h1 className="text-xl font-extrabold text-ink">Connection required</h1>
+          <h1 className="text-xl font-extrabold text-ink">Get In Touch required</h1>
           <p className="mt-2 text-sm text-muted">{connectionError}</p>
           <Link href={`/profile/${otherUid}`} className="mt-5 inline-flex rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white">View profile</Link>
         </div>
