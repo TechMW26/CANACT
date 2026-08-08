@@ -2,7 +2,7 @@ import { get, onValue, push, ref, remove, set, update, query, orderByChild, limi
 import { db } from '../firebase';
 import type { ReelItem } from '../types';
 import { recordOnboardingSignal } from './onboarding';
-import { recordScoreActivity } from './scoreActivity';
+import { dailyActivityClaim, nextContentReactionVersion, recordScoreActivity, recordUniqueAuthorContentFeedback, syncAuthorContentReaction } from './scoreActivity';
 
 function stripUndef<T>(v: T): T {
   if (Array.isArray(v)) return v.map(stripUndef).filter((x) => x !== undefined) as unknown as T;
@@ -29,7 +29,7 @@ export async function createReel(input: Omit<ReelItem, 'id' | 'createdAt' | 'lik
   await set(node, reel);
   await set(ref(db, `userReels/${input.uid}/${reel.id}`), reel.createdAt);
   await recordOnboardingSignal(input.uid, 'create-post');
-  await recordScoreActivity(input.uid);
+  await recordScoreActivity(input.uid, dailyActivityClaim('create:reel'));
   return reel;
 }
 
@@ -58,17 +58,39 @@ export function listenUserReels(uid: string, cb: (items: ReelItem[]) => void) {
   });
 }
 
-export async function toggleReelLike(reelId: string, uid: string) {
-  const r = ref(db, `reels/${reelId}/likes/${uid}`);
-  const [likeSnap, reelSnap] = await Promise.all([get(r), get(ref(db, `reels/${reelId}`))]);
-  const wasLiked = likeSnap.exists();
-  const authorUid = (reelSnap.val() as ReelItem | null)?.uid;
-  await runTransaction(r, (cur) => (cur ? null : Date.now()));
-  await recordOnboardingSignal(uid, 'engage-post');
-  if (!wasLiked) await recordScoreActivity(uid);
-  if (authorUid && authorUid !== uid) {
-    await runTransaction(ref(db, `users/${authorUid}/contentLikes`), (count: number | null) => Math.max(0, Number(count || 0) + (wasLiked ? -1 : 1)));
+export async function toggleReelReaction(reelId: string, uid: string, kind: 'like' | 'dislike') {
+  const reactionVersion = nextContentReactionVersion();
+  let previous: 'like' | 'dislike' | null = null;
+  const result = await runTransaction(ref(db, `reels/${reelId}`), (reel: ReelItem | null) => {
+    if (!reel) return reel;
+    reel.likes = reel.likes ?? {};
+    reel.dislikes = reel.dislikes ?? {};
+    previous = reel.likes[uid] ? 'like' : reel.dislikes[uid] ? 'dislike' : null;
+    delete reel.likes[uid];
+    delete reel.dislikes[uid];
+    if (previous !== kind) {
+      const bucket = kind === 'like' ? reel.likes : reel.dislikes;
+      bucket[uid] = Date.now();
+    }
+    return reel;
+  });
+  if (!result.committed) throw new Error('Reel not found');
+  const reel = result.snapshot.val() as ReelItem;
+  const next = previous === kind ? null : kind;
+
+  if (reel.uid !== uid) {
+    await syncAuthorContentReaction(reel.uid, uid, `reel:${reelId}:reaction`, previous, next, reactionVersion);
+    if (next) {
+      await Promise.all([
+        recordOnboardingSignal(uid, 'engage-post'),
+        recordScoreActivity(uid, `reel:${reelId}:reaction`),
+      ]);
+    }
   }
+}
+
+export async function toggleReelLike(reelId: string, uid: string) {
+  return toggleReelReaction(reelId, uid, 'like');
 }
 
 export async function bumpReelView(reelId: string) {
@@ -87,12 +109,13 @@ export async function addReelComment(reelId: string, uid: string, name: string, 
   const node = push(ref(db, `reelComments/${reelId}`));
   await set(node, stripUndef({ id: node.key, uid, name, photoURL, text, createdAt: Date.now() }));
   await runTransaction(ref(db, `reels/${reelId}/commentCount`), (c: number) => (c ?? 0) + 1);
-  await recordOnboardingSignal(uid, 'engage-post');
-  await recordScoreActivity(uid);
-
   const reel = (await get(ref(db, `reels/${reelId}`))).val() as ReelItem | null;
   if (reel?.uid && reel.uid !== uid) {
-    await runTransaction(ref(db, `users/${reel.uid}/contentLikes`), (count: number | null) => Number(count || 0) + 1);
+    await recordOnboardingSignal(uid, 'engage-post');
+    await Promise.all([
+      recordScoreActivity(uid, `reel:${reelId}:comment`),
+      recordUniqueAuthorContentFeedback(reel.uid, uid, `reel:${reelId}:comment`),
+    ]);
   }
 }
 

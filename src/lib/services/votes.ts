@@ -85,6 +85,7 @@ function recomputeRating(u: UserProfile) {
 }
 
 export async function setLikeDislike(toUid: string, fromUid: string, kind: 'like' | 'dislike') {
+  if (!toUid || !fromUid || toUid === fromUid) throw new Error('Invalid rating recipient');
   const myVoteRef = ref(db, `votes/${toUid}/${fromUid}/main`);
   const votedAtRef = ref(db, `votes/${toUid}/${fromUid}/votedAt`);
   const cacheKey = `${toUid}/${fromUid}/main`;

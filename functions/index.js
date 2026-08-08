@@ -413,13 +413,21 @@ exports.notifyChatMessage = functions
 
     const db = admin.database();
 
-    // Look up sender's display name. Fall back to "Someone" if missing.
-    let fromName = 'Someone';
+    // Resolve the sender from the current profile schema first, then retain
+    // thread participant data as a fallback for deleted/legacy profiles.
+    let fromName = '';
     try {
-      const fromSnap = await db.ref(`users/${fromUid}`).get();
+      const [fromSnap, threadSnap] = await Promise.all([
+        db.ref(`users/${fromUid}`).get(),
+        db.ref(`chatThreads/${context.params.threadId}`).get(),
+      ]);
       const u = fromSnap.val() || {};
-      fromName = u.displayName || u.name || u.username || 'Someone';
+      const composedName = [u.firstName, u.middleName, u.lastName].filter(Boolean).join(' ').trim();
+      const threadName = threadSnap.val()?.participants?.[fromUid]?.name;
+      const emailName = typeof u.email === 'string' ? u.email.split('@')[0] : '';
+      fromName = u.fullName || u.displayName || u.name || composedName || threadName || u.username || emailName || '';
     } catch (_) {}
+    fromName = String(fromName || 'Canact user').trim().slice(0, 80) || 'Canact user';
 
     // Truncate the message body so we never blow the FCM payload limit.
     const text = (msg.text || '').toString().slice(0, 180);
@@ -434,7 +442,7 @@ exports.notifyChatMessage = functions
       body,
       deepLink: `canact://open?to=/inbox/${fromUid}`,
       type: 'chat',
-      extra: { fromUid, threadId: context.params.threadId },
+      extra: { fromUid, fromName, threadId: context.params.threadId },
     });
     return null;
   });

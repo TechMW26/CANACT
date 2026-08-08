@@ -40,7 +40,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-[var(--canact-viewport-height)] w-screen max-w-[100vw] overflow-x-hidden bg-candy text-ink antialiased">
+      <body className="min-h-[var(--canact-viewport-height)] w-screen max-w-[100vw] bg-candy text-ink antialiased">
         <ViewportHeightManager />
         <PopupStatusBarSync />
         <GlassMorphismRuntime />

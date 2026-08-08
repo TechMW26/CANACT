@@ -14,6 +14,8 @@ import { uploadMedia } from '@/lib/uploadMedia';
 import {
   deleteChatMessage,
   editChatMessage,
+  getCachedMessages,
+  getCachedThread,
   listenMessages,
   listenThread,
   markThreadRead,
@@ -38,6 +40,8 @@ export default function InboxThreadPage() {
 
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messagesReady, setMessagesReady] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [other, setOther] = useState<UserProfile | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -73,15 +77,34 @@ export default function InboxThreadPage() {
 
   useEffect(() => {
     if (!otherUid) return;
+    setOther(null);
     get(ref(db, `users/${otherUid}`)).then((snapshot) => {
       setOther(withProfileUid(otherUid, snapshot.val() as UserProfile | null));
     });
   }, [otherUid]);
 
   useEffect(() => {
+    if (!user || !otherUid) return;
+    const id = threadIdFor(user.uid, otherUid);
+    const cachedThread = getCachedThread(id);
+    const cachedMessages = getCachedMessages(id);
+    setThread(cachedThread);
+    setMessages(cachedMessages ?? []);
+    setMessagesReady(!!cachedMessages);
+
+    const off = listenThread(id, setThread);
+    const offMsgs = listenMessages(id, (nextMessages) => {
+      setMessages(nextMessages);
+      setMessagesReady(true);
+    });
+    markThreadRead(id, user.uid).catch(() => {});
+    return () => { off(); offMsgs(); };
+  }, [user?.uid, otherUid]);
+
+  useEffect(() => {
     if (!user || !profile || !other) return;
-    let off: (() => void) | undefined;
-    let offMsgs: (() => void) | undefined;
+    let cancelled = false;
+    setInitializing(true);
     (async () => {
       try {
         setConnectionError(null);
@@ -89,16 +112,16 @@ export default function InboxThreadPage() {
           { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
           { uid: otherUid, name: other.fullName, photoURL: other.photoURL },
         );
-        const id = threadIdFor(user.uid, other.uid);
-        off = listenThread(id, setThread);
-        offMsgs = listenMessages(id, setMessages);
-        markThreadRead(id, user.uid).catch(() => {});
+        if (!cancelled) setInitializing(false);
       } catch (error: any) {
+        if (!cancelled) {
+          setInitializing(false);
           setConnectionError(error?.message ?? 'Get In Touch as friends before messaging.');
         }
+      }
     })();
-    return () => { off?.(); offMsgs?.(); };
-  }, [user, profile, other, otherUid]);
+    return () => { cancelled = true; };
+  }, [user?.uid, profile?.fullName, profile?.photoURL, other, otherUid]);
 
   // Scroll the message list to the bottom on every change. We do it on
   // a triple-rAF schedule (current frame + next two) because:
@@ -153,7 +176,11 @@ export default function InboxThreadPage() {
   const incomingPending = thread?.status === 'pending' && thread.initiator !== user.uid;
   const outgoingPending = thread?.status === 'pending' && thread.initiator === user.uid;
   const canSend =
-    thread?.status === 'accepted';
+    thread?.status === 'accepted' && !initializing && !connectionError;
+  const participant = thread?.participants?.[otherUid];
+  const otherName = other?.fullName ?? participant?.name ?? 'User';
+  const otherPhoto = other?.photoURL ?? participant?.photoURL ?? null;
+  const chatLoading = !messagesReady || (!thread && initializing);
 
   function buildReplyTo(m: ChatMessage): ChatMessage['replyTo'] {
     return {
@@ -307,9 +334,9 @@ export default function InboxThreadPage() {
           <ArrowLeft size={22} />
         </button>
         <Link href={`/profile/${otherUid}`} className="flex min-w-0 flex-1 items-center gap-3">
-          <Avatar src={other?.photoURL ?? null} name={other?.fullName ?? '?'} size={38} />
+          <Avatar src={otherPhoto} name={otherName} size={38} />
           <div className="min-w-0">
-            <div className="truncate text-base font-extrabold text-ink">{other?.fullName ?? 'User'}</div>
+            <div className="truncate text-base font-extrabold text-ink">{otherName}</div>
             <div className="text-[11px] text-ink/55">
               {thread?.status === 'pending' ? 'Pending request' : 'Active now'}
             </div>
@@ -344,6 +371,9 @@ export default function InboxThreadPage() {
         style={{ overscrollBehavior: 'contain' }}
       >
         <div className="flex min-h-full flex-col justify-end">
+        {chatLoading ? (
+          <ChatMessagesSkeleton />
+        ) : <>
         {incomingPending && (
           <div className="mx-auto mb-4 max-w-sm rounded-2xl bg-brand-light/60 p-3 text-center text-sm">
             <div className="font-extrabold text-ink">Chat request</div>
@@ -401,6 +431,7 @@ export default function InboxThreadPage() {
             );
           })}
         </ul>
+        </>}
         </div>
       </div>
 
@@ -417,7 +448,7 @@ export default function InboxThreadPage() {
         {replyTo && (
           <div className="mb-2 flex items-start gap-2 rounded-xl border-l-2 border-brand bg-white px-2 py-1.5 text-xs">
             <CornerUpLeft size={14} className="mt-0.5 text-brand" />
-            <div className="min-w-0 flex-1"><div className="font-extrabold text-brand">Replying to {replyTo.fromUid === user.uid ? 'yourself' : other?.fullName ?? 'them'}</div><div className="line-clamp-2 text-ink/70">{replyTo.text || 'Attachment'}</div></div>
+            <div className="min-w-0 flex-1"><div className="font-extrabold text-brand">Replying to {replyTo.fromUid === user.uid ? 'yourself' : otherName}</div><div className="line-clamp-2 text-ink/70">{replyTo.text || 'Attachment'}</div></div>
             <button type="button" onClick={() => setReplyTo(null)} className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink/60 hover:bg-brand-light/40"><X size={14} /></button>
           </div>
         )}
@@ -589,5 +620,16 @@ function ActionRow({
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-candy">{icon}</span>
       {label}
     </button>
+  );
+}
+
+function ChatMessagesSkeleton() {
+  return (
+    <div className="flex min-h-full flex-col justify-end gap-3 pb-3" aria-label="Loading messages" aria-busy="true">
+      <div className="h-10 w-[58%] animate-pulse self-start rounded-[18px] rounded-bl-md bg-white/75" />
+      <div className="h-16 w-[72%] animate-pulse self-end rounded-[18px] rounded-br-md bg-brand-light/70" />
+      <div className="h-11 w-[46%] animate-pulse self-start rounded-[18px] rounded-bl-md bg-white/75" />
+      <div className="h-12 w-[64%] animate-pulse self-end rounded-[18px] rounded-br-md bg-brand-light/70" />
+    </div>
   );
 }

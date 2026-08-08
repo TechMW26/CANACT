@@ -260,6 +260,7 @@ export async function submitHelpRating(
   stars: number,
   note?: string,
 ) {
+  if (!fromUid || !toUid || fromUid === toUid) throw new Error('Invalid rating recipient');
   const key = `${fromUid}__${toUid}`;
   const existing = (await get(ref(db, `help/${helpId}/ratings/${key}`))).val();
   if (existing) return;

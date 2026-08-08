@@ -10,11 +10,16 @@ import type { ChatThread } from '@/lib/types';
 export default function InboxPage() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'chats' | 'requests'>('chats');
 
   useEffect(() => {
     if (!user) return;
-    return listenMyThreads(user.uid, setThreads);
+    setLoading(true);
+    return listenMyThreads(user.uid, (nextThreads) => {
+      setThreads(nextThreads);
+      setLoading(false);
+    });
   }, [user]);
 
   const filtered = useMemo(() => {
@@ -70,7 +75,9 @@ export default function InboxPage() {
       </div>
 
       <div className="rounded-[28px] bg-white/92 p-2 ring-1 ring-[#E4E7E2]">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <InboxRowsSkeleton />
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <MessageSquare size={28} className="text-brand" />
             <div className="text-sm font-extrabold text-ink">
@@ -116,6 +123,23 @@ export default function InboxPage() {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function InboxRowsSkeleton() {
+  return (
+    <div className="space-y-1" aria-label="Loading conversations" aria-busy="true">
+      {[0, 1, 2, 3].map((row) => (
+        <div key={row} className="flex h-[68px] items-center gap-3 rounded-2xl px-3">
+          <div className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-brand-light/70" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className={`h-3 animate-pulse rounded-full bg-brand-light/80 ${row % 2 ? 'w-28' : 'w-36'}`} />
+            <div className={`h-2.5 animate-pulse rounded-full bg-candy ${row % 2 ? 'w-40' : 'w-48'}`} />
+          </div>
+          <div className="h-5 w-5 animate-pulse rounded-full bg-candy" />
+        </div>
+      ))}
     </div>
   );
 }

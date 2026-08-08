@@ -294,6 +294,7 @@ export async function dismissPendingRating(uid: string, pairKey: string) {
  * Stores the raw rating sample under `proximityRatings/{toUid}/{pairKey}` for audit.
  */
 export async function submitProximityRating(fromUid: string, toUid: string, pairKey: string, stars: number) {
+  if (!fromUid || !toUid || fromUid === toUid) throw new Error('Invalid rating recipient');
   const s = Math.max(1, Math.min(5, Math.round(stars)));
   await set(ref(db, `proximityRatings/${toUid}/${pairKey}`), {
     fromUid, stars: s, at: Date.now(),

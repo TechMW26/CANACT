@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { LucideIcon } from 'lucide-react';
 import { BarChart3, Bell, Camera, Eye, Film, Globe2, Grid3X3, Activity, HandHeart, MessageSquare, Search, ShieldAlert, Sparkles, Users } from './icons';
 import { haptic } from '@/lib/haptics';
+import { lockPageScroll } from '@/lib/scrollLock';
 
 type RadialItem = {
   href: string;
@@ -78,13 +79,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
   // Lock body scroll when open
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-    return () => {
-      document.body.style.overflow = prev;
-      document.body.style.touchAction = '';
-    };
+    return lockPageScroll();
   }, [open]);
 
   const handleClose = useCallback(() => {
@@ -230,6 +225,7 @@ export function RadialCreateMenu({ open, onClose, plusItems }: { open: boolean; 
     <>
       {/* Opaque lower surface fading cleanly into the page. */}
       <div
+        data-canact-scroll-lock="true"
         className="fixed inset-0 transition-opacity duration-300"
         style={{
           zIndex: 54,

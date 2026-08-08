@@ -191,6 +191,10 @@ export interface UserProfile {
   /** Accumulated content reaction score from post/poll likes & dislikes (T4). */
   contentLikes?: number;
   contentDislikes?: number;
+  contentScoreClaims?: Record<string, number>;
+  /** Latest counted reaction per actor/content pair. This keeps aggregate
+   * content counters consistent when rapid toggles complete out of order. */
+  contentReactionClaims?: Record<string, { kind: 'like' | 'dislike' | 'none'; version: number }>;
   /** Accumulated voter engagement score (+0.50 per poll interaction, capped +10/day). */
   contentEngagementScore?: number;
   contentEngagementDayKey?: string;
@@ -199,6 +203,9 @@ export interface UserProfile {
   activityScorePoints?: number;
   activityScoreDayKey?: string;
   activityScoreDayCount?: number;
+  /** Durable idempotency claims. A content action can award activity score
+   * once even if its UI is toggled off/on repeatedly. */
+  activityScoreClaims?: Record<string, number>;
   gender?: 'female' | 'male' | 'nonbinary' | 'other';
   createdAt: number;
 }
@@ -439,6 +446,7 @@ export interface ReelItem {
   /** True when soundtrack and original audio are already muxed into videoUrl. */
   audioStitched?: boolean;
   likes?: Record<string, number>;
+  dislikes?: Record<string, number>;
   views?: number;
   commentCount?: number;
   createdAt: number;

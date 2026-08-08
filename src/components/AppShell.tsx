@@ -14,7 +14,6 @@ import { listenHelpFeed } from '@/lib/services/help';
 import { Brand } from './Brand';
 import { Avatar } from './Avatar';
 import { PageTransition } from './PageTransition';
-import { PullToRefresh } from './PullToRefresh';
 import { PlusSheet } from './PlusSheet';
 import { RadialCreateMenu } from './RadialCreateMenu';
 import { PostDetailSheet, type PostDetailSheetItem } from './PostDetailSheet';
@@ -36,6 +35,7 @@ import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { listenIncomingRequests } from '@/lib/services/friends';
 import { listenFollowRequests } from '@/lib/services/favourites';
+import { recoverOrphanedPageScroll } from '@/lib/scrollLock';
 import { ATTR_LABELS, NEGATIVE_ATTRS, POSITIVE_ATTRS, type ChatAttachment, type UserProfile } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -95,10 +95,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const routeProfileHero = false;
   const routeFadeChrome = !!pathname && pathname === '/favourites';
   const routeLeaderboard = pathname === '/leaderboard';
-  const headerOverContent = pathname === '/' || pathname === '/favourites' || !!pathname?.startsWith('/profile');
+  const isProfileRoute = !!pathname?.startsWith('/profile');
+  const headerOverContent = pathname === '/' || pathname === '/favourites' || isProfileRoute;
   const profileChrome = routeProfileHero;
   const footerFadeChrome = !profileChrome && (routeFadeChrome || pageBlendChrome);
   const chromeOverContent = profileChrome || footerFadeChrome;
+  const routeOwnsViewport = pathname === '/'
+    || pathname === '/favourites'
+    || (!!pathname && /^\/inbox\/[^/]+/.test(pathname));
 
   useLayoutEffect(() => {
     document.documentElement.toggleAttribute('data-canact-profile-route', routeProfileHero);
@@ -153,6 +157,44 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const liquidNav = useLiquidNavSlider(pathname, user?.uid, router, visibleTabs, handleNavAction);
 
   useEffect(() => { setPageBlendChrome(false); setRadialCreateOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    const recover = () => {
+      if (!routeOwnsViewport) {
+        const root = document.documentElement;
+        root.removeAttribute('data-canact-fullscreen-page');
+        root.removeAttribute('data-canact-home-nearby');
+        root.removeAttribute('data-canact-home-score');
+        root.removeAttribute('data-canact-map-fade');
+      }
+      recoverOrphanedPageScroll();
+    };
+    let settledRouteFrame = 0;
+    const recoverAfterRoute = requestAnimationFrame(() => {
+      recover();
+      settledRouteFrame = requestAnimationFrame(recover);
+    });
+    const recoverAfterTransition = window.setTimeout(recover, 400);
+    window.addEventListener('pageshow', recover);
+    window.addEventListener('focus', recover);
+    window.addEventListener('pointerdown', recover, true);
+    window.addEventListener('touchstart', recover, { capture: true, passive: true });
+    window.addEventListener('wheel', recover, { capture: true, passive: true });
+    window.addEventListener('popstate', recover);
+    document.addEventListener('visibilitychange', recover);
+    return () => {
+      cancelAnimationFrame(recoverAfterRoute);
+      cancelAnimationFrame(settledRouteFrame);
+      window.clearTimeout(recoverAfterTransition);
+      window.removeEventListener('pageshow', recover);
+      window.removeEventListener('focus', recover);
+      window.removeEventListener('pointerdown', recover, true);
+      window.removeEventListener('touchstart', recover, true);
+      window.removeEventListener('wheel', recover, true);
+      window.removeEventListener('popstate', recover);
+      document.removeEventListener('visibilitychange', recover);
+    };
+  }, [pathname, routeOwnsViewport]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -314,11 +356,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     <div id="canact-app-shell" className="min-h-[var(--canact-viewport-height)]">
       <IncomingCardEnvelope uid={user.uid} />
       <ScrollRestoration />
-      {/* Global swipe-down-to-refresh — mounted once for the whole app so
-          every page (feed, profile, leaderboard, etc.) gets the gesture
-          without having to wrap its own root. Pages that maintain client
-          subscriptions can listen for the `canact:pull-refresh` event. */}
-      <PullToRefresh disabled={pathname !== '/feed'} />
       <OnboardingTaskGuide />
       {/* `canact-app-content` is the element that gets the zoom-out transform
           when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
@@ -381,7 +418,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
         <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderInset} />
         <div
-          className={`canact-col ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
+          className={isProfileRoute ? 'w-full pb-[var(--canact-bottom-nav-height)] lg:px-6 lg:pb-6' : `canact-col ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:!max-w-none lg:w-full lg:mx-0 lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: `calc(${mobileHeaderInset} + 92px)` } : undefined}
         ><PageTransition>{children}</PageTransition></div>
         <VicinityTracker />

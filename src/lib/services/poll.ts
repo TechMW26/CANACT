@@ -3,12 +3,7 @@ import { db } from '../firebase';
 import { Poll, PollOption } from '../types';
 import { uid as rid } from '../utils';
 import { recordOnboardingSignal } from './onboarding';
-import { recordScoreActivity } from './scoreActivity';
-
-/** Bump the poll author's contentLikes or contentDislikes (T4). */
-async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
-  await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
-}
+import { dailyActivityClaim, nextContentReactionVersion, recordScoreActivity, recordUniqueAuthorContentFeedback, syncAuthorContentReaction } from './scoreActivity';
 
 function normalizeOptions(raw: any): PollOption[] {
   if (Array.isArray(raw)) return raw.filter(Boolean);
@@ -50,7 +45,7 @@ export async function createPoll(input: Omit<Poll, 'id' | 'createdAt' | 'options
   await set(node, poll);
   await set(ref(db, `userPolls/${input.uid}/${poll.id}`), poll.createdAt);
   await recordOnboardingSignal(input.uid, 'create-post');
-  await recordScoreActivity(input.uid);
+  await recordScoreActivity(input.uid, dailyActivityClaim('create:poll'));
   return poll;
 }
 
@@ -87,80 +82,70 @@ export async function votePoll(pollId: string, uid: string, optionId: string) {
     return poll;
   });
   if (!result.committed) throw new Error(rejectReason ?? 'Could not vote');
-  await recordOnboardingSignal(uid, 'engage-post');
-
   // T4: Vote counts as a like-equivalent for the poll author
   try {
     const pollSnap = await get(ref(db, `polls/${pollId}`));
     const authorUid = (pollSnap.val() as Poll | null)?.uid;
     if (authorUid && authorUid !== uid) {
-      await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      await recordScoreActivity(uid);
+      await recordOnboardingSignal(uid, 'engage-post');
+      await recordUniqueAuthorContentFeedback(authorUid, uid, `poll:${pollId}:vote`);
+      await recordScoreActivity(uid, `poll:${pollId}:vote`);
     }
   } catch { /* non-fatal */ }
 }
 
 export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dislike') {
-  const voterRef = ref(db, `polls/${pollId}/reactionVoters/${uid}`);
-  const prev = (await get(voterRef)).val() as 'like' | 'dislike' | null;
-
-  // Fetch author uid for content score bump
-  let authorUid: string | undefined;
-  try {
-    const pollSnap = await get(ref(db, `polls/${pollId}`));
-    authorUid = (pollSnap.val() as Poll | null)?.uid;
-  } catch { /* non-fatal */ }
-
-  await runTransaction(ref(db, `polls/${pollId}`), (p: Poll | null) => {
+  const reactionVersion = nextContentReactionVersion();
+  let previous: 'like' | 'dislike' | null = null;
+  const result = await runTransaction(ref(db, `polls/${pollId}`), (p: Poll | null) => {
     if (!p) return p;
     p.likes = p.likes ?? 0; p.dislikes = p.dislikes ?? 0;
-    if (prev === 'like') p.likes = Math.max(0, p.likes - 1);
-    if (prev === 'dislike') p.dislikes = Math.max(0, p.dislikes - 1);
-    if (prev !== kind) {
+    p.reactionVoters = p.reactionVoters ?? {};
+    previous = p.reactionVoters[uid] ?? null;
+    if (previous === 'like') p.likes = Math.max(0, p.likes - 1);
+    if (previous === 'dislike') p.dislikes = Math.max(0, p.dislikes - 1);
+    if (previous !== kind) {
       const k = kind === 'like' ? 'likes' : 'dislikes';
       p[k] = (p[k] ?? 0) + 1;
+      p.reactionVoters[uid] = kind;
+    } else {
+      delete p.reactionVoters[uid];
     }
     return p;
   });
-  await set(voterRef, prev === kind ? null : kind);
+  if (!result.committed) throw new Error('Poll not found');
+  const poll = result.snapshot.val() as Poll;
+  const authorUid = poll.uid;
+  const next = previous === kind ? null : kind;
 
   // T4: Wire reaction to author's content score
   if (authorUid && authorUid !== uid) {
-    if (prev && prev !== kind) {
-      // Changed reaction
-      if (prev === 'like') await bumpAuthorContent(authorUid, 'contentLikes', -1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
-      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
-    } else if (prev === kind) {
-      // Toggling off
-      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', -1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
-    } else {
-      // New reaction
-      if (kind === 'like') await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
-    }
+    await syncAuthorContentReaction(authorUid, uid, `poll:${pollId}:reaction`, previous, next, reactionVersion);
   }
 
   // T4: Voter engagement reward
-  if (uid !== authorUid && prev !== kind) await recordScoreActivity(uid);
-  if (prev !== kind) await recordOnboardingSignal(uid, 'engage-post');
+  if (authorUid && uid !== authorUid && next) {
+    await Promise.all([
+      recordScoreActivity(uid, `poll:${pollId}:reaction`),
+      recordOnboardingSignal(uid, 'engage-post'),
+    ]);
+  }
 }
 
 export async function commentPoll(pollId: string, uid: string, name: string, text: string) {
   const n = push(ref(db, `pollComments/${pollId}`));
   await set(n, { id: n.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `polls/${pollId}/commentCount`), (c: number) => (c ?? 0) + 1);
-  await recordOnboardingSignal(uid, 'engage-post');
-
   // T4: Comment counts as like-equivalent for poll author + voter engagement
   try {
     const pollSnap = await get(ref(db, `polls/${pollId}`));
     const authorUid = (pollSnap.val() as Poll | null)?.uid;
     if (authorUid && authorUid !== uid) {
-      await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      await recordScoreActivity(uid);
+      await recordOnboardingSignal(uid, 'engage-post');
+      await Promise.all([
+        recordScoreActivity(uid, `poll:${pollId}:comment`),
+        recordUniqueAuthorContentFeedback(authorUid, uid, `poll:${pollId}:comment`),
+      ]);
     }
   } catch { /* non-fatal */ }
 }

@@ -2,18 +2,13 @@ import { onValue, push, ref, remove, runTransaction, set, update, get, query, or
 import { db } from '../firebase';
 import { WhaPost } from '../types';
 import { recordOnboardingSignal } from './onboarding';
-import { recordScoreActivity } from './scoreActivity';
+import { dailyActivityClaim, nextContentReactionVersion, recordScoreActivity, recordUniqueAuthorContentFeedback, syncAuthorContentReaction } from './scoreActivity';
 
 function notify(receiverUid: string, kind: 'react' | 'comment', title: string, body: string, url: string) {
   Promise.all([import('./sendPush'), import('./notifications')]).then(([{ sendPush }, { pushNotification }]) => {
     sendPush({ toUid: receiverUid, title, body, url, tag: url }).catch(() => {});
     pushNotification(receiverUid, { kind, title, body, data: { url } }).catch(() => {});
   }).catch(() => {});
-}
-
-/** Bump the post author's contentLikes or contentDislikes (T4). */
-async function bumpAuthorContent(authorUid: string, field: 'contentLikes' | 'contentDislikes', delta: 1 | -1) {
-  await runTransaction(ref(db, `users/${authorUid}/${field}`), (n: number | null) => Math.max(0, (n ?? 0) + delta));
 }
 
 export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'expiresAt' | 'reactions'>) {
@@ -27,7 +22,7 @@ export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'e
   await set(node, post);
   await set(ref(db, `userPosts/${input.uid}/${post.id}`), post.createdAt);
   await recordOnboardingSignal(input.uid, 'create-post');
-  await recordScoreActivity(input.uid);
+  await recordScoreActivity(input.uid, dailyActivityClaim('create:wha'));
   return post;
 }
 
@@ -94,53 +89,50 @@ export function listenPost(id: string, cb: (p: WhaPost | null) => void) {
 }
 
 export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love' | 'wow' | 'sad' | 'angry') {
-  const voterRef = ref(db, `wha/${postId}/reactionVoters/${uid}`);
-  const cur = (await get(voterRef)).val() as string | null;
-
-  // Fetch author uid for content score bump
-  const postSnap = await get(ref(db, `wha/${postId}`));
-  const authorUid = (postSnap.val() as WhaPost | null)?.uid;
-
-  await runTransaction(ref(db, `wha/${postId}/reactions`), (cur2: any) => {
-    cur2 = cur2 ?? { cool: 0, love: 0, wow: 0, sad: 0, angry: 0 };
-    if (cur && cur in cur2) cur2[cur] = Math.max(0, (cur2[cur] ?? 0) - 1);
-    if (cur !== kind) cur2[kind] = (cur2[kind] ?? 0) + 1;
-    return cur2;
+  const reactionVersion = nextContentReactionVersion();
+  let previous: 'cool' | 'love' | 'wow' | 'sad' | 'angry' | null = null;
+  const result = await runTransaction(ref(db, `wha/${postId}`), (post: WhaPost | null) => {
+    if (!post) return post;
+    post.reactions = post.reactions ?? { cool: 0, love: 0, wow: 0, sad: 0, angry: 0 };
+    post.reactionVoters = post.reactionVoters ?? {};
+    const stored = post.reactionVoters[uid];
+    previous = stored === 'cool' || stored === 'love' || stored === 'wow' || stored === 'sad' || stored === 'angry'
+      ? stored
+      : null;
+    if (previous) post.reactions[previous] = Math.max(0, Number(post.reactions[previous] || 0) - 1);
+    if (previous === kind) delete post.reactionVoters[uid];
+    else {
+      post.reactions[kind] = Number(post.reactions[kind] || 0) + 1;
+      post.reactionVoters[uid] = kind;
+    }
+    return post;
   });
-  if (cur === kind) await remove(voterRef); else await set(voterRef, kind);
+  if (!result.committed) throw new Error('Post not found');
+  const post = result.snapshot.val() as WhaPost;
+  const authorUid = post.uid;
+  const next = previous === kind ? null : kind;
 
   // T4: Wire reaction to author's content score
   if (authorUid && authorUid !== uid) {
     const positiveKinds = ['cool', 'love', 'wow'];
-    if (cur && cur !== kind) {
-      // User changed reaction — remove old, add new
-      const wasPositive = positiveKinds.includes(cur);
-      const isPositive = positiveKinds.includes(kind);
-      if (wasPositive) await bumpAuthorContent(authorUid, 'contentLikes', -1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
-      if (isPositive) await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
-    } else if (cur === kind) {
-      // Toggling off (removing reaction)
-      const wasPositive = positiveKinds.includes(kind);
-      if (wasPositive) await bumpAuthorContent(authorUid, 'contentLikes', -1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', -1);
-    } else {
-      // New reaction
-      const isPositive = positiveKinds.includes(kind);
-      if (isPositive) await bumpAuthorContent(authorUid, 'contentLikes', 1);
-      else await bumpAuthorContent(authorUid, 'contentDislikes', 1);
-    }
+    await syncAuthorContentReaction(
+      authorUid,
+      uid,
+      `wha:${postId}:reaction`,
+      previous ? (positiveKinds.includes(previous) ? 'like' : 'dislike') : null,
+      next ? (positiveKinds.includes(next) ? 'like' : 'dislike') : null,
+      reactionVersion,
+    );
   }
 
   // Notify the post author about the reaction.
-  if (authorUid && authorUid !== uid && cur !== kind) {
+  if (authorUid && authorUid !== uid && next) {
     const emoji = { cool: '😎', love: '❤️', wow: '😮', sad: '😢', angry: '😡' }[kind];
     notify(authorUid, 'react', `${emoji} Someone reacted to your post`, 'Tap to see the reaction.', `/post/${postId}`);
   }
-  if (cur !== kind) {
+  if (authorUid && authorUid !== uid && next) {
     await recordOnboardingSignal(uid, 'engage-post');
-    await recordScoreActivity(uid);
+    await recordScoreActivity(uid, `wha:${postId}:reaction`);
   }
 }
 
@@ -148,15 +140,16 @@ export async function addComment(postId: string, uid: string, name: string, text
   const node = push(ref(db, `whaComments/${postId}`));
   await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
-  await recordOnboardingSignal(uid, 'engage-post');
-  await recordScoreActivity(uid);
-
   // T4 + notify the post author.
   try {
     const postSnap = await get(ref(db, `wha/${postId}`));
     const authorUid = (postSnap.val() as WhaPost | null)?.uid;
     if (authorUid && authorUid !== uid) {
-      await bumpAuthorContent(authorUid, 'contentLikes', 1);
+      await recordOnboardingSignal(uid, 'engage-post');
+      await Promise.all([
+        recordScoreActivity(uid, `wha:${postId}:comment`),
+        recordUniqueAuthorContentFeedback(authorUid, uid, `wha:${postId}:comment`),
+      ]);
       notify(authorUid, 'comment', `${name} commented on your post`, text.slice(0, 100), `/post/${postId}`);
     }
   } catch { /* non-fatal */ }

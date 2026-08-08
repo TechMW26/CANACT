@@ -9,14 +9,14 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { StoryViewer } from '@/components/StoryViewer';
 import { listenWhaFeed, reactWha, deletePost } from '@/lib/services/wha';
-import { listenPollFeed, votePoll, deletePoll } from '@/lib/services/poll';
+import { listenPollFeed, votePoll, deletePoll, reactPoll } from '@/lib/services/poll';
 import { deleteRateMeSession, listenActiveRateMe, voteRateMe } from '@/lib/services/rateme';
 import { deleteStory, listenActiveStories } from '@/lib/services/stories';
-import { listenReels, deleteReel, toggleReelLike } from '@/lib/services/reels';
+import { listenReels, deleteReel, toggleReelReaction } from '@/lib/services/reels';
 import { FeedItem, Poll, RateMeSession, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import { haversineMeters, timeAgo, timeLeft } from '@/lib/utils';
 import { toast } from '@/components/Toaster';
-import { MessageCircle, ThumbsUp, ThumbsDown, Smile, Heart, PartyPopper, Frown, Angry, Plus, SlidersHorizontal, Play, Share2 } from '@/components/icons';
+import { MessageCircle, ThumbsUp, ThumbsDown, Plus, SlidersHorizontal, Play, Share2 } from '@/components/icons';
 import { isVideoUrl } from '@/components/CameraCapture';
 import { VideoPreview } from '@/components/VideoPreview';
 import { Sheet } from '@/components/Sheet';
@@ -28,17 +28,8 @@ import { readFeedCache, writeFeedCachePart } from '@/lib/feedCache';
 import type { ChatAttachment } from '@/lib/types';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
-import type { LucideIcon } from 'lucide-react';
 
 type FeedDetailItem = Extract<FeedItem, { kind: 'wha' | 'poll' | 'rateme' }>;
-
-const REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
-  { id: 'cool',  Icon: Smile,       label: 'Cool' },
-  { id: 'love',  Icon: Heart,       label: 'Love' },
-  { id: 'wow',   Icon: PartyPopper, label: 'Wow' },
-  { id: 'sad',   Icon: Frown,       label: 'Sad' },
-  { id: 'angry', Icon: Angry,       label: 'Angry' },
-];
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -281,7 +272,7 @@ export default function FeedPage() {
           {items.map((it, index) => {
               const span = 'col-span-1';
               const height = 'h-[286px]';
-              const cv = '[content-visibility:auto] [contain-intrinsic-size:auto_360px]';
+              const cv = 'canact-feed-card-wrap';
               if (it.kind === 'poll') {
                 return (
                   <div key={`poll_${it.data.id}`} className={`${span} ${cv}`}>
@@ -398,46 +389,56 @@ function MediaOverlayTile({
   heightClass,
   badge,
   bottomContent,
-  actions,
   statText,
   authorPhoto,
   authorName,
   authorUid,
   caption,
   liked,
+  disliked,
   likeCount,
+  dislikeCount,
   commentCount,
   onOpen,
   onLike,
+  onDislike,
   onShare,
   onDelete,
   isOwner,
+  reactionsDisabled = false,
   children,
 }: {
   href: string;
   heightClass: string;
   badge?: React.ReactNode;
   bottomContent?: React.ReactNode;
-  actions?: React.ReactNode;
   statText?: string;
   authorPhoto?: string | null;
   authorName: string;
   authorUid: string;
   caption?: string | null;
   liked: boolean;
+  disliked: boolean;
   likeCount: number;
+  dislikeCount: number;
   commentCount: number;
   onOpen?: () => void;
   onLike: () => void;
+  onDislike: () => void;
   onShare: () => void;
   onDelete?: () => Promise<void> | void;
   isOwner: boolean;
+  reactionsDisabled?: boolean;
   children: React.ReactNode;
 }) {
   const trimmed = (caption ?? '').trim();
   const router = useRouter();
   const open = () => { if (onOpen) onOpen(); else router.push(href); };
-  const defaultStatText = statText ?? `${likeCount.toLocaleString()} likes${commentCount ? ` · ${commentCount} comments` : ''}`;
+  const defaultStatText = statText ?? [
+    `${likeCount.toLocaleString()} ${likeCount === 1 ? 'like' : 'likes'}`,
+    `${dislikeCount.toLocaleString()} ${dislikeCount === 1 ? 'dislike' : 'dislikes'}`,
+    ...(commentCount ? [`${commentCount.toLocaleString()} ${commentCount === 1 ? 'comment' : 'comments'}`] : []),
+  ].join(' · ');
   return (
     <article
       role="link"
@@ -449,7 +450,7 @@ function MediaOverlayTile({
           open();
         }
       }}
-      className="relative overflow-hidden rounded-3xl border border-[#E4E7E2] bg-white active:scale-[0.99] transition cursor-pointer"
+      className="canact-feed-card relative overflow-hidden rounded-3xl border border-[#E4E7E2] bg-white active:scale-[0.99] transition cursor-pointer"
     >
       <div className={`relative w-full ${heightClass} overflow-hidden bg-[#0E0E10]`}>
         <div className="absolute inset-0">{children}</div>
@@ -498,14 +499,26 @@ function MediaOverlayTile({
             )}
           </div>
 
-          {actions ?? <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
+          <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
             <button
               type="button"
+              disabled={reactionsDisabled}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLike(); }}
               aria-label="Like"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition"
+              aria-pressed={liked}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full active:scale-95 transition disabled:opacity-45 ${liked ? 'bg-[#2E8068] text-white' : 'bg-white text-[#2E8068]'}`}
             >
-              <Heart size={15} fill={liked ? '#2E8068' : 'none'} />
+              <ThumbsUp size={15} fill={liked ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              type="button"
+              disabled={reactionsDisabled}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDislike(); }}
+              aria-label="Dislike"
+              aria-pressed={disliked}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full active:scale-95 transition disabled:opacity-45 ${disliked ? 'bg-[#B6534D] text-white' : 'bg-white text-[#9A4944]'}`}
+            >
+              <ThumbsDown size={15} fill={disliked ? 'currentColor' : 'none'} />
             </button>
             <button
               type="button"
@@ -523,7 +536,7 @@ function MediaOverlayTile({
             >
               <Share2 size={15} />
             </button>
-          </div>}
+          </div>
         </div>
       </div>
     </article>
@@ -532,47 +545,46 @@ function MediaOverlayTile({
 
 function WhaTile({ post, myUid, onOpen, onShare, heightClass }: { post: WhaPost; myUid: string; onOpen: () => void; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const myReact = post.reactionVoters?.[myUid];
-  const liked = myReact === 'love';
-  const totalReactions = post.reactions
-    ? Object.values(post.reactions).reduce((a, b) => a + (b ?? 0), 0)
-    : 0;
+  const liked = myReact === 'cool' || myReact === 'love' || myReact === 'wow';
+  const disliked = myReact === 'sad' || myReact === 'angry';
+  const likeCount = Number(post.reactions?.cool || 0) + Number(post.reactions?.love || 0) + Number(post.reactions?.wow || 0);
+  const dislikeCount = Number(post.reactions?.sad || 0) + Number(post.reactions?.angry || 0);
   const cover = post.mediaUrls?.[0];
   const coverPoster = post.mediaPosters?.[0] || undefined;
   const coverLqip = post.mediaLqips?.[0] || undefined;
   const isVideo = cover ? isVideoUrl(cover) : false;
   return (
-    <article className="overflow-hidden rounded-3xl border border-[#E4E7E2] bg-white shadow-[0_18px_44px_rgba(31,56,47,0.05)]">
-      <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpen(); }} className={`relative block w-full ${heightClass} overflow-hidden bg-[#e8e4d8] text-left cursor-pointer`}>
-        {cover && isVideo ? (
-          <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
-        ) : cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover lqip-img" style={coverLqip ? { backgroundImage: `url(${coverLqip})`, backgroundSize: 'cover' } : undefined} />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#dcece5] via-[#f0eee5] to-white p-8 text-center">
-            <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
-          </div>
-        )}
-        <Link href={`/profile/${post.uid}`} onClick={(event) => event.stopPropagation()} className="absolute left-3 top-3 inline-flex max-w-[60vw] items-center gap-2 rounded-full bg-white py-1 pl-1 pr-3" aria-label={`View ${post.authorName}'s profile`}>
-          <span className="inline-block h-6 w-6 overflow-hidden rounded-full ring-2 ring-[#2E8068]">
-            <Avatar src={post.authorPhoto} name={post.authorName} size={24} />
-          </span>
-          <span className="max-w-[180px] truncate text-[11px] font-medium text-neutral-800">{post.authorName}</span>
-        </Link>
-        {post.uid === myUid ? <span className="absolute right-3 top-3" onClick={(event) => event.stopPropagation()}><PostMenu isOwner onDelete={async () => { await deletePost(post.id, myUid); }} /></span> : null}
-      </div>
-      <div className="p-3">
-        <button type="button" onClick={onOpen} className="block w-full text-left">
-          <h2 className="whitespace-pre-wrap text-[21px] font-extrabold leading-[1.2] tracking-[-0.025em] text-black">{post.text || "What's Happening"}</h2>
-        </button>
-        <div className="mt-3 flex items-center gap-2.5">
-          <button type="button" aria-label="Love" onClick={() => reactWha(post.id, myUid, 'love')} className={`inline-flex h-10 w-11 items-center justify-center rounded-full ${liked ? 'bg-brand text-white' : 'bg-[#faf8f2] text-black'}`}><Heart size={17} fill={liked ? 'currentColor' : 'none'} /></button>
-          <button type="button" aria-label="Comments" onClick={onOpen} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><MessageCircle size={17} /></button>
-          <button type="button" aria-label="Share" onClick={() => onShare({ kind: 'post', postId: post.id })} className="inline-flex h-10 w-11 items-center justify-center rounded-full bg-[#faf8f2] text-black"><Share2 size={17} /></button>
-          <span className="ml-1 text-sm font-semibold text-[#6b6f76]">+{totalReactions + (post.commentCount ?? 0)}</span>
+    <MediaOverlayTile
+      href={`/post/${post.id}`}
+      heightClass={heightClass}
+      authorPhoto={post.authorPhoto}
+      authorName={post.authorName}
+      authorUid={post.uid}
+      caption={post.text || "What's Happening"}
+      liked={liked}
+      disliked={disliked}
+      likeCount={likeCount}
+      dislikeCount={dislikeCount}
+      commentCount={post.commentCount ?? 0}
+      onOpen={onOpen}
+      onLike={() => reactWha(post.id, myUid, 'love')}
+      onDislike={() => reactWha(post.id, myUid, 'angry')}
+      onShare={() => onShare({ kind: 'post', postId: post.id })}
+      isOwner={post.uid === myUid}
+      onDelete={post.uid === myUid ? async () => { await deletePost(post.id, myUid); } : undefined}
+      badge={<span className="inline-flex h-6 items-center rounded-full bg-[#2E8068] px-2 text-[10px] font-bold text-white">Post</span>}
+    >
+      {cover && isVideo ? (
+        <VideoPreview src={cover} poster={coverPoster} className="h-full w-full" fit="cover" autoPlay loop initialMuted />
+      ) : cover ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={coverPoster || cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover lqip-img" style={coverLqip ? { backgroundImage: `url(${coverLqip})`, backgroundSize: 'cover' } : undefined} />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#dcece5] via-[#f0eee5] to-white p-8 text-center">
+          <span className="line-clamp-5 text-2xl font-black leading-tight text-brand/80">{post.text || "What's Happening"}</span>
         </div>
-      </div>
-    </article>
+      )}
+    </MediaOverlayTile>
   );
 }
 
@@ -580,6 +592,7 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
   const options = Array.isArray(poll.options) ? poll.options : [];
   const total = options.reduce((s, o) => s + (o.votes ?? 0), 0);
   const mine = poll.voters?.[myUid];
+  const myReaction = poll.reactionVoters?.[myUid];
   const ended = poll.endsAt < Date.now();
   const locked = ended || !!mine;
   const isOwner = poll.uid === myUid;
@@ -590,11 +603,14 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
       authorName={poll.authorName}
       authorUid={poll.uid}
       caption={poll.question}
-      liked={mine != null}
-      likeCount={total}
+      liked={myReaction === 'like'}
+      disliked={myReaction === 'dislike'}
+      likeCount={poll.likes ?? 0}
+      dislikeCount={poll.dislikes ?? 0}
       commentCount={poll.commentCount ?? 0}
       onOpen={onOpen}
-      onLike={() => options[0] && !locked && votePoll(poll.id, myUid, options[0].id)}
+      onLike={() => reactPoll(poll.id, myUid, 'like')}
+      onDislike={() => reactPoll(poll.id, myUid, 'dislike')}
       onShare={() => onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL })}
       isOwner={isOwner}
       onDelete={isOwner ? async () => {
@@ -623,20 +639,9 @@ function PollCard({ poll, myUid, onOpen, onShare, heightClass }: { poll: Poll; m
               );
             })}
           </div>
-          <div className="mt-1 text-[10px] text-white/80">{total} votes · {ended ? 'Ended' : timeLeft(poll.endsAt)}</div>
-        </div>
-      )}
-      actions={(
-        <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
-          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(); }} aria-label="Open poll" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
-            <MessageCircle size={15} />
-          </button>
-          <button type="button" disabled={!options[0] || locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); options[0] && !locked && votePoll(poll.id, myUid, options[0].id); }} aria-label="Vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition disabled:opacity-60">
-            <ThumbsUp size={15} />
-          </button>
-          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'poll', pollId: poll.id, authorName: poll.authorName, question: poll.question, thumbUrl: poll.photoURL }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
-            <Share2 size={15} />
-          </button>
+          <div className="mt-1 text-[10px] text-white/80">
+            {total} {total === 1 ? 'vote' : 'votes'} · {poll.likes ?? 0} likes · {poll.dislikes ?? 0} dislikes · {ended ? 'Ended' : timeLeft(poll.endsAt)}
+          </div>
         </div>
       )}
     >
@@ -690,35 +695,26 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
       authorUid={sess.uid}
       caption="Rate Me"
       liked={my === 'like'}
+      disliked={my === 'dislike'}
       likeCount={likes}
+      dislikeCount={dislikes}
       commentCount={sess.commentCount ?? 0}
       onOpen={onOpen}
       onLike={() => cast('like')}
+      onDislike={() => cast('dislike')}
       onShare={() => onShare({ kind: 'rateme', sessionId: sess.id })}
       isOwner={isOwner}
+      reactionsDisabled={locked}
       onDelete={isOwner ? async () => { await deleteRateMeSession(sess.id, sess.uid); } : undefined}
       statText={`${likes} up · ${dislikes} down`}
       bottomContent={(
         <div>
           <div className="text-[12px] font-bold leading-tight text-white">Rate Me</div>
-          <div className="mt-0.5 text-[10px] text-white/80">{ended ? 'Voting closed' : timeLeft(sess.endsAt)}</div>
+          <div className="mt-0.5 text-[10px] text-white/80">{likes} up · {dislikes} down · {ended ? 'Voting closed' : timeLeft(sess.endsAt)}</div>
           <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-white/25">
             <div style={{ width: `${downPct}%` }} className="bg-rose-300" />
             <div style={{ width: `${upPct}%` }} className="bg-emerald-300" />
           </div>
-        </div>
-      )}
-      actions={(
-        <div onClick={(event) => event.stopPropagation()} className="flex shrink-0 flex-col gap-1.5 pointer-events-auto">
-          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('like'); }} aria-label="Up vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#2E8068] active:scale-95 transition disabled:opacity-60">
-            <ThumbsUp size={15} />
-          </button>
-          <button type="button" disabled={locked} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cast('dislike'); }} aria-label="Down vote" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition disabled:opacity-60">
-            <ThumbsDown size={15} />
-          </button>
-          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onShare({ kind: 'rateme', sessionId: sess.id }); }} aria-label="Share" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-neutral-700 active:scale-95 transition">
-            <Share2 size={15} />
-          </button>
         </div>
       )}
     >
@@ -736,7 +732,9 @@ function RateMeCard({ sess, myUid, onOpen, onShare, heightClass }: { sess: RateM
 
 function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid: string; onShare: (a: ChatAttachment) => void; heightClass: string }) {
   const liked = !!(reel.likes && reel.likes[myUid]);
+  const disliked = !!(reel.dislikes && reel.dislikes[myUid]);
   const likeCount = reel.likes ? Object.keys(reel.likes).length : 0;
+  const dislikeCount = reel.dislikes ? Object.keys(reel.dislikes).length : 0;
   return (
     <MediaOverlayTile
       href={`/reel/${reel.id}`}
@@ -746,9 +744,12 @@ function ReelTile({ reel, myUid, onShare, heightClass }: { reel: ReelItem; myUid
       authorUid={reel.uid}
       caption={reel.caption}
       liked={liked}
+      disliked={disliked}
       likeCount={likeCount}
-      commentCount={0}
-      onLike={() => toggleReelLike(reel.id, myUid)}
+      dislikeCount={dislikeCount}
+      commentCount={reel.commentCount ?? 0}
+      onLike={() => toggleReelReaction(reel.id, myUid, 'like')}
+      onDislike={() => toggleReelReaction(reel.id, myUid, 'dislike')}
       onShare={() => onShare({ kind: 'reel', reelId: reel.id })}
       isOwner={reel.uid === myUid}
       onDelete={async () => { await deleteReel(reel.id, myUid); }}

@@ -1025,7 +1025,7 @@ function CanactPagesProfileUI({
   };
 
   return (
-    <div className="relative -mx-[2vw] min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
+    <div className="relative min-h-[calc(var(--canact-viewport-height)-170px)] overflow-hidden bg-[#faf8f2] pb-8">
       <div className={blurred ? 'pointer-events-none select-none blur-[12px] opacity-50' : ''}>
       <section className="relative mx-auto w-full max-w-[440px] px-5 pb-5 text-center">
         <div

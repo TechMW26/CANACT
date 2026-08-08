@@ -1,13 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { MediaSlider } from './MediaSlider';
 import { PostMenu } from './PostMenu';
 import { Sheet } from './Sheet';
 import { toast } from './Toaster';
-import { Angry, Frown, Heart, MessageCircle, PartyPopper, Send, Share2, Smile, ThumbsDown, ThumbsUp } from './icons';
+import { MessageCircle, Send, Share2, ThumbsDown, ThumbsUp } from './icons';
 import { addComment, deletePost, listenComments, listenPost, reactWha } from '@/lib/services/wha';
 import { commentPoll, deletePoll, listenPoll, listenPollComments, reactPoll, votePoll } from '@/lib/services/poll';
 import { commentRateMe, deleteRateMeSession, listenRateMeComments, listenRateMeSession, voteRateMe } from '@/lib/services/rateme';
@@ -29,14 +28,6 @@ type CommentRow = {
   text: string;
   createdAt: number;
 };
-
-const WHA_REACTIONS: { id: 'cool' | 'love' | 'wow' | 'sad' | 'angry'; Icon: LucideIcon; label: string }[] = [
-  { id: 'cool', Icon: Smile, label: 'Cool' },
-  { id: 'love', Icon: Heart, label: 'Love' },
-  { id: 'wow', Icon: PartyPopper, label: 'Wow' },
-  { id: 'sad', Icon: Frown, label: 'Sad' },
-  { id: 'angry', Icon: Angry, label: 'Angry' },
-];
 
 export function PostDetailSheet({
   item,
@@ -294,24 +285,31 @@ function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; my
 
 function WhaReactionBar({ post, myUid, overlay = false }: { post: WhaPost; myUid: string; overlay?: boolean }) {
   const myReact = post.reactionVoters?.[myUid];
+  const liked = myReact === 'cool' || myReact === 'love' || myReact === 'wow';
+  const disliked = myReact === 'sad' || myReact === 'angry';
+  const likeCount = Number(post.reactions?.cool || 0) + Number(post.reactions?.love || 0) + Number(post.reactions?.wow || 0);
+  const dislikeCount = Number(post.reactions?.sad || 0) + Number(post.reactions?.angry || 0);
+  const inactive = overlay ? 'border-white/50 bg-white/95 text-ink' : 'border-line bg-white text-ink';
   return (
-    <div className={`${overlay ? '' : 'mt-4'} flex gap-2 overflow-x-auto pb-1 no-scrollbar`}>
-      {WHA_REACTIONS.map(({ id, Icon, label }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => reactWha(post.id, myUid, id)}
-          className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold ${
-            myReact === id
-              ? 'border-brand bg-brand text-white'
-              : overlay
-                ? 'border-white/50 bg-white/95 text-ink'
-                : 'border-line bg-white text-ink shadow-sm'
-          }`}
-        >
-          <Icon size={14} /> {post.reactions?.[id] ?? 0}<span className="sr-only">{label}</span>
-        </button>
-      ))}
+    <div className={`${overlay ? '' : 'mt-4'} flex gap-2`}>
+      <button
+        type="button"
+        onClick={() => reactWha(post.id, myUid, 'love')}
+        aria-label="Like"
+        aria-pressed={liked}
+        className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold ${liked ? 'border-brand bg-brand text-white' : inactive}`}
+      >
+        <ThumbsUp size={14} fill={liked ? 'currentColor' : 'none'} /> {likeCount}
+      </button>
+      <button
+        type="button"
+        onClick={() => reactWha(post.id, myUid, 'angry')}
+        aria-label="Dislike"
+        aria-pressed={disliked}
+        className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-extrabold ${disliked ? 'border-[#B6534D] bg-[#B6534D] text-white' : inactive}`}
+      >
+        <ThumbsDown size={14} fill={disliked ? 'currentColor' : 'none'} /> {dislikeCount}
+      </button>
     </div>
   );
 }
