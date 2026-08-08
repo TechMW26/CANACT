@@ -29,6 +29,7 @@ export function Sheet({
   clearSurface = false,
   flatSurface = false,
   nearFullscreen = false,
+  compactBottom = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -54,6 +55,9 @@ export function Sheet({
   /** Allows content-heavy sheets to use the full visible viewport while
    * retaining a small safe-area gap at the top. */
   nearFullscreen?: boolean;
+  /** Removes the shared decorative bottom inset for sheets whose content
+   * already provides its own final control/navigation row. */
+  compactBottom?: boolean;
 }) {
   const [mounted, setMounted] = useState(open);
   const [entered, setEntered] = useState(false);
@@ -176,7 +180,7 @@ export function Sheet({
           maxHeight: nearFullscreen
             ? 'calc(var(--canact-viewport-height, 100svh) - max(8px, env(safe-area-inset-top, 0px)))'
             : 'var(--canact-popup-max-height)',
-          paddingBottom: 'var(--canact-popup-bottom-inset)',
+          paddingBottom: compactBottom ? '0px' : 'var(--canact-popup-bottom-inset)',
         }}
         className={`canact-liquid-sheet-panel ${clearSurface ? 'canact-liquid-sheet-panel-clear' : ''} ${flatSurface ? 'canact-liquid-sheet-panel-flat' : ''} relative flex w-[100vw] max-w-[100vw] transform-gpu flex-col overflow-hidden rounded-t-[32px] bg-transparent pt-3 will-change-transform overscroll-contain lg:w-full lg:max-w-md ${entered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
       >

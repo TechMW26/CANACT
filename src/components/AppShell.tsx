@@ -31,6 +31,7 @@ import { IncomingCardEnvelope } from './IncomingCardEnvelope';
 import { OnboardingTaskGuide } from './OnboardingTaskGuide';
 import { MandatoryPhoneSheet } from './MandatoryPhoneSheet';
 import { StickyHelpPullTab } from './StickyHelpPullTab';
+import { VerifiedBadge } from './VerifiedBadge';
 import { haptic } from '@/lib/haptics';
 import { useInboxBadges } from '@/lib/useInboxBadges';
 import { listenIncomingRequests } from '@/lib/services/friends';
@@ -41,6 +42,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Home, Compass, HeartHandshake, Plus, Trophy, UserIcon, Search, Bell, MessageSquare,
   Heart, Eye, Settings as SettingsIcon, Sparkles, MapPin, Grid3X3, Activity, Camera, Pencil, AlignLeft, X,
+  ShieldCheck, ChevronRight,
 } from './icons';
 
 type Tab = { href: string; label: string; Icon: LucideIcon; isFab?: boolean; badge?: number };
@@ -429,6 +431,30 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         <NativeCallDeepLinkRouter />
       </main>
       </div>{/* /canact-app-content */}
+
+      {profile?.profileVerified || profile?.verificationStatus === 'approved' ? null : (
+        <Link
+          href="/profile/settings#identity-verification"
+          prefetch
+          onClick={() => haptic('selection')}
+          className="fixed left-1/2 z-[39] flex w-[min(calc(100%_-_24px),390px)] -translate-x-1/2 items-center gap-3 rounded-2xl border border-[#e8c873] bg-white px-3.5 py-2.5 text-left shadow-[0_8px_22px_rgba(42,35,15,.16)] transition active:scale-[.98] lg:left-auto lg:right-6 lg:translate-x-0"
+          style={{ bottom: 'calc(var(--canact-bottom-nav-height) + 10px)' }}
+          aria-label={profile?.verificationStatus === 'pending' ? 'KYC verification is under review' : 'Complete KYC verification'}
+        >
+          <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${profile?.verificationStatus === 'pending' ? 'bg-brand-light text-brand' : 'bg-[#fff3cc] text-[#8a6412]'}`}>
+            <ShieldCheck size={19} aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-[13px] font-black leading-4 text-ink">
+              {profile?.verificationStatus === 'pending' ? 'KYC review in progress' : 'Verify your profile'}
+            </strong>
+            <small className="mt-0.5 block truncate text-[11px] font-semibold leading-4 text-ink/60">
+              {profile?.verificationStatus === 'pending' ? 'We will notify you after admin review.' : 'Complete KYC to receive your verified badge.'}
+            </small>
+          </span>
+          <ChevronRight size={17} className="shrink-0 text-ink/45" aria-hidden="true" />
+        </Link>
+      )}
 
       {/* Mobile bottom nav group — centered, button on right */}
       <div className="canact-bottom-group fixed bottom-0 z-40 flex items-end gap-[1.5em] lg:hidden"
@@ -1233,7 +1259,10 @@ function UnifiedHeader({ home = false, profileChrome = false, fadeChrome = false
                     <div className="flex items-center gap-3 px-5 pt-2 pb-4 border-b border-ink/6">
                       <Avatar src={profile?.photoURL ?? null} name={profile?.fullName ?? 'You'} size={48} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-base font-extrabold text-ink">{profile?.firstName || profile?.fullName || 'You'}</div>
+                        <div className="flex min-w-0 items-center gap-1.5 text-base font-extrabold text-ink">
+                          <span className="truncate">{profile?.firstName || profile?.fullName || 'You'}</span>
+                          {profile?.profileVerified || profile?.verificationStatus === 'approved' ? <VerifiedBadge size={18} /> : null}
+                        </div>
                         {profile && (
                           <div className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-bold text-brand">
                             {liveScore} {scoreSummary.label}

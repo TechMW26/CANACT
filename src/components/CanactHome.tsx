@@ -20,6 +20,7 @@ import type { UserProfile } from '@/lib/types';
 import type { FriendMapPerson } from '@/components/FriendsWorldMap';
 import { formatDistance, haversineMeters } from '@/lib/utils';
 import styles from './CanactHome.module.css';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 
 type HomeProfile = UserProfile & { lastLocation?: { lat?: number; lng?: number } };
 type HomeSuggestion = { profile: HomeProfile; source: 'contact' | 'nearby'; distanceMeters?: number };
@@ -665,7 +666,10 @@ function PeopleListRow({
 
       {/* Name + handle */}
       <span className={styles.suggestionIdentity}>
-        <span className={styles.suggestionName}>{name}</span>
+        <span className={styles.suggestionName}>
+          {name}
+          {candidate.profileVerified || candidate.verificationStatus === 'approved' ? <VerifiedBadge size={16} /> : null}
+        </span>
         <span className={styles.suggestionHandle}>{handle}</span>
         <span className={styles.suggestionMeta}>
           <span className={styles.suggestionReason}>

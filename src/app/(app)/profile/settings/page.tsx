@@ -80,7 +80,7 @@ export default function ProfileSettingsPage() {
       </div>
 
       {/* Manual identity verification */}
-      <div className={styles.section}>
+      <div id="identity-verification" className={styles.section}>
         <span className={styles.sectionLabel}>Identity verification</span>
           <h2 className={styles.digiTitle}>Verify your identity</h2>
           <p className={styles.digiDesc}>

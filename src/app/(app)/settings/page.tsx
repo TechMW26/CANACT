@@ -77,7 +77,7 @@ export default function SettingsPage() {
 
   if (!user || !profile) return null;
   return (
-    <div className="space-y-3 pt-4">
+    <div className="space-y-3 px-4 pt-4">
       <Card>
         <h3 className="font-bold">Notifications</h3>
         <div className="mt-3 flex items-center justify-between">

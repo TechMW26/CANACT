@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Avatar } from './Avatar';
@@ -29,12 +29,71 @@ import { LifetimeCardSendAnimation } from './LifetimeCardSendAnimation';
 import { RocketLaunchOverlay } from './RocketLaunchOverlay';
 import { ConnectionCardContent } from './ConnectionAttributeCard';
 import { useAttributeCardStyle } from '@/lib/attributeCardStyle';
+import { haptic, isIOSWebKit } from '@/lib/haptics';
 
 type Folder = 'connections' | 'cards';
 type CardMode = 'received' | 'reward';
 type ConnectionMode = 'received' | 'send';
 type CandidateFilter = 'all' | GiftCandidateCategory;
 type SendAnimationRect = { left: number; top: number; width: number; height: number; naturalWidth: number; naturalHeight: number };
+
+function getLiftedCardMaxHeight(viewportHeight: number) {
+  return Math.max(240, Math.min(viewportHeight * .45, viewportHeight - 300));
+}
+
+function TrustedHapticPress({
+  children,
+  className,
+  disabled = false,
+  pressed,
+  selected,
+  kind = 'selection',
+  onPress,
+}: {
+  children: React.ReactNode;
+  className: string;
+  disabled?: boolean;
+  pressed?: boolean;
+  selected?: boolean;
+  kind?: 'subtle' | 'strong' | 'success' | 'selection';
+  onPress: () => void;
+}) {
+  const id = useId();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <label
+      htmlFor={id}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled}
+      aria-pressed={pressed}
+      data-disabled={disabled || undefined}
+      data-selected={selected || undefined}
+      className={className}
+      onKeyDown={(event) => {
+        if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        inputRef.current?.click();
+      }}
+    >
+      <input
+        ref={inputRef}
+        id={id}
+        type="checkbox"
+        {...({ switch: '' } as { switch: string })}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        className={styles.trustedHapticSwitch}
+        onChange={() => {
+          if (!isIOSWebKit()) haptic(kind);
+          onPress();
+        }}
+      />
+      {children}
+    </label>
+  );
+}
 
 function getGestureAxis(dx: number, dy: number): 'x' | 'y' | null {
   const absX = Math.abs(dx);
@@ -57,9 +116,15 @@ function useCardSwipe() {
       return;
     }
     const shouldLaunch = next <= -54 && !launchPendingRef.current;
-    dragYRef.current = 0;
-    setDragY(0);
-    if (!shouldLaunch) return;
+    if (!shouldLaunch) {
+      dragYRef.current = 0;
+      setDragY(0);
+      return;
+    }
+    // Keep the exact release transform until the recipient sheet has mounted.
+    // Resetting here made the card briefly resize to its resting dimensions
+    // before starting the lift animation, which produced a visible two-step
+    // jump on mobile WebKit.
     launchPendingRef.current = true;
     launchRef.current?.();
     requestAnimationFrame(() => { launchPendingRef.current = false; });
@@ -88,7 +153,7 @@ function getSendAnimationRect(sourceKey: string): SendAnimationRect {
       };
     }
   }
-  const naturalWidth = Math.min(620, Math.max(300, window.innerWidth - 32));
+  const naturalWidth = Math.min(520, Math.max(260, window.innerWidth - 32));
   const naturalHeight = naturalWidth * .52;
   return {
     left: (window.innerWidth - naturalWidth) / 2,
@@ -327,11 +392,11 @@ export function ProfileRecognitionFolders({
     requestedSlideRef.current = null;
   }, [mode, connectionMode]);
   useEffect(() => {
-    if (pickerOpen || closingGift) rewardSwipe.reset();
-  }, [closingGift, pickerOpen, rewardSwipe.reset]);
+    if (closingGift) rewardSwipe.reset();
+  }, [closingGift, rewardSwipe.reset]);
   useEffect(() => {
-    if (connectionPickerOpen || closingConnection) connectionSwipe.reset();
-  }, [closingConnection, connectionPickerOpen, connectionSwipe.reset]);
+    if (closingConnection) connectionSwipe.reset();
+  }, [closingConnection, connectionSwipe.reset]);
   useEffect(() => {
     if (!user || viewingSelf) { setMyAttrVotes({}); setMyAttrCooldowns({}); return; }
     return listenAttributeVoteState(profile.uid, user.uid, ({ attrs, cooldowns }) => {
@@ -465,6 +530,7 @@ export function ProfileRecognitionFolders({
   }
 
   function finishGift() {
+    rewardSwipe.reset();
     setPickerOpen(false);
     setClosingGift(false);
     setGiftKind(null);
@@ -491,6 +557,7 @@ export function ProfileRecognitionFolders({
   }
 
   function finishConnectionSend() {
+    connectionSwipe.reset();
     setConnectionPickerOpen(false);
     setClosingConnection(false);
     setConnectionKind(null);
@@ -562,7 +629,7 @@ export function ProfileRecognitionFolders({
         </Link>
       ) : null}
 
-      {showCards ? <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost nearFullscreen flatSurface={folder === 'connections'}>
+      {showCards ? <Sheet open={folder !== null} onClose={closeFolder} title={folder === 'connections' ? 'Connection cards' : 'Lifetime cards'} hideClose topmost nearFullscreen compactBottom={folder === 'connections'} flatSurface={folder === 'connections'}>
         {folder === 'connections' ? (
           <div className={styles.gallery} data-connection-popup="true">
             {connectionMode === 'received' ? (
@@ -853,10 +920,7 @@ function ConnectionCardShowcaseCarousel({ cards, onExpand }: { cards: Connection
               data-connection-kind={group.kind}
             >
               {active && group.gifts.length > 1 ? (
-                <>
-                  <ConnectionCard gift={representative} stackLayer={2} />
-                  <ConnectionCard gift={representative} stackLayer={1} />
-                </>
+                <ConnectionCard gift={representative} stackLayer={1} />
               ) : null}
               <ConnectionCard gift={representative} />
               {active && group.gifts.length > 1 ? <span className={styles.connectionStackCount}>×{group.gifts.length}</span> : null}
@@ -1126,7 +1190,7 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
       };
       if (bounds?.width && bounds.height) {
         const availableWidth = Math.min(620, window.innerWidth - 32, next.width - 32);
-        const scale = Math.min(1, availableWidth / bounds.width);
+        const scale = Math.min(1, availableWidth / bounds.width, getLiftedCardMaxHeight(window.innerHeight) / bounds.height);
         const overlap = Math.min(42, Math.max(0, next.top - 16));
         nextPanel.style.setProperty('--canact-lifted-card-clearance', `${Math.ceil(24 + bounds.height * scale - overlap + 16)}px`);
       }
@@ -1151,11 +1215,14 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
     };
   }, [active, bounds, exiting]);
 
-  const isDragging = dragY !== 0;
+  // Once a launch has started, the retained drag offset is an animation origin,
+  // not an active gesture. This restores the transform transition while keeping
+  // the first lifted frame pixel-identical to the release frame.
+  const isDragging = dragY !== 0 && !active && !exiting;
   const viewportWidth = typeof window === 'undefined' ? 430 : window.innerWidth;
   const viewportHeight = typeof window === 'undefined' ? 844 : window.innerHeight;
   const availableWidth = Math.min(620, viewportWidth - 32, (popupBounds?.width ?? viewportWidth) - 32);
-  const liftScale = bounds ? Math.min(1, availableWidth / bounds.width) : 1;
+  const liftScale = bounds ? Math.min(1, availableWidth / bounds.width, getLiftedCardMaxHeight(viewportHeight) / bounds.height) : 1;
   const anchorCenter = popupBounds ? popupBounds.left + (popupBounds.width / 2) : viewportWidth / 2;
   const liftX = bounds ? anchorCenter - (bounds.left + bounds.width / 2) : 0;
   const scaledHeight = bounds ? bounds.height * liftScale : 0;
@@ -1171,8 +1238,10 @@ function SwipeableLifetimeCard({ kind, family = 'lifetime', sourceKey, enabled, 
   const cardTransform = lifted
       ? `translate3d(${liftX}px, ${liftY}px, 0) scale(${liftScale}) rotateX(-1.5deg)`
       : active
-        ? 'translate3d(0, -54px, 0) scale(1.025) rotateX(-1deg)'
-        : `translate3d(0, ${dragY}px, 0) scale(${dragScale}) rotateX(${-dragProgress * 2.5}deg)`;
+        ? `translate3d(0, ${dragY || -54}px, 0) scale(${dragY ? dragScale : 1.025}) rotateX(${dragY ? -dragProgress * 2.5 : -1}deg)`
+        : exiting
+          ? 'translate3d(0, 0, 0) scale(1) rotateX(0deg)'
+          : `translate3d(0, ${dragY}px, 0) scale(${dragScale}) rotateX(${-dragProgress * 2.5}deg)`;
 
   const card = (
     <article
@@ -1281,6 +1350,7 @@ function RecipientPicker({ open, kind, sourceGift, profile, fixedRecipient, onCl
     onSendingChange(true);
     try {
       await Promise.all([sendLifetimeCard(selected.uid, kind, customText, sourceGift?.id), animationDone]);
+      haptic('success');
       toast(`${LIFETIME_CARD_LABELS[kind]} was ${sourceGift ? 'passed on' : 'given'} to ${selected.name}`, 'success');
       onSent();
     } catch (error: any) {
@@ -1310,14 +1380,14 @@ function RecipientPicker({ open, kind, sourceGift, profile, fixedRecipient, onCl
               {!fixedRecipient ? <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label> : null}
               <div className={styles.people}>
                 {loading ? <div className={styles.empty}><Loader2 className="animate-spin" /></div> : visible.length ? visible.map((candidate) => (
-                  <button key={candidate.uid} type="button" className={styles.person} data-selected={selectedUid === candidate.uid} aria-pressed={selectedUid === candidate.uid} onClick={() => setSelectedUid(candidate.uid)}>
+                  <TrustedHapticPress key={candidate.uid} className={styles.person} selected={selectedUid === candidate.uid} pressed={selectedUid === candidate.uid} onPress={() => setSelectedUid(candidate.uid)}>
                     <Avatar src={candidate.photoURL} name={candidate.name} size={44} />
                     <span><strong>{candidate.name}</strong><small>{candidate.city || candidate.categories.map((value) => FILTERS.find((item) => item.id === value)?.label).filter(Boolean).join(' · ')}</small></span>
                     {selectedUid === candidate.uid ? <Check size={18} className="text-brand" /> : null}
-                  </button>
+                  </TrustedHapticPress>
                 )) : <div className={styles.empty}>No people found in this filter.</div>}
               </div>
-              <button type="button" className={styles.sendButton} disabled={!selected || sending} onClick={send}>{sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} {sourceGift ? 'Pass on' : 'Give forever'}{selected ? ` to ${selected.name}` : ''}</button>
+              <TrustedHapticPress className={styles.sendButton} disabled={!selected || sending} kind="strong" onPress={send}>{sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} {sourceGift ? 'Pass on' : 'Give forever'}{selected ? ` to ${selected.name}` : ''}</TrustedHapticPress>
             </>
           )}
         </div>
@@ -1397,6 +1467,7 @@ function ConnectionRecipientPicker({ open, kind, profile, fixedRecipient, onClos
     try {
       const sendRequest = sendConnectionCard(selected.uid, kind);
       await Promise.all([sendRequest, animationDone]);
+      haptic('success');
       toast(`${CARD_LABELS[kind]} sent to ${selected.name}`, 'success');
       onSent();
     } catch (error: any) {
@@ -1417,14 +1488,14 @@ function ConnectionRecipientPicker({ open, kind, profile, fixedRecipient, onClos
           {!fixedRecipient ? <label className={styles.search}><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people" /></label> : null}
           <div className={styles.people}>
             {loading ? <div className={styles.empty}><Loader2 className="animate-spin" /></div> : visible.length ? visible.map((candidate) => (
-              <button key={candidate.uid} type="button" className={styles.person} data-selected={selectedUid === candidate.uid} aria-pressed={selectedUid === candidate.uid} onClick={() => setSelectedUid(candidate.uid)}>
+              <TrustedHapticPress key={candidate.uid} className={styles.person} selected={selectedUid === candidate.uid} pressed={selectedUid === candidate.uid} onPress={() => setSelectedUid(candidate.uid)}>
                 <Avatar src={candidate.photoURL} name={candidate.name} size={44} />
                 <span><strong>{candidate.name}</strong><small>{candidate.city || candidate.categories.map((value) => FILTERS.find((item) => item.id === value)?.label).filter(Boolean).join(' · ')}</small></span>
                 {selectedUid === candidate.uid ? <Check size={18} className="text-brand" /> : null}
-              </button>
+              </TrustedHapticPress>
             )) : <div className={styles.empty}>No people found in this filter.</div>}
           </div>
-          <button type="button" className={styles.sendButton} disabled={!selected || sending} onClick={send}>{sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} Send card{selected ? ` to ${selected.name}` : ''}</button>
+          <TrustedHapticPress className={styles.sendButton} disabled={!selected || sending} kind="strong" onPress={send}>{sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />} Send card{selected ? ` to ${selected.name}` : ''}</TrustedHapticPress>
         </div>
       </Sheet>
       {sendAnimation ? (

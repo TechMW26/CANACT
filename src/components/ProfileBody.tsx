@@ -43,6 +43,7 @@ import { lockPageScroll } from '@/lib/scrollLock';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { getMoodDefinition } from '@/lib/moodTracker';
 import { withProfileUid } from '@/lib/userProfiles';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import {
   Award,
   CheckCircle2,
@@ -1123,7 +1124,10 @@ function CanactPagesProfileUI({
             Update mood
           </button>
         ) : null}
-        <h1 className="mt-6 text-[26px] font-black tracking-[-.04em] text-white">{displayName}{isVerified ? <span className="ml-2 align-middle text-lg text-[#9de1c1]">✓</span> : null}</h1>
+        <h1 className="mt-6 flex items-center justify-center gap-2 text-[26px] font-black tracking-[-.04em] text-white">
+          <span>{displayName}</span>
+          {isVerified ? <VerifiedBadge size={22} /> : null}
+        </h1>
         <p className="mt-1 text-[13px] font-semibold text-white/65">@{profileSlug(userProfile)} · {role}</p>
         <p className="mx-auto mt-2.5 max-w-[340px] text-[13px] font-semibold leading-5 text-white/80">{profileInsight}</p>
         {userProfile.bio && userProfile.bio.trim() !== profileInsight ? <p className="mx-auto mt-2 max-w-sm whitespace-pre-wrap text-xs leading-5 text-white/60">{userProfile.bio}</p> : null}
@@ -1396,14 +1400,6 @@ function FriendButton({
     );
   }
   return <Button size="sm" onClick={() => onSend()}>Add friend</Button>;
-}
-
-function VerifiedBadge({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full bg-emerald-100 font-bold text-emerald-800 ${compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'}`}>
-      <CheckCircle2 size={compact ? 12 : 14} /> Verified
-    </span>
-  );
 }
 
 function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {

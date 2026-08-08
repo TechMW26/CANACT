@@ -8,7 +8,7 @@ type HapticKind = 'subtle' | 'strong' | 'success' | 'selection';
 let iosSwitch: HTMLInputElement | null = null;
 let iosSwitchLabel: HTMLLabelElement | null = null;
 
-function isIOSWebKit() {
+export function isIOSWebKit() {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
