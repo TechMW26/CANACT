@@ -2,12 +2,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { onValue, ref } from 'firebase/database';
-import { Avatar } from '@/components/Avatar';
 import { useAuth } from '@/lib/auth';
 import { db, getFirebaseAuth } from '@/lib/firebase';
 import { toast } from '@/components/Toaster';
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, Eye, Loader2, Lock, Pencil, ShieldCheck, Sparkles, Star,
+  Camera, CheckCircle2, ChevronRight, Eye, Loader2, Lock, Pencil, ShieldCheck, Sparkles, Star,
 } from '@/components/icons';
 import type { UserProfile } from '@/lib/types';
 import styles from './Settings.module.css';
@@ -61,18 +60,6 @@ export default function ProfileSettingsPage() {
 
   return (
     <div className={styles.page}>
-      {/* Header */}
-      <div className={styles.header}>
-        <Link href="/profile" prefetch className={styles.backBtn} aria-label="Back">
-          <ArrowLeft size={22} />
-        </Link>
-        <div className={styles.headerTitle}>
-          <h1>Profile settings</h1>
-          {profile.city ? <span>{profile.city}</span> : null}
-        </div>
-        <Avatar src={profile.photoURL} name={profile.fullName} size={40} className={styles.headerAvatar} />
-      </div>
-
       {/* Quick Actions */}
       <div className={styles.section}>
         <span className={styles.sectionLabel}>Quick actions</span>
@@ -95,10 +82,6 @@ export default function ProfileSettingsPage() {
       {/* Manual identity verification */}
       <div className={styles.section}>
         <span className={styles.sectionLabel}>Identity verification</span>
-        <div className={styles.digiCard}>
-          <div className={styles.digiBadge}>
-            <ShieldCheck size={11} /> Manual review
-          </div>
           <h2 className={styles.digiTitle}>Verify your identity</h2>
           <p className={styles.digiDesc}>
             Upload an identity document and a fresh selfie. An authorised Canact reviewer will approve or reject the request from the secure admin dashboard.
@@ -130,7 +113,10 @@ export default function ProfileSettingsPage() {
           ) : verificationStatus === 'pending' ? (
             <div className={styles.reviewState}>
               <span className={styles.reviewStateIcon}><Loader2 size={20} /></span>
-              <div><strong>Review in progress</strong><p>Your documents are safely queued for an administrator. We will notify you after the review.</p></div>
+              <div>
+                <strong>Review in progress</strong>
+                <p>Your documents are safely queued for an administrator. Reviews typically take up to 24 hours. We will notify you after the review.</p>
+              </div>
             </div>
           ) : cooldownActive ? (
             <div className={`${styles.reviewState} ${styles.reviewRejected}`}>
@@ -166,7 +152,6 @@ export default function ProfileSettingsPage() {
               </button>
             </div>
           )}
-        </div>
       </div>
 
       {/* More */}

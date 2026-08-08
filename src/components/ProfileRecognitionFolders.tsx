@@ -130,6 +130,8 @@ export function AttributePairSlider({
   busy,
   cooldownMs,
   readOnly,
+  labelMode = 'counts',
+  dynamicLabel = false,
   onCommit,
 }: {
   negative: AttrKey;
@@ -140,6 +142,8 @@ export function AttributePairSlider({
   busy: boolean;
   cooldownMs: number;
   readOnly: boolean;
+  labelMode?: 'counts' | 'names';
+  dynamicLabel?: boolean;
   onCommit: (value: -1 | 0 | 1) => void;
 }) {
   const barRef = useRef<HTMLDivElement | null>(null);
@@ -206,6 +210,10 @@ export function AttributePairSlider({
     if (pct >= 50 + third / 2) return 1;
     return 0;
   };
+  const pillValue = valueFromPct(pillPosition);
+  const pillLabel = dynamicLabel
+    ? pillValue === -1 ? ATTR_LABELS[negative] : pillValue === 1 ? ATTR_LABELS[positive] : 'Neutral'
+    : label;
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (disabled || readOnly) return;
@@ -232,8 +240,8 @@ export function AttributePairSlider({
   return (
     <div className={styles.attributePair} data-busy={busy} data-locked={locked} data-selected={selectedValue}>
       <div className={styles.attributeSpectrumLabels}>
-        <span>+{negativeCount}</span>
-        <span>+{positiveCount}</span>
+        <span>{labelMode === 'names' ? ATTR_LABELS[negative] : `+${negativeCount}`}</span>
+        <span>{labelMode === 'names' ? ATTR_LABELS[positive] : `+${positiveCount}`}</span>
       </div>
       <div
         ref={barRef}
@@ -250,7 +258,7 @@ export function AttributePairSlider({
           className={`${styles.attributeSpectrumPill} ${selectedValue === -1 ? styles.attributeSpectrumPillNeg : selectedValue === 1 ? styles.attributeSpectrumPillPos : ''}`}
           style={{ left: `${pillPosition}%` }}
         >
-          <span>{label}</span>
+          <span>{pillLabel}</span>
         </div>
       </div>
       {busy ? <Loader2 className={styles.attributeSpinner} size={17} aria-label="Updating attribute" /> : null}
