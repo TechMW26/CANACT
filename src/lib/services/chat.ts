@@ -9,12 +9,13 @@ function threadIdFor(a: string, b: string) {
 export { threadIdFor };
 
 async function assertConnected(a: string, b: string) {
-  const [friend, blockedByA, blockedByB] = await Promise.all([
+  const [friendByA, friendByB, blockedByA, blockedByB] = await Promise.all([
     get(ref(db, `friends/${a}/${b}`)),
+    get(ref(db, `friends/${b}/${a}`)),
     get(ref(db, `blocks/${a}/${b}`)),
     get(ref(db, `blocks/${b}/${a}`)),
   ]);
-  if (!friend.exists()) throw new Error('Get In Touch as friends before messaging.');
+  if (!friendByA.exists() && !friendByB.exists()) throw new Error('Get In Touch as friends before messaging.');
   if (blockedByA.exists() || blockedByB.exists()) throw new Error('Messaging is unavailable for this connection.');
 }
 

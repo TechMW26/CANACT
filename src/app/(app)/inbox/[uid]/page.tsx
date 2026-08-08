@@ -27,6 +27,7 @@ import type { ChatAttachment, ChatMessage, ChatThread, UserProfile } from '@/lib
 import { MessageBubble, QUICK_REACTIONS, ChatDateDivider, isDifferentDay } from '@/components/MessageBubble';
 import { InAppCallSheet } from '@/components/InAppCallSheet';
 import type { CallKind } from '@/lib/services/calls';
+import { withProfileUid } from '@/lib/userProfiles';
 
 export default function InboxThreadPage() {
   const { user, profile } = useAuth();
@@ -72,7 +73,9 @@ export default function InboxThreadPage() {
 
   useEffect(() => {
     if (!otherUid) return;
-    get(ref(db, `users/${otherUid}`)).then((s) => setOther(s.val()));
+    get(ref(db, `users/${otherUid}`)).then((snapshot) => {
+      setOther(withProfileUid(otherUid, snapshot.val() as UserProfile | null));
+    });
   }, [otherUid]);
 
   useEffect(() => {
@@ -81,9 +84,10 @@ export default function InboxThreadPage() {
     let offMsgs: (() => void) | undefined;
     (async () => {
       try {
+        setConnectionError(null);
         await startOrGetThread(
           { uid: user.uid, name: profile.fullName, photoURL: profile.photoURL },
-          { uid: other.uid, name: other.fullName, photoURL: other.photoURL },
+          { uid: otherUid, name: other.fullName, photoURL: other.photoURL },
         );
         const id = threadIdFor(user.uid, other.uid);
         off = listenThread(id, setThread);
@@ -94,7 +98,7 @@ export default function InboxThreadPage() {
         }
     })();
     return () => { off?.(); offMsgs?.(); };
-  }, [user, profile, other]);
+  }, [user, profile, other, otherUid]);
 
   // Scroll the message list to the bottom on every change. We do it on
   // a triple-rAF schedule (current frame + next two) because:

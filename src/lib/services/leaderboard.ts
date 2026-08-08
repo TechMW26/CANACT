@@ -1,6 +1,7 @@
 import { onValue, ref, get } from 'firebase/database';
 import { db } from '../firebase';
 import { NEGATIVE_ATTRS, POSITIVE_ATTRS, type UserProfile } from '../types';
+import { withProfileUid } from '../userProfiles';
 import { calculateCanactScore } from '../canactScore';
 
 export type LeaderScope = 'app' | 'city' | 'country' | 'favourites' | 'contacts';
@@ -49,8 +50,7 @@ function isVisibleOnLeaderboard(profile: UserProfile) {
 
 function profileFromSnapshot(value: unknown, key: string | null) {
   if (!value || typeof value !== 'object') return null;
-  const profile = value as UserProfile;
-  return { ...profile, uid: profile.uid || key || '' } as UserProfile;
+  return withProfileUid(key ?? '', value as UserProfile);
 }
 
 function sortLeaderboard(rows: UserProfile[]) {
@@ -105,7 +105,8 @@ export async function searchUsers(text: string): Promise<UserProfile[]> {
   const t = text.trim().toLowerCase(); if (!t) return [];
   const snap = await get(ref(db, 'users'));
   const out: UserProfile[] = []; snap.forEach((c) => {
-    const u = c.val() as UserProfile;
+    const u = withProfileUid(c.key ?? '', c.val() as UserProfile | null);
+    if (!u) return;
     if (u.role === 'admin') return;
     const hay = `${u.fullName ?? ''} ${u.city ?? ''} ${u.country ?? ''} ${u.email ?? ''} ${u.mobile ?? ''}`.toLowerCase();
     if (hay.includes(t)) out.push(u);

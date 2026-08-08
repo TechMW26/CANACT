@@ -42,12 +42,13 @@ export async function unfriend(meUid: string, otherUid: string) {
 }
 
 export function listenFriendStatus(meUid: string, otherUid: string, cb: (status: FriendStatus) => void) {
-  let outgoing = false, incoming = false, friends = false;
-  const emit = () => cb(friends ? 'friends' : outgoing ? 'requested' : incoming ? 'incoming' : 'none');
-  const u1 = onValue(ref(db, `friends/${meUid}/${otherUid}`), (s) => { friends = s.exists(); emit(); });
-  const u2 = onValue(ref(db, `friendRequests/outgoing/${meUid}/${otherUid}`), (s) => { outgoing = s.exists(); emit(); });
-  const u3 = onValue(ref(db, `friendRequests/incoming/${meUid}/${otherUid}`), (s) => { incoming = s.exists(); emit(); });
-  return () => { u1(); u2(); u3(); };
+  let outgoing = false, incoming = false, friendByMe = false, friendByOther = false;
+  const emit = () => cb(friendByMe || friendByOther ? 'friends' : outgoing ? 'requested' : incoming ? 'incoming' : 'none');
+  const u1 = onValue(ref(db, `friends/${meUid}/${otherUid}`), (s) => { friendByMe = s.exists(); emit(); });
+  const u2 = onValue(ref(db, `friends/${otherUid}/${meUid}`), (s) => { friendByOther = s.exists(); emit(); });
+  const u3 = onValue(ref(db, `friendRequests/outgoing/${meUid}/${otherUid}`), (s) => { outgoing = s.exists(); emit(); });
+  const u4 = onValue(ref(db, `friendRequests/incoming/${meUid}/${otherUid}`), (s) => { incoming = s.exists(); emit(); });
+  return () => { u1(); u2(); u3(); u4(); };
 }
 
 export function listenIncomingRequests(meUid: string, cb: (items: FriendEdge[]) => void) {

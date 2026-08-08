@@ -42,6 +42,7 @@ import { calculateCanactScore } from '@/lib/canactScore';
 import { lockPageScroll } from '@/lib/scrollLock';
 import { uploadMedia } from '@/lib/uploadMedia';
 import { getMoodDefinition } from '@/lib/moodTracker';
+import { withProfileUid } from '@/lib/userProfiles';
 import {
   Award,
   CheckCircle2,
@@ -979,7 +980,7 @@ function CanactPagesProfileUI({
   useEffect(() => {
     if (!myFavUids.length) { setMyFavProfiles({}); return; }
     const offs = myFavUids.map((uid) => onValue(ref(db, `users/${uid}`), (snap) => {
-      setMyFavProfiles((current) => ({ ...current, [uid]: snap.val() as UserProfile | null }));
+      setMyFavProfiles((current) => ({ ...current, [uid]: withProfileUid(uid, snap.val() as UserProfile | null) }));
     }));
     return () => offs.forEach((off) => off());
   }, [myFavUids.join(',')]);

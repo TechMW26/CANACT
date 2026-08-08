@@ -22,6 +22,7 @@ import { POSITIVE_ATTRS, NEGATIVE_ATTRS, ATTR_LABELS } from '@/lib/types';
 import { formatDistance, haversineMeters } from '@/lib/utils';
 import { useGeo } from '@/lib/useGeo';
 import styles from './HomeScoreExperience.module.css';
+import { withProfileUid } from '@/lib/userProfiles';
 
 type ScoreClassName = 'scoreExcellent' | 'scoreGood' | 'scoreFair' | 'scorePoor';
 type HomeStage = 'score' | 'nearby';
@@ -788,7 +789,9 @@ export function HomeScoreExperience() {
 
   useEffect(() => {
     if (!expandedCardUid) return;
-    return onValue(ref(db, `users/${expandedCardUid}`), (s) => setExpandedCardProfile(s.val() as UserProfile | null));
+    return onValue(ref(db, `users/${expandedCardUid}`), (s) => {
+      setExpandedCardProfile(withProfileUid(expandedCardUid, s.val() as UserProfile | null));
+    });
   }, [expandedCardUid]);
 
   useEffect(() => {

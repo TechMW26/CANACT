@@ -29,6 +29,7 @@ import { deleteStory } from '@/lib/services/stories';
 import { StoryViewer } from '@/components/StoryViewer';
 import type { Poll, ReelItem, StoryItem, WhaPost } from '@/lib/types';
 import styles from './ExplorePage.module.css';
+import { withProfileUid } from '@/lib/userProfiles';
 
 type Tab = 'friends' | 'favourites' | 'requests';
 type PeopleView = 'map' | 'list';
@@ -97,7 +98,7 @@ export default function FavouritesPage() {
     const uidSet = new Set(friends.map((friend) => friend.uid));
     setFriendProfiles((current) => Object.fromEntries(Object.entries(current).filter(([uid]) => uidSet.has(uid))) as Record<string, FriendProfile | null>);
     const offs = friends.map((friend) => onValue(ref(db, `users/${friend.uid}`), (snap) => {
-      setFriendProfiles((current) => ({ ...current, [friend.uid]: snap.val() as FriendProfile | null }));
+      setFriendProfiles((current) => ({ ...current, [friend.uid]: withProfileUid(friend.uid, snap.val() as FriendProfile | null) }));
     }));
     return () => { offs.forEach((off) => off()); };
   }, [friendIds, friends]);
@@ -108,7 +109,7 @@ export default function FavouritesPage() {
       const out: FriendProfile[] = [];
       await Promise.all(uids.map(async (uid) => {
         const snap = await get(ref(db, `users/${uid}`));
-        const s = snap.val() as FriendProfile | null;
+        const s = withProfileUid(uid, snap.val() as FriendProfile | null);
         if (s) out.push(s);
       }));
       setFavs(out);
@@ -121,7 +122,7 @@ export default function FavouritesPage() {
       const out: FavouriteRequest[] = [];
       await Promise.all(rs.map(async (r) => {
         const snap = await get(ref(db, `users/${r.fromUid}`));
-        out.push({ ...r, profile: snap.val() as UserProfile | null });
+        out.push({ ...r, profile: withProfileUid(r.fromUid, snap.val() as UserProfile | null) });
       }));
       setFavReqs(out);
     });

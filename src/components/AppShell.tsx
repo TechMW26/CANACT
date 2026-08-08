@@ -444,14 +444,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                       aria-label={tabBadge ? `${label} — ${tabBadge} nearby request${tabBadge === 1 ? '' : 's'}` : label}
                       onPointerDown={(event) => {
                         prefetchRoute(href);
-                        if (event.isPrimary && event.button === 0) {
-                          haptic('selection');
-                          setHelpOpen(true);
-                        }
+                        liquidNav.begin(tabIndex, event);
                       }}
                       onClick={(event) => {
-                        liquidNav.consumeClick(event);
-                        if (event.detail === 0) {
+                        if (!liquidNav.consumeClick(event)) {
                           onTap();
                           setHelpOpen(true);
                         }
