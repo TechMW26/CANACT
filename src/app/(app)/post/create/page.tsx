@@ -11,7 +11,7 @@ import { VideoPreview } from '@/components/VideoPreview';
 import { ArrowLeft, Camera, Check, Expand, Loader2, MapPin, Plus, X } from '@/components/icons';
 import { useAuth } from '@/lib/auth';
 import { useGeo } from '@/lib/useGeo';
-import { createWhaPost } from '@/lib/services/wha';
+import { createWhaPost, WHA_CAPTION_WORD_LIMIT, whaCaptionWordCount } from '@/lib/services/wha';
 import { notifyNearbyFriends } from '@/lib/services/sendPush';
 import { dataUrlToBlob, prepareMedia, uploadMedia, type PreparedMedia } from '@/lib/uploadMedia';
 import { toast } from '@/components/Toaster';
@@ -38,6 +38,8 @@ export default function PostCreatePage() {
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const shotsRef = useRef<DraftShot[]>([]);
+  const captionWordCount = whaCaptionWordCount(text);
+  const captionTooLong = captionWordCount > WHA_CAPTION_WORD_LIMIT;
 
   useEffect(() => { shotsRef.current = shots; }, [shots]);
   useEffect(() => () => { shotsRef.current.forEach(revokeDraftShot); }, []);
@@ -236,17 +238,23 @@ export default function PostCreatePage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={500}
+            error={captionTooLong ? `Keep your caption within ${WHA_CAPTION_WORD_LIMIT} words.` : undefined}
           />
+          <div className={`mt-1 text-right text-xs font-bold ${captionTooLong ? 'text-red-600' : 'text-ink/45'}`} aria-live="polite">
+            {captionWordCount} / {WHA_CAPTION_WORD_LIMIT} words
+          </div>
         </div>
 
         <Button
           full
           size="lg"
           loading={busy || preparing}
+          disabled={captionTooLong}
           className="mt-4"
           onClick={async () => {
             if (preparing) return;
             if (!text.trim() && shots.length === 0) return toast('Add a photo or caption', 'error');
+            if (captionTooLong) return toast(`Keep your caption within ${WHA_CAPTION_WORD_LIMIT} words`, 'error');
             setBusy(true);
             try {
               // Upload all shots to Vercel Blob in parallel (Instagram-style:

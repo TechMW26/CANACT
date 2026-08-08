@@ -123,9 +123,11 @@ export async function voteRateMe(sessionId: string, voterUid: string, kind: 'lik
   }
 }
 
-export async function commentRateMe(sessionId: string, uid: string, name: string, text: string) {
+export async function commentRateMe(sessionId: string, uid: string, name: string, text: string, photoURL?: string | null) {
   const node = push(ref(db, `ratemeComments/${sessionId}`));
-  await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
+  const data: Record<string, unknown> = { id: node.key, uid, name, text, createdAt: Date.now() };
+  if (photoURL) data.photoURL = photoURL;
+  await set(node, data);
   await runTransaction(ref(db, `ratemeSessions/${sessionId}/commentCount`), (count: number) => (count ?? 0) + 1);
   const session = (await get(ref(db, `ratemeSessions/${sessionId}`))).val() as RateMeSession | null;
   if (session?.uid && session.uid !== uid) {

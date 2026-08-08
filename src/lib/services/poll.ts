@@ -132,9 +132,11 @@ export async function reactPoll(pollId: string, uid: string, kind: 'like' | 'dis
   }
 }
 
-export async function commentPoll(pollId: string, uid: string, name: string, text: string) {
+export async function commentPoll(pollId: string, uid: string, name: string, text: string, photoURL?: string | null) {
   const n = push(ref(db, `pollComments/${pollId}`));
-  await set(n, { id: n.key, uid, name, text, createdAt: Date.now() });
+  const data: Record<string, unknown> = { id: n.key, uid, name, text, createdAt: Date.now() };
+  if (photoURL) data.photoURL = photoURL;
+  await set(n, data);
   await runTransaction(ref(db, `polls/${pollId}/commentCount`), (c: number) => (c ?? 0) + 1);
   // T4: Comment counts as like-equivalent for poll author + voter engagement
   try {

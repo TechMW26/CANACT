@@ -1,12 +1,14 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { onValue, ref as dbRef } from 'firebase/database';
+import { db } from '@/lib/firebase';
 import { Avatar } from './Avatar';
 import { MediaSlider } from './MediaSlider';
 import { PostMenu } from './PostMenu';
 import { Sheet } from './Sheet';
 import { toast } from './Toaster';
-import { MessageCircle, Send, Share2, ThumbsDown, ThumbsUp } from './icons';
+import { Send, Share2, ThumbsDown, ThumbsUp } from './icons';
 import { addComment, deletePost, listenComments, listenPost, reactWha } from '@/lib/services/wha';
 import { commentPoll, deletePoll, listenPoll, listenPollComments, reactPoll, votePoll } from '@/lib/services/poll';
 import { commentRateMe, deleteRateMeSession, listenRateMeComments, listenRateMeSession, voteRateMe } from '@/lib/services/rateme';
@@ -25,20 +27,35 @@ type CommentRow = {
   id: string;
   uid?: string;
   name: string;
+  photoURL?: string | null;
   text: string;
   createdAt: number;
 };
+
+/** Subscribes to a commenter's live profile photo from RTDB. */
+function CommentAvatar({ uid, name, size = 32 }: { uid?: string; name: string; size?: number }) {
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
+  useEffect(() => {
+    if (!uid) return;
+    return onValue(dbRef(db, `users/${uid}`), (snap) => {
+      setPhotoURL(snap.val()?.photoURL ?? null);
+    });
+  }, [uid]);
+  return <Avatar src={photoURL} name={name} size={size} />;
+}
 
 export function PostDetailSheet({
   item,
   myUid,
   myName,
+  myPhoto,
   onClose,
   onShare,
 }: {
   item: PostDetailSheetItem | null;
   myUid: string;
   myName: string;
+  myPhoto?: string | null;
   onClose: () => void;
   onShare: (attachment: ChatAttachment) => void;
 }) {
@@ -48,6 +65,7 @@ export function PostDetailSheet({
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ id: string; name: string } | null>(null);
 
   const activeItemId = item ? ('id' in item ? item.id : item.data.id) : '';
   const itemKey = item ? `${item.kind}:${activeItemId}` : '';
@@ -101,9 +119,9 @@ export function PostDetailSheet({
     setSending(true);
     setText('');
     try {
-      if (item.kind === 'wha') await addComment(activeItemId, myUid, myName, value);
-      else if (item.kind === 'poll') await commentPoll(activeItemId, myUid, myName, value);
-      else await commentRateMe(activeItemId, myUid, myName, value);
+      if (item.kind === 'wha') await addComment(activeItemId, myUid, myName, value, myPhoto);
+      else if (item.kind === 'poll') await commentPoll(activeItemId, myUid, myName, value, myPhoto);
+      else await commentRateMe(activeItemId, myUid, myName, value, myPhoto);
     } catch (error: any) {
       setText(value);
       toast(error?.message ?? 'Could not comment', 'error');
@@ -134,41 +152,52 @@ export function PostDetailSheet({
           <div className="py-16 text-center text-sm text-ink/55">Loading...</div>
         )}
 
-        <section className="mt-5 pt-4">
-          <div className="mb-3 flex items-center gap-2">
-            <MessageCircle size={16} className="text-brand" />
-            <h3 className="text-sm font-extrabold text-ink">Comments</h3>
-            <span className="text-xs font-semibold text-ink/45">{comments.length}</span>
-          </div>
+        <div className="mt-5 mx-3">
           {comments.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-ink/50">
               Be the first to comment.
             </div>
           ) : (
-            <div className="space-y-3 pb-2">
+            <div className="space-y-3">
               {comments.map((comment) => (
                 <div key={comment.id} className="flex items-start gap-3">
-                  <Avatar name={comment.name} size={32} />
-                  <div className="min-w-0 flex-1 rounded-2xl bg-brand-light/45 px-3 py-2">
-                    <div className="flex items-baseline gap-2">
-                      <span className="truncate text-sm font-extrabold text-ink">{comment.name}</span>
-                      <span className="shrink-0 text-[10px] font-semibold text-ink/45">{timeAgo(comment.createdAt)}</span>
+                  <CommentAvatar uid={comment.uid} name={comment.name} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="rounded-2xl bg-brand-light/45 px-3 py-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-extrabold text-ink">{comment.name}</span>
+                        <span className="shrink-0 text-[10px] font-semibold text-ink/45">{timeAgo(comment.createdAt)}</span>
+                      </div>
+                      <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-ink/80">{comment.text}</p>
                     </div>
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm leading-snug text-ink/80">{comment.text}</p>
+                    <button
+                      type="button"
+                      onClick={() => { setReplyTo({ id: comment.id, name: comment.name }); setText(`@${comment.name.split(' ')[0]} `); }}
+                      className="mt-1 text-[10px] font-semibold text-ink/40 hover:text-brand transition"
+                    >
+                      Reply
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </div>
       </div>
 
-      <form onSubmit={submitComment} className="sticky bottom-0 z-10 flex shrink-0 gap-2 rounded-[999px] bg-white p-2">
+      <form onSubmit={submitComment} className="sticky bottom-0 z-10 shrink-0 rounded-[20px] bg-white p-2">
+        {replyTo ? (
+          <div className="mb-1 flex items-center gap-2 px-2 pt-1">
+            <span className="text-[11px] font-semibold text-ink/50">Replying to {replyTo.name}</span>
+            <button type="button" onClick={() => { setReplyTo(null); setText(''); }} className="text-[10px] font-bold text-ink/35 hover:text-ink/60">Cancel</button>
+          </div>
+        ) : null}
+        <div className="flex gap-2">
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           rows={1}
-          placeholder={composerPlaceholder}
+          placeholder={replyTo ? `Reply to ${replyTo.name.split(' ')[0]}...` : composerPlaceholder}
           className="max-h-28 min-h-11 flex-1 resize-none rounded-[900px] border border-line bg-white p-2.5 text-sm leading-snug outline-none focus:border-brand"
         />
         <button
@@ -179,6 +208,7 @@ export function PostDetailSheet({
         >
           <Send size={17} />
         </button>
+        </div>
       </form>
     </Sheet>
   );
@@ -277,9 +307,51 @@ function WhaPostDetails({ post, myUid, onShare, onDeleted }: { post: WhaPost; my
       ) : (
         <DetailHeader authorName={post.authorName} authorUid={post.uid} authorPhoto={post.authorPhoto} subline={timeAgo(post.createdAt)} onShare={onShare} onDelete={onDelete} />
       )}
-      {post.text ? <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{post.text}</p> : null}
+      {post.text ? <ExpandableCaption text={post.text} overlapsMedia={hasMedia} /> : null}
       {!hasMedia ? <WhaReactionBar post={post} myUid={myUid} /> : null}
     </div>
+  );
+}
+
+function ExpandableCaption({ text, overlapsMedia }: { text: string; overlapsMedia: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const textRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => { setExpanded(false); }, [text]);
+  useEffect(() => {
+    const element = textRef.current;
+    if (!element) return;
+    const measure = () => {
+      const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+      setCanExpand(element.scrollHeight > lineHeight * 2 + 1);
+    };
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [text]);
+
+  return (
+    <section
+      aria-label="Post caption"
+      className={`relative z-[1] rounded-[20px] border border-brand/10 bg-[#F1F7F4] px-5 py-4 shadow-[0_10px_28px_rgba(20,54,42,0.09)] ${overlapsMedia ? '-mt-3 mx-3' : 'mt-4'}`}
+    >
+      <p ref={textRef} className={`${expanded ? '' : 'line-clamp-2'} whitespace-pre-wrap text-[17px] font-bold leading-[1.55] tracking-[-0.01em] text-ink`}>{text}</p>
+      {canExpand ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="mt-1.5 text-sm font-extrabold text-brand hover:text-brand-dark focus-ring"
+        >
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      ) : null}
+    </section>
   );
 }
 
@@ -291,7 +363,7 @@ function WhaReactionBar({ post, myUid, overlay = false }: { post: WhaPost; myUid
   const dislikeCount = Number(post.reactions?.sad || 0) + Number(post.reactions?.angry || 0);
   const inactive = overlay ? 'border-white/50 bg-white/95 text-ink' : 'border-line bg-white text-ink';
   return (
-    <div className={`${overlay ? '' : 'mt-4'} flex gap-2`}>
+    <div className={`${overlay ? '' : 'mt-4'} flex justify-end gap-2`}>
       <button
         type="button"
         onClick={() => reactWha(post.id, myUid, 'love')}

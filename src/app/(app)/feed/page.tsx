@@ -368,6 +368,7 @@ export default function FeedPage() {
         item={detailItem}
         myUid={user!.uid}
         myName={profile?.fullName ?? 'You'}
+        myPhoto={profile?.photoURL}
         onClose={() => setDetailItem(null)}
         onShare={setShareAttachment}
       />

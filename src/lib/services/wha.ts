@@ -4,6 +4,13 @@ import { WhaPost } from '../types';
 import { recordOnboardingSignal } from './onboarding';
 import { dailyActivityClaim, nextContentReactionVersion, recordScoreActivity, recordUniqueAuthorContentFeedback, syncAuthorContentReaction } from './scoreActivity';
 
+export const WHA_CAPTION_WORD_LIMIT = 80;
+
+export function whaCaptionWordCount(value: string) {
+  const normalized = value.trim();
+  return normalized ? normalized.split(/\s+/u).length : 0;
+}
+
 function notify(receiverUid: string, kind: 'react' | 'comment', title: string, body: string, url: string) {
   Promise.all([import('./sendPush'), import('./notifications')]).then(([{ sendPush }, { pushNotification }]) => {
     sendPush({ toUid: receiverUid, title, body, url, tag: url }).catch(() => {});
@@ -12,9 +19,14 @@ function notify(receiverUid: string, kind: 'react' | 'comment', title: string, b
 }
 
 export async function createWhaPost(input: Omit<WhaPost, 'id' | 'createdAt' | 'expiresAt' | 'reactions'>) {
+  const text = input.text.trim();
+  if (whaCaptionWordCount(text) > WHA_CAPTION_WORD_LIMIT) {
+    throw new Error(`Captions can contain up to ${WHA_CAPTION_WORD_LIMIT} words`);
+  }
   const node = push(ref(db, 'wha'));
   const post: WhaPost = {
     ...input,
+    text,
     id: node.key!,
     createdAt: Date.now(),
     reactions: { cool: 0, love: 0, wow: 0, sad: 0, angry: 0 },
@@ -136,9 +148,11 @@ export async function reactWha(postId: string, uid: string, kind: 'cool' | 'love
   }
 }
 
-export async function addComment(postId: string, uid: string, name: string, text: string) {
+export async function addComment(postId: string, uid: string, name: string, text: string, photoURL?: string | null) {
   const node = push(ref(db, `whaComments/${postId}`));
-  await set(node, { id: node.key, uid, name, text, createdAt: Date.now() });
+  const data: Record<string, unknown> = { id: node.key, uid, name, text, createdAt: Date.now() };
+  if (photoURL) data.photoURL = photoURL;
+  await set(node, data);
   await runTransaction(ref(db, `wha/${postId}/commentCount`), (c: number) => (c ?? 0) + 1);
   // T4 + notify the post author.
   try {

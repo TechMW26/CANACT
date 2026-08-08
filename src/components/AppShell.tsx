@@ -322,6 +322,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         item={globalDetailItem}
         myUid={user.uid}
         myName={profile?.fullName ?? 'You'}
+        myPhoto={profile?.photoURL}
         onClose={() => setGlobalDetailItem(null)}
         onShare={setPostShareAttachment}
       />
@@ -357,10 +358,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <IncomingCardEnvelope uid={user.uid} />
       <ScrollRestoration />
       <OnboardingTaskGuide />
+      <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderInset} />
       {/* `canact-app-content` is the element that gets the zoom-out transform
-          when a sheet opens. The bottom nav lives OUTSIDE this wrapper so it
-          stays anchored to the viewport and never disappears during sheet
-          open / close transitions. */}
+          when a sheet opens. The fixed header and bottom nav live OUTSIDE this
+          wrapper so they stay anchored to the viewport during sheet motion. */}
       {/* Desktop layout: full viewport width with a FIXED sidebar pinned
           to the left edge and the main content stretching to fill the
           remaining space (offset by `lg:pl-60` so it doesn't slide under
@@ -416,7 +417,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 lg:px-6 lg:pt-6">
-        <UnifiedHeader home={pathname === '/'} profileChrome={profileChrome} fadeChrome={false} leaderboard={routeLeaderboard} topInset={mobileHeaderInset} />
         <div
           className={`w-full ${pathname === '/' ? 'pb-0' : 'pb-[var(--canact-bottom-nav-height)]'} lg:px-6 lg:pb-6`}
           style={!headerOverContent ? { paddingTop: `calc(${mobileHeaderInset} + 92px)` } : undefined}
